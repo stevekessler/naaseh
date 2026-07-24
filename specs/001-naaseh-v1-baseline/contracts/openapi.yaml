@@ -1,0 +1,953 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh v1 API
+  version: 1.0.0
+  description: Same-origin API for authentication, administration, tasks, groups, sync, and reminders.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+tags:
+  - name: Authentication
+  - name: Synchronization
+  - name: Tasks
+  - name: Groups
+  - name: Categories
+  - name: Notifications
+  - name: Administration
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication]
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authenticated; sets the __Host-naaseh session cookie.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+        '401':
+          $ref: '#/components/responses/GenericAuthenticationFailure'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/session:
+    get:
+      tags: [Authentication]
+      operationId: getSession
+      responses:
+        '200':
+          description: Current session and CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      operationId: logout
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      responses:
+        '204': { description: Session revoked and cookie cleared. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /sync/bootstrap:
+    get:
+      tags: [Synchronization]
+      operationId: bootstrapSync
+      responses:
+        '200':
+          description: Full authorized working set and initial vector cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootstrapResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /sync/push:
+    post:
+      tags: [Synchronization]
+      operationId: pushMutations
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushRequest'
+      responses:
+        '200':
+          description: Per-mutation stable outcomes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PushResponse'
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { description: Batch exceeds 100 mutations or 1 MiB. }
+  /sync/pull:
+    post:
+      tags: [Synchronization]
+      operationId: pullChanges
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PullRequest'
+      responses:
+        '200':
+          description: Authorized changes and next vector cursor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /tasks:
+    post:
+      tags: [Tasks]
+      operationId: createTask
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Created task.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /tasks/{taskId}:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      tags: [Tasks]
+      operationId: getTask
+      responses:
+        '200':
+          description: Authorized task.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Tasks]
+      operationId: patchTask
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/MutationId'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/TaskPatch' }
+      responses:
+        '200':
+          description: Updated task.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /tasks/{taskId}/completion:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [Tasks]
+      operationId: setTaskCompletion
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/MutationId'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [completed]
+              properties:
+                completed: { type: boolean }
+      responses:
+        '200':
+          description: Completion state applied idempotently.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Task' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /tasks/{taskId}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      tags: [Tasks]
+      operationId: listTaskRevisions
+      parameters:
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Authorized append-only revisions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/TaskRevision' }
+                  cursor: { type: [string, 'null'] }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tasks/{taskId}/hidden-memo/recovery:
+    parameters:
+      - $ref: '#/components/parameters/TaskId'
+    post:
+      tags: [Tasks]
+      operationId: recoverHiddenMemoKey
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password, reason, ephemeralPublicKeySpki]
+              properties:
+                password: { type: string, minLength: 1, maxLength: 1024 }
+                reason: { type: string, minLength: 1, maxLength: 200 }
+                ephemeralPublicKeySpki: { type: string, minLength: 1, maxLength: 8192 }
+      responses:
+        '200':
+          description: DEK encrypted only to the browser's ephemeral RSA public key.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [algorithm, encryptedDek, kmsKeyVersion, authority]
+                properties:
+                  algorithm: { type: string, const: RSA-OAEP-256 }
+                  encryptedDek: { type: string }
+                  kmsKeyVersion: { type: string }
+                  authority: { type: string, const: recovery-account }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /groups:
+    get:
+      tags: [Groups]
+      operationId: listGroups
+      responses:
+        '200':
+          description: Discoverable active groups with the caller's membership status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/GroupView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [Groups]
+      operationId: createGroup
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                joinPin: { type: string, pattern: '^[0-9]{6,32}$' }
+      responses:
+        '201':
+          description: Group created with the caller as its owner.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupView' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      tags: [Groups]
+      operationId: getGroup
+      responses:
+        '200':
+          description: Discoverable group and, for active members, its active membership list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupDetailResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /groups/{groupId}/join:
+    post:
+      tags: [Groups]
+      operationId: joinGroup
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                pin: { type: string, pattern: '^[0-9]{6,32}$' }
+      responses:
+        '200':
+          description: Membership active, including an idempotent replay of an active membership.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupMembershipView' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /groups/{groupId}/members/{userId}:
+    delete:
+      tags: [Groups]
+      operationId: revokeGroupMembership
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/GroupId'
+        - name: userId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '204': { description: Membership revoked. }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /categories:
+    get:
+      tags: [Categories]
+      operationId: listCategories
+      responses:
+        '200':
+          description: Active and referenced archived categories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Category' }
+    post:
+      tags: [Categories, Administration]
+      operationId: createCategory
+      description: Requires an active application user with role `admin`.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryCreate' }
+      responses:
+        '201':
+          description: Category created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /categories/{categoryId}:
+    parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Ulid' }
+    patch:
+      tags: [Categories, Administration]
+      operationId: updateCategory
+      description: Requires an active application user with role `admin`.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: { $ref: '#/components/schemas/CategoryPatch' }
+      responses:
+        '200':
+          description: Category updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Categories, Administration]
+      operationId: archiveCategory
+      description: Requires an active application user with role `admin`; historical task references remain valid.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/IfMatchVersion'
+      responses:
+        '200':
+          description: Category archived.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Category' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /push-subscriptions:
+    post:
+      tags: [Notifications]
+      operationId: upsertPushSubscription
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PushSubscriptionInput' }
+      responses:
+        '204': { description: Subscription stored or refreshed. }
+    delete:
+      tags: [Notifications]
+      operationId: deletePushSubscription
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: clientId
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '204': { description: Subscription revoked. }
+  /admin/users:
+    get:
+      tags: [Administration]
+      operationId: listUsers
+      description: Requires an active application user with role `admin`; credential material is never returned.
+      responses:
+        '200':
+          description: Administrative user views without credential material.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/UserView' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Administration]
+      operationId: provisionUser
+      description: Requires an active application user with role `admin`; role selection does not grant access to private user data.
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserProvisionRequest' }
+      responses:
+        '201':
+          description: Provisioned user; secrets are write-only.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserProvisionResult' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Ulid' }
+    patch:
+      tags: [Administration]
+      operationId: setUserStatus
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [active]
+              properties:
+                active: { type: boolean }
+      responses:
+        '200': { description: User status and session epoch updated. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/profile-pictures/upload:
+    post:
+      tags: [Administration]
+      operationId: createProfilePictureUpload
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [userId, contentType, contentLength]
+              properties:
+                userId: { $ref: '#/components/schemas/Ulid' }
+                contentType: { type: string, enum: [image/jpeg, image/png, image/webp] }
+                contentLength: { type: integer, minimum: 1, maximum: 5000000 }
+      responses:
+        '201': { description: Five-minute private signed upload request. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-naaseh
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 32, maxLength: 256 }
+    MutationId:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    IfMatchVersion:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string, pattern: '^"[0-9]+"$' }
+    TaskId:
+      name: taskId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+  responses:
+    GenericAuthenticationFailure:
+      description: Username or password was not accepted.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Authentication required or expired.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Authenticated but not authorized.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource not found or deliberately concealed.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationError:
+      description: Request failed validation.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Optimistic concurrency or uniqueness conflict.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ConflictProblem' }
+    RateLimited:
+      description: Retry is temporarily limited.
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [username, password]
+      properties:
+        username: { type: string, minLength: 1, maxLength: 64 }
+        password: { type: string, minLength: 1, maxLength: 1024 }
+    SessionView:
+      type: object
+      required: [user, csrfToken, idleExpiresAt, absoluteExpiresAt, sessionEpoch]
+      properties:
+        user: { $ref: '#/components/schemas/UserView' }
+        csrfToken: { type: string }
+        idleExpiresAt: { type: string, format: date-time }
+        absoluteExpiresAt: { type: string, format: date-time }
+        sessionEpoch: { type: integer, minimum: 0 }
+    UserView:
+      type: object
+      required: [id, username, role, status, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        username: { type: string }
+        pictureUrl: { type: [string, 'null'], format: uri }
+        role: { type: string, enum: [user, admin] }
+        status: { type: string, enum: [active, disabled] }
+        version: { type: integer, minimum: 1 }
+    UserProvisionRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, username, password, pin, idempotencyToken]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 200 }
+        username: { type: string, minLength: 1, maxLength: 100 }
+        password: { type: string, minLength: 12, maxLength: 1024 }
+        pin: { type: string, pattern: '^[0-9]{6,12}$' }
+        idempotencyToken: { type: string, minLength: 1, maxLength: 200 }
+        role: { type: string, enum: [user, admin], default: user }
+    UserProvisionResult:
+      type: object
+      additionalProperties: false
+      required: [version, created, user]
+      properties:
+        version: { type: string, const: naaseh.provision-user-result/v1 }
+        created: { type: boolean }
+        user: { $ref: '#/components/schemas/UserView' }
+    GroupView:
+      type: object
+      additionalProperties: false
+      required: [id, name, ownerId, status, hasJoinPin, joined, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        ownerId: { $ref: '#/components/schemas/Ulid' }
+        status: { type: string, enum: [active, archived] }
+        hasJoinPin: { type: boolean }
+        joined: { type: boolean }
+        role: { type: string, enum: [owner, manager, member] }
+        version: { type: integer, minimum: 1 }
+    GroupMembershipView:
+      type: object
+      additionalProperties: false
+      required: [groupId, userId, role, status, joinedAt, version]
+      properties:
+        groupId: { $ref: '#/components/schemas/Ulid' }
+        userId: { $ref: '#/components/schemas/Ulid' }
+        role: { type: string, enum: [owner, manager, member] }
+        status: { type: string, enum: [active, revoked] }
+        joinedAt: { type: string, format: date-time }
+        revokedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    GroupDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [group, members]
+      properties:
+        group: { $ref: '#/components/schemas/GroupView' }
+        members:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMembershipView' }
+    TaskCreate:
+      type: object
+      additionalProperties: false
+      required: [label]
+      properties:
+        parentId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        label: { type: string, minLength: 1, maxLength: 300 }
+        link: { type: [string, 'null'], format: uri }
+        memo: { type: string, maxLength: 20000, default: '' }
+        encryptedMemo: { type: [string, 'null'] }
+        memoHidden: { type: boolean }
+        dueAt: { type: [string, 'null'], format: date-time }
+        dueTimeZone: { type: [string, 'null'] }
+        assigneeId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        categoryId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        groupId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        visibility: { type: string, enum: [public, private], default: public }
+    TaskPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        label: { type: string, minLength: 1, maxLength: 300 }
+        link: { type: [string, 'null'], format: uri }
+        memo: { type: string, maxLength: 20000 }
+        encryptedMemo: { type: [string, 'null'] }
+        memoHidden: { type: boolean }
+        dueAt: { type: [string, 'null'], format: date-time }
+        dueTimeZone: { type: [string, 'null'] }
+        assigneeId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        categoryId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        groupId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        visibility: { type: string, enum: [public, private] }
+    Task:
+      allOf:
+        - $ref: '#/components/schemas/TaskCreate'
+        - type: object
+          required: [id, ownerId, status, createdAt, updatedAt, version]
+          properties:
+            id: { $ref: '#/components/schemas/Ulid' }
+            ownerId: { $ref: '#/components/schemas/Ulid' }
+            status: { type: string, enum: [open, completed, archived] }
+            completedAt: { type: [string, 'null'], format: date-time }
+            completedBy: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+            version: { type: integer, minimum: 1 }
+    HiddenMemoPackage:
+      type: object
+      additionalProperties: true
+      required: [schema, cipher, ciphertext, iv, aad, pinWrap, recoveryWraps]
+      properties:
+        schema: { type: string, const: naaseh-hidden-memo/v1 }
+        cipher: { type: string, const: AES-256-GCM }
+        ciphertext: { type: string }
+        iv: { type: string }
+        aad: { type: object }
+        pinWrap: { type: object }
+        recoveryWraps:
+          type: array
+          minItems: 1
+          items: { type: object }
+    TaskRevision:
+      type: object
+      required:
+        [id, taskId, version, actorId, operation, changedFields, after, syncOutcome, changedAt]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        taskId: { $ref: '#/components/schemas/Ulid' }
+        version: { type: integer, minimum: 1 }
+        mutationId: { $ref: '#/components/schemas/Ulid' }
+        sourceClientId: { $ref: '#/components/schemas/Ulid' }
+        actorId: { $ref: '#/components/schemas/Ulid' }
+        operation: { type: string }
+        changedFields: { type: array, items: { type: string } }
+        before:
+          {
+            type: object,
+            description: Safe allowlisted values only; memo and label content are excluded.,
+          }
+        after:
+          {
+            type: object,
+            description: Safe allowlisted values only; memo and label content are excluded.,
+          }
+        syncOutcome: { type: string, enum: [local-pending, applied, replayed, merged] }
+        changedAt: { type: string, format: date-time }
+    CategoryCreate:
+      type: object
+      additionalProperties: false
+      required: [name, color]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        defaultAssigneeId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+    CategoryPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80 }
+        defaultAssigneeId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
+        color: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+    Category:
+      allOf:
+        - $ref: '#/components/schemas/CategoryCreate'
+        - type: object
+          required: [categoryId, status, version]
+          properties:
+            categoryId: { $ref: '#/components/schemas/Ulid' }
+            status: { type: string, enum: [active, archived] }
+            version: { type: integer, minimum: 1 }
+    SyncMutation:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          mutationId,
+          clientId,
+          entityType,
+          entityId,
+          operation,
+          baseVersion,
+          clientCreatedAt,
+          payload,
+        ]
+      properties:
+        mutationId: { $ref: '#/components/schemas/Ulid' }
+        clientId: { $ref: '#/components/schemas/Ulid' }
+        entityType:
+          { type: string, enum: [task, group, membership, category, reminder, hiddenMemoRewrap] }
+        entityId: { $ref: '#/components/schemas/Ulid' }
+        operation: { type: string }
+        baseVersion: { type: integer, minimum: 0 }
+        clientCreatedAt: { type: string, format: date-time }
+        payload: { type: object }
+    MutationResult:
+      type: object
+      required: [mutationId, status]
+      properties:
+        mutationId: { $ref: '#/components/schemas/Ulid' }
+        status: { type: string, enum: [applied, alreadyApplied, conflict, rejected, retry] }
+        entityVersion: { type: integer, minimum: 0 }
+        entity: { type: object }
+        conflict: { type: object }
+        problem: { $ref: '#/components/schemas/Problem' }
+    CursorEntry:
+      type: object
+      required: [feed, shard, sequence]
+      properties:
+        feed: { type: string }
+        shard: { type: integer, minimum: 0, maximum: 15 }
+        sequence: { type: integer, minimum: 0 }
+    SyncChange:
+      type: object
+      required: [feed, shard, sequence, entityType, entityId, changeType, entityVersion, occurredAt]
+      properties:
+        feed: { type: string }
+        shard: { type: integer }
+        sequence: { type: integer }
+        entityType: { type: string }
+        entityId: { $ref: '#/components/schemas/Ulid' }
+        changeType: { type: string, enum: [upsert, tombstone] }
+        entityVersion: { type: integer }
+        safePayload: { type: object }
+        occurredAt: { type: string, format: date-time }
+    BootstrapResponse:
+      type: object
+      required:
+        [contractVersion, user, sessionEpoch, records, cursor, recoveryKeyRegistry, serverTime]
+      properties:
+        contractVersion: { type: integer, const: 1 }
+        user: { $ref: '#/components/schemas/UserView' }
+        sessionEpoch: { type: integer }
+        records: { type: object }
+        cursor: { type: array, items: { $ref: '#/components/schemas/CursorEntry' } }
+        recoveryKeyRegistry: { type: object }
+        serverTime: { type: string, format: date-time }
+    PushRequest:
+      type: object
+      required: [contractVersion, mutations]
+      properties:
+        contractVersion: { type: integer, const: 1 }
+        mutations:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/SyncMutation' }
+        backlog:
+          type: object
+          additionalProperties: false
+          required: [depth, oldestAgeSeconds]
+          description: Content-free snapshot of the caller's durable IndexedDB outbox.
+          properties:
+            depth: { type: integer, minimum: 1, maximum: 100000 }
+            oldestAgeSeconds: { type: integer, minimum: 0, maximum: 31536000 }
+    PushResponse:
+      type: object
+      required: [results]
+      properties:
+        results: { type: array, items: { $ref: '#/components/schemas/MutationResult' } }
+    PullRequest:
+      type: object
+      required: [contractVersion, cursor]
+      properties:
+        contractVersion: { type: integer, const: 1 }
+        cursor: { type: array, items: { $ref: '#/components/schemas/CursorEntry' } }
+        perFeedLimit: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    PullResponse:
+      type: object
+      required: [changes, cursor, hasMore]
+      properties:
+        changes: { type: array, items: { $ref: '#/components/schemas/SyncChange' } }
+        cursor: { type: array, items: { $ref: '#/components/schemas/CursorEntry' } }
+        hasMore: { type: boolean }
+    PushSubscriptionInput:
+      type: object
+      required: [clientId, endpoint, keys]
+      properties:
+        clientId: { $ref: '#/components/schemas/Ulid' }
+        endpoint: { type: string, format: uri }
+        expirationTime: { type: [integer, 'null'] }
+        keys:
+          type: object
+          required: [p256dh, auth]
+          properties:
+            p256dh: { type: string }
+            auth: { type: string }
+        capabilities: { type: object }
+    Problem:
+      type: object
+      required: [type, title, status, correlationId]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
+        fieldErrors: { type: object }
+    ConflictProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            currentVersion: { type: integer }
+            current: { type: object }
+            conflictingFields: { type: array, items: { type: string } }

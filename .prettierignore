@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+coverage/
+cdk.out/
+package-lock.json
+.agents/
+.specify/
+specs/

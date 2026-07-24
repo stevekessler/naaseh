@@ -1,0 +1,33 @@
+{
+  "name": "@naaseh/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-backup": "3.1092.0",
+    "@aws-sdk/client-dynamodb": "3.1092.0",
+    "@aws-sdk/client-kms": "3.1092.0",
+    "@aws-sdk/client-s3": "^3.1092.0",
+    "@aws-sdk/client-scheduler": "^3.1092.0",
+    "@aws-sdk/client-sfn": "3.1092.0",
+    "@aws-sdk/client-secrets-manager": "3.1092.0",
+    "@aws-sdk/lib-dynamodb": "3.1092.0",
+    "@aws-sdk/s3-request-presigner": "^3.1092.0",
+    "@aws-sdk/util-dynamodb": "3.996.7",
+    "@naaseh/contracts": "1.0.0",
+    "@naaseh/domain": "1.0.0",
+    "@naaseh/observability": "1.0.0",
+    "@node-rs/argon2": "2.0.2",
+    "sharp": "^0.35.3",
+    "web-push": "^3.6.7",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "8.10.152",
+    "@types/web-push": "^3.6.4"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "@naaseh/test-fixtures",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": "./src/index.ts"
+}

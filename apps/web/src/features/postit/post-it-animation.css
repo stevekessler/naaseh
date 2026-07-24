@@ -1,0 +1,20 @@
+.postit.crumpled {
+  animation: crumple 0.55s ease forwards;
+  text-decoration: line-through;
+}
+@keyframes crumple {
+  50% {
+    /* Keep the 48px completion control above the 44px touch-target floor. */
+    transform: scale(0.94) rotate(8deg);
+  }
+  100% {
+    /* Return controls to their full hit-target size after the visual crumple. */
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .postit.crumpled {
+    animation: none;
+  }
+}

@@ -1,0 +1,8 @@
+:root {
+  --naaseh-navy: #06366b;
+  --naaseh-green: #36a83f;
+  --surface: #fff;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile: 640px;
+}

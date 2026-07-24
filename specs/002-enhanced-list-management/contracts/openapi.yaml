@@ -1,0 +1,527 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Enhanced List Management API
+  version: 2.0.0
+  description: Additive contract for lists, directory items, attachments, task locking, and completion.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+tags:
+  - name: Lists
+  - name: Directory
+  - name: Attachments
+  - name: Tasks
+paths:
+  /lists:
+    post:
+      tags: [Lists]
+      operationId: createList
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ListCreate'}
+      responses:
+        '201':
+          description: Created list
+          content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}
+        '400': {$ref: '#/components/responses/Validation'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /lists/{listId}:
+    parameters:
+      - $ref: '#/components/parameters/ListId'
+    get:
+      tags: [Lists]
+      operationId: getList
+      responses:
+        '200':
+          description: Authorized list with ordered items
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [list, items]
+                properties:
+                  list: {$ref: '#/components/schemas/List'}
+                  items: {type: array, items: {$ref: '#/components/schemas/ListItem'}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Lists]
+      operationId: patchList
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: {$ref: '#/components/schemas/ListPatch'}
+      responses:
+        '200':
+          description: Updated list
+          content: {application/json: {schema: {$ref: '#/components/schemas/List'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    delete:
+      tags: [Lists]
+      operationId: archiveList
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {description: Archived}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /lists/{listId}/items:
+    parameters:
+      - $ref: '#/components/parameters/ListId'
+    post:
+      tags: [Lists]
+      operationId: createListItem
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ListItemCreate'}
+      responses:
+        '201':
+          description: Created item
+          content: {application/json: {schema: {$ref: '#/components/schemas/ListItem'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /lists/{listId}/items/{itemId}:
+    parameters:
+      - $ref: '#/components/parameters/ListId'
+      - $ref: '#/components/parameters/ItemId'
+    patch:
+      tags: [Lists]
+      operationId: patchListItem
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema: {$ref: '#/components/schemas/ListItemPatch'}
+      responses:
+        '200':
+          description: Updated item
+          content: {application/json: {schema: {$ref: '#/components/schemas/ListItem'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+    delete:
+      tags: [Lists]
+      operationId: removeListItem
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {description: Removed}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /lists/{listId}/items/{itemId}/completion:
+    parameters:
+      - $ref: '#/components/parameters/ListId'
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags: [Lists]
+      operationId: setListItemCompletion
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [completed]
+              properties: {completed: {type: boolean}}
+      responses:
+        '200':
+          description: Completion applied idempotently
+          content: {application/json: {schema: {$ref: '#/components/schemas/ListItem'}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /lists/{listId}/items/{itemId}/reset-to-global:
+    parameters:
+      - $ref: '#/components/parameters/ListId'
+      - $ref: '#/components/parameters/ItemId'
+    post:
+      tags: [Lists]
+      operationId: resetListItemToGlobal
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '200':
+          description: Both overrides cleared against current active directory item
+          content: {application/json: {schema: {$ref: '#/components/schemas/ListItem'}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /lists/{listId}/copies:
+    parameters:
+      - $ref: '#/components/parameters/ListId'
+    post:
+      tags: [Lists]
+      operationId: copyList
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}]
+      responses:
+        '202':
+          description: Idempotent hidden-until-ready copy job
+          content: {application/json: {schema: {$ref: '#/components/schemas/CopyJob'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /list-copies/{copyId}:
+    parameters:
+      - name: copyId
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/Ulid'}
+    get:
+      tags: [Lists]
+      operationId: getCopyJob
+      responses:
+        '200':
+          description: Caller-owned copy status
+          content: {application/json: {schema: {$ref: '#/components/schemas/CopyJob'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /directory-items:
+    get:
+      tags: [Directory]
+      operationId: listDirectoryItems
+      parameters:
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 100}}
+      responses:
+        '200':
+          description: Active globally visible directory entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/DirectoryItem'}}
+                  cursor: {type: [string, 'null']}
+    post:
+      tags: [Directory]
+      operationId: createDirectoryItem
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/DirectoryItemCreate'}
+      responses:
+        '201':
+          description: Created
+          content: {application/json: {schema: {$ref: '#/components/schemas/DirectoryItem'}}}
+  /directory-items/{directoryItemId}:
+    parameters:
+      - name: directoryItemId
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/Ulid'}
+    patch:
+      tags: [Directory]
+      operationId: patchDirectoryItem
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                name: {type: string, minLength: 1, maxLength: 300}
+                amountMinor: {type: [integer, 'null']}
+                status: {type: string, enum: [active, archived]}
+      responses:
+        '200':
+          description: Updated
+          content: {application/json: {schema: {$ref: '#/components/schemas/DirectoryItem'}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /attachments/uploads:
+    post:
+      tags: [Attachments]
+      operationId: initiateAttachmentUpload
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/UploadInitiate'}
+      responses:
+        '201':
+          description: Pending attachment and five-minute upload capability
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content: {application/json: {schema: {$ref: '#/components/schemas/UploadGrant'}}}
+        '400': {$ref: '#/components/responses/Validation'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /attachments/{attachmentId}:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    get:
+      tags: [Attachments]
+      operationId: getAttachment
+      responses:
+        '200':
+          description: Authorized metadata only
+          content: {application/json: {schema: {$ref: '#/components/schemas/Attachment'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    delete:
+      tags: [Attachments]
+      operationId: deleteAttachment
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      responses:
+        '204': {description: Metadata removed and reference released}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /attachments/{attachmentId}/complete:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    post:
+      tags: [Attachments]
+      operationId: completeAttachmentUpload
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [objectVersionId]
+              properties: {objectVersionId: {type: string, minLength: 1, maxLength: 1024}}
+      responses:
+        '202':
+          description: Verified upload awaiting malware result
+          content: {application/json: {schema: {$ref: '#/components/schemas/Attachment'}}}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /attachments/{attachmentId}/download:
+    parameters:
+      - $ref: '#/components/parameters/AttachmentId'
+    post:
+      tags: [Attachments]
+      operationId: authorizeAttachmentDownload
+      parameters: [{$ref: '#/components/parameters/Csrf'}]
+      responses:
+        '200':
+          description: Freshly authorized 60-second exact-version download capability
+          headers:
+            Cache-Control: {schema: {type: string, const: no-store}}
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [url, expiresAt]
+                properties:
+                  url: {type: string, format: uri}
+                  expiresAt: {type: string, format: date-time}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Attachment is not clean and available
+  /tasks/{taskId}/lock:
+    parameters:
+      - name: taskId
+        in: path
+        required: true
+        schema: {$ref: '#/components/schemas/Ulid'}
+    post:
+      tags: [Tasks]
+      operationId: setTaskLock
+      parameters: [{$ref: '#/components/parameters/Csrf'}, {$ref: '#/components/parameters/MutationId'}, {$ref: '#/components/parameters/IfMatch'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [locked]
+              properties: {locked: {type: boolean}}
+      responses:
+        '200': {description: Existing task returned with private/public visibility mapped to locked}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+components:
+  securitySchemes:
+    sessionCookie: {type: apiKey, in: cookie, name: __Host-naaseh}
+  parameters:
+    Csrf: {name: x-csrf-token, in: header, required: true, schema: {type: string}}
+    MutationId: {name: x-mutation-id, in: header, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    IfMatch: {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^"[1-9][0-9]*"$'}}
+    ListId: {name: listId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    ItemId: {name: itemId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    AttachmentId: {name: attachmentId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+  responses:
+    Validation:
+      description: Invalid input
+      content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}
+    Forbidden:
+      description: Authenticated but operation forbidden
+      content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}
+    NotFound:
+      description: Missing or not authorized; existence is not disclosed
+      content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}
+    Conflict:
+      description: Version or semantic conflict
+      content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}
+  schemas:
+    Ulid: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: {type: string, format: uri-reference}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        correlationId: {type: string}
+    List:
+      type: object
+      additionalProperties: false
+      required: [id, ownerId, name, locked, status, createdAt, updatedAt, version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        ownerId: {type: string}
+        name: {type: string, minLength: 1, maxLength: 300}
+        groupId: {type: string}
+        locked: {type: boolean}
+        status: {type: string, enum: [active, archived]}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, minimum: 1}
+    ListCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 300}
+        groupId: {type: string}
+        locked: {type: boolean, default: false}
+    ListPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 300}
+        groupId: {type: [string, 'null']}
+        locked: {type: boolean}
+    ValueOverride:
+      oneOf:
+        - {type: object, additionalProperties: false, required: [kind], properties: {kind: {const: none}}}
+        - {type: object, additionalProperties: false, required: [kind, amountMinor], properties: {kind: {const: amount}, amountMinor: {type: integer}}}
+    ListItem:
+      type: object
+      additionalProperties: false
+      required: [id, listId, orderKey, status, directorySnapshot, createdAt, updatedAt, version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        listId: {$ref: '#/components/schemas/Ulid'}
+        orderKey: {type: string, minLength: 1, maxLength: 128}
+        status: {type: string, enum: [open, completed, removed]}
+        directoryItemId: {$ref: '#/components/schemas/Ulid'}
+        directorySnapshot: {$ref: '#/components/schemas/DirectorySnapshot'}
+        nameOverride: {type: string, minLength: 1, maxLength: 300}
+        valueOverride: {$ref: '#/components/schemas/ValueOverride'}
+        completedAt: {type: string, format: date-time}
+        completedBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, minimum: 1}
+    DirectorySnapshot:
+      type: object
+      additionalProperties: false
+      required: [name, amountMinor, directoryVersion]
+      properties:
+        name: {type: string}
+        amountMinor: {type: [integer, 'null']}
+        directoryVersion: {type: integer, minimum: 0}
+    ListItemCreate:
+      type: object
+      additionalProperties: false
+      required: [orderKey]
+      properties:
+        orderKey: {type: string, minLength: 1, maxLength: 128}
+        name: {type: string, minLength: 1, maxLength: 300}
+        amountMinor: {type: [integer, 'null']}
+        directoryItemId: {$ref: '#/components/schemas/Ulid'}
+    ListItemPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        orderKey: {type: string, minLength: 1, maxLength: 128}
+        nameOverride: {type: [string, 'null'], maxLength: 300}
+        valueOverride:
+          oneOf:
+            - {$ref: '#/components/schemas/ValueOverride'}
+            - {type: 'null'}
+    DirectoryItem:
+      type: object
+      additionalProperties: false
+      required: [id, name, amountMinor, currency, status, createdBy, updatedBy, createdAt, updatedAt, version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        name: {type: string, minLength: 1, maxLength: 300}
+        amountMinor: {type: [integer, 'null']}
+        currency: {type: string, pattern: '^[A-Z]{3}$'}
+        status: {type: string, enum: [active, archived]}
+        createdBy: {type: string}
+        updatedBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, minimum: 1}
+    DirectoryItemCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 300}
+        amountMinor: {type: [integer, 'null']}
+    Attachment:
+      type: object
+      additionalProperties: false
+      required: [id, parentType, parentId, originalFilename, mediaType, sizeBytes, checksumSha256, uploaderId, status, createdAt, updatedAt, version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        parentType: {type: string, enum: [task, listItem]}
+        parentId: {$ref: '#/components/schemas/Ulid'}
+        originalFilename: {type: string, minLength: 1, maxLength: 255}
+        mediaType: {type: string}
+        sizeBytes: {type: integer, minimum: 1, maximum: 26214400}
+        checksumSha256: {type: string}
+        uploaderId: {type: string}
+        status: {type: string, enum: [pending_upload, scanning, available, scan_failed, rejected, expired, cancelled, deleted]}
+        failureCode: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, minimum: 1}
+    UploadInitiate:
+      type: object
+      additionalProperties: false
+      required: [parentType, parentId, originalFilename, mediaType, sizeBytes, checksumSha256]
+      properties:
+        parentType: {type: string, enum: [task, listItem]}
+        parentId: {$ref: '#/components/schemas/Ulid'}
+        originalFilename: {type: string, minLength: 1, maxLength: 255}
+        mediaType: {type: string}
+        sizeBytes: {type: integer, minimum: 1, maximum: 26214400}
+        checksumSha256: {type: string}
+    UploadGrant:
+      type: object
+      additionalProperties: false
+      required: [attachment, method, url, headers, expiresAt]
+      properties:
+        attachment: {$ref: '#/components/schemas/Attachment'}
+        method: {type: string, const: PUT}
+        url: {type: string, format: uri}
+        headers: {type: object, additionalProperties: {type: string}}
+        expiresAt: {type: string, format: date-time}
+    CopyJob:
+      type: object
+      additionalProperties: false
+      required: [id, sourceListId, destinationListId, status, itemCount, copiedCount, attachmentCount, linkedCount, createdAt, updatedAt]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        sourceListId: {$ref: '#/components/schemas/Ulid'}
+        destinationListId: {$ref: '#/components/schemas/Ulid'}
+        status: {type: string, enum: [pending, copying, ready, failed]}
+        itemCount: {type: integer, minimum: 0}
+        copiedCount: {type: integer, minimum: 0}
+        attachmentCount: {type: integer, minimum: 0}
+        linkedCount: {type: integer, minimum: 0}
+        errorCode: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+

@@ -1,0 +1,437 @@
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
+import * as authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as events from 'aws-cdk-lib/aws-events';
+import * as eventTargets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import type { Construct } from 'constructs';
+import { fileURLToPath } from 'node:url';
+import { createCryptoRecoveryFunction } from './crypto-recovery-stack.js';
+import { attachAdminRoutes, createAdminFunctions } from './admin-stack.js';
+import { attachCollaborationRoutes, createCollaborationFunction } from './collaboration-stack.js';
+import { createNotificationResources } from './notification-stack.js';
+import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+
+export const sharedLambdaDefaults = (
+  environment: Record<string, string>,
+): Pick<nodejs.NodejsFunctionProps, 'runtime' | 'timeout' | 'bundling' | 'environment'> => ({
+  runtime: lambda.Runtime.NODEJS_24_X,
+  timeout: Duration.seconds(15),
+  bundling: { minify: true, sourceMap: true },
+  environment,
+});
+
+export function createHttpApi(scope: Construct) {
+  const accessLogs = new logs.LogGroup(scope, 'ApiAccessLogs', {
+    retention: logs.RetentionDays.ONE_MONTH,
+    removalPolicy: RemovalPolicy.RETAIN,
+  });
+  const api = new apigwv2.HttpApi(scope, 'HttpApi', { createDefaultStage: false });
+  const stage = new apigwv2.HttpStage(scope, 'DefaultStage', {
+    httpApi: api,
+    stageName: '$default',
+    autoDeploy: true,
+  });
+  const resource = stage.node.defaultChild as apigwv2.CfnStage;
+  resource.accessLogSettings = {
+    destinationArn: accessLogs.logGroupArn,
+    format: JSON.stringify({
+      requestId: '$context.requestId',
+      routeKey: '$context.routeKey',
+      status: '$context.status',
+      responseLength: '$context.responseLength',
+    }),
+  };
+  return { api, accessLogs };
+}
+
+export function createApplicationApi(
+  scope: Construct,
+  options: {
+    environment: Record<string, string>;
+    allowedOrigin: string;
+    table: dynamodb.ITable;
+    pepper: secretsmanager.ISecret;
+    dataKey: kms.IKey;
+    media: s3.IBucket;
+    exportBucket: s3.IBucket;
+    exportKey: kms.IKey;
+    exportStateMachine: sfn.IStateMachine;
+    logGroups: { task: logs.ILogGroup; auth: logs.ILogGroup; sync: logs.ILogGroup };
+    recoveryKeyArn: string;
+    recoveryWrappingKey: kms.IKey;
+    manifestSigningKey: kms.IKey;
+    webPushSecret: secretsmanager.ISecret;
+  },
+) {
+  const defaults = sharedLambdaDefaults(options.environment);
+  const task = new nodejs.NodejsFunction(scope, 'TaskFunction', {
+    ...defaults,
+    entry: fileURLToPath(new URL('../../apps/api/src/tasks/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    logGroup: options.logGroups.task,
+  });
+  const auth = new nodejs.NodejsFunction(scope, 'AuthFunction', {
+    ...defaults,
+    entry: fileURLToPath(new URL('../../apps/api/src/auth/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 1024,
+    reservedConcurrentExecutions: 5,
+    bundling: { ...defaults.bundling, nodeModules: ['@node-rs/argon2'] },
+    logGroup: options.logGroups.auth,
+  });
+  const authCalibration = new nodejs.NodejsFunction(scope, 'Argon2CalibrationFunction', {
+    ...defaults,
+    entry: fileURLToPath(
+      new URL('../../apps/api/src/auth/calibration-handler.ts', import.meta.url),
+    ),
+    handler: 'handler',
+    memorySize: 1024,
+    reservedConcurrentExecutions: 1,
+    timeout: Duration.minutes(5),
+    bundling: { ...defaults.bundling, nodeModules: ['@node-rs/argon2'] },
+    logGroup: options.logGroups.auth,
+  });
+  const sync = new nodejs.NodejsFunction(scope, 'SyncFunction', {
+    ...defaults,
+    entry: fileURLToPath(new URL('../../apps/api/src/sync/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    reservedConcurrentExecutions: 10,
+    logGroup: options.logGroups.sync,
+  });
+  const contentEnvironment = {
+    ...options.environment,
+    NAASEH_ATTACHMENT_BUCKET: options.media.bucketName,
+    NAASEH_ATTACHMENT_KMS_KEY_ARN: options.dataKey.keyArn,
+  };
+  const list = new nodejs.NodejsFunction(scope, 'ListFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(new URL('../../apps/api/src/lists/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    logGroup: options.logGroups.task,
+  });
+  const listCopy = new nodejs.NodejsFunction(scope, 'ListCopyFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(new URL('../../apps/api/src/lists/copy-handlers.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    timeout: Duration.minutes(2),
+    logGroup: options.logGroups.task,
+  });
+  const directory = new nodejs.NodejsFunction(scope, 'DirectoryFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(new URL('../../apps/api/src/directory/handlers.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    logGroup: options.logGroups.task,
+  });
+  const attachment = new nodejs.NodejsFunction(scope, 'AttachmentFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(new URL('../../apps/api/src/attachments/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    logGroup: options.logGroups.task,
+  });
+  const attachmentScan = new nodejs.NodejsFunction(scope, 'AttachmentScanFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(
+      new URL('../../apps/api/src/attachments/scan-result-handler.ts', import.meta.url),
+    ),
+    handler: 'handler',
+    memorySize: 256,
+    logGroup: options.logGroups.task,
+  });
+  const attachmentReconcile = new nodejs.NodejsFunction(scope, 'AttachmentReconciliationFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(
+      new URL('../../apps/api/src/attachments/reconciliation-handler.ts', import.meta.url),
+    ),
+    handler: 'handler',
+    memorySize: 256,
+    timeout: Duration.minutes(5),
+    logGroup: options.logGroups.task,
+  });
+  const exportCoordinator = new nodejs.NodejsFunction(scope, 'ExportTodosFunction', {
+    ...sharedLambdaDefaults({
+      ...contentEnvironment,
+      NAASEH_EXPORT_BUCKET: options.exportBucket.bucketName,
+      NAASEH_EXPORT_KMS_KEY_ARN: options.exportKey.keyArn,
+      NAASEH_EXPORT_STATE_MACHINE_ARN: options.exportStateMachine.stateMachineArn,
+    }),
+    entry: fileURLToPath(
+      new URL('../../apps/api/src/exports/coordinator-handler.ts', import.meta.url),
+    ),
+    handler: 'handler',
+    memorySize: 512,
+    timeout: Duration.seconds(30),
+    logGroup: options.logGroups.sync,
+  });
+  const { group } = createCollaborationFunction(scope, {
+    environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
+    table: options.table,
+    pepper: options.pepper,
+    logGroup: options.logGroups.task,
+  });
+  const recovery = createCryptoRecoveryFunction(scope, {
+    environment: options.environment,
+    table: options.table,
+    pepper: options.pepper,
+    recoveryKeyArn: options.recoveryKeyArn,
+  }).fn;
+  const { admin, provisionUser, operatorPolicy, processor, categories } = createAdminFunctions(
+    scope,
+    {
+      environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
+      table: options.table,
+      media: options.media,
+      passwordPepper: options.pepper,
+      logGroup: options.logGroups.auth,
+    },
+  );
+  const notification = createNotificationResources(scope, {
+    environment: options.environment,
+    table: options.table,
+    webPushSecret: options.webPushSecret,
+    taskFunction: task,
+    logGroup: options.logGroups.task,
+  }).fn;
+  const authorizerFunction = new nodejs.NodejsFunction(scope, 'AuthorizerFunction', {
+    ...defaults,
+    entry: fileURLToPath(new URL('../../apps/api/src/auth/authorizer.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 256,
+    timeout: Duration.seconds(5),
+    bundling: { minify: true },
+  });
+  const functions = [
+    task,
+    auth,
+    sync,
+    authorizerFunction,
+    list,
+    listCopy,
+    directory,
+    attachment,
+    attachmentScan,
+    attachmentReconcile,
+    exportCoordinator,
+  ];
+  for (const fn of functions) {
+    fn.addEnvironment('ALLOWED_ORIGINS', options.allowedOrigin);
+    options.table.grantReadWriteData(fn);
+    options.pepper.grantRead(fn);
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.DENY,
+        actions: ['kms:ScheduleKeyDeletion', 'secretsmanager:DeleteSecret'],
+        resources: ['*'],
+      }),
+    );
+  }
+  options.dataKey.grantEncryptDecrypt(task);
+  options.recoveryWrappingKey.grant(sync, 'kms:GetPublicKey');
+  options.manifestSigningKey.grant(sync, 'kms:GetPublicKey', 'kms:Sign');
+  options.media.grantReadWrite(task);
+  for (const fn of [attachment, attachmentScan, attachmentReconcile, listCopy]) {
+    options.media.grantReadWrite(fn, 'attachments/*');
+    options.dataKey.grantEncryptDecrypt(fn);
+  }
+  options.exportBucket.grantReadWrite(exportCoordinator, 'exports/*');
+  options.exportKey.grantEncryptDecrypt(exportCoordinator);
+  options.exportStateMachine.grantStartExecution(exportCoordinator);
+  new events.Rule(scope, 'AttachmentScanResults', {
+    eventPattern: {
+      source: ['aws.guardduty'],
+      detailType: ['GuardDuty Malware Protection Object Scan Result'],
+    },
+    targets: [new eventTargets.LambdaFunction(attachmentScan)],
+  });
+  new events.Rule(scope, 'AttachmentReconciliationSchedule', {
+    schedule: events.Schedule.rate(Duration.hours(1)),
+    targets: [new eventTargets.LambdaFunction(attachmentReconcile)],
+  });
+  const { api } = createHttpApi(scope);
+  const sessionAuthorizer = new authorizers.HttpLambdaAuthorizer(
+    'SessionAuthorizer',
+    authorizerFunction,
+    {
+      responseTypes: [authorizers.HttpLambdaResponseType.SIMPLE],
+      identitySource: ['$request.header.Cookie'],
+      resultsCacheTtl: Duration.seconds(0),
+    },
+  );
+  const route = (
+    id: string,
+    path: string,
+    methods: apigwv2.HttpMethod[],
+    fn: lambda.IFunction,
+    authorize = true,
+  ) =>
+    api.addRoutes({
+      path,
+      methods,
+      integration: new integrations.HttpLambdaIntegration(id, fn),
+      ...(authorize ? { authorizer: sessionAuthorizer } : {}),
+    });
+  route('LoginIntegration', '/api/v1/auth/login', [apigwv2.HttpMethod.POST], auth, false);
+  route('SessionIntegration', '/api/v1/auth/session', [apigwv2.HttpMethod.GET], auth, false);
+  route('LogoutIntegration', '/api/v1/auth/logout', [apigwv2.HttpMethod.POST], auth, false);
+  route(
+    'TaskIntegration',
+    '/api/v1/tasks',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+    task,
+  );
+  route(
+    'TaskItemIntegration',
+    '/api/v1/tasks/{taskId}',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH],
+    task,
+  );
+  route(
+    'TaskCompletionIntegration',
+    '/api/v1/tasks/{taskId}/completion',
+    [apigwv2.HttpMethod.POST],
+    task,
+  );
+  route(
+    'TaskRevisionIntegration',
+    '/api/v1/tasks/{taskId}/revisions',
+    [apigwv2.HttpMethod.GET],
+    task,
+  );
+  route('SyncIntegration', '/api/v1/sync/push', [apigwv2.HttpMethod.POST], sync);
+  route('SyncPullIntegration', '/api/v1/sync/pull', [apigwv2.HttpMethod.POST], sync);
+  route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
+  route('ListsIntegration', '/api/v1/lists', [apigwv2.HttpMethod.POST], list);
+  route(
+    'ListIntegration',
+    '/api/v1/lists/{listId}',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
+    list,
+  );
+  route('ListItemsIntegration', '/api/v1/lists/{listId}/items', [apigwv2.HttpMethod.POST], list);
+  route(
+    'ListItemIntegration',
+    '/api/v1/lists/{listId}/items/{itemId}',
+    [apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
+    list,
+  );
+  route(
+    'ListCompletionIntegration',
+    '/api/v1/lists/{listId}/items/{itemId}/completion',
+    [apigwv2.HttpMethod.POST],
+    list,
+  );
+  route(
+    'ListResetIntegration',
+    '/api/v1/lists/{listId}/items/{itemId}/reset-to-global',
+    [apigwv2.HttpMethod.POST],
+    list,
+  );
+  route(
+    'ListCopyIntegration',
+    '/api/v1/lists/{listId}/copies',
+    [apigwv2.HttpMethod.POST],
+    listCopy,
+  );
+  route(
+    'ListCopyStatusIntegration',
+    '/api/v1/list-copies/{copyId}',
+    [apigwv2.HttpMethod.GET],
+    listCopy,
+  );
+  route(
+    'DirectoryIntegration',
+    '/api/v1/directory-items',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+    directory,
+  );
+  route(
+    'DirectoryItemIntegration',
+    '/api/v1/directory-items/{directoryItemId}',
+    [apigwv2.HttpMethod.PATCH],
+    directory,
+  );
+  route(
+    'AttachmentUploadsIntegration',
+    '/api/v1/attachments/uploads',
+    [apigwv2.HttpMethod.POST],
+    attachment,
+  );
+  route(
+    'AttachmentIntegration',
+    '/api/v1/attachments/{attachmentId}',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.DELETE],
+    attachment,
+  );
+  route(
+    'AttachmentCompleteIntegration',
+    '/api/v1/attachments/{attachmentId}/complete',
+    [apigwv2.HttpMethod.POST],
+    attachment,
+  );
+  route(
+    'AttachmentRetryIntegration',
+    '/api/v1/attachments/{attachmentId}/retry',
+    [apigwv2.HttpMethod.POST],
+    attachment,
+  );
+  route(
+    'AttachmentDownloadIntegration',
+    '/api/v1/attachments/{attachmentId}/download',
+    [apigwv2.HttpMethod.GET],
+    attachment,
+  );
+  route('TaskLockIntegration', '/api/v1/tasks/{taskId}/lock', [apigwv2.HttpMethod.POST], task);
+  route(
+    'PinRecoveryIntegration',
+    '/api/v1/tasks/{taskId}/hidden-memo/recovery',
+    [apigwv2.HttpMethod.POST],
+    recovery,
+  );
+  route(
+    'PushSubscriptionIntegration',
+    '/api/v1/push-subscriptions',
+    [apigwv2.HttpMethod.POST, apigwv2.HttpMethod.DELETE],
+    notification,
+  );
+  attachCollaborationRoutes(api, sessionAuthorizer, group);
+  attachAdminRoutes(api, sessionAuthorizer, { admin, categories });
+  return {
+    api,
+    functions: {
+      task,
+      auth,
+      authCalibration,
+      sync,
+      group,
+      recovery,
+      admin,
+      provisionUser,
+      provisionUserOperatorPolicy: operatorPolicy,
+      categories,
+      processor,
+      notification,
+      authorizer: authorizerFunction,
+      list,
+      listCopy,
+      directory,
+      attachment,
+      attachmentScan,
+      attachmentReconcile,
+      exportCoordinator,
+    },
+  };
+}

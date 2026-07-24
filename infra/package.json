@@ -1,0 +1,20 @@
+{
+  "name": "@naaseh/infra",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "synth": "cdk synth"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.262.0",
+    "constructs": "10.5.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "2.1132.0",
+    "esbuild": "0.25.8",
+    "tsx": "4.20.3"
+  }
+}

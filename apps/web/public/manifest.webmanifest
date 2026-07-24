@@ -1,0 +1,9 @@
+{
+  "name": "Na'aseh",
+  "short_name": "Na'aseh",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#06366b",
+  "background_color": "#f4f7f4",
+  "icons": [{ "src": "/naaseh_logo.png", "sizes": "1536x1024", "type": "image/png" }]
+}
