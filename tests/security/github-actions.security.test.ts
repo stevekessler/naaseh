@@ -26,4 +26,16 @@ describe('GitHub Actions supply-chain controls', () => {
     expect(workflow).toContain('-c "breakGlassRoleArn=$BREAK_GLASS_ROLE"');
     expect(workflow).not.toContain('breakGlassRoleArn=${{ secrets.');
   });
+
+  it('keeps automatic validation on one bounded runner and cancels superseded commits', () => {
+    const workflow = readFileSync('.github/workflows/validate.yml', 'utf8');
+    expect(workflow.match(/runs-on: ubuntu-latest/g)).toHaveLength(1);
+    expect(workflow.match(/- run: npm ci/g)).toHaveLength(1);
+    expect(workflow).toContain('timeout-minutes: 20');
+    expect(workflow).toContain(
+      "cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}",
+    );
+    expect(workflow).toContain('- run: npm audit --omit=dev --audit-level=high');
+    expect(workflow).toContain('- run: npm run test:e2e');
+  });
 });

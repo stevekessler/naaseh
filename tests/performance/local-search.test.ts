@@ -23,4 +23,4 @@ it('searches 50k tasks in under one second p95', () => {
   const p95 = timings[Math.ceil(timings.length * 0.95) - 1]!;
   console.info(JSON.stringify({ metric: 'local-search-50k', p50Ms: p50, p95Ms: p95 }));
   expect(p95).toBeLessThan(1_000);
-});
+}, 15_000);

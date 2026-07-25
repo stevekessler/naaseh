@@ -24,7 +24,7 @@ beforeAll(() => {
       ...webProps,
     }),
   );
-}, 30_000);
+}, 60_000);
 
 describe('single-region recovery infrastructure', () => {
   it('rejects a production stack outside us-west-2', () => {

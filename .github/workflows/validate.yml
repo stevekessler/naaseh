@@ -6,31 +6,20 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 jobs:
   validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run validate:workflows
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm run validate
-  browser:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with: { node-version: 24, cache: npm }
-      - run: npm ci
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e
-  security:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with: { node-version: 24, cache: npm }
-      - run: npm ci
-      - run: npm audit --omit=dev --audit-level=high
-      - run: npx vitest run tests/security packages/observability/test
