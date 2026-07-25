@@ -8,8 +8,51 @@ import {
   releaseBlobReference,
   saveAttachment,
   saveAttachmentBlob,
+  listParentAttachments,
 } from './attachment-repository.js';
 import { publishAttachmentChange } from './attachment-audience.js';
+
+export async function purgeAttachmentVersions(
+  blobs: readonly { objectKey: string; objectVersionId: string }[],
+  remove: (objectKey: string, objectVersionId: string) => Promise<void>,
+) {
+  const seen = new Set<string>();
+  for (const blob of blobs) {
+    const identity = `${blob.objectKey}\0${blob.objectVersionId}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    await remove(blob.objectKey, blob.objectVersionId);
+  }
+}
+
+export async function purgeAttachmentsForParent(
+  parentType: 'task' | 'listItem',
+  parentId: string,
+  remove: (objectKey: string, objectVersionId: string) => Promise<void> = async (
+    objectKey,
+    objectVersionId,
+  ) => {
+    await new S3Client({}).send(
+      new DeleteObjectCommand({
+        Bucket: process.env.NAASEH_ATTACHMENT_BUCKET ?? '',
+        Key: objectKey,
+        VersionId: objectVersionId,
+      }),
+    );
+  },
+) {
+  const attachments = await listParentAttachments(parentType, parentId);
+  const blobs = [];
+  for (const attachment of attachments) {
+    await releaseBlobReference(attachment.blobId, attachment.id);
+    if ((await listBlobReferences(attachment.blobId)).length !== 0) continue;
+    const blob = await findAttachmentBlob(attachment.blobId);
+    if (blob?.objectVersionId)
+      blobs.push({ objectKey: blob.objectKey, objectVersionId: blob.objectVersionId });
+  }
+  await purgeAttachmentVersions(blobs, remove);
+  return { attachments: attachments.length, objectVersions: blobs.length };
+}
 export async function deleteAttachment(id: string, actor: AttachmentActor) {
   const current = await findAttachment(id);
   if (

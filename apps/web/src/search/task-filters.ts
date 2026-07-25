@@ -4,6 +4,7 @@ export interface TaskFilters {
   to?: string;
   assigneeId?: string;
   categoryId?: string;
+  projectId?: string;
   status?: Task['status'];
 }
 export function matchesFilters(task: Task, filters: TaskFilters) {
@@ -12,6 +13,10 @@ export function matchesFilters(task: Task, filters: TaskFilters) {
     (!filters.to || Boolean(task.dueAt && task.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
     (!filters.assigneeId || task.assigneeId === filters.assigneeId) &&
     (!filters.categoryId || task.categoryId === filters.categoryId) &&
+    (!filters.projectId ||
+      (filters.projectId === 'unassigned'
+        ? !task.projectId
+        : task.projectId === filters.projectId)) &&
     (!filters.status || task.status === filters.status)
   );
 }

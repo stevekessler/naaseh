@@ -27,13 +27,18 @@ export function createAdminFunctions(
     table: dynamodb.ITable;
     media: s3.IBucket;
     passwordPepper: secretsmanager.ISecret;
+    deletionConfirmationSecret: secretsmanager.ISecret;
     logGroup: logs.ILogGroup;
   },
 ) {
   const common = {
     runtime: lambda.Runtime.NODEJS_24_X,
     timeout: Duration.seconds(15),
-    environment: { ...options.environment, PROFILE_MEDIA_BUCKET: options.media.bucketName },
+    environment: {
+      ...options.environment,
+      PROFILE_MEDIA_BUCKET: options.media.bucketName,
+      DELETION_CONFIRMATION_SECRET_ID: options.deletionConfirmationSecret.secretArn,
+    },
   } as const;
   const admin = new nodejs.NodejsFunction(scope, 'AdminFunction', {
     ...common,
@@ -75,6 +80,15 @@ export function createAdminFunctions(
     logGroup: options.logGroup,
     bundling: { minify: true, sourceMap: true },
   });
+  const projects = new nodejs.NodejsFunction(scope, 'ProjectAdminFunction', {
+    ...common,
+    entry: fileURLToPath(new URL('../../apps/api/src/projects/handlers.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    reservedConcurrentExecutions: 5,
+    logGroup: options.logGroup,
+    bundling: { minify: true, sourceMap: true },
+  });
   options.table.grantReadWriteData(admin);
   provisionUser.addToRolePolicy(
     new iam.PolicyStatement({
@@ -85,12 +99,15 @@ export function createAdminFunctions(
   );
   options.passwordPepper.grantRead(admin);
   options.passwordPepper.grantRead(provisionUser);
+  options.deletionConfirmationSecret.grantRead(categories);
+  options.deletionConfirmationSecret.grantRead(projects);
   options.table.grantReadWriteData(processor);
   options.table.grantReadWriteData(categories);
+  options.table.grantReadWriteData(projects);
   options.media.grantReadWrite(admin, 'profiles/*');
   options.media.grantReadWrite(processor, 'profiles/*');
   options.media.grantDelete(processor, 'profiles/*');
-  for (const fn of [admin, provisionUser, processor, categories])
+  for (const fn of [admin, provisionUser, processor, categories, projects])
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.DENY,
@@ -137,6 +154,12 @@ export function createAdminFunctions(
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }),
+    new cloudwatch.Alarm(scope, 'ProjectAdminErrors', {
+      metric: projects.metricErrors({ period: Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    }),
     new cloudwatch.Alarm(scope, 'ProfilePictureProcessingErrors', {
       metric: processor.metricErrors({ period: Duration.minutes(5) }),
       threshold: 1,
@@ -144,18 +167,22 @@ export function createAdminFunctions(
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     }),
   ];
-  return { admin, provisionUser, operatorPolicy, processor, categories, alarms };
+  return { admin, provisionUser, operatorPolicy, processor, categories, projects, alarms };
 }
 
 export function attachAdminRoutes(
   api: apigwv2.HttpApi,
   authorizer: apigwv2.IHttpRouteAuthorizer,
-  functions: { admin: lambda.IFunction; categories: lambda.IFunction },
+  functions: { admin: lambda.IFunction; categories: lambda.IFunction; projects: lambda.IFunction },
 ) {
   const admin = new integrations.HttpLambdaIntegration('AdminIntegration', functions.admin);
   const categories = new integrations.HttpLambdaIntegration(
     'CategoryAdminIntegration',
     functions.categories,
+  );
+  const projects = new integrations.HttpLambdaIntegration(
+    'ProjectAdminIntegration',
+    functions.projects,
   );
   for (const [path, methods, integration] of [
     ['/api/v1/admin/users', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST], admin],
@@ -167,6 +194,18 @@ export function attachAdminRoutes(
       [apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
       categories,
     ],
+    ['/api/v1/projects', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST], projects],
+    [
+      '/api/v1/projects/{projectId}',
+      [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
+      projects,
+    ],
+    ['/api/v1/categories/{categoryId}/archive', [apigwv2.HttpMethod.POST], categories],
+    ['/api/v1/categories/{categoryId}/restore', [apigwv2.HttpMethod.POST], categories],
+    ['/api/v1/categories/{categoryId}/deletion-preview', [apigwv2.HttpMethod.GET], categories],
+    ['/api/v1/projects/{projectId}/archive', [apigwv2.HttpMethod.POST], projects],
+    ['/api/v1/projects/{projectId}/restore', [apigwv2.HttpMethod.POST], projects],
+    ['/api/v1/projects/{projectId}/deletion-preview', [apigwv2.HttpMethod.GET], projects],
   ] as const)
     api.addRoutes({ path, methods: [...methods], integration, authorizer });
 }

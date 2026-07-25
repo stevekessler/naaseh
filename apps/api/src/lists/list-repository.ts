@@ -5,10 +5,16 @@ import {
   type List,
   type ListItem,
   type StableMutationResult,
+  contentAudienceFor,
 } from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { commitEntity, getRecord } from '../shared/store.js';
 import { keys } from '../shared/keys.js';
+import { getProject } from '../projects/project-repository.js';
+import {
+  workloadProjectionChanges,
+  workloadProjectionWrites,
+} from '../reporting/workload-projection-repository.js';
 export async function findList(id: string) {
   return (await getRecord<{ data: List }>(`LIST#${id}`, 'CURRENT'))?.data;
 }
@@ -65,6 +71,27 @@ export async function saveList(
   expectedVersion: number,
   feedChanges: Parameters<typeof commitEntity>[0]['feedChanges'] = [],
 ) {
+  const previous = expectedVersion > 0 ? await findList(value.id) : undefined;
+  const projected = async (list: List | undefined) => {
+    if (!list) return undefined;
+    const project = list.projectId ? await getProject(list.projectId) : undefined;
+    return {
+      id: list.id,
+      workType: 'list' as const,
+      audience: contentAudienceFor({
+        ownerId: list.ownerId,
+        locked: list.locked,
+        ...(list.groupId ? { groupId: list.groupId } : {}),
+      }).ordinary,
+      lifecycle: list.lifecycle,
+      projectId: list.projectId,
+      categoryId: project?.categoryId,
+    };
+  };
+  const [beforeProjection, afterProjection] = await Promise.all([
+    projected(previous),
+    projected(value),
+  ]);
   const result: StableMutationResult = { mutationId, status: 'applied', version: value.version };
   await commitEntity({
     current: {
@@ -89,6 +116,9 @@ export async function saveList(
     mutationResult: result,
     expectedVersion,
     feedChanges,
+    additionalWrites: workloadProjectionWrites(
+      workloadProjectionChanges(beforeProjection, afterProjection),
+    ),
   });
   return value;
 }
@@ -127,4 +157,23 @@ export async function saveListItem(
     feedChanges,
   });
   return value;
+}
+
+export async function saveListLifecycleMutation(
+  value: List,
+  previous: List,
+  actorId: string,
+  mutationId: string,
+  operation: 'finish' | 'archive' | 'restore',
+  feedChanges: Parameters<typeof commitEntity>[0]['feedChanges'] = [],
+) {
+  return saveList(
+    value,
+    actorId,
+    mutationId,
+    operation,
+    ['status', 'lifecycle', 'archiveReason', 'archivedAt', 'archivedBy'],
+    previous.version,
+    feedChanges,
+  );
 }

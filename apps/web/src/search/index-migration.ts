@@ -43,11 +43,17 @@ export async function rebuildMixedIndex(
       type: 'todo',
       title: task.label,
       body: task.memoHidden ? '' : task.memo,
+      ...(task.lifecycle ? { lifecycle: task.lifecycle } : {}),
     });
     if (++processed % yieldEvery === 0) await yieldFrame();
   }
   for (const list of input.lists) {
-    index.upsert({ id: list.id, type: 'list', title: list.name });
+    index.upsert({
+      id: list.id,
+      type: 'list',
+      title: list.name,
+      ...(list.lifecycle ? { lifecycle: list.lifecycle } : {}),
+    });
     if (++processed % yieldEvery === 0) await yieldFrame();
   }
   for (const item of input.listItems) {

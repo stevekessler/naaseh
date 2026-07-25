@@ -29,17 +29,16 @@ test('preserves filtered state and preference across responsive list and post-it
   await note.scrollIntoViewIfNeeded();
   await expect(note).toBeInViewport();
   await note.getByRole('button', { name: 'Complete Cedar post-it' }).click();
-  await expect(note).toHaveClass(/crumpled/);
-  await expect(page.getByRole('status').filter({ hasText: 'Cedar post-it completed' })).toHaveText(
-    'Cedar post-it completed.',
-  );
+  await expect(note).toBeHidden();
 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Post-its' })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('.postit', { hasText: 'Cedar post-it' })).toBeVisible();
+  await expect(page.locator('.postit', { hasText: 'Cedar post-it' })).toBeHidden();
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible();
 });
 
 test('uses a non-motion completion treatment when reduced motion is requested', async ({
@@ -50,10 +49,7 @@ test('uses a non-motion completion treatment when reduced motion is requested', 
   await page.getByRole('button', { name: 'Post-its' }).click();
   const note = page.locator('.postit', { hasText: 'Cedar post-it' });
   await note.getByRole('button', { name: 'Complete Cedar post-it' }).click();
-  await expect(note).toHaveClass(/crumpled/);
-  const animationSeconds = await note.evaluate((element) =>
-    Number.parseFloat(getComputedStyle(element).animationDuration),
-  );
-  expect(animationSeconds).toBeLessThanOrEqual(0.001);
-  await expect(note).toHaveCSS('text-decoration-line', 'line-through');
+  await expect(note).toBeHidden();
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible();
 });

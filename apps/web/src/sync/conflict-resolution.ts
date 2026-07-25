@@ -15,7 +15,13 @@ export interface PersistedEntityConflict<T = unknown> {
   entityId: string;
   local: T;
   remote?: T;
-  reason: 'version_mismatch' | 'authorization_changed' | 'validation_failed';
+  reason:
+    | 'version_mismatch'
+    | 'authorization_changed'
+    | 'validation_failed'
+    | 'lifecycle_changed'
+    | 'project_unavailable'
+    | 'hard_deleted';
   quarantined: boolean;
   createdAt: string;
 }
@@ -28,7 +34,7 @@ export function resolveEntityConflict<T extends { version: number }>(
   conflict: PersistedEntityConflict<T>,
   resolution: Resolution,
 ): T {
-  if (conflict.quarantined && resolution === 'keep-local') {
+  if ((conflict.quarantined || conflict.reason === 'hard_deleted') && resolution === 'keep-local') {
     throw new Error('Authorization-changed conflicts cannot be replayed');
   }
   if (resolution === 'keep-remote') {

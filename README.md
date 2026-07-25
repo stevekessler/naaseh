@@ -40,3 +40,15 @@ and exit codes are documented in [the export runbook](docs/operations/export-tod
 User bootstrap and administration use the secret-safe Python command in `scripts/create_user.py`;
 see [the provisioning runbook](docs/operations/user-provisioning.md). The retired TypeScript tool
 must not be used because positional credentials are visible in process listings.
+
+## Archive, Categories, Projects, and reporting
+
+Finished to-dos and Lists move to Archive instead of being deleted. Restoring a completed to-do
+reopens it and reverses its previous completion credit; completing it again creates new credit.
+Categories contain Projects, work may be assigned to one Project or left Unassigned, and a
+Project assignment always supplies its parent Category. The Projects page shows active to-do and
+List counts plus Project end dates. The Dashboard shows personal daily, weekly, or monthly
+completion totals in the selected time zone and retains completion-time labels after organization
+changes. Administrators can edit, archive, restore, or—only when empty—permanently delete
+Categories and Projects. Every permanent delete presents an irreversible warning and has no
+recycle-bin recovery path. See [the user guide](docs/user/archive-project-reporting.md).

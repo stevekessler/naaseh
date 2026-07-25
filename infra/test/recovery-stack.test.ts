@@ -72,7 +72,7 @@ describe('single-region recovery infrastructure', () => {
   });
 
   it('keeps secrets and private versioned media in one region without replication', () => {
-    template.resourceCountIs('AWS::SecretsManager::Secret', 2);
+    template.resourceCountIs('AWS::SecretsManager::Secret', 3);
     template.hasResourceProperties('AWS::SecretsManager::Secret', {
       Tags: Match.arrayWith([Match.objectLike({ Key: 'NaasehRotationReviewDays', Value: '90' })]),
     });

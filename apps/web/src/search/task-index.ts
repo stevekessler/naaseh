@@ -1,7 +1,7 @@
 import MiniSearch from 'minisearch';
 import type { Task } from '@naaseh/domain';
 
-type SearchDocument = Pick<Task, 'id' | 'label' | 'memo'>;
+type SearchDocument = Pick<Task, 'id' | 'label' | 'memo' | 'lifecycle'>;
 
 export type ContentTypeFilter = 'all' | 'lists' | 'todos';
 export interface MixedSearchDocument {
@@ -10,6 +10,7 @@ export interface MixedSearchDocument {
   parentId?: string;
   title: string;
   body?: string;
+  lifecycle?: 'active' | 'archived' | 'deleting';
 }
 export interface MixedSearchHit extends MixedSearchDocument {
   score?: number;
@@ -17,7 +18,7 @@ export interface MixedSearchHit extends MixedSearchDocument {
 export class MixedContentIndex {
   private index = new MiniSearch<MixedSearchDocument>({
     fields: ['title', 'body'],
-    storeFields: ['id', 'type', 'parentId', 'title', 'body'],
+    storeFields: ['id', 'type', 'parentId', 'title', 'body', 'lifecycle'],
     idField: 'id',
   });
   private documents = new Map<string, MixedSearchDocument>();
@@ -57,14 +58,19 @@ export function groupMixedHits(hits: MixedSearchHit[]) {
 export class TaskIndex {
   private index = new MiniSearch<SearchDocument>({
     fields: ['label', 'memo'],
-    storeFields: ['id'],
+    storeFields: ['id', 'lifecycle'],
     idField: 'id',
   });
   private ids = new Set<string>();
 
   upsert(task: Task) {
     if (this.ids.has(task.id)) this.index.discard(task.id);
-    this.index.add({ id: task.id, label: task.label, memo: task.memoHidden ? '' : task.memo });
+    this.index.add({
+      id: task.id,
+      label: task.label,
+      memo: task.memoHidden ? '' : task.memo,
+      lifecycle: task.lifecycle,
+    });
     this.ids.add(task.id);
   }
 

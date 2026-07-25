@@ -4,6 +4,9 @@ export type AppRoute =
   | { section: 'tasks'; taskId?: string }
   | { section: 'lists'; listId?: string }
   | { section: 'groups' }
+  | { section: 'archive' }
+  | { section: 'projects' }
+  | { section: 'dashboard' }
   | { section: 'admin' };
 
 export function parseAppRoute(pathname: string): AppRoute {
@@ -14,6 +17,9 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (task)
     return { section: 'tasks', ...(task[1] ? { taskId: decodeURIComponent(task[1]) } : {}) };
   if (/^\/groups\/?$/.test(pathname)) return { section: 'groups' };
+  if (/^\/archive\/?$/.test(pathname)) return { section: 'archive' };
+  if (/^\/projects\/?$/.test(pathname)) return { section: 'projects' };
+  if (/^\/dashboard\/?$/.test(pathname)) return { section: 'dashboard' };
   if (/^\/admin\/?$/.test(pathname)) return { section: 'admin' };
   return { section: 'tasks' };
 }

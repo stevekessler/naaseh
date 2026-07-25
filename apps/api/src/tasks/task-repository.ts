@@ -1,10 +1,36 @@
-import { createUlid, type Task, type TaskRevision } from '@naaseh/domain';
+import {
+  createUlid,
+  type CompletionEvent,
+  type Task,
+  type TaskRevision,
+  contentAudienceFor,
+} from '@naaseh/domain';
 import { commitTask, getRecord } from '../shared/store.js';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { administratorTaskFeedChange, privacyFeedChanges } from './privacy-transition.js';
 import { keys } from '../shared/keys.js';
+import {
+  workloadProjectionChanges,
+  workloadProjectionWrites,
+} from '../reporting/workload-projection-repository.js';
+
+const projectedTask = (task: Task | undefined) =>
+  task
+    ? {
+        id: task.id,
+        workType: 'task' as const,
+        audience: contentAudienceFor({
+          ownerId: task.ownerId,
+          locked: task.visibility === 'private',
+          ...(task.groupId ? { groupId: task.groupId } : {}),
+        }).ordinary,
+        lifecycle: task.lifecycle,
+        projectId: task.projectId,
+        categoryId: task.categoryId,
+      }
+    : undefined;
 
 export interface StoredTaskMutationResult {
   mutationId: string;
@@ -94,7 +120,15 @@ export async function saveTaskMutation(
     if (dependencies.administratorFeed) feedChanges.push(administratorTaskFeedChange(task));
     const changes = await Promise.all(feedChanges.map(dependencies.prepareChange));
     try {
-      await dependencies.commit(task, revision, mutationId, changes);
+      await dependencies.commit(
+        task,
+        revision,
+        mutationId,
+        changes,
+        workloadProjectionWrites(
+          workloadProjectionChanges(projectedTask(previous), projectedTask(task)),
+        ),
+      );
       return { task, revision, replayed: false };
     } catch (error) {
       lastError = error;
@@ -121,4 +155,76 @@ export async function listRevisions(taskId: string): Promise<TaskRevision[]> {
     }),
   );
   return (result.Items ?? []).map((item) => item.data as TaskRevision);
+}
+
+export async function findCompletionEvent(id: string) {
+  const key = keys.completionEventById(id);
+  return (await getRecord<{ data: CompletionEvent }>(key.PK, key.SK))?.data;
+}
+
+export async function saveTaskLifecycleMutation(
+  task: Task,
+  previous: Task,
+  actorId: string,
+  mutationId: string,
+  operation: 'completeAndArchive' | 'archive' | 'reopenAndRestore',
+  completionEvent?: CompletionEvent,
+) {
+  const changedFields = [
+    'status',
+    'lifecycle',
+    'completionState',
+    'archiveReason',
+    'archivedAt',
+    'archivedBy',
+    'completedAt',
+    'completedBy',
+    'currentCompletionEventId',
+  ];
+  const revision: TaskRevision = {
+    id: createUlid(),
+    taskId: task.id,
+    mutationId,
+    actorId,
+    version: task.version,
+    changedAt: task.updatedAt,
+    operation,
+    changedFields,
+    before: safeRevisionValues(previous, changedFields),
+    after: safeRevisionValues(task, changedFields) ?? {},
+    syncOutcome: 'applied',
+  };
+  const intents = privacyFeedChanges(previous, task);
+  if (defaultDependencies.administratorFeed) intents.push(administratorTaskFeedChange(task));
+  const feedChanges = await Promise.all(intents.map(prepareAudienceChange));
+  const additionalWrites = completionEvent
+    ? [
+        {
+          Put: {
+            TableName: tableName,
+            Item: { ...keys.completionEventById(completionEvent.id), data: completionEvent },
+          },
+        },
+        {
+          Put: {
+            TableName: tableName,
+            Item: {
+              ...keys.completionEvent(
+                completionEvent.taskId,
+                completionEvent.occurredAt,
+                completionEvent.id,
+              ),
+              data: completionEvent,
+            },
+          },
+        },
+      ]
+    : [];
+  await commitTask(task, revision, mutationId, feedChanges, [
+    ...additionalWrites,
+    ...workloadProjectionWrites(
+      workloadProjectionChanges(projectedTask(previous), projectedTask(task)),
+    ),
+  ]);
+  return { task, revision, completionEvent, replayed: false };
 }

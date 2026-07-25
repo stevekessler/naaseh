@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -15,5 +16,14 @@ describe('GitHub Actions supply-chain controls', () => {
       { line: 1, reference: 'actions/checkout@v6' },
     ]);
     expect(findUnsafeActionReferences("uses: './.github/workflows/validate.yml'")).toEqual([]);
+  });
+
+  it('limits staging OIDC to its deploy job and keeps secrets out of shell interpolation', () => {
+    const workflow = readFileSync('.github/workflows/deploy-staging.yml', 'utf8');
+    expect(workflow).toMatch(/^permissions: \{ contents: read \}$/m);
+    expect(workflow.match(/id-token: write/g)).toHaveLength(1);
+    expect(workflow).toContain("BREAK_GLASS_ROLE: '${{ secrets.RECOVERY_BREAK_GLASS_ROLE_ARN }}'");
+    expect(workflow).toContain('-c "breakGlassRoleArn=$BREAK_GLASS_ROLE"');
+    expect(workflow).not.toContain('breakGlassRoleArn=${{ secrets.');
   });
 });

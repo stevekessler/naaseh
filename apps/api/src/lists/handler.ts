@@ -26,6 +26,7 @@ import { authorizeList } from './list-authorization.js';
 import { listAudienceChanges, listItemAudienceChanges } from './list-audience.js';
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { recordListAdminRead } from './telemetry.js';
+import { resolveProjectAssignment } from '../projects/project-service.js';
 const actorFor = (event: any) => ({
   id: event.requestContext.authorizer?.lambda?.userId as string,
   role: (event.requestContext.authorizer?.lambda?.role ?? 'user') as 'admin' | 'user',
@@ -57,7 +58,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     const mutationId = event.headers['x-client-mutation-id'] ?? createUlid();
     if (method === 'POST' && !listId) {
       const input = listCreateSchema.parse(JSON.parse(event.body ?? '{}'));
-      const value = createOwnedList(input.name, actor.id);
+      const assignment = await resolveProjectAssignment(input.projectId ?? null);
+      const value = createOwnedList(input.name, actor.id, new Date(), assignment.projectId);
       const feeds = await Promise.all(
         listAudienceChanges(undefined, value).map(prepareAudienceChange),
       );
@@ -67,6 +69,8 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (!current || !authorizeList(current, actor, 'edit').allowed)
       return problem(404, 'not_found', 'List not found.', correlationId);
     const expected = Number(event.headers['if-match']);
+    if (event.rawPath.endsWith('/project') && !expected)
+      return problem(428, 'precondition_required', 'If-Match is required.', correlationId);
     if (
       expected &&
       (itemId ? (await findListItem(itemId))?.version !== expected : current.version !== expected)
@@ -74,9 +78,16 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return problem(409, 'conflict', 'The resource changed on another device.', correlationId);
     if (method === 'PATCH' && !itemId) {
       const parsed = listPatchSchema.parse(JSON.parse(event.body ?? '{}'));
-      const patch = Object.fromEntries(
-        Object.entries(parsed).filter(([, value]) => value !== undefined && value !== null),
-      ) as Pick<Partial<typeof current>, 'name' | 'groupId' | 'locked' | 'status'>;
+      const assignment =
+        parsed.projectId !== undefined
+          ? await resolveProjectAssignment(parsed.projectId)
+          : undefined;
+      const patch = {
+        ...Object.fromEntries(
+          Object.entries(parsed).filter(([, value]) => value !== undefined && value !== null),
+        ),
+        ...(assignment ? { projectId: assignment.projectId } : {}),
+      } as Pick<Partial<typeof current>, 'name' | 'groupId' | 'locked' | 'status' | 'projectId'>;
       const value = updateOwnedList(current, patch, actor.id);
       const feeds = await Promise.all(
         listAudienceChanges(current, value).map(prepareAudienceChange),

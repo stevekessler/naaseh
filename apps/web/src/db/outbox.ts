@@ -12,6 +12,8 @@ export async function atomicEntityAndMutation(
 }
 const encryptedStoreFor = (entityType: StoredMutation['entityType']) => {
   switch (entityType) {
+    case 'category':
+      return db.secureCategories;
     case 'list':
       return db.secureLists;
     case 'listItem':
@@ -22,6 +24,12 @@ const encryptedStoreFor = (entityType: StoredMutation['entityType']) => {
       return db.secureAttachments;
     case 'copyJob':
       return db.secureJobs;
+    case 'project':
+      return db.secureProjects;
+    case 'completionEvent':
+      return db.secureCompletionEvents;
+    case 'deletionJob':
+      return db.secureDeletionJobs;
     case 'accessControl':
       return db.secureGroups;
     default:
@@ -81,7 +89,17 @@ export function mergeCursor(current: VectorCursor, next: VectorCursor): VectorCu
   return merged;
 }
 export interface EncryptedPullChange {
-  entityType: 'list' | 'listItem' | 'directoryItem' | 'attachment' | 'copyJob' | 'accessControl';
+  entityType:
+    | 'list'
+    | 'category'
+    | 'listItem'
+    | 'directoryItem'
+    | 'attachment'
+    | 'copyJob'
+    | 'accessControl'
+    | 'project'
+    | 'completionEvent'
+    | 'deletionJob';
   record?: EncryptedEntityRecord;
   entityId: string;
   operation: 'upsert' | 'tombstone';
@@ -100,10 +118,14 @@ export async function commitEnhancedPull(
     'rw',
     [
       db.secureLists,
+      db.secureCategories,
       db.secureListItems,
       db.secureDirectoryItems,
       db.secureAttachments,
       db.secureJobs,
+      db.secureProjects,
+      db.secureCompletionEvents,
+      db.secureDeletionJobs,
       db.secureGroups,
       db.secureConflicts,
       db.outbox,

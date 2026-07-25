@@ -1,14 +1,17 @@
 import { type FormEvent } from 'react';
-import type { CategoryRecord, Task, TaskInput } from '@naaseh/domain';
+import type { CategoryRecord, Project, Task, TaskInput } from '@naaseh/domain';
+import { ProjectPicker } from '../projects/ProjectPicker.js';
 export function TaskForm({
   save,
   task,
   categories = [],
+  projects = [],
   submitLabel = task ? 'Save changes' : 'Add task',
 }: {
   save: (task: TaskInput) => Promise<void>;
   task?: Task;
   categories?: CategoryRecord[];
+  projects?: Project[];
   submitLabel?: string;
 }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -17,7 +20,8 @@ export function TaskForm({
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
     const due = value('dueAt');
-    const categoryId = value('categoryId');
+    const projectId = value('projectId');
+    const categoryId = projects.find((item) => item.id === projectId)?.categoryId;
     const category = categories.find((item) => item.id === categoryId);
     const assigneeId = value('assigneeId') || category?.defaultAssigneeId;
     await save({
@@ -32,6 +36,7 @@ export function TaskForm({
         : {}),
       ...(assigneeId ? { assigneeId } : {}),
       ...(categoryId ? { categoryId } : {}),
+      ...(projectId ? { projectId } : {}),
       ...(value('groupId') ? { groupId: value('groupId') } : {}),
       ...(value('parentId') ? { parentId: value('parentId') } : {}),
       visibility: data.get('private') ? 'private' : 'public',
@@ -68,19 +73,11 @@ export function TaskForm({
           Assignee
           <input name="assigneeId" defaultValue={task?.assigneeId} />
         </label>
-        <label>
-          Category
-          <input name="categoryId" list="categories" defaultValue={task?.categoryId} />
-          <datalist id="categories">
-            {categories
-              .filter((item) => !item.archived)
-              .map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </datalist>
-        </label>
+        <ProjectPicker
+          categories={categories}
+          projects={projects}
+          {...(task?.projectId ? { defaultValue: task.projectId } : {})}
+        />
         <label>
           Group
           <input name="groupId" defaultValue={task?.groupId} />

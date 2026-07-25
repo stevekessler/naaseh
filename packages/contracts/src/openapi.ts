@@ -14,12 +14,17 @@ import {
 } from '@naaseh/domain';
 export const enhancedListContractVersion = 2 as const;
 export const enhancedListContractVersionSchema = z.literal(enhancedListContractVersion);
+export const archiveProjectContractVersionSchema = z.literal(3);
 export const loginRequestSchema = z
   .object({ username: z.string().trim().min(1).max(100), password: z.string().min(1).max(1024) })
   .strict();
 export const taskCreateSchema = taskInputSchema;
 export const listCreateSchema = z
-  .object({ name: z.string().trim().min(1).max(300), groupId: z.string().min(1).optional() })
+  .object({
+    name: z.string().trim().min(1).max(300),
+    groupId: z.string().min(1).optional(),
+    projectId: ulidSchema.nullable().optional(),
+  })
   .strict();
 export const listPatchSchema = z
   .object({
@@ -27,6 +32,7 @@ export const listPatchSchema = z
     groupId: z.string().min(1).nullable().optional(),
     locked: z.boolean().optional(),
     status: z.enum(['active', 'archived']).optional(),
+    projectId: ulidSchema.nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'Patch cannot be empty.');
@@ -134,7 +140,9 @@ export const enhancedMutationSchema = z.object({
 export const mutationSchema = enhancedMutationSchema;
 export const pushRequestSchema = z
   .object({
-    contractVersion: z.union([z.literal(1), enhancedListContractVersionSchema]).default(1),
+    contractVersion: z
+      .union([z.literal(1), enhancedListContractVersionSchema, archiveProjectContractVersionSchema])
+      .default(1),
     mutations: z.array(enhancedMutationSchema).min(1).max(100),
     backlog: z
       .object({

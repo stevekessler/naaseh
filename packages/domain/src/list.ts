@@ -12,8 +12,13 @@ export const listSchema = z
     ownerId: z.string().min(1),
     name: z.string().trim().min(1).max(300),
     groupId: z.string().min(1).optional(),
+    projectId: ulidSchema.optional(),
     locked: z.boolean(),
     status: z.enum(['active', 'archived']),
+    lifecycle: z.enum(['active', 'archived', 'deleting']).optional(),
+    archiveReason: z.enum(['finished', 'manual']).optional(),
+    archivedAt: z.string().datetime().optional(),
+    archivedBy: z.string().min(1).optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     version: z.number().int().positive(),
@@ -49,7 +54,7 @@ export const listItemSchema = z
 export type ListItem = z.infer<typeof listItemSchema>;
 
 export function createList(
-  input: { name: string; groupId?: string },
+  input: { name: string; groupId?: string; projectId?: string },
   ownerId: string,
   now = new Date(),
 ): List {
@@ -59,8 +64,10 @@ export function createList(
     ownerId,
     name: input.name,
     ...(input.groupId ? { groupId: input.groupId } : {}),
+    ...(input.projectId ? { projectId: input.projectId } : {}),
     locked: false,
     status: 'active',
+    lifecycle: 'active',
     createdAt: timestamp,
     updatedAt: timestamp,
     version: 1,
@@ -120,6 +127,41 @@ export function transitionListItem(
       : { completedAt: undefined, completedBy: undefined }),
   });
 }
+
+function transitionListLifecycle(
+  list: List,
+  lifecycle: 'active' | 'archived',
+  actorId: string,
+  reason: 'finished' | 'manual' | undefined,
+  now = new Date(),
+): List {
+  const current = list.lifecycle ?? list.status;
+  if (current === lifecycle) throw new Error(`List is already ${lifecycle}.`);
+  const timestamp = now.toISOString();
+  return listSchema.parse({
+    ...list,
+    status: lifecycle,
+    lifecycle,
+    ...(lifecycle === 'archived'
+      ? { archiveReason: reason, archivedAt: timestamp, archivedBy: actorId }
+      : {
+          archiveReason: undefined,
+          archivedAt: undefined,
+          archivedBy: undefined,
+        }),
+    updatedAt: timestamp,
+    version: list.version + 1,
+  });
+}
+
+export const finishList = (list: List, actorId: string, now = new Date()) =>
+  transitionListLifecycle(list, 'archived', actorId, 'finished', now);
+
+export const archiveList = (list: List, actorId: string, now = new Date()) =>
+  transitionListLifecycle(list, 'archived', actorId, 'manual', now);
+
+export const restoreList = (list: List, actorId: string, now = new Date()) =>
+  transitionListLifecycle(list, 'active', actorId, undefined, now);
 export function moveListItem(item: ListItem, orderKey: string, now = new Date()): ListItem {
   return listItemSchema.parse({
     ...item,

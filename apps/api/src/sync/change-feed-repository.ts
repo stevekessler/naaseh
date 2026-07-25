@@ -30,11 +30,13 @@ export function contentAudiences(input: {
   administratorShards?: number;
 }): string[] {
   const audiences = [
-    feedAudience.owner(input.ownerId),
+    input.locked
+      ? feedAudience.owner(input.ownerId)
+      : input.groupId
+        ? feedAudience.group(input.groupId)
+        : feedAudience.public(),
     feedAudience.administrator(administratorShard(input.entityId, input.administratorShards)),
   ];
-  if (!input.locked)
-    audiences.push(input.groupId ? feedAudience.group(input.groupId) : feedAudience.public());
   return [...new Set(audiences)];
 }
 

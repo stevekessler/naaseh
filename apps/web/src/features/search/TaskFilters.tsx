@@ -12,11 +12,33 @@ export function TaskFilters({
     ['to', value.to],
     ['assigneeId', value.assigneeId],
     ['categoryId', value.categoryId],
+    ['projectId', value.projectId ?? ''],
   ] as const;
 
   return (
     <fieldset className="filter-fields">
       <legend>Filters</legend>
+      <label>
+        <span>Project</span>
+        <input
+          value={value.projectId ?? ''}
+          placeholder="Project ID or unassigned"
+          onChange={(event) => change({ ...value, projectId: event.target.value })}
+        />
+      </label>
+      <label>
+        <span>Scope</span>
+        <select
+          value={value.lifecycle ?? 'active'}
+          onChange={(event) =>
+            change({ ...value, lifecycle: event.target.value as 'active' | 'archive' | 'all' })
+          }
+        >
+          <option value="active">Active</option>
+          <option value="archive">Archive</option>
+          <option value="all">Active and archive</option>
+        </select>
+      </label>
       <label>
         <span>Content</span>
         <select

@@ -1,10 +1,13 @@
-export const currentSchemaVersion = 7;
+export const currentSchemaVersion = 8;
 export const enhancedEncryptedStores = [
   'secureLists',
   'secureListItems',
   'secureDirectoryItems',
   'secureAttachments',
   'secureJobs',
+  'secureProjects',
+  'secureCompletionEvents',
+  'secureDeletionJobs',
 ] as const;
 
 export interface EnhancedSchemaMigrationPlan {

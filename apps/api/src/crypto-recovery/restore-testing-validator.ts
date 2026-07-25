@@ -7,6 +7,7 @@ import {
   DescribeTableCommand,
   DynamoDBClient,
   ScanCommand,
+  QueryCommand,
   type AttributeValue,
   type ScanCommandOutput,
 } from '@aws-sdk/client-dynamodb';
@@ -25,6 +26,7 @@ import { z } from 'zod';
 import { verifyStoredManifest } from './manifest-service.js';
 import { MAX_RTO_SECONDS } from './restore-validator.js';
 import { validateEnhancedRecoveryRows } from './backup-manifest.js';
+import { assertDeletionLedgerApplied } from './deletion-ledger-validator.js';
 
 const restoreEventSchema = z
   .object({
@@ -80,6 +82,7 @@ export type RestoreTestingDependencies = {
   recoveryKeyIds: Record<'recovery', string>;
   verifyManifest(manifest: BackupManifest, keyId: string): Promise<boolean>;
   decryptRecoveryWrap(wrap: HiddenMemoPackage['recoveryWraps'][number]): Promise<Uint8Array>;
+  currentDeletionLedgerKeys?(): Promise<ReadonlySet<string>>;
 };
 
 const defaultDependencies = (): RestoreTestingDependencies => ({
@@ -103,6 +106,28 @@ const defaultDependencies = (): RestoreTestingDependencies => ({
     )) as { Plaintext?: Uint8Array };
     if (!response.Plaintext?.length) throw new Error('Recovery wrap decryption returned no key.');
     return response.Plaintext;
+  },
+  async currentDeletionLedgerKeys() {
+    const tableName = process.env.DELETION_LEDGER_TABLE;
+    if (!tableName) throw new Error('Deletion ledger table is unavailable.');
+    const response = (await this.dynamodb.send(
+      new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: 'PK=:pk',
+        ExpressionAttributeValues: { ':pk': { S: 'DELETIONLEDGER' } },
+        ProjectionExpression: 'SK',
+        ConsistentRead: true,
+      }),
+    )) as { Items?: Array<{ SK?: { S?: string } }> };
+    return new Set(
+      (response.Items ?? [])
+        .map((item) => item.SK?.S)
+        .filter((value): value is string => Boolean(value))
+        .map((value) => {
+          const [type, id] = value.split('#');
+          return `${type?.toLocaleLowerCase()}:${id}`;
+        }),
+    );
   },
 });
 
@@ -249,6 +274,18 @@ async function probeRestoredResource(
     )
       throw new Error('Restored DynamoDB table is not active or does not match the restore job.');
     const items = await readDynamoItems(tableName, dependencies.dynamodb);
+    const ledgerKeys = (await dependencies.currentDeletionLedgerKeys?.()) ?? new Set<string>();
+    assertDeletionLedgerApplied({
+      restoredRecords: items.flatMap((item) => {
+        if (item.SK !== 'CURRENT' || typeof item.PK !== 'string') return [];
+        const [prefix, resourceId] = item.PK.split('#');
+        const resourceType = prefix?.toLocaleLowerCase();
+        return resourceId && (resourceType === 'task' || resourceType === 'list')
+          ? [{ resourceType, resourceId }]
+          : [];
+      }),
+      ledgerKeys,
+    });
     const integrity = await validateRestoredInventory(items, evidence, dependencies);
     return { resourceType: 'DynamoDB' as const, itemCount: items.length, integrity };
   }

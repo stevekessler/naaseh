@@ -1,11 +1,19 @@
 import type { SyncChange, Task } from '@naaseh/domain';
-import { administratorShard, feedAudience } from '../sync/change-feed-repository.js';
+import {
+  administratorShard,
+  contentAudiences,
+  feedAudience,
+} from '../sync/change-feed-repository.js';
 
 export type FeedChangeIntent = Omit<SyncChange, 'sequence'>;
 
-function audienceFor(task: Task) {
-  return task.visibility === 'public' ? 'PUBLIC' : `OWNER#${task.ownerId}`;
-}
+const taskAudiences = (task: Task) =>
+  contentAudiences({
+    entityId: task.id,
+    ownerId: task.ownerId,
+    locked: task.visibility === 'private',
+    ...(task.groupId ? { groupId: task.groupId } : {}),
+  }).filter((audience) => !audience.startsWith('ADMIN#'));
 
 /**
  * Describe every audience change that must commit with a task mutation.
@@ -13,22 +21,28 @@ function audienceFor(task: Task) {
  * publishes the new copy only to its newly authorized audience.
  */
 export function privacyFeedChanges(previous: Task | undefined, next: Task): FeedChangeIntent[] {
-  const upsert: FeedChangeIntent = {
-    audience: audienceFor(next),
-    entityId: next.id,
-    operation: 'upsert',
-    payload: next,
-    changedAt: next.updatedAt,
-  };
-  if (!previous || previous.visibility === next.visibility) return [upsert];
+  const before = previous ? taskAudiences(previous) : [];
+  const after = taskAudiences(next);
   return [
-    {
-      audience: audienceFor(previous),
+    ...before
+      .filter((audience) => !after.includes(audience))
+      .map((audience) => ({
+        audience,
+        entityType: 'task' as const,
+        entityId: next.id,
+        version: next.version,
+        operation: 'tombstone' as const,
+        changedAt: next.updatedAt,
+      })),
+    ...after.map((audience) => ({
+      audience,
+      entityType: 'task' as const,
       entityId: next.id,
-      operation: 'tombstone',
+      version: next.version,
+      operation: 'upsert' as const,
+      payload: next,
       changedAt: next.updatedAt,
-    },
-    upsert,
+    })),
   ];
 }
 

@@ -1,4 +1,5 @@
 import type { Task } from '@naaseh/domain';
+import { assertDeletionLedgerApplied } from './deletion-ledger-validator.js';
 
 export const MAX_RPO_SECONDS = 5 * 60;
 export const MAX_RTO_SECONDS = 4 * 60 * 60;
@@ -82,4 +83,17 @@ function secondsBetween(earlier: string, later: string): number {
   const difference = Date.parse(later) - Date.parse(earlier);
   if (!Number.isFinite(difference)) return Number.NaN;
   return difference / 1_000;
+}
+
+export function validateRestoreBeforeServing(
+  expected: RestoreExpectations,
+  tasks: Task[],
+  context: RestoreValidationContext,
+  deletionLedgerKeys: ReadonlySet<string>,
+) {
+  assertDeletionLedgerApplied({
+    restoredRecords: tasks.map((task) => ({ resourceType: 'task', resourceId: task.id })),
+    ledgerKeys: deletionLedgerKeys,
+  });
+  return validateRestore(expected, tasks, context);
 }

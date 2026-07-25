@@ -21,11 +21,19 @@ import { requireMutationSecurity } from '../shared/security.js';
 import { sanitizeTaskPatch } from './task-service.js';
 import { syncTaskReminder } from '../notifications/web-push.js';
 import { recordTaskAdminRead } from './telemetry.js';
+import { resolveProjectAssignment } from '../projects/project-service.js';
 
 async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const correlationId = event.requestContext.requestId || randomUUID();
   const context = event.requestContext as typeof event.requestContext & {
-    authorizer?: { lambda?: { userId?: string; csrfToken?: string; role?: 'admin' | 'user' } };
+    authorizer?: {
+      lambda?: {
+        userId?: string;
+        csrfToken?: string;
+        role?: 'admin' | 'user';
+        groupIds?: string;
+      };
+    };
   };
   const actorId = context.authorizer?.lambda?.userId;
   if (!actorId) return problem(401, 'unauthorized', 'Authentication required.', correlationId);
@@ -34,6 +42,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       id: actorId,
       role: context.authorizer?.lambda?.role ?? 'user',
       active: true,
+      groupIds: context.authorizer?.lambda?.groupIds?.split(',').filter(Boolean) ?? [],
     }).allowed;
   const auditRead = (task: Task) => {
     if (
@@ -41,6 +50,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         id: actorId,
         role: context.authorizer?.lambda?.role ?? 'user',
         active: true,
+        groupIds: context.authorizer?.lambda?.groupIds?.split(',').filter(Boolean) ?? [],
       }).privileged
     )
       recordTaskAdminRead(correlationId, actorId, task.id);
@@ -116,6 +126,11 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         { correlationId, operation: 'tasks.update.authorize', actorId, resourceId: taskId },
       );
     const expected = Number(event.headers['if-match']);
+    if (event.rawPath.endsWith('/project') && !expected)
+      return errorResponse(
+        new SafeApiError(428, 'precondition_required', 'If-Match is required.', 'validation'),
+        { correlationId, operation: 'tasks.project.version', actorId, resourceId: taskId },
+      );
     if (expected && expected !== current.version)
       return errorResponse(
         new SafeApiError(409, 'conflict', 'The task changed on another device.', 'conflict'),
@@ -124,6 +139,13 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     let normalized: Partial<Task>;
     try {
       const body = JSON.parse(event.body ?? '{}') as Record<string, unknown>;
+      if (Object.hasOwn(body, 'projectId')) {
+        if (body.projectId !== null && typeof body.projectId !== 'string')
+          throw new Error('Project assignment is invalid.');
+        const assignment = await resolveProjectAssignment(body.projectId as string | null);
+        body.projectId = assignment.projectId;
+        body.categoryId = assignment.categoryId;
+      }
       normalized = event.rawPath.endsWith('/completion')
         ? { status: body.completed ? 'completed' : 'open' }
         : event.rawPath.endsWith('/lock')

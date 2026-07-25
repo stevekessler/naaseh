@@ -8,6 +8,7 @@ export interface DeploymentConfig {
   attachmentUploadExpirySeconds: number;
   attachmentDownloadExpirySeconds: number;
   exportStagingExpirySeconds: number;
+  archiveProjectMigrationMode: 'off' | 'dual-write' | 'backfill' | 'verify' | 'complete';
 }
 
 function boundedInteger(
@@ -62,6 +63,12 @@ export function deploymentConfig(source: Record<string, string | undefined>): De
       3_600,
       86_400,
     ),
+    archiveProjectMigrationMode: (() => {
+      const value = source.NAASEH_ARCHIVE_PROJECT_MIGRATION_MODE ?? 'off';
+      if (!['off', 'dual-write', 'backfill', 'verify', 'complete'].includes(value))
+        throw new Error('NAASEH_ARCHIVE_PROJECT_MIGRATION_MODE is invalid.');
+      return value as DeploymentConfig['archiveProjectMigrationMode'];
+    })(),
   };
 }
 import { NAASEH_AWS_REGION, requireNaasehRegion } from './environments.js';

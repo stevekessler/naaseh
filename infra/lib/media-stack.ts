@@ -50,6 +50,14 @@ export function createProfileMediaResources(
         tagFilters: { GuardDutyMalwareScanStatus: 'THREATS_FOUND' },
         expiration: Duration.days(1),
       },
+      {
+        id: 'ProfileMediaNoncurrentVersions',
+        prefix: 'profiles/',
+        // Deleting an uploaded original from a versioned bucket creates a delete
+        // marker. Bound retention of that untrusted, user-supplied version.
+        noncurrentVersionExpiration: Duration.days(7),
+        abortIncompleteMultipartUploadAfter: Duration.days(1),
+      },
     ],
     removalPolicy: RemovalPolicy.RETAIN,
   });

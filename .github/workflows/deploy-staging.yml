@@ -1,6 +1,6 @@
 name: Deploy staging
 on: { workflow_dispatch: {} }
-permissions: { contents: read, id-token: write }
+permissions: { contents: read }
 concurrency: { group: staging, cancel-in-progress: false }
 jobs:
   validate:
@@ -8,8 +8,12 @@ jobs:
   deploy:
     needs: validate
     environment: staging
+    permissions:
+      contents: read
+      id-token: write
     runs-on: ubuntu-latest
     env:
+      BREAK_GLASS_ROLE: '${{ secrets.RECOVERY_BREAK_GLASS_ROLE_ARN }}'
       NAASEH_DOMAIN_NAME: '${{ vars.NAASEH_DOMAIN_NAME }}'
       NAASEH_HOSTED_ZONE_ID: '${{ vars.NAASEH_HOSTED_ZONE_ID }}'
       NAASEH_HOSTED_ZONE_NAME: '${{ vars.NAASEH_HOSTED_ZONE_NAME }}'
@@ -34,5 +38,5 @@ jobs:
           aws-region: us-west-2
       - run: >-
           npm run synth -w '@naaseh/infra' --
-          -c breakGlassRoleArn=${{ secrets.RECOVERY_BREAK_GLASS_ROLE_ARN }}
+          -c "breakGlassRoleArn=$BREAK_GLASS_ROLE"
       - run: npx cdk deploy --all --app infra/cdk.out --require-approval never

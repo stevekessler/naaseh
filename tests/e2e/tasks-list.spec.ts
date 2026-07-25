@@ -18,7 +18,6 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await form.getByLabel('Memo').fill('Ask for an updated estimate');
   await form.getByLabel('Due date and time').fill('2020-01-01T09:00');
   await form.getByLabel('Assignee').fill('steve');
-  await form.getByLabel('Category').fill('calls');
   await form.getByLabel('Group').fill('family');
   await form.getByLabel('Private task').check();
   await form.getByRole('button', { name: 'Add task' }).click();
@@ -34,9 +33,9 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(detail.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
   await detail.getByRole('button', { name: 'Close details' }).click();
   await page.getByRole('button', { name: 'Complete Call the contractor today' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Reopen Call the contractor today' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeHidden();
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
 });
 
 test('shows nested subtasks in task details', async ({ page }) => {

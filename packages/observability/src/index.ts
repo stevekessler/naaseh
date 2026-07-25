@@ -11,3 +11,4 @@ export const metric = logger.metric;
 export { redact as redactLogFields };
 export * from './logger.js';
 export * from './redaction.js';
+export * from './archive-project-reporting.js';

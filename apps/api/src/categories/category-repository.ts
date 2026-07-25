@@ -100,3 +100,29 @@ export async function archiveCategory(id: string) {
   await updateCategoryRecord(current, next);
   return next;
 }
+
+export async function deleteEmptyCategoryRecord(category: CategoryRecord) {
+  await dynamodb.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Delete: {
+            TableName: tableName,
+            Key: categoryKey(category.id),
+            ConditionExpression: '#data.#version=:version',
+            ExpressionAttributeNames: { '#data': 'data', '#version': 'version' },
+            ExpressionAttributeValues: { ':version': category.version },
+          },
+        },
+        {
+          Delete: {
+            TableName: tableName,
+            Key: nameKey(category.name),
+            ConditionExpression: 'categoryId=:id',
+            ExpressionAttributeValues: { ':id': category.id },
+          },
+        },
+      ],
+    }),
+  );
+}

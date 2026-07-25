@@ -1,0 +1,658 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Archive, Projects, and Reporting API
+  version: 3.0.0
+  description: Additive lifecycle, two-level organization, count, report, and permanent-delete contract.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+tags:
+  - name: Archive
+  - name: Tasks
+  - name: Lists
+  - name: Organization
+  - name: Reporting
+  - name: Deletion
+paths:
+  /archive:
+    get:
+      tags: [Archive]
+      operationId: listArchive
+      parameters:
+        - {$ref: '#/components/parameters/EntityTypeFilter'}
+        - {$ref: '#/components/parameters/CategoryFilter'}
+        - {$ref: '#/components/parameters/ProjectFilter'}
+        - {$ref: '#/components/parameters/AssignmentFilter'}
+        - {$ref: '#/components/parameters/Cursor'}
+        - {$ref: '#/components/parameters/Limit'}
+      responses:
+        '200':
+          description: Authorized archived to-dos and Lists; List Items are nested only.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ArchivePage'}
+  /tasks/{taskId}/completion:
+    post:
+      tags: [Tasks]
+      operationId: setTaskCompletion
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [completed]
+              additionalProperties: false
+              properties:
+                completed: {type: boolean}
+      responses:
+        '200':
+          description: Task atomically completed+archived or restored+reopened.
+          content: {application/json: {schema: {$ref: '#/components/schemas/TaskLifecycleResult'}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /tasks/{taskId}/archive:
+    post:
+      tags: [Tasks]
+      operationId: archiveTaskManually
+      parameters: &taskMutationParameters
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '200': {description: Archived task, content: {application/json: {schema: {$ref: '#/components/schemas/TaskLifecycleResult'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /tasks/{taskId}/restore:
+    post:
+      tags: [Tasks]
+      operationId: restoreTask
+      parameters: *taskMutationParameters
+      responses:
+        '200': {description: Restored task, content: {application/json: {schema: {$ref: '#/components/schemas/TaskLifecycleResult'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /tasks/{taskId}/deletion-preview:
+    post:
+      tags: [Deletion]
+      operationId: previewTaskDeletion
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/Csrf'}
+      responses:
+        '200': {description: Bound irreversible deletion preview, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionPreview'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /tasks/{taskId}:
+    patch:
+      tags: [Tasks]
+      operationId: assignTaskProject
+      description: Additive Project-assignment field for the existing Task patch operation; Category is derived by the server.
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content: {application/merge-patch+json: {schema: {$ref: '#/components/schemas/ProjectAssignmentPatch'}}}
+      responses:
+        '200': {description: Task assigned to one Project or Unassigned}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+    delete:
+      tags: [Deletion]
+      operationId: permanentlyDeleteTask
+      parameters:
+        - {$ref: '#/components/parameters/TaskId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+        - {$ref: '#/components/parameters/DeletionConfirmation'}
+      responses:
+        '202': {description: Deletion accepted, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionJob'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /lists/{listId}/finish:
+    post:
+      tags: [Lists]
+      operationId: finishList
+      parameters: &listMutationParameters
+        - {$ref: '#/components/parameters/ListId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '200': {description: Parent List archived as finished, content: {application/json: {schema: {$ref: '#/components/schemas/ListLifecycleResult'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /lists/{listId}/archive:
+    post:
+      tags: [Lists]
+      operationId: archiveListManually
+      parameters: *listMutationParameters
+      responses:
+        '200': {description: Parent List archived, content: {application/json: {schema: {$ref: '#/components/schemas/ListLifecycleResult'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /lists/{listId}/restore:
+    post:
+      tags: [Lists]
+      operationId: restoreList
+      parameters: *listMutationParameters
+      responses:
+        '200': {description: Parent List restored with all Items, content: {application/json: {schema: {$ref: '#/components/schemas/ListLifecycleResult'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /lists/{listId}/deletion-preview:
+    post:
+      tags: [Deletion]
+      operationId: previewListDeletion
+      parameters:
+        - {$ref: '#/components/parameters/ListId'}
+        - {$ref: '#/components/parameters/Csrf'}
+      responses:
+        '200': {description: Bound irreversible deletion preview, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionPreview'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /lists/{listId}:
+    patch:
+      tags: [Lists]
+      operationId: assignListProject
+      description: Additive Project-assignment field for the existing List patch operation; Category is derived by the server.
+      parameters:
+        - {$ref: '#/components/parameters/ListId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content: {application/merge-patch+json: {schema: {$ref: '#/components/schemas/ProjectAssignmentPatch'}}}
+      responses:
+        '200': {description: List assigned to one Project or Unassigned}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+    delete:
+      tags: [Deletion]
+      operationId: permanentlyDeleteList
+      parameters:
+        - {$ref: '#/components/parameters/ListId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+        - {$ref: '#/components/parameters/DeletionConfirmation'}
+      responses:
+        '202': {description: Deletion accepted, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionJob'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+  /categories:
+    get:
+      tags: [Organization]
+      operationId: listCategories
+      parameters:
+        - {$ref: '#/components/parameters/LifecycleFilter'}
+      responses:
+        '200': {description: Authorized Categories, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Category'}}}}}
+    post:
+      tags: [Organization]
+      operationId: createCategory
+      parameters:
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/CategoryInput'}}}
+      responses:
+        '201': {description: Created Category, content: {application/json: {schema: {$ref: '#/components/schemas/Category'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /categories/{categoryId}:
+    parameters:
+      - {$ref: '#/components/parameters/CategoryId'}
+    get:
+      tags: [Organization]
+      operationId: getCategory
+      responses:
+        '200': {description: Category, content: {application/json: {schema: {$ref: '#/components/schemas/Category'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Organization]
+      operationId: updateCategory
+      parameters:
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content: {application/merge-patch+json: {schema: {$ref: '#/components/schemas/CategoryPatch'}}}
+      responses:
+        '200': {description: Updated Category, content: {application/json: {schema: {$ref: '#/components/schemas/Category'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+    delete:
+      tags: [Deletion]
+      operationId: permanentlyDeleteCategory
+      parameters:
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+        - {$ref: '#/components/parameters/DeletionConfirmation'}
+      responses:
+        '204': {description: Empty Category permanently deleted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/DeleteBlocked'}
+  /categories/{categoryId}/archive:
+    post:
+      tags: [Organization]
+      operationId: archiveCategory
+      parameters: &categoryActionParameters
+        - {$ref: '#/components/parameters/CategoryId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '200': {description: Archived Category, content: {application/json: {schema: {$ref: '#/components/schemas/Category'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /categories/{categoryId}/restore:
+    post:
+      tags: [Organization]
+      operationId: restoreCategory
+      parameters: *categoryActionParameters
+      responses:
+        '200': {description: Restored Category, content: {application/json: {schema: {$ref: '#/components/schemas/Category'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /categories/{categoryId}/deletion-preview:
+    post:
+      tags: [Deletion]
+      operationId: previewCategoryDeletion
+      parameters:
+        - {$ref: '#/components/parameters/CategoryId'}
+        - {$ref: '#/components/parameters/Csrf'}
+      responses:
+        '200': {description: Preview with blockers, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionPreview'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /categories/{categoryId}/projects:
+    get:
+      tags: [Organization]
+      operationId: listProjects
+      parameters:
+        - {$ref: '#/components/parameters/CategoryId'}
+        - {$ref: '#/components/parameters/LifecycleFilter'}
+      responses:
+        '200': {description: Authorized Projects, content: {application/json: {schema: {type: array, items: {$ref: '#/components/schemas/Project'}}}}}
+    post:
+      tags: [Organization]
+      operationId: createProject
+      parameters:
+        - {$ref: '#/components/parameters/CategoryId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content: {application/json: {schema: {$ref: '#/components/schemas/ProjectInput'}}}
+      responses:
+        '201': {description: Created Project, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /categories/{categoryId}/projects/{projectId}:
+    parameters:
+      - {$ref: '#/components/parameters/CategoryId'}
+      - {$ref: '#/components/parameters/ProjectId'}
+    get:
+      tags: [Organization]
+      operationId: getProject
+      responses:
+        '200': {description: Project, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+    patch:
+      tags: [Organization]
+      operationId: updateProject
+      parameters:
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      requestBody:
+        required: true
+        content: {application/merge-patch+json: {schema: {$ref: '#/components/schemas/ProjectPatch'}}}
+      responses:
+        '200': {description: Updated or moved Project, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '428': {$ref: '#/components/responses/PreconditionRequired'}
+    delete:
+      tags: [Deletion]
+      operationId: permanentlyDeleteProject
+      parameters:
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+        - {$ref: '#/components/parameters/DeletionConfirmation'}
+      responses:
+        '204': {description: Empty Project permanently deleted}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/DeleteBlocked'}
+  /categories/{categoryId}/projects/{projectId}/archive:
+    post:
+      tags: [Organization]
+      operationId: archiveProject
+      parameters: &projectActionParameters
+        - {$ref: '#/components/parameters/CategoryId'}
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {$ref: '#/components/parameters/Csrf'}
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+        - {$ref: '#/components/parameters/IfMatch'}
+      responses:
+        '200': {description: Archived Project, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /categories/{categoryId}/projects/{projectId}/restore:
+    post:
+      tags: [Organization]
+      operationId: restoreProject
+      parameters: *projectActionParameters
+      responses:
+        '200': {description: Restored Project, content: {application/json: {schema: {$ref: '#/components/schemas/Project'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/Conflict'}
+  /categories/{categoryId}/projects/{projectId}/deletion-preview:
+    post:
+      tags: [Deletion]
+      operationId: previewProjectDeletion
+      parameters:
+        - {$ref: '#/components/parameters/CategoryId'}
+        - {$ref: '#/components/parameters/ProjectId'}
+        - {$ref: '#/components/parameters/Csrf'}
+      responses:
+        '200': {description: Preview with blockers, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionPreview'}}}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /organization/tree:
+    get:
+      tags: [Organization]
+      operationId: getOrganizationTree
+      parameters:
+        - {$ref: '#/components/parameters/LifecycleFilter'}
+      responses:
+        '200': {description: Authorization-filtered tree and exact active counts, content: {application/json: {schema: {$ref: '#/components/schemas/OrganizationTree'}}}}
+  /reports/completions:
+    get:
+      tags: [Reporting]
+      operationId: getCompletionReport
+      parameters:
+        - {name: from, in: query, required: true, schema: {type: string, format: date}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date}}
+        - {name: bucket, in: query, required: true, schema: {type: string, enum: [day, week, month]}}
+        - {name: timeZone, in: query, required: true, schema: {type: string, minLength: 1, maxLength: 100}}
+        - {name: weekStartsOn, in: query, required: false, schema: {type: integer, minimum: 0, maximum: 6, default: 1}}
+        - {name: assignment, in: query, required: false, schema: {type: string, enum: [all, unassigned, category, project], default: all}}
+        - {$ref: '#/components/parameters/CategoryFilter'}
+        - {$ref: '#/components/parameters/ProjectFilter'}
+        - {name: userId, in: query, required: false, schema: {type: string}, description: Defaults to caller; another user requires reporting authority.}
+      responses:
+        '200': {description: Authorized completion buckets and hierarchy attribution, content: {application/json: {schema: {$ref: '#/components/schemas/CompletionReport'}}}}
+        '400': {$ref: '#/components/responses/Validation'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+  /deletion-jobs/{jobId}:
+    get:
+      tags: [Deletion]
+      operationId: getDeletionJob
+      parameters:
+        - {name: jobId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+      responses:
+        '200': {description: Safe deletion progress, content: {application/json: {schema: {$ref: '#/components/schemas/DeletionJob'}}}}
+        '404': {$ref: '#/components/responses/NotFound'}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-naaseh_session
+  parameters:
+    Csrf: {name: X-CSRF-Token, in: header, required: true, schema: {type: string}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, minLength: 1, maxLength: 200}}
+    IfMatch: {name: If-Match, in: header, required: true, schema: {type: string, pattern: '^"[1-9][0-9]*"$'}}
+    DeletionConfirmation: {name: X-Deletion-Confirmation, in: header, required: true, schema: {type: string}, description: Short-lived token from deletion preview.}
+    TaskId: {name: taskId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    ListId: {name: listId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    CategoryId: {name: categoryId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    ProjectId: {name: projectId, in: path, required: true, schema: {$ref: '#/components/schemas/Ulid'}}
+    CategoryFilter: {name: categoryId, in: query, required: false, schema: {$ref: '#/components/schemas/Ulid'}}
+    ProjectFilter: {name: projectId, in: query, required: false, schema: {$ref: '#/components/schemas/Ulid'}}
+    AssignmentFilter: {name: assignment, in: query, required: false, schema: {type: string, enum: [all, unassigned], default: all}}
+    EntityTypeFilter: {name: entityType, in: query, required: false, schema: {type: string, enum: [task, list]}}
+    LifecycleFilter: {name: lifecycle, in: query, required: false, schema: {type: string, enum: [active, archived, all], default: active}}
+    Cursor: {name: cursor, in: query, required: false, schema: {type: string}}
+    Limit: {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 50}}
+  schemas:
+    Ulid: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}
+    Lifecycle: {type: string, enum: [active, archived]}
+    ProjectAssignmentPatch:
+      type: object
+      required: [projectId]
+      additionalProperties: false
+      properties:
+        projectId:
+          oneOf:
+            - {$ref: '#/components/schemas/Ulid'}
+            - {type: 'null'}
+    CategoryInput:
+      type: object
+      required: [name, color]
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        color: {type: string, pattern: '^#[0-9A-Fa-f]{6}$'}
+        defaultAssigneeId: {type: string}
+        groupId: {type: string}
+    CategoryPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        color: {type: string, pattern: '^#[0-9A-Fa-f]{6}$'}
+        defaultAssigneeId: {type: [string, 'null']}
+        groupId: {type: [string, 'null']}
+    Category:
+      type: object
+      required: [id, name, color, lifecycle, createdAt, updatedAt, version]
+      additionalProperties: false
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        color: {type: string, pattern: '^#[0-9A-Fa-f]{6}$'}
+        defaultAssigneeId: {type: string}
+        groupId: {type: string}
+        lifecycle: {$ref: '#/components/schemas/Lifecycle'}
+        archivedAt: {type: string, format: date-time}
+        archivedBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, minimum: 1}
+    ProjectInput:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        endDate: {type: string, format: date}
+        groupId: {type: string}
+    ProjectPatch:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name: {type: string, minLength: 1, maxLength: 80}
+        endDate: {type: [string, 'null'], format: date}
+        groupId: {type: [string, 'null']}
+        parentCategoryId: {$ref: '#/components/schemas/Ulid'}
+    Project:
+      type: object
+      required: [id, categoryId, name, lifecycle, effectivelyAssignable, createdAt, updatedAt, version]
+      additionalProperties: false
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        categoryId: {$ref: '#/components/schemas/Ulid'}
+        name: {type: string, minLength: 1, maxLength: 80}
+        endDate: {type: string, format: date}
+        groupId: {type: string}
+        lifecycle: {$ref: '#/components/schemas/Lifecycle'}
+        effectivelyAssignable: {type: boolean}
+        archivedAt: {type: string, format: date-time}
+        archivedBy: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        version: {type: integer, minimum: 1}
+    WorkCounts:
+      type: object
+      required: [activeTodoCount, activeListCount]
+      properties:
+        activeTodoCount: {type: integer, minimum: 0}
+        activeListCount: {type: integer, minimum: 0}
+    ProjectNode:
+      type: object
+      required: [project, counts, deadlineState, drillDown]
+      properties:
+        project: {$ref: '#/components/schemas/Project'}
+        counts: {$ref: '#/components/schemas/WorkCounts'}
+        deadlineState: {type: string, enum: [none, upcoming, today, overdue]}
+        drillDown: {type: object, additionalProperties: {type: string}}
+    CategoryNode:
+      type: object
+      required: [category, counts, projects, drillDown]
+      properties:
+        category: {$ref: '#/components/schemas/Category'}
+        counts: {$ref: '#/components/schemas/WorkCounts'}
+        projects: {type: array, items: {$ref: '#/components/schemas/ProjectNode'}}
+        drillDown: {type: object, additionalProperties: {type: string}}
+    OrganizationTree:
+      type: object
+      required: [asOf, categories, unassigned]
+      properties:
+        asOf: {type: string, format: date-time}
+        categories: {type: array, items: {$ref: '#/components/schemas/CategoryNode'}}
+        unassigned: {$ref: '#/components/schemas/WorkCounts'}
+    TaskLifecycleResult:
+      type: object
+      required: [id, lifecycle, completionState, version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        lifecycle: {$ref: '#/components/schemas/Lifecycle'}
+        completionState: {type: string, enum: [open, completed]}
+        archiveReason: {type: string, enum: [completed, manual]}
+        completionEventId: {$ref: '#/components/schemas/Ulid'}
+        version: {type: integer, minimum: 1}
+    ListLifecycleResult:
+      type: object
+      required: [id, lifecycle, itemCount, version]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        lifecycle: {$ref: '#/components/schemas/Lifecycle'}
+        archiveReason: {type: string, enum: [finished, manual]}
+        itemCount: {type: integer, minimum: 0}
+        version: {type: integer, minimum: 1}
+    ArchiveItem:
+      type: object
+      required: [entityType, id, archivedAt, archiveReason, version]
+      properties:
+        entityType: {type: string, enum: [task, list]}
+        id: {$ref: '#/components/schemas/Ulid'}
+        archivedAt: {type: string, format: date-time}
+        archiveReason: {type: string}
+        projectId: {$ref: '#/components/schemas/Ulid'}
+        categoryId: {$ref: '#/components/schemas/Ulid'}
+        version: {type: integer, minimum: 1}
+    ArchivePage:
+      type: object
+      required: [items]
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/ArchiveItem'}}
+        cursor: {type: [string, 'null']}
+    DependentCounts:
+      type: object
+      additionalProperties: {type: integer, minimum: 0}
+    DeletionPreview:
+      type: object
+      required: [resourceType, resourceId, displayLabel, targetVersion, dependentCounts, blockers, irreversible, expiresAt, confirmationToken]
+      properties:
+        resourceType: {type: string, enum: [task, list, category, project]}
+        resourceId: {$ref: '#/components/schemas/Ulid'}
+        displayLabel: {type: string}
+        targetVersion: {type: integer, minimum: 1}
+        dependentCounts: {$ref: '#/components/schemas/DependentCounts'}
+        blockers: {type: array, items: {type: string}}
+        irreversible: {const: true}
+        expiresAt: {type: string, format: date-time}
+        confirmationToken: {type: string}
+    DeletionJob:
+      type: object
+      required: [id, resourceType, resourceId, status, createdAt, updatedAt]
+      properties:
+        id: {$ref: '#/components/schemas/Ulid'}
+        resourceType: {type: string, enum: [task, list]}
+        resourceId: {$ref: '#/components/schemas/Ulid'}
+        status: {type: string, enum: [pending, locking, purging, publishing, complete, failed]}
+        progress: {type: integer, minimum: 0, maximum: 100}
+        safeFailureCode: {type: string}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+        completedAt: {type: string, format: date-time}
+    CompletionBucket:
+      type: object
+      required: [startDate, endDate, count]
+      properties:
+        startDate: {type: string, format: date}
+        endDate: {type: string, format: date}
+        count: {type: integer, minimum: 0}
+    CompletionReport:
+      type: object
+      required: [asOf, bucket, timeZone, total, buckets]
+      properties:
+        asOf: {type: string, format: date-time}
+        bucket: {type: string, enum: [day, week, month]}
+        timeZone: {type: string}
+        total: {type: integer, minimum: 0}
+        buckets: {type: array, items: {$ref: '#/components/schemas/CompletionBucket'}}
+        historicalScope:
+          type: object
+          properties:
+            categoryId: {$ref: '#/components/schemas/Ulid'}
+            categoryName: {type: string}
+            projectId: {$ref: '#/components/schemas/Ulid'}
+            projectName: {type: string}
+        currentLocationDiffers: {type: boolean}
+    Problem:
+      type: object
+      required: [type, title, status, correlationId]
+      properties:
+        type: {type: string}
+        title: {type: string}
+        status: {type: integer}
+        detail: {type: string}
+        correlationId: {type: string}
+        code: {type: string}
+        blockers: {type: array, items: {type: string}}
+  responses:
+    Validation: {description: Invalid request, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    Forbidden: {description: Explicit privilege required, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    NotFound: {description: Missing or concealed inaccessible resource, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    Conflict: {description: Version, name, lifecycle, assignment, or confirmation conflict, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    DeleteBlocked: {description: Category or Project is not empty, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}
+    PreconditionRequired: {description: If-Match is required, content: {application/problem+json: {schema: {$ref: '#/components/schemas/Problem'}}}}

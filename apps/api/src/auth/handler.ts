@@ -5,6 +5,7 @@ import type {
 } from 'aws-lambda';
 import { createHash, randomUUID } from 'node:crypto';
 import { log } from '@naaseh/observability';
+import { loginRequestSchema } from '@naaseh/contracts';
 import { loadPepper, verifyOrDummy } from './password.js';
 import {
   authenticateSession,
@@ -70,16 +71,14 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     return problem(405, 'method_not_allowed', 'Method not allowed.', correlationId);
   if (!validOrigin(event.headers.origin))
     return problem(403, 'forbidden', 'Request rejected.', correlationId);
-  let body: { username?: string; password?: string };
+  let body: { username: string; password: string };
   try {
-    body = JSON.parse(event.body ?? '{}');
+    body = loginRequestSchema.parse(JSON.parse(event.body ?? '{}'));
   } catch (error) {
     return errorResponse(error, { correlationId, operation: 'auth.login.validate' });
   }
-  const username = body.username?.trim().toLocaleLowerCase('en-US');
-  const accountKey = `account:${createHash('sha256')
-    .update(username ?? '')
-    .digest('hex')}`;
+  const username = body.username.toLocaleLowerCase('en-US');
+  const accountKey = `account:${createHash('sha256').update(username).digest('hex')}`;
   const ipKey = `ip:${createHash('sha256')
     .update(event.requestContext.http.sourceIp ?? 'unknown')
     .digest('hex')}`;
@@ -90,10 +89,10 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       'Sign-in is temporarily unavailable. Try again later.',
       correlationId,
     );
-  const user = username ? await userByUsername(username) : undefined;
+  const user = await userByUsername(username);
   const pepper = await loadPepper(process.env.PASSWORD_PEPPER_SECRET_ID, user?.pepperVersion);
-  const validPassword = await verifyOrDummy(user?.passwordHash, body.password ?? '', pepper.value);
-  const valid = Boolean(user?.active && body.password && validPassword);
+  const validPassword = await verifyOrDummy(user?.passwordHash, body.password, pepper.value);
+  const valid = Boolean(user?.active && validPassword);
   if (!valid || !user) {
     await Promise.all([registerDurableFailure(accountKey), registerDurableFailure(ipKey)]);
     log('auth.login', { correlationId, outcome: 'denied' });

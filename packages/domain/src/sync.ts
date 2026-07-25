@@ -11,6 +11,9 @@ export const entityTypeSchema = z.enum([
   'attachment',
   'copyJob',
   'accessControl',
+  'project',
+  'completionEvent',
+  'deletionJob',
 ]);
 export type EntityType = z.infer<typeof entityTypeSchema>;
 export const supportedEntityTypes = entityTypeSchema.options;
@@ -31,6 +34,12 @@ export const mutationOperationSchema = z.enum([
   'archive',
   'restore',
   'releaseAttachment',
+  'completeAndArchive',
+  'reopenAndRestore',
+  'finish',
+  'assignProject',
+  'archiveOrganization',
+  'restoreOrganization',
 ]);
 export type MutationOperation = z.infer<typeof mutationOperationSchema>;
 
@@ -59,7 +68,13 @@ export interface SyncConflict<TLocal = Task, TRemote = Task> {
   mutationId: string;
   local: TLocal;
   remote: TRemote;
-  reason: 'version_mismatch' | 'authorization_changed' | 'validation_failed';
+  reason:
+    | 'version_mismatch'
+    | 'authorization_changed'
+    | 'validation_failed'
+    | 'lifecycle_changed'
+    | 'project_unavailable'
+    | 'hard_deleted';
 }
 export interface SyncChange {
   audience: string;

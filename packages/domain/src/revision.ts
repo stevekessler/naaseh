@@ -18,6 +18,12 @@ export const revisionOperationSchema = z.enum([
   'resetOverrides',
   'reorder',
   'releaseAttachment',
+  'completeAndArchive',
+  'reopenAndRestore',
+  'finish',
+  'assignProject',
+  'archiveOrganization',
+  'restoreOrganization',
 ]);
 
 export const revisionSyncOutcomeSchema = z.enum(['local-pending', 'applied', 'replayed', 'merged']);

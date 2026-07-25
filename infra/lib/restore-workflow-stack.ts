@@ -4,6 +4,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import type { Construct } from 'constructs';
@@ -49,6 +50,7 @@ export function createRestoreWorkflow(
     manifestSigningKey: kms.IKey;
     recoveryWrappingKey: kms.IKey;
     logGroup: logs.ILogGroup;
+    deletionLedgerTable: dynamodb.ITable;
   },
 ) {
   const stack = Stack.of(scope);
@@ -67,11 +69,13 @@ export function createRestoreWorkflow(
       RESTORE_TESTING_PLAN_ARN: options.restoreTestingPlanArn,
       MANIFEST_SIGNING_KEY_ARN: options.manifestSigningKey.keyArn,
       RECOVERY_MEMO_WRAPPING_KEY_ARN: options.recoveryWrappingKey.keyArn,
+      DELETION_LEDGER_TABLE: options.deletionLedgerTable.tableName,
     },
     bundling: { minify: true, sourceMap: true },
   });
   options.manifestSigningKey.grantVerify(validator);
   options.recoveryWrappingKey.grantDecrypt(validator);
+  options.deletionLedgerTable.grantReadData(validator);
 
   validator.addToRolePolicy(
     new iam.PolicyStatement({

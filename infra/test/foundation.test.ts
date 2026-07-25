@@ -36,7 +36,7 @@ describe('foundation infrastructure', () => {
     template.resourceCountIs('AWS::CloudFormation::Stack', 0);
     template.resourceCountIs('AWS::Backup::BackupPlan', 1);
     template.resourceCountIs('AWS::Backup::BackupVault', 1);
-    template.resourceCountIs('AWS::StepFunctions::StateMachine', 2);
+    template.resourceCountIs('AWS::StepFunctions::StateMachine', 3);
   });
   it('uses private, retained S3 origins and CloudFront OAC over HTTPS', () => {
     template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 1);
@@ -89,6 +89,10 @@ describe('foundation infrastructure', () => {
     template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
       StageName: '$default',
       AutoDeploy: true,
+      DefaultRouteSettings: {
+        ThrottlingBurstLimit: 100,
+        ThrottlingRateLimit: 50,
+      },
       AccessLogSettings: Match.objectLike({
         Format: Match.serializedJson({
           requestId: '$context.requestId',
@@ -99,6 +103,11 @@ describe('foundation infrastructure', () => {
       }),
     });
     template.hasResourceProperties('AWS::Lambda::Function', { Runtime: 'nodejs24.x' });
+    template.hasResourceProperties('AWS::Lambda::Function', {
+      Environment: {
+        Variables: Match.objectLike({ NODE_ENV: 'production' }),
+      },
+    });
     template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
       RouteKey: 'POST /api/v1/auth/login',
     });
@@ -117,6 +126,17 @@ describe('foundation infrastructure', () => {
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: route });
   });
 
+  it('limits password-pepper access to authentication and provisioning boundaries', () => {
+    const policies = Object.values(template.findResources('AWS::IAM::Policy'));
+    const pepperReaders = policies.filter((policy) => {
+      const rendered = JSON.stringify(policy);
+      return (
+        rendered.includes('PasswordPepper') && rendered.includes('secretsmanager:GetSecretValue')
+      );
+    });
+    expect(pepperReaders).toHaveLength(5);
+  });
+
   it('throttles group joins independently and scopes profile-media access', () => {
     edgeTemplate.hasResourceProperties('AWS::WAFv2::WebACL', {
       Rules: Match.arrayWith([
@@ -130,6 +150,7 @@ describe('foundation infrastructure', () => {
     });
     const rendered = JSON.stringify(template.toJSON());
     expect(rendered).toContain('profiles/*');
+    expect(rendered).toContain('schedule/default/naaseh-reminder-*');
     expect(rendered).toContain('GroupAuthorizationErrors');
     expect(rendered).toContain('ProfilePictureProcessingErrors');
   });
@@ -171,9 +192,9 @@ describe('foundation infrastructure', () => {
   });
 
   it('creates retained log groups, operational alarms, and a dashboard', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 7);
+    template.resourceCountIs('AWS::Logs::LogGroup', 8);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 30);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 38);
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
   });
 });

@@ -30,6 +30,7 @@ const mutableTaskFields = new Set<keyof Task>([
   'dueTimeZone',
   'assigneeId',
   'categoryId',
+  'projectId',
   'groupId',
   'parentId',
   'visibility',

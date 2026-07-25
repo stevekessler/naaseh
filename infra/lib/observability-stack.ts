@@ -29,7 +29,12 @@ export function createLogGroups(scope: Construct) {
 }
 export function createOperationalVisibility(
   scope: Construct,
-  functions: { task: lambda.IFunction; auth: lambda.IFunction; sync: lambda.IFunction },
+  functions: {
+    task: lambda.IFunction;
+    auth: lambda.IFunction;
+    sync: lambda.IFunction;
+    reporting?: lambda.IFunction;
+  },
   table: dynamodb.ITable,
 ) {
   new cloudwatch.Alarm(scope, 'TaskErrors', {
@@ -46,6 +51,23 @@ export function createOperationalVisibility(
     metric: functions.sync.metricErrors({ period: Duration.minutes(5) }),
     threshold: 1,
     evaluationPeriods: 1,
+  });
+  if (functions.reporting)
+    new cloudwatch.Alarm(scope, 'ReportingErrors', {
+      metric: functions.reporting.metricErrors({ period: Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+    });
+  new cloudwatch.Alarm(scope, 'CompletionReportLatencyAlarm', {
+    metric: new cloudwatch.Metric({
+      namespace: 'Naaseh',
+      metricName: 'CompletionReportLatency',
+      statistic: 'p95',
+      period: Duration.minutes(5),
+    }),
+    threshold: 1000,
+    evaluationPeriods: 2,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
   new cloudwatch.Alarm(scope, 'AuthDuration', {
     metric: functions.auth.metricDuration({ period: Duration.minutes(5), statistic: 'p95' }),
@@ -92,6 +114,9 @@ export function createOperationalVisibility(
     ['AttachmentOrphanAlarm', 'AttachmentOrphanBlobs', 1],
     ['AttachmentMissingObjectAlarm', 'AttachmentMissingObjects', 1],
     ['ExportFailureAlarm', 'ExportFailures', 1],
+    ['WorkloadProjectionDriftAlarm', 'WorkloadProjectionDrift', 1],
+    ['OrganizationDeleteBlockedAlarm', 'OrganizationDeleteBlocked', 5],
+    ['OrganizationDeleteFailureAlarm', 'OrganizationDeleteFailures', 1],
   ] as const)
     new cloudwatch.Alarm(scope, id, {
       metric: applicationMetric(metricName),
@@ -127,8 +152,20 @@ export function createOperationalVisibility(
     }),
     new cloudwatch.GraphWidget({
       title: 'Administrative changes and provisioning failures',
-      left: [applicationMetric('UserStatusChanges'), applicationMetric('CategoryAdminChanges')],
-      right: [applicationMetric('UserProvisionFailures')],
+      left: [
+        applicationMetric('UserStatusChanges'),
+        applicationMetric('CategoryAdminChanges'),
+        applicationMetric('OrganizationDeleteBlocked'),
+      ],
+      right: [
+        applicationMetric('UserProvisionFailures'),
+        applicationMetric('OrganizationDeleteFailures'),
+      ],
+    }),
+    new cloudwatch.GraphWidget({
+      title: 'Completion reporting',
+      left: [applicationMetric('CompletionReportLatency', 'p95')],
+      right: [functions.reporting?.metricErrors() ?? applicationMetric('CompletionReportErrors')],
     }),
     new cloudwatch.GraphWidget({
       title: 'DynamoDB throttles',

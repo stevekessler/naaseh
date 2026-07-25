@@ -14,6 +14,7 @@ import { ListVisibilityControl } from './ListVisibilityControl.js';
 import { CopyListAction } from './CopyListAction.js';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { listLocalDirectoryItems } from '../../db/directory-repository.js';
+import { PermanentDeleteDialog } from '../archive/PermanentDeleteDialog.js';
 export function ListPage({
   lists,
   items,
@@ -33,10 +34,12 @@ export function ListPage({
   copyReady,
   selectedId,
   openList,
+  categories,
+  projects,
 }: {
   lists: List[];
   items: Map<string, ListItem[]>;
-  createList: (name: string) => Promise<void>;
+  createList: (name: string, projectId?: string) => Promise<void>;
   addItem: (listId: string, name: string) => Promise<void>;
   toggle: (item: ListItem) => void;
   remove: (item: ListItem) => void;
@@ -52,6 +55,8 @@ export function ListPage({
   copyReady: (id: string) => void;
   selectedId?: string;
   openList: (list: List) => void;
+  categories: import('@naaseh/domain').CategoryRecord[];
+  projects: import('@naaseh/domain').Project[];
 }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const directory = useLiveQuery(() => listLocalDirectoryItems(), []) ?? [];
@@ -63,7 +68,7 @@ export function ListPage({
           <h1>Lists</h1>
         </div>
       </header>
-      <ListForm save={createList} />
+      <ListForm save={createList} categories={categories} projects={projects} />
       <ListIndexPage lists={lists} {...(selectedId ? { selectedId } : {})} open={openList} />
       <GlobalDirectory actorId={actorId} lists={lists} addToList={addDirectoryItem} />
       {lists.length === 0 ? (
@@ -84,12 +89,30 @@ export function ListPage({
               >
                 Rename list
               </button>
+              <PermanentDeleteDialog
+                target={{ resourceType: 'list', resourceId: list.id, version: list.version }}
+                label={list.name}
+                csrfToken={csrfToken}
+                disabled={list.lifecycle === 'deleting'}
+              />
               <ListVisibilityControl
                 list={list}
                 groups={groups}
                 change={(patch) => void changeList(list, patch)}
               />
               <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
+              <button
+                type="button"
+                onClick={() =>
+                  void changeList(list, {
+                    status: 'archived',
+                    lifecycle: 'archived',
+                    archiveReason: 'finished',
+                  })
+                }
+              >
+                Finish and archive list
+              </button>
               <form
                 className="list-add"
                 onSubmit={(event) => {

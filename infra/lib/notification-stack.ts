@@ -1,4 +1,4 @@
-import { Duration } from 'aws-cdk-lib';
+import { ArnFormat, Duration, Stack } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -47,7 +47,14 @@ export function createNotificationResources(
   options.taskFunction.addToRolePolicy(
     new iam.PolicyStatement({
       actions: ['scheduler:CreateSchedule', 'scheduler:UpdateSchedule', 'scheduler:DeleteSchedule'],
-      resources: ['*'],
+      resources: [
+        Stack.of(scope).formatArn({
+          service: 'scheduler',
+          resource: 'schedule',
+          resourceName: 'default/naaseh-reminder-*',
+          arnFormat: ArnFormat.SLASH_RESOURCE_NAME,
+        }),
+      ],
     }),
   );
   options.taskFunction.addToRolePolicy(

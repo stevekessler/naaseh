@@ -1,10 +1,15 @@
 import {
   createTask,
   createUlid,
+  archiveTask,
+  completeAndArchiveTask,
+  restoreArchivedTask,
   transitionTask,
+  taskSchema,
   type Task,
   type TaskInput,
   type TaskRevision,
+  type CompletionEvent,
 } from '@naaseh/domain';
 import { db } from './database.js';
 import { createDeviceKey, decryptText, encryptText } from '../crypto/vault.js';
@@ -53,9 +58,12 @@ export async function taskToEncryptedRecord(task: Task) {
     ...(task.dueTimeZone ? { dueTimeZone: task.dueTimeZone } : {}),
     ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
     ...(task.categoryId ? { categoryId: task.categoryId } : {}),
+    ...(task.projectId ? { projectId: task.projectId } : {}),
     ...(task.groupId ? { groupId: task.groupId } : {}),
     ...(task.parentId ? { parentId: task.parentId } : {}),
     visibility: task.visibility,
+    ...(task.lifecycle ? { lifecycle: task.lifecycle } : {}),
+    ...(task.completionState ? { completionState: task.completionState } : {}),
     updatedAt: task.updatedAt,
     value,
   };
@@ -69,12 +77,19 @@ const safeRevisionFields = new Set<keyof Task>([
   'dueTimeZone',
   'assigneeId',
   'categoryId',
+  'projectId',
   'groupId',
   'parentId',
   'visibility',
   'status',
   'completedAt',
   'completedBy',
+  'lifecycle',
+  'completionState',
+  'archiveReason',
+  'archivedAt',
+  'archivedBy',
+  'currentCompletionEventId',
   'version',
 ]);
 function localRevisionValues(task: Task, fields: string[]) {
@@ -109,9 +124,8 @@ export async function listLocalTasks(): Promise<Task[]> {
   const records = await db.secureTasks.orderBy('updatedAt').reverse().toArray();
   const key = await deviceKey();
   return Promise.all(
-    records.map(
-      async (record) =>
-        JSON.parse(await decryptText(record.value, key, `task:${record.id}`)) as Task,
+    records.map(async (record) =>
+      taskSchema.parse(JSON.parse(await decryptText(record.value, key, `task:${record.id}`))),
     ),
   );
 }
@@ -167,15 +181,91 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
 }
 
 export async function updateTask(task: Task, patch: Partial<Task>, actorId: string): Promise<Task> {
-  const changedFields = Object.keys(patch);
-  const operation =
-    patch.status === 'completed' ? 'complete' : patch.status === 'open' ? 'reopen' : 'update';
-  const transitioned =
-    patch.status && patch.status !== task.status
-      ? transitionTask(task, patch.status, actorId)
-      : { ...task, version: task.version + 1, updatedAt: new Date().toISOString() };
-  const next = { ...transitioned, ...patch };
   const id = createUlid();
+  let completionEvent: CompletionEvent | undefined;
+  let operation: TaskRevision['operation'] = 'update';
+  let transitioned: Task;
+  if (patch.status === 'completed' && task.lifecycle !== 'archived') {
+    let attribution = {};
+    if (task.projectId) {
+      const projectRecord = await db.secureProjects.get(task.projectId);
+      if (projectRecord) {
+        const project = await decryptLocalValue<import('@naaseh/domain').Project>(
+          'project',
+          projectRecord.id,
+          projectRecord.value,
+        );
+        const categoryRecord = await db.secureCategories.get(project.categoryId);
+        if (categoryRecord) {
+          const category = await decryptLocalValue<import('@naaseh/domain').CategoryRecord>(
+            'category',
+            categoryRecord.id,
+            categoryRecord.value,
+          );
+          attribution = {
+            projectId: project.id,
+            projectName: project.name,
+            categoryId: category.id,
+            categoryName: category.name,
+          };
+        }
+      }
+    }
+    const result = completeAndArchiveTask(task, actorId, attribution);
+    transitioned = result.task;
+    completionEvent = result.completionEvent;
+    operation = 'completeAndArchive';
+  } else if (patch.status === 'archived' && task.lifecycle !== 'archived') {
+    transitioned = archiveTask(task, actorId);
+    operation = 'archive';
+  } else if (patch.status === 'open' && task.lifecycle === 'archived') {
+    const currentEvent = task.currentCompletionEventId
+      ? await db.secureCompletionEvents.get(task.currentCompletionEventId)
+      : undefined;
+    const restored = restoreArchivedTask(
+      task,
+      currentEvent
+        ? await decryptLocalValue<CompletionEvent>(
+            'completionEvent',
+            currentEvent.id,
+            currentEvent.value,
+          )
+        : undefined,
+      actorId,
+      id,
+    );
+    transitioned = restored.task;
+    completionEvent = restored.completionEvent;
+    operation = 'reopenAndRestore';
+  } else {
+    transitioned =
+      patch.status && patch.status !== task.status
+        ? transitionTask(task, patch.status, actorId)
+        : { ...task, version: task.version + 1, updatedAt: new Date().toISOString() };
+    operation = patch.status === 'open' ? 'reopen' : 'update';
+  }
+  const lifecyclePatch =
+    operation === 'completeAndArchive' ||
+    operation === 'archive' ||
+    operation === 'reopenAndRestore'
+      ? Object.fromEntries(Object.entries(patch).filter(([key]) => key !== 'status'))
+      : patch;
+  const next = taskSchema.parse({ ...transitioned, ...lifecyclePatch });
+  const changedFields = [
+    ...new Set([
+      ...Object.keys(patch),
+      ...(operation === 'update'
+        ? []
+        : [
+            'lifecycle',
+            'completionState',
+            'archiveReason',
+            'archivedAt',
+            'archivedBy',
+            'currentCompletionEventId',
+          ]),
+    ]),
+  ];
   const sourceClientId = await getClientId();
   const revision: TaskRevision = {
     id: createUlid(),
@@ -191,25 +281,50 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
     after: localRevisionValues(next, changedFields),
     syncOutcome: 'local-pending',
   };
-  const [storedTask, payload, storedRevision] = await Promise.all([
+  const [storedTask, payload, storedRevision, storedEvent] = await Promise.all([
     taskToEncryptedRecord(next),
-    encryptMutationPayload(id, patch),
+    encryptMutationPayload(id, { patch, ...(completionEvent ? { completionEvent } : {}) }),
     encryptRevision(revision),
+    completionEvent
+      ? Promise.resolve({
+          id: completionEvent.id,
+          taskId: completionEvent.taskId,
+          completedBy: completionEvent.completedBy,
+          occurredAt: completionEvent.occurredAt,
+          ...(completionEvent.projectIdAtCompletion
+            ? { projectId: completionEvent.projectIdAtCompletion }
+            : {}),
+          ...(completionEvent.categoryIdAtCompletion
+            ? { categoryId: completionEvent.categoryIdAtCompletion }
+            : {}),
+          ...(completionEvent.reversedAt ? { reversedAt: completionEvent.reversedAt } : {}),
+          updatedAt: completionEvent.reversedAt ?? completionEvent.occurredAt,
+          value: await encryptLocalValue('completionEvent', completionEvent.id, completionEvent),
+        })
+      : Promise.resolve(undefined),
   ]);
-  await db.transaction('rw', db.secureTasks, db.secureRevisions, db.outbox, async () => {
-    await db.secureTasks.put(storedTask);
-    await db.secureRevisions.add(storedRevision);
-    await db.outbox.add({
-      id,
-      entityId: task.id,
-      entityType: 'task',
-      operation: 'update',
-      baseVersion: task.version,
-      payload,
-      createdAt: next.updatedAt,
-      attempts: 0,
-    });
-  });
+  await db.transaction(
+    'rw',
+    db.secureTasks,
+    db.secureRevisions,
+    db.secureCompletionEvents,
+    db.outbox,
+    async () => {
+      await db.secureTasks.put(storedTask);
+      await db.secureRevisions.add(storedRevision);
+      if (storedEvent) await db.secureCompletionEvents.put(storedEvent);
+      await db.outbox.add({
+        id,
+        entityId: task.id,
+        entityType: 'task',
+        operation,
+        baseVersion: task.version,
+        payload,
+        createdAt: next.updatedAt,
+        attempts: 0,
+      });
+    },
+  );
   return next;
 }
 

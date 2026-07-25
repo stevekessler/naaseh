@@ -14,6 +14,8 @@ import { createRestoreSchedule } from './restore-schedule-stack.js';
 import { createRestoreWorkflow } from './restore-workflow-stack.js';
 import { createRuntimeSecrets } from './secrets-stack.js';
 import { createExportOperatorPolicy, createExportResources } from './export-stack.js';
+import { createArchiveProjectMigration } from './migration-stack.js';
+import { createReportingReconciliation } from './reporting-stack.js';
 
 export interface NaasehStackProps extends StackProps {
   breakGlassRoleArn: string;
@@ -63,6 +65,7 @@ export class NaasehStack extends Stack {
     });
     const exportResources = createExportResources(this, { table });
     const commonEnvironment = {
+      NODE_ENV: 'production',
       NAASEH_TABLE: table.tableName,
       NAASEH_AWS_REGION: 'us-west-2',
       PASSWORD_PEPPER_SECRET_ID: pepper.secretArn,
@@ -73,6 +76,16 @@ export class NaasehStack extends Stack {
       VERBOSE_LOGGING: 'false',
     };
     const logGroups = createLogGroups(this);
+    createArchiveProjectMigration(this, {
+      environment: commonEnvironment,
+      table,
+      logGroup: logGroups.sync,
+    });
+    createReportingReconciliation(this, {
+      environment: commonEnvironment,
+      table,
+      logGroup: logGroups.task,
+    });
     const { api: httpApi, functions } = createApplicationApi(this, {
       environment: commonEnvironment,
       allowedOrigin: `https://${props.domainName}`,
@@ -92,7 +105,12 @@ export class NaasehStack extends Stack {
     attachSameOriginApi(distribution, httpApi, responseHeadersPolicy);
     createOperationalVisibility(
       this,
-      { task: functions.task, auth: functions.auth, sync: functions.sync },
+      {
+        task: functions.task,
+        auth: functions.auth,
+        sync: functions.sync,
+        reporting: functions.reporting,
+      },
       table,
     );
     const backup = createBackupResources(this, { dataKey, table, media });
@@ -105,6 +123,7 @@ export class NaasehStack extends Stack {
       manifestSigningKey: recoveryKeys.manifestSigningKey,
       recoveryWrappingKey: recoveryKeys.recoveryWrappingKey,
       logGroup: restoreLogs,
+      deletionLedgerTable: table,
     });
     createRestoreSchedule(
       this,

@@ -1,6 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
+  // WebKit's four device projects can exhaust the local preview process when
+  // the complete suite fans out; two workers keeps the release gate stable.
+  workers: 2,
   metadata: { featureSet: 'enhanced-list-management' },
   testDir: './tests/e2e',
   webServer: process.env.PRODUCTION_BASE_URL

@@ -1,4 +1,4 @@
-import type { Task, TaskRevision } from '@naaseh/domain';
+import type { CategoryRecord, Project, Task, TaskRevision } from '@naaseh/domain';
 import { TaskList } from './TaskList.js';
 import { TaskForm } from './TaskForm.js';
 import { TaskActions } from './TaskActions.js';
@@ -16,6 +16,8 @@ export function TaskListPage({
   onClose,
   onUpdate,
   csrfToken,
+  categories = [],
+  projects = [],
 }: {
   tasks: Task[];
   loading?: boolean;
@@ -27,6 +29,8 @@ export function TaskListPage({
   onClose: () => void;
   onUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
   csrfToken: string;
+  categories?: CategoryRecord[];
+  projects?: Project[];
 }) {
   if (loading) return <p role="status">Loading tasks…</p>;
   if (error)
@@ -45,9 +49,15 @@ export function TaskListPage({
             Close details
           </button>
           <h2>{selected.label}</h2>
-          <TaskActions task={selected} update={(patch) => void onUpdate(selected, patch)} />
+          <TaskActions
+            task={selected}
+            csrfToken={csrfToken}
+            update={(patch) => void onUpdate(selected, patch)}
+          />
           <TaskForm
             task={selected}
+            categories={categories}
+            projects={projects}
             submitLabel="Save changes"
             save={(patch) => onUpdate(selected, patch as Partial<Task>)}
           />

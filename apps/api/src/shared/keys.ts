@@ -41,6 +41,53 @@ export const keys = {
   }),
   copyJob: (id: string) => ({ PK: `COPYJOB#${id}`, SK: 'CURRENT' }),
   exportJob: (id: string) => ({ PK: `EXPORTJOB#${id}`, SK: 'CURRENT' }),
+  category: (id: string) => ({ PK: `CATEGORY#${id}`, SK: 'CATEGORY' }),
+  project: (id: string) => ({ PK: `PROJECT#${id}`, SK: 'CURRENT' }),
+  projectName: (categoryId: string, canonicalName: string) => ({
+    PK: `PROJECTNAME#${categoryId}#${canonicalName}`,
+    SK: 'PROJECT',
+  }),
+  completionEvent: (taskId: string, occurredAt: string, id: string) => ({
+    PK: `TASK#${taskId}`,
+    SK: `COMPLETION#${occurredAt}#${id}`,
+  }),
+  completionEventById: (id: string) => ({ PK: `COMPLETION#${id}`, SK: 'EVENT' }),
+  workloadCounter: (audience: string, scopeType: string, scopeId: string, workType: string) => ({
+    PK: `WORKLOAD#${audience}`,
+    SK: `COUNT#${scopeType}#${scopeId}#${workType}`,
+  }),
+  workloadPointer: (
+    audience: string,
+    scopeType: string,
+    scopeId: string,
+    workType: string,
+    workId: string,
+  ) => ({
+    PK: `WORKLOAD#${audience}`,
+    SK: `ITEM#${scopeType}#${scopeId}#${workType}#${workId}`,
+  }),
+  completionProjection: (
+    userId: string,
+    utcDate: string,
+    categoryId: string,
+    projectId: string,
+  ) => ({
+    PK: `COMPLETIONS#USER#${userId}`,
+    SK: `DAY#${utcDate}#CATEGORY#${categoryId}#PROJECT#${projectId}`,
+  }),
+  deletionJob: (id: string) => ({ PK: `DELETEJOB#${id}`, SK: 'CURRENT' }),
+  deletionReceipt: (actorId: string, mutationId: string) => ({
+    PK: `USER#${actorId}`,
+    SK: `DELETION#${mutationId}`,
+  }),
+  deletionLedger: (resourceType: string, resourceId: string) => ({
+    PK: 'DELETIONLEDGER',
+    SK: `${resourceType.toUpperCase()}#${resourceId}`,
+  }),
+  migrationCheckpoint: (name: string, id: string) => ({
+    PK: `MIGRATION#${name}`,
+    SK: `CHECKPOINT#${id}`,
+  }),
   jobCheckpoint: (jobType: 'COPY' | 'EXPORT', id: string, checkpoint: string) => ({
     PK: `${jobType}JOB#${id}`,
     SK: `CHECKPOINT#${checkpoint}`,

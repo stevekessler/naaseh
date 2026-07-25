@@ -62,6 +62,7 @@ export function buildTaskTransaction(
   revision: TaskRevision,
   mutationId: string,
   feedChanges: PreparedFeedChange[] = [],
+  additionalWrites: NonNullable<TransactWriteCommandInput['TransactItems']> = [],
 ): TransactWriteCommandInput {
   return {
     TransactItems: [
@@ -132,6 +133,7 @@ export function buildTaskTransaction(
           },
         },
       ]),
+      ...additionalWrites,
     ],
   };
 }
@@ -140,9 +142,12 @@ export async function commitTask(
   revision: TaskRevision,
   mutationId: string,
   feedChanges: PreparedFeedChange[] = [],
+  additionalWrites: NonNullable<TransactWriteCommandInput['TransactItems']> = [],
 ): Promise<void> {
   await document.send(
-    new TransactWriteCommand(buildTaskTransaction(task, revision, mutationId, feedChanges)),
+    new TransactWriteCommand(
+      buildTaskTransaction(task, revision, mutationId, feedChanges, additionalWrites),
+    ),
   );
 }
 
@@ -163,6 +168,7 @@ export interface GenericTransactionInput<T> {
   expectedVersion: number;
   feedChanges?: PreparedFeedChange[];
   checkpoints?: Record<string, unknown>[];
+  additionalWrites?: NonNullable<TransactWriteCommandInput['TransactItems']>;
 }
 
 export function buildEntityTransaction<T>(
@@ -232,6 +238,7 @@ export function buildEntityTransaction<T>(
       ...(input.checkpoints ?? []).map((item) => ({
         Put: { TableName: table, Item: item },
       })),
+      ...(input.additionalWrites ?? []),
     ],
   };
 }

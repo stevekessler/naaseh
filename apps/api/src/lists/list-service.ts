@@ -7,11 +7,15 @@ import {
   type List,
   type ListItem,
 } from '@naaseh/domain';
-export const createOwnedList = (name: string, actorId: string, now = new Date()) =>
-  createList({ name }, actorId, now);
+export const createOwnedList = (
+  name: string,
+  actorId: string,
+  now = new Date(),
+  projectId?: string,
+) => createList({ name, ...(projectId ? { projectId } : {}) }, actorId, now);
 export function updateOwnedList(
   current: List,
-  patch: Pick<Partial<List>, 'name' | 'groupId' | 'locked' | 'status'>,
+  patch: Pick<Partial<List>, 'name' | 'groupId' | 'locked' | 'status' | 'projectId'>,
   actorId: string,
   now = new Date(),
 ) {

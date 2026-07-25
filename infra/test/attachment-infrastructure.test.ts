@@ -26,6 +26,18 @@ describe('attachment infrastructure', () => {
       CorsConfiguration: Match.anyValue(),
       LifecycleConfiguration: Match.anyValue(),
     });
+    template.hasResourceProperties('AWS::S3::Bucket', {
+      LifecycleConfiguration: {
+        Rules: Match.arrayWith([
+          Match.objectLike({
+            Id: 'ProfileMediaNoncurrentVersions',
+            NoncurrentVersionExpiration: { NoncurrentDays: 7 },
+            Prefix: 'profiles/',
+            Status: 'Enabled',
+          }),
+        ]),
+      },
+    });
     expect(JSON.stringify(template.toJSON())).toContain('BucketKeyEnabled');
     template.resourceCountIs('AWS::GuardDuty::MalwareProtectionPlan', 1);
     template.hasResourceProperties('AWS::S3::BucketPolicy', {

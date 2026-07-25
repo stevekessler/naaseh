@@ -2,10 +2,14 @@ import type { EntityType, Task, VectorCursor } from '@naaseh/domain';
 import {
   attachmentSchema,
   copyJobSchema,
+  completionEventSchema,
+  deletionJobSchema,
   directoryItemSchema,
   isSupportedEntityType,
   listItemSchema,
   listSchema,
+  projectSchema,
+  categorySchema,
   nextRetryDelay,
   taskSchema,
 } from '@naaseh/domain';
@@ -61,7 +65,11 @@ async function pushMutation(
       'x-client-id': clientId,
     },
     body: JSON.stringify({
-      contractVersion: ['task', 'category', 'group'].includes(mutation.entityType) ? 1 : 2,
+      contractVersion: ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
+        ? 3
+        : ['task', 'category', 'group'].includes(mutation.entityType)
+          ? 1
+          : 2,
       mutations: [mutation],
       backlog,
     }),
@@ -104,7 +112,7 @@ export async function pullChanges(): Promise<void> {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ contractVersion: 2, cursor: current }),
+    body: JSON.stringify({ contractVersion: 3, cursor: current }),
   });
   if (!response.ok) throw syncHttpError('Synchronization pull', response.status);
   const body = (await response.json()) as {
@@ -127,6 +135,10 @@ export async function pullChanges(): Promise<void> {
     directoryItem: directoryItemSchema,
     attachment: attachmentSchema,
     copyJob: copyJobSchema,
+    project: projectSchema,
+    category: categorySchema,
+    completionEvent: completionEventSchema,
+    deletionJob: deletionJobSchema,
   };
   for (const change of body.changes) {
     const entityType = change.entityType ?? 'task';
@@ -143,11 +155,15 @@ export async function pullChanges(): Promise<void> {
         enhanced.push({
           entityType: entityType as
             | 'list'
+            | 'category'
             | 'listItem'
             | 'directoryItem'
             | 'attachment'
             | 'copyJob'
-            | 'accessControl',
+            | 'accessControl'
+            | 'project'
+            | 'completionEvent'
+            | 'deletionJob',
           entityId: change.entityId,
           operation: 'tombstone' as const,
         });
@@ -160,15 +176,25 @@ export async function pullChanges(): Promise<void> {
         updatedAt?: string;
         listId?: string;
         parentId?: string;
+        projectId?: string;
+        categoryId?: string;
+        lifecycle?: string;
+        completedBy?: string;
+        occurredAt?: string;
+        reversedAt?: string;
       };
       enhanced.push({
         entityType: entityType as
           | 'list'
+          | 'category'
           | 'listItem'
           | 'directoryItem'
           | 'attachment'
           | 'copyJob'
-          | 'accessControl',
+          | 'accessControl'
+          | 'project'
+          | 'completionEvent'
+          | 'deletionJob',
         entityId: change.entityId,
         operation: 'upsert' as const,
         record: {
@@ -177,6 +203,24 @@ export async function pullChanges(): Promise<void> {
             ? { taskId: parsed.listId ?? parsed.parentId }
             : {}),
           updatedAt: parsed.updatedAt ?? change.changedAt ?? new Date().toISOString(),
+          ...('projectId' in parsed && typeof parsed.projectId === 'string'
+            ? { projectId: parsed.projectId }
+            : {}),
+          ...('categoryId' in parsed && typeof parsed.categoryId === 'string'
+            ? { categoryId: parsed.categoryId }
+            : {}),
+          ...('lifecycle' in parsed && typeof parsed.lifecycle === 'string'
+            ? { lifecycle: parsed.lifecycle }
+            : {}),
+          ...('completedBy' in parsed && typeof parsed.completedBy === 'string'
+            ? { completedBy: parsed.completedBy }
+            : {}),
+          ...('occurredAt' in parsed && typeof parsed.occurredAt === 'string'
+            ? { occurredAt: parsed.occurredAt }
+            : {}),
+          ...('reversedAt' in parsed && typeof parsed.reversedAt === 'string'
+            ? { reversedAt: parsed.reversedAt }
+            : {}),
           value: await encryptLocalValue(entityType, parsed.id, parsed),
         },
       });

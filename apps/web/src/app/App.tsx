@@ -50,14 +50,34 @@ import { listLocalDirectoryItems, saveDirectoryItem } from '../db/directory-repo
 import { CompletionSoundSetting } from '../features/tasks/CompletionSoundSetting.js';
 import { SearchResults } from '../features/search/SearchResults.js';
 import { navigate, parseAppRoute } from './router.js';
+import { listLocalArchive } from '../db/archive-repository.js';
+import { ArchivePage } from '../features/archive/ArchivePage.js';
+import { listLocalProjects } from '../db/project-repository.js';
+import {
+  changeLocalProjectLifecycle,
+  saveNewLocalProject,
+  updateLocalProject,
+} from '../db/project-repository.js';
+import {
+  changeLocalCategoryLifecycle,
+  saveNewLocalCategory,
+  updateLocalCategory,
+} from '../db/category-repository.js';
+import { CategoriesAdminPage } from '../features/admin/CategoriesAdminPage.js';
+import { ProjectTree } from '../features/projects/ProjectTree.js';
+import { useWorkloadTree } from '../features/projects/useWorkloadTree.js';
+import { listLocalCompletionEvents } from '../db/completion-event-repository.js';
+import { CompletionDashboard } from '../features/reports/CompletionDashboard.js';
 
 const emptyFilters: Filters = {
   query: '',
   assigneeId: '',
   categoryId: '',
+  projectId: '',
   from: '',
   to: '',
   contentType: 'all',
+  lifecycle: 'active',
 };
 
 export function App() {
@@ -74,9 +94,9 @@ export function App() {
   });
   const [view, setView] = useState<'list' | 'postit'>('list');
   const initialRoute = parseAppRoute(location.pathname);
-  const [section, setSection] = useState<'tasks' | 'lists' | 'groups' | 'admin'>(
-    initialRoute.section,
-  );
+  const [section, setSection] = useState<
+    'tasks' | 'lists' | 'groups' | 'archive' | 'projects' | 'dashboard' | 'admin'
+  >(initialRoute.section);
   const [selectedListId, setSelectedListId] = useState<string | undefined>(
     initialRoute.section === 'lists' ? initialRoute.listId : undefined,
   );
@@ -88,9 +108,17 @@ export function App() {
   const taskResult = useLiveQuery(() => listLocalTasks(), []);
   const tasks = taskResult ?? [];
   const categories = useLiveQuery(() => listCategories(), []) ?? [];
+  const projects = useLiveQuery(() => listLocalProjects(), []) ?? [];
   const groups = useLiveQuery(() => listLocalGroups(), []) ?? [];
   const lists = useLiveQuery(() => listLocalLists(), []) ?? [];
+  const archive = useLiveQuery(() => listLocalArchive(), []) ?? [];
+  const completionEvents =
+    useLiveQuery(
+      () => (session ? listLocalCompletionEvents(session.userId) : Promise.resolve([])),
+      [session?.userId],
+    ) ?? [];
   const directoryItems = useLiveQuery(() => listLocalDirectoryItems(), []) ?? [];
+  const workloadTree = useWorkloadTree(categories, projects, tasks, lists);
   const listItems =
     useLiveQuery(
       async () =>
@@ -115,9 +143,10 @@ export function App() {
   const matchingLists = useMemo(() => {
     if (filters.contentType === 'todos') return [];
     const query = filters.query.normalize('NFKC').trim().toLocaleLowerCase();
-    if (!query) return filters.contentType === 'lists' ? lists : [];
+    const scopedLists = lists.filter((list) => list.lifecycle !== 'archived');
+    if (!query) return filters.contentType === 'lists' ? scopedLists : [];
     const directory = new Map(directoryItems.map((item) => [item.id, item]));
-    return lists.filter(
+    return scopedLists.filter(
       (list) =>
         list.name.toLocaleLowerCase().includes(query) ||
         (listItems.get(list.id) ?? []).some((item) =>
@@ -259,6 +288,27 @@ export function App() {
           <nav aria-label="Main navigation">
             <button
               className="quiet"
+              aria-current={section === 'dashboard' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'dashboard' })}
+            >
+              Dashboard
+            </button>
+            <button
+              className="quiet"
+              aria-current={section === 'projects' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'projects' })}
+            >
+              Projects
+            </button>
+            <button
+              className="quiet"
+              aria-current={section === 'archive' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'archive' })}
+            >
+              Archive
+            </button>
+            <button
+              className="quiet"
               aria-current={section === 'lists' ? 'page' : undefined}
               onClick={() => navigate({ section: 'lists' })}
             >
@@ -303,22 +353,42 @@ export function App() {
       </header>
       <main>
         {section === 'admin' ? (
-          <UsersAdminPage
-            users={adminUsers}
-            currentUserId={session.userId}
-            online={navigator.onLine}
-            create={async (input) => {
-              const created = await createAdminUser(input, session.csrfToken);
-              setAdminUsers((users) => [
-                ...users.filter((user) => user.id !== created.id),
-                created,
-              ]);
-            }}
-            toggle={async (userId, active) => {
-              const updated = await changeAdminUserStatus(userId, active, session.csrfToken);
-              setAdminUsers((users) => users.map((user) => (user.id === userId ? updated : user)));
-            }}
-          />
+          <>
+            <UsersAdminPage
+              users={adminUsers}
+              currentUserId={session.userId}
+              online={navigator.onLine}
+              create={async (input) => {
+                const created = await createAdminUser(input, session.csrfToken);
+                setAdminUsers((users) => [
+                  ...users.filter((user) => user.id !== created.id),
+                  created,
+                ]);
+              }}
+              toggle={async (userId, active) => {
+                const updated = await changeAdminUserStatus(userId, active, session.csrfToken);
+                setAdminUsers((users) =>
+                  users.map((user) => (user.id === userId ? updated : user)),
+                );
+              }}
+            />
+            <CategoriesAdminPage
+              categories={categories}
+              projects={projects}
+              createCategory={(value) => void saveNewLocalCategory(value)}
+              updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
+              createProject={(value) => void saveNewLocalProject(value)}
+              updateProject={(project, patch) => void updateLocalProject(project, patch)}
+              actorId={session.userId}
+              csrfToken={session.csrfToken}
+              changeCategoryLifecycle={(category, action, actorId) =>
+                void changeLocalCategoryLifecycle(category, action, actorId)
+              }
+              changeProjectLifecycle={(project, action, actorId) =>
+                void changeLocalProjectLifecycle(project, action, actorId)
+              }
+            />
+          </>
         ) : section === 'groups' ? (
           <GroupPage
             groups={groups}
@@ -330,17 +400,38 @@ export function App() {
               await joinRemoteGroup(group, pin, session.csrfToken);
             }}
           />
+        ) : section === 'projects' ? (
+          <ProjectTree tree={workloadTree} />
+        ) : section === 'dashboard' ? (
+          <CompletionDashboard
+            events={completionEvents}
+            categories={categories}
+            projects={projects}
+            pending={pending}
+          />
+        ) : section === 'archive' ? (
+          <ArchivePage
+            entries={archive}
+            csrfToken={session.csrfToken}
+            restore={async (entry) => {
+              if (entry.task) await updateTask(entry.task, { status: 'open' }, session.userId);
+              if (entry.list)
+                await updateLocalList(entry.list, { status: 'active', lifecycle: 'active' });
+            }}
+          />
         ) : section === 'lists' ? (
           <ListPage
             actorId={session.userId}
             csrfToken={session.csrfToken}
-            lists={lists}
+            lists={lists.filter((list) => list.lifecycle !== 'archived')}
             items={listItems}
             {...(selectedListId ? { selectedId: selectedListId } : {})}
             openList={(list) => navigate({ section: 'lists', listId: list.id })}
             groups={groups.map((group) => ({ id: group.id, name: group.name }))}
-            createList={async (name) => {
-              await saveNewList(name, session.userId);
+            categories={categories}
+            projects={projects}
+            createList={async (name, projectId) => {
+              await saveNewList(name, session.userId, projectId);
             }}
             addItem={async (listId, name) => {
               await addLocalListItem(listId, name, session.userId);
@@ -394,7 +485,7 @@ export function App() {
                 }}
               />
             </section>
-            <TaskForm save={addTask} categories={categories} />
+            <TaskForm save={addTask} categories={categories} projects={projects} />
             <section className="filters" aria-label="Search and filters">
               <TaskSearchBar
                 value={filters.query}
@@ -406,7 +497,8 @@ export function App() {
                 filters.from ||
                 filters.to ||
                 filters.assigneeId ||
-                filters.categoryId) && (
+                filters.categoryId ||
+                filters.projectId) && (
                 <button className="quiet" onClick={() => setFilters(emptyFilters)}>
                   Clear filters
                 </button>
@@ -420,6 +512,8 @@ export function App() {
             {view === 'list' ? (
               <TaskListPage
                 csrfToken={session.csrfToken}
+                categories={categories}
+                projects={projects}
                 tasks={visible}
                 loading={taskResult === undefined}
                 selected={tasks.find((item) => item.id === selectedId)}

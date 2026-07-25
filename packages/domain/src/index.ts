@@ -19,4 +19,8 @@ export * from './category.js';
 export * from './reminder.js';
 export * from './backup.js';
 export * from './group.js';
+export * from './project.js';
+export * from './completion-event.js';
+export * from './deletion.js';
+export * from './workload.js';
 export * from './crypto/hidden-memo-package.js';

@@ -18,6 +18,26 @@ export interface ContentPolicyDecision {
   privileged: boolean;
 }
 
+export interface ContentAudienceInput {
+  ownerId: string;
+  locked: boolean;
+  groupId?: string;
+}
+
+export function contentAudienceFor(input: ContentAudienceInput): {
+  ordinary: `OWNER#${string}` | `GROUP#${string}` | 'PUBLIC';
+  administrator: 'ADMIN';
+} {
+  return {
+    ordinary: input.locked
+      ? `OWNER#${input.ownerId}`
+      : input.groupId
+        ? `GROUP#${input.groupId}`
+        : 'PUBLIC',
+    administrator: 'ADMIN',
+  };
+}
+
 export function authorizeContent(input: ContentPolicyInput): ContentPolicyDecision {
   const { actor } = input;
   const action = input.action ?? 'read';

@@ -1,5 +1,13 @@
 import type { Filters } from '../../search/task-search.js';
-const allowed = ['from', 'to', 'assigneeId', 'categoryId', 'contentType'] as const;
+const allowed = [
+  'from',
+  'to',
+  'assigneeId',
+  'categoryId',
+  'projectId',
+  'contentType',
+  'lifecycle',
+] as const;
 export function safeSearchState(_query: string, filters: Filters) {
   const params = new URLSearchParams();
   for (const key of allowed) if (filters[key]) params.set(key, filters[key]);
@@ -13,6 +21,13 @@ export function filtersFromSearch(search: string): Filters {
     to: params.get('to') ?? '',
     assigneeId: params.get('assigneeId') ?? '',
     categoryId: params.get('categoryId') ?? '',
+    projectId: params.get('projectId') ?? '',
+    lifecycle:
+      params.get('lifecycle') === 'archive'
+        ? 'archive'
+        : params.get('lifecycle') === 'all'
+          ? 'all'
+          : 'active',
     contentType:
       params.get('contentType') === 'lists'
         ? 'lists'

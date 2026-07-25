@@ -2,6 +2,9 @@ import {
   createList,
   createListItem,
   createUlid,
+  archiveList,
+  finishList,
+  restoreList,
   transitionListItem,
   type List,
   type ListItem,
@@ -11,11 +14,20 @@ import { decryptLocalValue, encryptLocalValue } from './task-repository.js';
 
 async function record(
   namespace: string,
-  value: { id: string; updatedAt: string; listId?: string; parentId?: string },
+  value: {
+    id: string;
+    updatedAt: string;
+    listId?: string;
+    parentId?: string;
+    projectId?: string | undefined;
+    lifecycle?: string | undefined;
+  },
 ): Promise<EncryptedEntityRecord> {
   return {
     id: value.id,
     ...((value.listId ?? value.parentId) ? { taskId: value.listId ?? value.parentId } : {}),
+    ...(value.projectId ? { projectId: value.projectId } : {}),
+    ...(value.lifecycle ? { lifecycle: value.lifecycle } : {}),
     updatedAt: value.updatedAt,
     value: await encryptLocalValue(namespace, value.id, value),
   };
@@ -32,7 +44,10 @@ async function queue(
     | 'reorder'
     | 'resetOverrides'
     | 'lock'
-    | 'unlock',
+    | 'unlock'
+    | 'finish'
+    | 'archive'
+    | 'restore',
   baseVersion: number,
   payload: unknown,
   createdAt: string,
@@ -62,8 +77,12 @@ export async function listLocalListItems(listId: string): Promise<ListItem[]> {
     .filter((item) => item.listId === listId && item.status !== 'removed')
     .sort((a, b) => a.orderKey.localeCompare(b.orderKey) || a.id.localeCompare(b.id));
 }
-export async function saveNewList(name: string, ownerId: string): Promise<List> {
-  const value = createList({ name }, ownerId);
+export async function saveNewList(
+  name: string,
+  ownerId: string,
+  projectId?: string,
+): Promise<List> {
+  const value = createList({ name, ...(projectId ? { projectId } : {}) }, ownerId);
   const [stored, mutation] = await Promise.all([
     record('list', value),
     queue('list', value.id, 'create', 0, value, value.createdAt),
@@ -75,13 +94,31 @@ export async function saveNewList(name: string, ownerId: string): Promise<List> 
   return value;
 }
 export async function updateLocalList(current: List, patch: Partial<List>): Promise<List> {
-  const next = {
-    ...current,
-    ...patch,
-    updatedAt: new Date().toISOString(),
-    version: current.version + 1,
-  };
-  const operation = patch.locked === true ? 'lock' : patch.locked === false ? 'unlock' : 'update';
+  const wantsArchive = patch.lifecycle === 'archived' || patch.status === 'archived';
+  const wantsRestore = patch.lifecycle === 'active' && current.lifecycle === 'archived';
+  const operation = wantsRestore
+    ? 'restore'
+    : wantsArchive
+      ? patch.archiveReason === 'finished'
+        ? 'finish'
+        : 'archive'
+      : patch.locked === true
+        ? 'lock'
+        : patch.locked === false
+          ? 'unlock'
+          : 'update';
+  const transitioned = wantsRestore
+    ? restoreList(current, current.ownerId)
+    : wantsArchive
+      ? patch.archiveReason === 'finished'
+        ? finishList(current, current.ownerId)
+        : archiveList(current, current.ownerId)
+      : {
+          ...current,
+          updatedAt: new Date().toISOString(),
+          version: current.version + 1,
+        };
+  const next = { ...transitioned, ...patch };
   const [stored, mutation] = await Promise.all([
     record('list', next),
     queue('list', next.id, operation, current.version, patch, next.updatedAt),

@@ -19,6 +19,7 @@ import { attachAdminRoutes, createAdminFunctions } from './admin-stack.js';
 import { attachCollaborationRoutes, createCollaborationFunction } from './collaboration-stack.js';
 import { createNotificationResources } from './notification-stack.js';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
+import { createDeletionResources } from './deletion-stack.js';
 
 export const sharedLambdaDefaults = (
   environment: Record<string, string>,
@@ -39,6 +40,7 @@ export function createHttpApi(scope: Construct) {
     httpApi: api,
     stageName: '$default',
     autoDeploy: true,
+    throttle: { burstLimit: 100, rateLimit: 50 },
   });
   const resource = stage.node.defaultChild as apigwv2.CfnStage;
   resource.accessLogSettings = {
@@ -121,6 +123,13 @@ export function createApplicationApi(
     memorySize: 512,
     logGroup: options.logGroups.task,
   });
+  const lifecycle = new nodejs.NodejsFunction(scope, 'LifecycleFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(new URL('../../apps/api/src/lifecycle/handlers.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    logGroup: options.logGroups.task,
+  });
   const listCopy = new nodejs.NodejsFunction(scope, 'ListCopyFunction', {
     ...sharedLambdaDefaults(contentEnvironment),
     entry: fileURLToPath(new URL('../../apps/api/src/lists/copy-handlers.ts', import.meta.url)),
@@ -132,6 +141,13 @@ export function createApplicationApi(
   const directory = new nodejs.NodejsFunction(scope, 'DirectoryFunction', {
     ...sharedLambdaDefaults(contentEnvironment),
     entry: fileURLToPath(new URL('../../apps/api/src/directory/handlers.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    logGroup: options.logGroups.task,
+  });
+  const reporting = new nodejs.NodejsFunction(scope, 'ReportingFunction', {
+    ...sharedLambdaDefaults(contentEnvironment),
+    entry: fileURLToPath(new URL('../../apps/api/src/reporting/handlers.ts', import.meta.url)),
     handler: 'handler',
     memorySize: 512,
     logGroup: options.logGroups.task,
@@ -177,6 +193,12 @@ export function createApplicationApi(
     timeout: Duration.seconds(30),
     logGroup: options.logGroups.sync,
   });
+  const deletion = createDeletionResources(scope, {
+    environment: contentEnvironment,
+    table: options.table,
+    media: options.media,
+    logGroup: options.logGroups.task,
+  });
   const { group } = createCollaborationFunction(scope, {
     environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
     table: options.table,
@@ -189,16 +211,15 @@ export function createApplicationApi(
     pepper: options.pepper,
     recoveryKeyArn: options.recoveryKeyArn,
   }).fn;
-  const { admin, provisionUser, operatorPolicy, processor, categories } = createAdminFunctions(
-    scope,
-    {
+  const { admin, provisionUser, operatorPolicy, processor, categories, projects } =
+    createAdminFunctions(scope, {
       environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
       table: options.table,
       media: options.media,
       passwordPepper: options.pepper,
+      deletionConfirmationSecret: deletion.secret,
       logGroup: options.logGroups.auth,
-    },
-  );
+    });
   const notification = createNotificationResources(scope, {
     environment: options.environment,
     table: options.table,
@@ -220,17 +241,18 @@ export function createApplicationApi(
     sync,
     authorizerFunction,
     list,
+    lifecycle,
     listCopy,
     directory,
     attachment,
     attachmentScan,
     attachmentReconcile,
     exportCoordinator,
+    deletion.apiHandler,
   ];
   for (const fn of functions) {
     fn.addEnvironment('ALLOWED_ORIGINS', options.allowedOrigin);
     options.table.grantReadWriteData(fn);
-    options.pepper.grantRead(fn);
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.DENY,
@@ -239,6 +261,18 @@ export function createApplicationApi(
       }),
     );
   }
+  reporting.addEnvironment('ALLOWED_ORIGINS', options.allowedOrigin);
+  options.table.grantReadData(reporting);
+  reporting.addToRolePolicy(
+    new iam.PolicyStatement({
+      effect: iam.Effect.DENY,
+      actions: ['kms:ScheduleKeyDeletion', 'secretsmanager:DeleteSecret'],
+      resources: ['*'],
+    }),
+  );
+  // Only the login handler needs the password pepper. Collaboration, recovery,
+  // and provisioning receive their grants in their isolated stacks.
+  options.pepper.grantRead(auth);
   options.dataKey.grantEncryptDecrypt(task);
   options.recoveryWrappingKey.grant(sync, 'kms:GetPublicKey');
   options.manifestSigningKey.grant(sync, 'kms:GetPublicKey', 'kms:Sign');
@@ -300,10 +334,65 @@ export function createApplicationApi(
     task,
   );
   route(
+    'TaskDeletionPreviewIntegration',
+    '/api/v1/tasks/{taskId}/deletion-preview',
+    [apigwv2.HttpMethod.GET],
+    deletion.apiHandler,
+  );
+  route(
+    'TaskProjectAssignmentIntegration',
+    '/api/v1/tasks/{taskId}/project',
+    [apigwv2.HttpMethod.PATCH],
+    task,
+  );
+  route(
+    'TaskPermanentDeleteIntegration',
+    '/api/v1/tasks/{taskId}',
+    [apigwv2.HttpMethod.DELETE],
+    deletion.apiHandler,
+  );
+  route(
     'TaskCompletionIntegration',
     '/api/v1/tasks/{taskId}/completion',
     [apigwv2.HttpMethod.POST],
     task,
+  );
+  route('ArchiveIntegration', '/api/v1/archive', [apigwv2.HttpMethod.GET], lifecycle);
+  route(
+    'OrganizationTreeIntegration',
+    '/api/v1/reporting/organization-tree',
+    [apigwv2.HttpMethod.GET],
+    reporting,
+  );
+  route(
+    'OrganizationDrilldownIntegration',
+    '/api/v1/reporting/organization-tree/drilldown',
+    [apigwv2.HttpMethod.GET],
+    reporting,
+  );
+  route(
+    'CompletionReportIntegration',
+    '/api/v1/reporting/completion-report',
+    [apigwv2.HttpMethod.GET],
+    reporting,
+  );
+  route(
+    'TaskArchiveIntegration',
+    '/api/v1/tasks/{taskId}/archive',
+    [apigwv2.HttpMethod.POST],
+    lifecycle,
+  );
+  route(
+    'TaskRestoreIntegration',
+    '/api/v1/tasks/{taskId}/restore',
+    [apigwv2.HttpMethod.POST],
+    lifecycle,
+  );
+  route(
+    'TaskCompleteArchiveIntegration',
+    '/api/v1/tasks/{taskId}/complete',
+    [apigwv2.HttpMethod.POST],
+    lifecycle,
   );
   route(
     'TaskRevisionIntegration',
@@ -316,10 +405,52 @@ export function createApplicationApi(
   route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
   route('ListsIntegration', '/api/v1/lists', [apigwv2.HttpMethod.POST], list);
   route(
+    'ListFinishIntegration',
+    '/api/v1/lists/{listId}/finish',
+    [apigwv2.HttpMethod.POST],
+    lifecycle,
+  );
+  route(
+    'ListArchiveIntegration',
+    '/api/v1/lists/{listId}/archive',
+    [apigwv2.HttpMethod.POST],
+    lifecycle,
+  );
+  route(
+    'ListRestoreIntegration',
+    '/api/v1/lists/{listId}/restore',
+    [apigwv2.HttpMethod.POST],
+    lifecycle,
+  );
+  route(
     'ListIntegration',
     '/api/v1/lists/{listId}',
-    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH],
     list,
+  );
+  route(
+    'ListDeletionPreviewIntegration',
+    '/api/v1/lists/{listId}/deletion-preview',
+    [apigwv2.HttpMethod.GET],
+    deletion.apiHandler,
+  );
+  route(
+    'ListProjectAssignmentIntegration',
+    '/api/v1/lists/{listId}/project',
+    [apigwv2.HttpMethod.PATCH],
+    list,
+  );
+  route(
+    'ListPermanentDeleteIntegration',
+    '/api/v1/lists/{listId}',
+    [apigwv2.HttpMethod.DELETE],
+    deletion.apiHandler,
+  );
+  route(
+    'DeletionJobIntegration',
+    '/api/v1/deletion-jobs/{jobId}',
+    [apigwv2.HttpMethod.GET],
+    deletion.apiHandler,
   );
   route('ListItemsIntegration', '/api/v1/lists/{listId}/items', [apigwv2.HttpMethod.POST], list);
   route(
@@ -408,7 +539,7 @@ export function createApplicationApi(
     notification,
   );
   attachCollaborationRoutes(api, sessionAuthorizer, group);
-  attachAdminRoutes(api, sessionAuthorizer, { admin, categories });
+  attachAdminRoutes(api, sessionAuthorizer, { admin, categories, projects });
   return {
     api,
     functions: {
@@ -422,16 +553,20 @@ export function createApplicationApi(
       provisionUser,
       provisionUserOperatorPolicy: operatorPolicy,
       categories,
+      projects,
       processor,
       notification,
       authorizer: authorizerFunction,
       list,
+      lifecycle,
       listCopy,
       directory,
+      reporting,
       attachment,
       attachmentScan,
       attachmentReconcile,
       exportCoordinator,
+      deletion: deletion.apiHandler,
     },
   };
 }
