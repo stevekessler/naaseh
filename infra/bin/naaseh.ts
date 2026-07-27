@@ -21,6 +21,10 @@ const hostedZoneName =
 const breakGlassRoleArn =
   app.node.tryGetContext('breakGlassRoleArn') ??
   `arn:aws:iam::${account ?? '111111111111'}:role/naaseh-recovery-break-glass`;
+const alertEmail =
+  app.node.tryGetContext('alertEmail') ??
+  process.env.NAASEH_ALERT_EMAIL ??
+  'steve.kessler18@gmail.com';
 
 const edge = new NaasehEdgeStack(app, 'NaasehEdge', {
   env: { ...(account ? { account } : {}), region: 'us-east-1' },
@@ -34,6 +38,7 @@ const application = new NaasehStack(app, 'NaasehProd', {
   env: { ...(account ? { account } : {}), region: config.region },
   crossRegionReferences: true,
   breakGlassRoleArn,
+  ...(alertEmail ? { alertEmail } : {}),
   certificateArn: edge.certificateArn,
   domainName,
   hostedZoneId,

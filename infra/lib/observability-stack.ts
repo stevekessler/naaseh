@@ -1,8 +1,10 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
 export const retention = {
@@ -37,50 +39,8 @@ export function createOperationalVisibility(
     googleSync?: lambda.IFunction;
   },
   table: dynamodb.ITable,
+  alerts: sns.ITopic,
 ) {
-  new cloudwatch.Alarm(scope, 'TaskErrors', {
-    metric: functions.task.metricErrors({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-  });
-  new cloudwatch.Alarm(scope, 'AuthThrottles', {
-    metric: functions.auth.metricThrottles({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-  });
-  new cloudwatch.Alarm(scope, 'SyncErrors', {
-    metric: functions.sync.metricErrors({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-  });
-  if (functions.reporting)
-    new cloudwatch.Alarm(scope, 'ReportingErrors', {
-      metric: functions.reporting.metricErrors({ period: Duration.minutes(5) }),
-      threshold: 1,
-      evaluationPeriods: 1,
-    });
-  if (functions.googleSync)
-    new cloudwatch.Alarm(scope, 'GoogleSyncLambdaErrors', {
-      metric: functions.googleSync.metricErrors({ period: Duration.minutes(5) }),
-      threshold: 1,
-      evaluationPeriods: 1,
-    });
-  new cloudwatch.Alarm(scope, 'CompletionReportLatencyAlarm', {
-    metric: new cloudwatch.Metric({
-      namespace: 'Naaseh',
-      metricName: 'CompletionReportLatency',
-      statistic: 'p95',
-      period: Duration.minutes(5),
-    }),
-    threshold: 1000,
-    evaluationPeriods: 2,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  new cloudwatch.Alarm(scope, 'AuthDuration', {
-    metric: functions.auth.metricDuration({ period: Duration.minutes(5), statistic: 'p95' }),
-    threshold: 1000,
-    evaluationPeriods: 1,
-  });
   const applicationMetric = (metricName: string, statistic = 'Sum') =>
     new cloudwatch.Metric({
       namespace: 'Naaseh',
@@ -88,60 +48,19 @@ export function createOperationalVisibility(
       statistic,
       period: Duration.minutes(5),
     });
-  new cloudwatch.Alarm(scope, 'SyncConflictAlarm', {
-    metric: applicationMetric('SyncConflicts'),
-    threshold: 10,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  new cloudwatch.Alarm(scope, 'SyncRetryableFailureAlarm', {
-    metric: applicationMetric('SyncRetryableFailures'),
-    threshold: 5,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  new cloudwatch.Alarm(scope, 'WebPushDeliveryFailureAlarm', {
-    metric: applicationMetric('WebPushDeliveryFailures'),
-    threshold: 5,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  new cloudwatch.Alarm(scope, 'SyncBacklogDepthAlarm', {
-    metric: applicationMetric('SyncBacklogDepth', 'Maximum'),
-    threshold: 25,
-    evaluationPeriods: 3,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  for (const [id, metricName, threshold] of [
-    ['ContentAuthorizationDeniedAlarm', 'ContentAuthorizationDenied', 25],
-    ['AttachmentScanFailureAlarm', 'AttachmentScanFailures', 1],
-    ['AttachmentThreatAlarm', 'AttachmentThreats', 1],
-    ['AttachmentStalledUploadAlarm', 'AttachmentExpiredUploads', 5],
-    ['AttachmentStalledScanAlarm', 'AttachmentStalledScans', 1],
-    ['AttachmentOrphanAlarm', 'AttachmentOrphanBlobs', 1],
-    ['AttachmentMissingObjectAlarm', 'AttachmentMissingObjects', 1],
-    ['ExportFailureAlarm', 'ExportFailures', 1],
-    ['WorkloadProjectionDriftAlarm', 'WorkloadProjectionDrift', 1],
-    ['OrganizationDeleteBlockedAlarm', 'OrganizationDeleteBlocked', 5],
-    ['OrganizationDeleteFailureAlarm', 'OrganizationDeleteFailures', 1],
-  ] as const)
-    new cloudwatch.Alarm(scope, id, {
+  for (const [id, metricName] of [
+    ['AttachmentThreatAlarm', 'AttachmentThreats'],
+    ['WorkloadProjectionDriftAlarm', 'WorkloadProjectionDrift'],
+    ['OrganizationDeleteFailureAlarm', 'OrganizationDeleteFailures'],
+  ] as const) {
+    const alarm = new cloudwatch.Alarm(scope, id, {
       metric: applicationMetric(metricName),
-      threshold,
+      threshold: 1,
       evaluationPeriods: 1,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
-  for (const [id, metricName, threshold] of [
-    ['UserProvisionFailureAlarm', 'UserProvisionFailures', 1],
-    ['UserStatusChangeSpikeAlarm', 'UserStatusChanges', 20],
-    ['CategoryAdminChangeSpikeAlarm', 'CategoryAdminChanges', 30],
-  ] as const)
-    new cloudwatch.Alarm(scope, id, {
-      metric: applicationMetric(metricName),
-      threshold,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
+    alarm.addAlarmAction(new actions.SnsAction(alerts));
+  }
   const dashboard = new cloudwatch.Dashboard(scope, 'OperationsDashboard');
   dashboard.addWidgets(
     new cloudwatch.GraphWidget({
@@ -194,6 +113,21 @@ export function createOperationalVisibility(
       right: [
         applicationMetric('WebPushDeliveryFailures'),
         applicationMetric('SyncBacklogDepth', 'Maximum'),
+      ],
+    }),
+    new cloudwatch.GraphWidget({
+      title: 'Google synchronization health',
+      left: [
+        applicationMetric('GoogleSyncAuthorizationFailures'),
+        applicationMetric('GoogleSyncRevocations'),
+        applicationMetric('GoogleSyncRunFailures'),
+        applicationMetric('GoogleSyncCheckpointStalls'),
+      ],
+      right: [
+        applicationMetric('GoogleSyncThrottles'),
+        applicationMetric('GoogleSyncConflicts'),
+        applicationMetric('GoogleSyncQuarantines'),
+        applicationMetric('GoogleSyncLagSeconds', 'Maximum'),
       ],
     }),
     new cloudwatch.GraphWidget({

@@ -18,6 +18,7 @@ const webProps = {
 const template = Template.fromStack(
   new NaasehStack(new App(), 'Test', {
     env: { account: '111111111111', region: 'us-west-2' },
+    alertEmail: 'alerts@example.com',
     breakGlassRoleArn: 'arn:aws:iam::111111111111:role/naaseh-recovery-break-glass',
     ...webProps,
   }),
@@ -32,6 +33,13 @@ const edgeTemplate = Template.fromStack(
 );
 
 describe('foundation infrastructure', () => {
+  it('keeps the production template below the resource budget', () => {
+    const resourceCount = Object.keys(template.toJSON().Resources ?? {}).length;
+    expect(resourceCount).toBeLessThanOrEqual(400);
+    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 17);
+    template.resourceCountIs('AWS::Lambda::Permission', 23);
+  });
+
   it('keeps focused helpers inside one deployable stack', () => {
     template.resourceCountIs('AWS::CloudFormation::Stack', 0);
     template.resourceCountIs('AWS::Backup::BackupPlan', 1);
@@ -151,8 +159,8 @@ describe('foundation infrastructure', () => {
     const rendered = JSON.stringify(template.toJSON());
     expect(rendered).toContain('profiles/*');
     expect(rendered).toContain('schedule/default/naaseh-reminder-*');
-    expect(rendered).toContain('GroupAuthorizationErrors');
-    expect(rendered).toContain('ProfilePictureProcessingErrors');
+    expect(rendered).toContain('GroupIntegration');
+    expect(rendered).toContain('ProfilePictureProcessor');
   });
 
   it('isolates recovery decrypt permission and bounds recovery concurrency', () => {
@@ -191,10 +199,31 @@ describe('foundation infrastructure', () => {
     });
   });
 
-  it('creates retained log groups, operational alarms, and a dashboard', () => {
+  it('creates retained log groups, only critical alarms, and a dashboard', () => {
     template.resourceCountIs('AWS::Logs::LogGroup', 9);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 47);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 8);
+    template.resourceCountIs('AWS::SNS::Topic', 1);
+    template.resourceCountIs('AWS::SNS::TopicPolicy', 1);
+    template.hasResourceProperties('AWS::SNS::Subscription', {
+      Protocol: 'email',
+      Endpoint: 'alerts@example.com',
+    });
+    const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
+    expect(alarms).toHaveLength(8);
+    for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
+    const rendered = JSON.stringify(template.toJSON());
+    for (const alarm of [
+      'RecoveryKeyPolicyChangeAlarm',
+      'RuntimeSecretPolicyChangeAlarm',
+      'PermanentDeletionFailureAlarm',
+      'AttachmentThreatAlarm',
+      'WorkloadProjectionDriftAlarm',
+      'OrganizationDeleteFailureAlarm',
+      'BackupFailureAlarm',
+      'RestoreWorkflowFailureAlarm',
+    ])
+      expect(rendered).toContain(alarm);
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
   });
 });

@@ -1,5 +1,6 @@
 import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -16,7 +17,10 @@ export const recoveryKeyControls = {
   signingAlgorithm: 'RSASSA_PSS_SHA_256',
 } as const;
 
-export function createRecoveryKeys(scope: Construct, options: { breakGlassRoleArn: string }) {
+export function createRecoveryKeys(
+  scope: Construct,
+  options: { breakGlassRoleArn: string; alerts: sns.ITopic },
+) {
   const recoveryWrappingKey = new kms.Key(scope, 'RecoveryMemoWrappingKey', {
     alias: 'alias/naaseh-memo-recovery',
     description: 'Single-Region public-key authority for hidden-memo recovery wraps.',
@@ -62,7 +66,6 @@ export function createRecoveryKeys(scope: Construct, options: { breakGlassRoleAr
     parameterName: '/naaseh/recovery/public-key-registry',
     stringValue: publicRegistryValue,
   });
-  const alerts = new sns.Topic(scope, 'RecoveryKeySecurityAlerts');
   const policyChangeRule = new events.Rule(scope, 'RecoveryKeyPolicyChangeRule', {
     eventPattern: {
       source: ['aws.kms'],
@@ -73,7 +76,7 @@ export function createRecoveryKeys(scope: Construct, options: { breakGlassRoleAr
       },
     },
   });
-  policyChangeRule.addTarget(new targets.SnsTopic(alerts));
+  policyChangeRule.addTarget(new targets.SnsTopic(options.alerts));
   const policyChangeAlarm = new cloudwatch.Alarm(scope, 'RecoveryKeyPolicyChangeAlarm', {
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Events',
@@ -86,12 +89,12 @@ export function createRecoveryKeys(scope: Construct, options: { breakGlassRoleAr
     evaluationPeriods: 1,
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
+  policyChangeAlarm.addAlarmAction(new actions.SnsAction(options.alerts));
   return {
     recoveryWrappingKey,
     manifestSigningKey,
     publicRegistry,
     publicRegistryValue,
-    alerts,
     policyChangeAlarm,
   };
 }

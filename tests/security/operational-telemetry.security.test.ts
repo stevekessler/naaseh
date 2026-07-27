@@ -28,12 +28,11 @@ describe('operational telemetry', () => {
     'UserProvisionFailures',
     'UserStatusChanges',
     'CategoryAdminChanges',
-  ])('alarms on the content-free %s metric', (metricName) => {
-    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
-      Namespace: 'Naaseh',
-      MetricName: metricName,
-      TreatMissingData: 'notBreaching',
-    });
+  ])('keeps the content-free %s metric on the dashboard without a dedicated alarm', (metricName) => {
+    const dashboard = JSON.stringify(template.findResources('AWS::CloudWatch::Dashboard'));
+    const alarms = JSON.stringify(template.findResources('AWS::CloudWatch::Alarm'));
+    expect(dashboard).toContain(metricName);
+    expect(alarms).not.toContain(metricName);
   });
 
   it('keeps workflow execution data out of restore logs', () => {

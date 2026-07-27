@@ -1,6 +1,7 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as backup from 'aws-cdk-lib/aws-backup';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -24,6 +25,7 @@ export function createBackupResources(
     dataKey: kms.IKey;
     table: dynamodb.ITable;
     media: s3.IBucket;
+    alerts: sns.ITopic;
   },
 ) {
   const vault = new backup.BackupVault(scope, 'BackupVault', {
@@ -101,9 +103,6 @@ export function createBackupResources(
   tableSelection.addResourceDependency(restoreTestingPlan);
   mediaSelection.addResourceDependency(restoreTestingPlan);
 
-  const alerts = new sns.Topic(scope, 'BackupFailureAlerts', {
-    displayName: 'Naaseh backup and restore-test failures',
-  });
   const failureRule = new events.Rule(scope, 'BackupFailureRule', {
     eventPattern: {
       source: ['aws.backup'],
@@ -111,7 +110,7 @@ export function createBackupResources(
       detail: { status: ['FAILED', 'ABORTED', 'EXPIRED'] },
     },
   });
-  failureRule.addTarget(new targets.SnsTopic(alerts));
+  failureRule.addTarget(new targets.SnsTopic(options.alerts));
   const failureAlarm = new cloudwatch.Alarm(scope, 'BackupFailureAlarm', {
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Events',
@@ -124,13 +123,13 @@ export function createBackupResources(
     evaluationPeriods: 1,
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
+  failureAlarm.addAlarmAction(new actions.SnsAction(options.alerts));
 
   return {
     vault,
     plan,
     restoreTestingPlan,
     restoreRole,
-    alerts,
     failureAlarm,
   };
 }

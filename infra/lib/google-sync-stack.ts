@@ -1,5 +1,4 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -116,34 +115,6 @@ export function createGoogleSyncResources(
   new events.Rule(scope, 'GoogleSyncSchedule', {
     schedule: events.Schedule.rate(Duration.minutes(googleSyncControls.scheduleMinutes)),
     targets: [new targets.LambdaFunction(api)],
-  });
-  const metric = (name: string, statistic = 'Sum') =>
-    new cloudwatch.Metric({
-      namespace: 'Naaseh',
-      metricName: name,
-      statistic,
-      period: Duration.minutes(5),
-    });
-  for (const [id, name, threshold, evaluations] of [
-    ['GoogleSyncAuthorizationFailureAlarm', 'GoogleSyncAuthorizationFailures', 1, 1],
-    ['GoogleSyncRevocationAlarm', 'GoogleSyncRevocations', 1, 1],
-    ['GoogleSyncThrottleAlarm', 'GoogleSyncThrottles', 5, 1],
-    ['GoogleSyncRunFailureAlarm', 'GoogleSyncRunFailures', 1, 1],
-    ['GoogleSyncCheckpointStallAlarm', 'GoogleSyncCheckpointStalls', 1, 2],
-    ['GoogleSyncConflictGrowthAlarm', 'GoogleSyncConflicts', 10, 1],
-    ['GoogleSyncQuarantineGrowthAlarm', 'GoogleSyncQuarantines', 5, 1],
-  ] as const)
-    new cloudwatch.Alarm(scope, id, {
-      metric: metric(name),
-      threshold,
-      evaluationPeriods: evaluations,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-  new cloudwatch.Alarm(scope, 'GoogleSyncLagAlarm', {
-    metric: metric('GoogleSyncLagSeconds', 'Maximum'),
-    threshold: 600,
-    evaluationPeriods: 2,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
   return { api, stream, logGroup };
 }

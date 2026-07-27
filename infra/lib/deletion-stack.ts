@@ -8,6 +8,8 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 import { fileURLToPath } from 'node:url';
 
@@ -18,6 +20,7 @@ export function createDeletionResources(
     table: dynamodb.ITable;
     media: s3.IBucket;
     logGroup: logs.ILogGroup;
+    alerts: sns.ITopic;
   },
 ) {
   const secret = new secretsmanager.Secret(scope, 'DeletionConfirmationSecret', {
@@ -76,17 +79,12 @@ export function createDeletionResources(
   options.media.grantDelete(worker, 'attachments/*');
   secret.grantRead(apiHandler);
   stateMachine.grantStartExecution(apiHandler);
-  new cloudwatch.Alarm(scope, 'PermanentDeletionFailureAlarm', {
+  const failureAlarm = new cloudwatch.Alarm(scope, 'PermanentDeletionFailureAlarm', {
     metric: stateMachine.metricFailed({ period: Duration.minutes(5) }),
     threshold: 1,
     evaluationPeriods: 1,
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
-  new cloudwatch.Alarm(scope, 'PermanentDeletionWorkerErrorAlarm', {
-    metric: worker.metricErrors({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
+  failureAlarm.addAlarmAction(new actions.SnsAction(options.alerts));
   return { apiHandler, worker, stateMachine, secret };
 }

@@ -3,6 +3,8 @@ import { Construct } from 'constructs';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { createRegionalDataResources } from './global-data-stack.js';
 import { attachSameOriginApi, createWebResources } from './web-stack.js';
 import { createApplicationApi } from './api-stack.js';
@@ -18,6 +20,7 @@ import { createArchiveProjectMigration } from './migration-stack.js';
 import { createReportingReconciliation } from './reporting-stack.js';
 
 export interface NaasehStackProps extends StackProps {
+  alertEmail?: string;
   breakGlassRoleArn: string;
   certificateArn: string;
   domainName: string;
@@ -32,11 +35,20 @@ export class NaasehStack extends Stack {
     if (props.env?.region && props.env.region !== 'us-west-2')
       throw new Error('Naaseh v1 Region-scoped resources must be deployed in us-west-2.');
     super(scope, id, props);
+    const criticalAlerts = new sns.Topic(this, 'CriticalAlerts', {
+      displayName: 'Naaseh critical operational alerts',
+    });
+    if (props.alertEmail)
+      criticalAlerts.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
     const { key: dataKey, table } = createRegionalDataResources(this);
     const recoveryKeys = createRecoveryKeys(this, {
       breakGlassRoleArn: props.breakGlassRoleArn,
+      alerts: criticalAlerts,
     });
-    const { pepper, webPushSecret, googleOAuthSecret } = createRuntimeSecrets(this);
+    const { pepper, webPushSecret, googleOAuthSecret } = createRuntimeSecrets(
+      this,
+      criticalAlerts,
+    );
     const { distribution, responseHeadersPolicy } = createWebResources(this, {
       certificateArn: props.certificateArn,
       domainName: props.domainName,
@@ -102,6 +114,7 @@ export class NaasehStack extends Stack {
       manifestSigningKey: recoveryKeys.manifestSigningKey,
       webPushSecret,
       googleOAuthSecret,
+      alerts: criticalAlerts,
     });
     attachSameOriginApi(distribution, httpApi, responseHeadersPolicy);
     createOperationalVisibility(
@@ -114,8 +127,9 @@ export class NaasehStack extends Stack {
         googleSync: functions.googleSync,
       },
       table,
+      criticalAlerts,
     );
-    const backup = createBackupResources(this, { dataKey, table, media });
+    const backup = createBackupResources(this, { dataKey, table, media, alerts: criticalAlerts });
     const restoreLogs = new logs.LogGroup(this, 'RestoreWorkflowLogs', {
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: RemovalPolicy.RETAIN,
@@ -131,10 +145,12 @@ export class NaasehStack extends Stack {
       this,
       restoreWorkflow.stateMachine,
       backup.restoreTestingPlan.attrRestoreTestingPlanArn,
+      criticalAlerts,
     );
     new CfnOutput(this, 'DeploymentRegion', { value: this.region });
     new CfnOutput(this, 'SiteUrl', { value: `https://${props.domainName}` });
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });
+    new CfnOutput(this, 'CriticalAlertsTopicArn', { value: criticalAlerts.topicArn });
     new CfnOutput(this, 'Argon2CalibrationFunctionName', {
       value: functions.authCalibration.functionName,
     });

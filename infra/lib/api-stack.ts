@@ -12,6 +12,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 import { fileURLToPath } from 'node:url';
 import { createCryptoRecoveryFunction } from './crypto-recovery-stack.js';
@@ -74,6 +75,7 @@ export function createApplicationApi(
     manifestSigningKey: kms.IKey;
     webPushSecret: secretsmanager.ISecret;
     googleOAuthSecret: secretsmanager.ISecret;
+    alerts: sns.ITopic;
   },
 ) {
   const defaults = sharedLambdaDefaults(options.environment);
@@ -200,6 +202,7 @@ export function createApplicationApi(
     table: options.table,
     media: options.media,
     logGroup: options.logGroups.task,
+    alerts: options.alerts,
   });
   const { group } = createCollaborationFunction(scope, {
     environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
@@ -314,8 +317,20 @@ export function createApplicationApi(
       resultsCacheTtl: Duration.seconds(0),
     },
   );
+  const integrationsByFunction = new Map<lambda.IFunction, integrations.HttpLambdaIntegration>();
+  const integrationFor = (fn: lambda.IFunction) => {
+    const existing = integrationsByFunction.get(fn);
+    if (existing) return existing;
+    const integration = new integrations.HttpLambdaIntegration(
+      `${fn.node.id}Integration`,
+      fn,
+      { scopePermissionToRoute: false },
+    );
+    integrationsByFunction.set(fn, integration);
+    return integration;
+  };
   const route = (
-    id: string,
+    _id: string,
     path: string,
     methods: apigwv2.HttpMethod[],
     fn: lambda.IFunction,
@@ -324,7 +339,7 @@ export function createApplicationApi(
     api.addRoutes({
       path,
       methods,
-      integration: new integrations.HttpLambdaIntegration(id, fn),
+      integration: integrationFor(fn),
       ...(authorize ? { authorizer: sessionAuthorizer } : {}),
     });
   route('LoginIntegration', '/api/v1/auth/login', [apigwv2.HttpMethod.POST], auth, false);

@@ -1,5 +1,6 @@
 import { Duration, RemovalPolicy, Tags } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -14,7 +15,7 @@ export const secretControls = {
   rotationReviewDays: 90,
 } as const;
 
-export function createRuntimeSecrets(scope: Construct) {
+export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
   const primaryKey = new kms.Key(scope, 'RuntimeSecretsKey', {
     alias: 'alias/naaseh-runtime-secrets',
     enableKeyRotation: true,
@@ -46,7 +47,6 @@ export function createRuntimeSecrets(scope: Construct) {
     Tags.of(secret).add('NaasehRotationReviewDays', String(secretControls.rotationReviewDays));
     Tags.of(secret).add('NaasehRecoveryRequired', 'true');
   }
-  const alerts = new sns.Topic(scope, 'RuntimeSecretSecurityAlerts');
   const policyChangeRule = new events.Rule(scope, 'RuntimeSecretPolicyChangeRule', {
     eventPattern: {
       source: ['aws.secretsmanager'],
@@ -68,5 +68,6 @@ export function createRuntimeSecrets(scope: Construct) {
     threshold: 1,
     evaluationPeriods: 1,
   });
-  return { primaryKey, pepper, webPushSecret, googleOAuthSecret, alerts, policyChangeAlarm };
+  policyChangeAlarm.addAlarmAction(new actions.SnsAction(alerts));
+  return { primaryKey, pepper, webPushSecret, googleOAuthSecret, policyChangeAlarm };
 }

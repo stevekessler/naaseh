@@ -1,5 +1,4 @@
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -59,10 +58,5 @@ export function createCryptoRecoveryFunction(
       resources: ['*'],
     }),
   );
-  const alarm = new cloudwatch.Alarm(scope, 'CryptoRecoveryErrors', {
-    metric: fn.metricErrors({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-  });
-  return { fn, logGroup, alarm };
+  return { fn, logGroup };
 }

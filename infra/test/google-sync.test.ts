@@ -75,7 +75,7 @@ describe('Google synchronization infrastructure', () => {
     expect(rendered).toContain('secretsmanager:DeleteSecret');
   });
 
-  it('retains logs, exposes all owner routes, and alarms on provider failure classes', () => {
+  it('retains logs, exposes all owner routes, and graphs provider failure classes', () => {
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 30 });
     for (const route of [
       'GET /api/v1/integrations/google/status',

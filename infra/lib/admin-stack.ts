@@ -1,7 +1,6 @@
 import { Duration } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -130,44 +129,7 @@ export function createAdminFunctions(
     new notifications.LambdaDestination(processor),
     { prefix: 'profiles/', suffix: '' },
   );
-  const alarms = [
-    new cloudwatch.Alarm(scope, 'AdminFunctionErrors', {
-      metric: admin.metricErrors({ period: Duration.minutes(5) }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }),
-    new cloudwatch.Alarm(scope, 'ProvisionUserFailures', {
-      metric: new cloudwatch.Metric({
-        namespace: 'Naaseh',
-        metricName: 'UserProvisionFailures',
-        statistic: 'Sum',
-        period: Duration.minutes(5),
-      }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }),
-    new cloudwatch.Alarm(scope, 'CategoryAdminErrors', {
-      metric: categories.metricErrors({ period: Duration.minutes(5) }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }),
-    new cloudwatch.Alarm(scope, 'ProjectAdminErrors', {
-      metric: projects.metricErrors({ period: Duration.minutes(5) }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }),
-    new cloudwatch.Alarm(scope, 'ProfilePictureProcessingErrors', {
-      metric: processor.metricErrors({ period: Duration.minutes(5) }),
-      threshold: 1,
-      evaluationPeriods: 1,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    }),
-  ];
-  return { admin, provisionUser, operatorPolicy, processor, categories, projects, alarms };
+  return { admin, provisionUser, operatorPolicy, processor, categories, projects };
 }
 
 export function attachAdminRoutes(
@@ -175,14 +137,18 @@ export function attachAdminRoutes(
   authorizer: apigwv2.IHttpRouteAuthorizer,
   functions: { admin: lambda.IFunction; categories: lambda.IFunction; projects: lambda.IFunction },
 ) {
-  const admin = new integrations.HttpLambdaIntegration('AdminIntegration', functions.admin);
+  const admin = new integrations.HttpLambdaIntegration('AdminIntegration', functions.admin, {
+    scopePermissionToRoute: false,
+  });
   const categories = new integrations.HttpLambdaIntegration(
     'CategoryAdminIntegration',
     functions.categories,
+    { scopePermissionToRoute: false },
   );
   const projects = new integrations.HttpLambdaIntegration(
     'ProjectAdminIntegration',
     functions.projects,
+    { scopePermissionToRoute: false },
   );
   for (const [path, methods, integration] of [
     ['/api/v1/admin/users', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST], admin],

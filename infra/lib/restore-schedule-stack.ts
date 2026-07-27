@@ -1,5 +1,6 @@
 import { Duration } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -22,6 +23,7 @@ export function createRestoreSchedule(
   scope: Construct,
   stateMachine: sfn.IStateMachine,
   restoreTestingPlanArn: string,
+  alerts: sns.ITopic,
 ) {
   const schedule = new events.Rule(scope, 'CompletedRestoreTestingValidationTrigger', {
     description: 'Validate only completed jobs from the approved AWS Backup restore-testing plan.',
@@ -42,9 +44,6 @@ export function createRestoreSchedule(
     }),
   );
 
-  const alerts = new sns.Topic(scope, 'RestoreWorkflowFailureAlerts', {
-    displayName: 'Naaseh isolated restore validation failures',
-  });
   const failures = new events.Rule(scope, 'RestoreWorkflowFailureRule', {
     eventPattern: {
       source: ['aws.states'],
@@ -68,5 +67,6 @@ export function createRestoreSchedule(
     evaluationPeriods: 1,
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
-  return { schedule, alerts, failures, failureAlarm };
+  failureAlarm.addAlarmAction(new actions.SnsAction(alerts));
+  return { schedule, failures, failureAlarm };
 }

@@ -1,7 +1,6 @@
 import { Duration } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -47,19 +46,7 @@ export function createCollaborationFunction(
       resources: ['*'],
     }),
   );
-  const errorAlarm = new cloudwatch.Alarm(scope, 'GroupAuthorizationErrors', {
-    metric: group.metricErrors({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  const throttleAlarm = new cloudwatch.Alarm(scope, 'GroupJoinThrottles', {
-    metric: group.metricThrottles({ period: Duration.minutes(5) }),
-    threshold: 1,
-    evaluationPeriods: 1,
-    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-  });
-  return { group, errorAlarm, throttleAlarm };
+  return { group };
 }
 
 export function attachCollaborationRoutes(
@@ -67,7 +54,9 @@ export function attachCollaborationRoutes(
   authorizer: apigwv2.IHttpRouteAuthorizer,
   group: lambda.IFunction,
 ) {
-  const integration = new integrations.HttpLambdaIntegration('GroupIntegration', group);
+  const integration = new integrations.HttpLambdaIntegration('GroupIntegration', group, {
+    scopePermissionToRoute: false,
+  });
   for (const [path, methods] of [
     ['/api/v1/groups', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST]],
     ['/api/v1/groups/{groupId}', [apigwv2.HttpMethod.GET]],
