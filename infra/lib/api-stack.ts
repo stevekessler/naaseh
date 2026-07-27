@@ -20,6 +20,7 @@ import { attachCollaborationRoutes, createCollaborationFunction } from './collab
 import { createNotificationResources } from './notification-stack.js';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { createDeletionResources } from './deletion-stack.js';
+import { createGoogleSyncResources } from './google-sync-stack.js';
 
 export const sharedLambdaDefaults = (
   environment: Record<string, string>,
@@ -60,7 +61,7 @@ export function createApplicationApi(
   options: {
     environment: Record<string, string>;
     allowedOrigin: string;
-    table: dynamodb.ITable;
+    table: dynamodb.Table;
     pepper: secretsmanager.ISecret;
     dataKey: kms.IKey;
     media: s3.IBucket;
@@ -72,6 +73,7 @@ export function createApplicationApi(
     recoveryWrappingKey: kms.IKey;
     manifestSigningKey: kms.IKey;
     webPushSecret: secretsmanager.ISecret;
+    googleOAuthSecret: secretsmanager.ISecret;
   },
 ) {
   const defaults = sharedLambdaDefaults(options.environment);
@@ -227,6 +229,13 @@ export function createApplicationApi(
     taskFunction: task,
     logGroup: options.logGroups.task,
   }).fn;
+  const googleSync = createGoogleSyncResources(scope, {
+    environment: options.environment,
+    allowedOrigin: options.allowedOrigin,
+    table: options.table,
+    dataKey: options.dataKey,
+    oauthSecret: options.googleOAuthSecret,
+  }).api;
   const authorizerFunction = new nodejs.NodejsFunction(scope, 'AuthorizerFunction', {
     ...defaults,
     entry: fileURLToPath(new URL('../../apps/api/src/auth/authorizer.ts', import.meta.url)),
@@ -403,6 +412,96 @@ export function createApplicationApi(
   route('SyncIntegration', '/api/v1/sync/push', [apigwv2.HttpMethod.POST], sync);
   route('SyncPullIntegration', '/api/v1/sync/pull', [apigwv2.HttpMethod.POST], sync);
   route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
+  route(
+    'GoogleSyncStatusIntegration',
+    '/api/v1/integrations/google/status',
+    [apigwv2.HttpMethod.GET],
+    googleSync,
+  );
+  route(
+    'GoogleSyncConnectIntegration',
+    '/api/v1/integrations/google/connect',
+    [apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleSyncCallbackIntegration',
+    '/api/v1/integrations/google/callback',
+    [apigwv2.HttpMethod.GET],
+    googleSync,
+  );
+  route(
+    'GoogleTaskListsIntegration',
+    '/api/v1/integrations/google/task-lists',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleSyncPreviewIntegration',
+    '/api/v1/integrations/google/preview',
+    [apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleSyncSettingsIntegration',
+    '/api/v1/integrations/google/settings',
+    [apigwv2.HttpMethod.PATCH],
+    googleSync,
+  );
+  route(
+    'GoogleSyncRunIntegration',
+    '/api/v1/integrations/google/sync',
+    [apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleSyncRunStatusIntegration',
+    '/api/v1/integrations/google/runs/{runId}',
+    [apigwv2.HttpMethod.GET],
+    googleSync,
+  );
+  route(
+    'GoogleSyncQuarantineIntegration',
+    '/api/v1/integrations/google/quarantine',
+    [apigwv2.HttpMethod.GET],
+    googleSync,
+  );
+  route(
+    'GoogleSyncQuarantineRetryIntegration',
+    '/api/v1/integrations/google/quarantine/{operationId}/retry',
+    [apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleSyncConflictsIntegration',
+    '/api/v1/integrations/google/conflicts',
+    [apigwv2.HttpMethod.GET],
+    googleSync,
+  );
+  route(
+    'GoogleSyncConflictIntegration',
+    '/api/v1/integrations/google/conflicts/{conflictId}',
+    [apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleSyncDisconnectPreviewIntegration',
+    '/api/v1/integrations/google/disconnect-preview',
+    [apigwv2.HttpMethod.GET],
+    googleSync,
+  );
+  route(
+    'GoogleSyncDisconnectIntegration',
+    '/api/v1/integrations/google/disconnect',
+    [apigwv2.HttpMethod.POST],
+    googleSync,
+  );
+  route(
+    'GoogleTaskSharingIntegration',
+    '/api/v1/tasks/{taskId}/google-sharing',
+    [apigwv2.HttpMethod.PUT],
+    googleSync,
+  );
   route('ListsIntegration', '/api/v1/lists', [apigwv2.HttpMethod.POST], list);
   route(
     'ListFinishIntegration',
@@ -567,6 +666,7 @@ export function createApplicationApi(
       attachmentReconcile,
       exportCoordinator,
       deletion: deletion.apiHandler,
+      googleSync,
     },
   };
 }

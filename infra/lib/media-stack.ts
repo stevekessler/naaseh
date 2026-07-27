@@ -1,9 +1,9 @@
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { Duration, RemovalPolicy, Stack } from 'aws-cdk-lib';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import type { Construct } from 'constructs';
+import type { Construct, IDependable } from 'constructs';
 
 export const mediaControls = {
   private: true,
@@ -64,27 +64,67 @@ export function createProfileMediaResources(
   const malwareRole = new iam.Role(scope, 'AttachmentMalwareProtectionRole', {
     assumedBy: new iam.ServicePrincipal('malware-protection-plan.guardduty.amazonaws.com'),
   });
-  media.grantReadWrite(malwareRole, 'attachments/*');
-  options.primaryKey.grantEncryptDecrypt(malwareRole);
-  malwareRole.addToPolicy(
+  const managedRuleArn = Stack.of(scope).formatArn({
+    service: 'events',
+    resource: 'rule',
+    resourceName: 'DO-NOT-DELETE-AmazonGuardDutyMalwareProtectionS3*',
+  });
+  const malwarePolicyDependencies: IDependable[] = [];
+  for (const statement of [
+    new iam.PolicyStatement({
+      actions: ['events:PutRule', 'events:DeleteRule', 'events:PutTargets', 'events:RemoveTargets'],
+      resources: [managedRuleArn],
+      conditions: {
+        StringLike: {
+          'events:ManagedBy': 'malware-protection-plan.guardduty.amazonaws.com',
+        },
+      },
+    }),
+    new iam.PolicyStatement({
+      actions: ['events:DescribeRule', 'events:ListTargetsByRule'],
+      resources: [managedRuleArn],
+    }),
     new iam.PolicyStatement({
       actions: [
+        's3:GetObject',
+        's3:GetObjectVersion',
         's3:GetObjectTagging',
         's3:PutObjectTagging',
-        's3:ListBucket',
-        's3:GetBucketNotification',
-        's3:PutBucketNotification',
+        's3:GetObjectVersionTagging',
+        's3:PutObjectVersionTagging',
       ],
-      resources: [media.bucketArn, media.arnForObjects('attachments/*')],
+      resources: [media.arnForObjects('attachments/*')],
     }),
-  );
-  new guardduty.CfnMalwareProtectionPlan(scope, 'AttachmentMalwareProtectionPlan', {
-    role: malwareRole.roleArn,
-    protectedResource: {
-      s3Bucket: { bucketName: media.bucketName, objectPrefixes: ['attachments/'] },
+    new iam.PolicyStatement({
+      actions: ['s3:GetBucketNotification', 's3:PutBucketNotification', 's3:ListBucket'],
+      resources: [media.bucketArn],
+    }),
+    new iam.PolicyStatement({
+      actions: ['s3:PutObject'],
+      resources: [media.arnForObjects('malware-protection-resource-validation-object')],
+    }),
+  ]) {
+    const { policyDependable } = malwareRole.addToPrincipalPolicy(statement);
+    if (policyDependable) malwarePolicyDependencies.push(policyDependable);
+  }
+  const kmsGrant = options.primaryKey.grant(malwareRole, 'kms:Decrypt', 'kms:GenerateDataKey');
+  const malwarePlan = new guardduty.CfnMalwareProtectionPlan(
+    scope,
+    'AttachmentMalwareProtectionPlan',
+    {
+      role: malwareRole.roleArn,
+      protectedResource: {
+        s3Bucket: { bucketName: media.bucketName, objectPrefixes: ['attachments/'] },
+      },
+      actions: { tagging: { status: 'ENABLED' } },
     },
-    actions: { tagging: { status: 'ENABLED' } },
-  });
+  );
+  // GuardDuty validates the role while creating the plan. Make CloudFormation wait for both the
+  // complete S3/EventBridge policy and the KMS grant instead of racing IAM propagation.
+  for (const policyDependable of malwarePolicyDependencies) {
+    malwarePlan.node.addDependency(policyDependable);
+  }
+  kmsGrant.applyBefore(malwarePlan);
   media.addToResourcePolicy(
     new iam.PolicyStatement({
       effect: iam.Effect.DENY,

@@ -24,6 +24,8 @@ export function TaskActions({
       <PrivacyControl
         privateTask={task.visibility === 'private'}
         change={(locked) => update({ visibility: locked ? 'private' : 'public' })}
+        taskId={task.id}
+        csrfToken={csrfToken}
       />
       <PermanentDeleteDialog
         target={{ resourceType: 'task', resourceId: task.id, version: task.version }}

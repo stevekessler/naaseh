@@ -13,6 +13,33 @@
   --line: #d8e2dc;
 }
 
+.google-sync-page {
+  display: grid;
+  gap: 1rem;
+  max-width: 52rem;
+  margin-inline: auto;
+}
+
+.google-sync-page dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+
+.google-sync-page dl > div,
+.google-sync-page article {
+  padding: 0.75rem;
+  border: 1px solid var(--border, #c9c9c9);
+  border-radius: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .google-sync-page button {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
 .task-form {
   display: grid;
   gap: 0.85rem;

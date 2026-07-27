@@ -32,9 +32,15 @@ export function createRuntimeSecrets(scope: Construct) {
     encryptionKey: primaryKey,
     removalPolicy: RemovalPolicy.RETAIN,
   });
+  const googleOAuthSecret = new secretsmanager.Secret(scope, 'GoogleOAuthCredentials', {
+    description: 'Google OAuth web client JSON with clientId, clientSecret, and exact redirectUri.',
+    encryptionKey: primaryKey,
+    removalPolicy: RemovalPolicy.RETAIN,
+  });
   for (const [secret, owner] of [
     [pepper, 'authentication'],
     [webPushSecret, 'notifications'],
+    [googleOAuthSecret, 'google-sync'],
   ] as const) {
     Tags.of(secret).add('NaasehRotationOwner', owner);
     Tags.of(secret).add('NaasehRotationReviewDays', String(secretControls.rotationReviewDays));
@@ -62,5 +68,5 @@ export function createRuntimeSecrets(scope: Construct) {
     threshold: 1,
     evaluationPeriods: 1,
   });
-  return { primaryKey, pepper, webPushSecret, alerts, policyChangeAlarm };
+  return { primaryKey, pepper, webPushSecret, googleOAuthSecret, alerts, policyChangeAlarm };
 }

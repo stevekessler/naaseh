@@ -16,3 +16,4 @@ export interface PushResult {
 export * from './openapi.js';
 export { enhancedListContractVersion, enhancedListContractVersionSchema } from './openapi.js';
 export * from './archive-project-reporting-openapi.js';
+export * from './google-sync-openapi.js';

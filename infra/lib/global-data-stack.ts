@@ -37,6 +37,11 @@ export function createRegionalDataResources(scope: Construct) {
     partitionKey: { name: 'GSI1PK', type: dynamodb.AttributeType.STRING },
     sortKey: { name: 'GSI1SK', type: dynamodb.AttributeType.STRING },
   });
+  table.addGlobalSecondaryIndex({
+    indexName: 'GSI2',
+    partitionKey: { name: 'GSI2PK', type: dynamodb.AttributeType.STRING },
+    sortKey: { name: 'GSI2SK', type: dynamodb.AttributeType.STRING },
+  });
   return { key, table };
 }
 

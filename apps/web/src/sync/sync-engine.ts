@@ -31,6 +31,7 @@ import {
 } from '../db/task-repository.js';
 import { getClientId } from '../db/client-id.js';
 import { listLocalLists } from '../db/list-repository.js';
+import { refreshGoogleSyncCache } from '../features/google-sync/google-sync-client.js';
 export type SyncState = 'offline' | 'idle' | 'syncing' | 'error';
 type MutationResult = {
   mutationId: string;
@@ -240,6 +241,7 @@ export async function pullChanges(): Promise<void> {
 export async function syncNow(csrfToken: string) {
   await drainOutbox(csrfToken);
   await pullChanges();
+  await refreshGoogleSyncCache(csrfToken).catch(() => undefined);
 }
 export async function drainSequentially(
   csrfToken: string,

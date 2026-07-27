@@ -39,6 +39,7 @@ export const handler: APIGatewayRequestSimpleAuthorizerHandlerV2 = async (event)
       csrfToken: record.csrfToken,
       sessionEpoch: record.sessionEpoch,
       groupIds: groupIds.join(','),
+      sessionHash: tokenHash,
     },
   };
 };

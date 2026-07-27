@@ -169,6 +169,7 @@ export async function saveTaskLifecycleMutation(
   mutationId: string,
   operation: 'completeAndArchive' | 'archive' | 'reopenAndRestore',
   completionEvent?: CompletionEvent,
+  sourceClientId?: string,
 ) {
   const changedFields = [
     'status',
@@ -193,6 +194,7 @@ export async function saveTaskLifecycleMutation(
     before: safeRevisionValues(previous, changedFields),
     after: safeRevisionValues(task, changedFields) ?? {},
     syncOutcome: 'applied',
+    ...(sourceClientId ? { sourceClientId } : {}),
   };
   const intents = privacyFeedChanges(previous, task);
   if (defaultDependencies.administratorFeed) intents.push(administratorTaskFeedChange(task));

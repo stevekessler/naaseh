@@ -192,9 +192,9 @@ describe('foundation infrastructure', () => {
   });
 
   it('creates retained log groups, operational alarms, and a dashboard', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 8);
+    template.resourceCountIs('AWS::Logs::LogGroup', 9);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 38);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 47);
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
   });
 });

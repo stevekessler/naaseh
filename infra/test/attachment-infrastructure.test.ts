@@ -38,8 +38,25 @@ describe('attachment infrastructure', () => {
         ]),
       },
     });
-    expect(JSON.stringify(template.toJSON())).toContain('BucketKeyEnabled');
+    const rendered = JSON.stringify(template.toJSON());
+    expect(rendered).toContain('BucketKeyEnabled');
     template.resourceCountIs('AWS::GuardDuty::MalwareProtectionPlan', 1);
+    for (const requiredPermission of [
+      'events:PutRule',
+      'events:PutTargets',
+      's3:ListBucket',
+      's3:PutBucketNotification',
+      'malware-protection-resource-validation-object',
+      'kms:GenerateDataKey',
+    ]) {
+      expect(rendered).toContain(requiredPermission);
+    }
+    expect(rendered).toContain('malware-protection-plan.guardduty.amazonaws.com');
+    template.hasResource('AWS::GuardDuty::MalwareProtectionPlan', {
+      DependsOn: Match.arrayWith([
+        Match.stringLikeRegexp('AttachmentMalwareProtectionRoleDefaultPolicy'),
+      ]),
+    });
     template.hasResourceProperties('AWS::S3::BucketPolicy', {
       PolicyDocument: Match.objectLike({
         Statement: Match.arrayWith([Match.objectLike({ Effect: 'Deny', Action: 's3:GetObject' })]),

@@ -36,7 +36,7 @@ export class NaasehStack extends Stack {
     const recoveryKeys = createRecoveryKeys(this, {
       breakGlassRoleArn: props.breakGlassRoleArn,
     });
-    const { pepper, webPushSecret } = createRuntimeSecrets(this);
+    const { pepper, webPushSecret, googleOAuthSecret } = createRuntimeSecrets(this);
     const { distribution, responseHeadersPolicy } = createWebResources(this, {
       certificateArn: props.certificateArn,
       domainName: props.domainName,
@@ -101,6 +101,7 @@ export class NaasehStack extends Stack {
       recoveryWrappingKey: recoveryKeys.recoveryWrappingKey,
       manifestSigningKey: recoveryKeys.manifestSigningKey,
       webPushSecret,
+      googleOAuthSecret,
     });
     attachSameOriginApi(distribution, httpApi, responseHeadersPolicy);
     createOperationalVisibility(
@@ -110,6 +111,7 @@ export class NaasehStack extends Stack {
         auth: functions.auth,
         sync: functions.sync,
         reporting: functions.reporting,
+        googleSync: functions.googleSync,
       },
       table,
     );

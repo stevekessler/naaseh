@@ -66,6 +66,7 @@ class NaasehDatabase extends Dexie {
   secureProjects!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureCompletionEvents!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureDeletionJobs!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureGoogleSync!: EntityTable<EncryptedEntityRecord, 'id'>;
   constructor() {
     super('naaseh');
     this.version(1).stores({
@@ -173,6 +174,30 @@ class NaasehDatabase extends Dexie {
       secureDirectoryItems: 'id,updatedAt',
       secureAttachments: 'id,taskId,updatedAt',
       secureJobs: 'id,updatedAt',
+    });
+    this.version(9).stores({
+      tasks: 'id,ownerId,status,dueAt,assigneeId,categoryId,parentId,visibility,updatedAt',
+      secureTasks:
+        'id,ownerId,status,lifecycle,completionState,dueAt,dueTimeZone,assigneeId,categoryId,projectId,groupId,parentId,visibility,updatedAt',
+      revisions: 'id,taskId,changedAt',
+      outbox: 'id,entityId,entityType,createdAt,attempts',
+      settings: 'key',
+      cryptoKeys: 'id',
+      secureCategories: 'id,lifecycle,updatedAt',
+      secureProjects: 'id,categoryId,lifecycle,updatedAt',
+      secureCompletionEvents:
+        'id,taskId,completedBy,occurredAt,projectId,categoryId,reversedAt,updatedAt',
+      secureDeletionJobs: 'id,taskId,updatedAt',
+      secureRevisions: 'id,taskId,mutationId,updatedAt',
+      secureReminders: 'id,taskId,updatedAt',
+      secureConflicts: 'id,updatedAt',
+      secureGroups: 'id,updatedAt',
+      secureLists: 'id,projectId,lifecycle,updatedAt',
+      secureListItems: 'id,taskId,updatedAt',
+      secureDirectoryItems: 'id,updatedAt',
+      secureAttachments: 'id,taskId,updatedAt',
+      secureJobs: 'id,updatedAt',
+      secureGoogleSync: 'id,updatedAt',
     });
   }
 }

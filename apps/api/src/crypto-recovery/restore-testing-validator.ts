@@ -287,7 +287,12 @@ async function probeRestoredResource(
       ledgerKeys,
     });
     const integrity = await validateRestoredInventory(items, evidence, dependencies);
-    return { resourceType: 'DynamoDB' as const, itemCount: items.length, integrity };
+    return {
+      resourceType: 'DynamoDB' as const,
+      itemCount: items.length,
+      integrity,
+      googleSyncSafety: googleRestoreSafetyPlan(items),
+    };
   }
 
   const bucketName = resourceName(evidence.createdResourceArn, 's3:::');
@@ -301,6 +306,27 @@ async function probeRestoredResource(
 }
 
 type RestoredItem = { PK?: unknown; SK?: unknown; data?: unknown };
+
+export function googleRestoreSafetyPlan(items: RestoredItem[]) {
+  let connectionsRequiringReauthorization = 0;
+  let operationsToCancel = 0;
+  for (const item of items) {
+    const data = item.data as { state?: unknown; encryptedRefreshToken?: unknown } | undefined;
+    if (item.SK === 'GOOGLE#CONNECTION' && data?.encryptedRefreshToken)
+      connectionsRequiringReauthorization += 1;
+    if (
+      typeof item.SK === 'string' &&
+      item.SK.startsWith('OP#') &&
+      ['pending', 'retry', 'running'].includes(String(data?.state))
+    )
+      operationsToCancel += 1;
+  }
+  return {
+    connectionsRequiringReauthorization,
+    operationsToCancel,
+    safeToExpose: connectionsRequiringReauthorization === 0 && operationsToCancel === 0,
+  };
+}
 
 async function readDynamoItems(tableName: string, client: CommandClient) {
   const items: RestoredItem[] = [];

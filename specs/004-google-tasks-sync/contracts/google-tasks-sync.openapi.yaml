@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Google Tasks Sync API
+  version: 1.0.0
+paths:
+  /api/v1/integrations/google/status:
+    get:
+      summary: Read owner-scoped connection and synchronization summary
+      responses:
+        '200': { description: Connection summary without credentials }
+  /api/v1/integrations/google/connect:
+    post:
+      summary: Start owner-scoped OAuth authorization
+      responses:
+        '200': { description: Full-page Google authorization URL and expiry }
+  /api/v1/integrations/google/callback:
+    get:
+      summary: Validate OAuth callback, store encrypted refresh token, and redirect to preview
+      parameters:
+        - { in: query, name: state, required: true, schema: { type: string } }
+        - { in: query, name: code, required: false, schema: { type: string } }
+        - { in: query, name: error, required: false, schema: { type: string } }
+      responses:
+        '302': { description: Same-origin settings redirect }
+  /api/v1/integrations/google/task-lists:
+    get:
+      summary: List bounded task-list choices for the connecting owner
+      responses:
+        '200': { description: Task-list IDs, titles, revisions and pagination summary }
+    post:
+      summary: Create a dedicated task list
+      responses:
+        '201': { description: Created task-list choice }
+  /api/v1/integrations/google/preview:
+    post:
+      summary: Preview initial publish/import/skipped counts without mutation
+      responses:
+        '200': { description: Bounded counts and warnings }
+  /api/v1/integrations/google/settings:
+    patch:
+      summary: Select list and update default time, time zone, state or privacy settings
+      responses:
+        '200': { description: Updated summary }
+  /api/v1/integrations/google/sync:
+    post:
+      summary: Acquire the run lease and trigger reconciliation
+      responses:
+        '202': { description: Run identity and current progress }
+        '409': { description: Existing run already active }
+  /api/v1/integrations/google/runs/{runId}:
+    get:
+      summary: Read safe owner-scoped run progress
+      parameters:
+        - { in: path, name: runId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Run summary }
+  /api/v1/integrations/google/conflicts:
+    get:
+      summary: List owner-authorized conflicts including protected candidate values
+      responses:
+        '200': { description: Conflict list }
+  /api/v1/integrations/google/quarantine:
+    get:
+      summary: List owner-safe quarantined item summaries
+      responses:
+        '200': { description: Quarantined operation summaries without task content }
+  /api/v1/integrations/google/quarantine/{operationId}/retry:
+    post:
+      summary: Requeue one owner-scoped quarantined operation
+      parameters:
+        - { in: path, name: operationId, required: true, schema: { type: string } }
+      responses:
+        '202': { description: Item requeued }
+        '404': { description: Item is absent or not owned by the requester }
+  /api/v1/integrations/google/conflicts/{conflictId}:
+    post:
+      summary: Resolve a conflict with local, Google, or edited value
+      parameters:
+        - { in: path, name: conflictId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Resolved conflict and queued convergence }
+        '409': { description: Conflict revision changed }
+  /api/v1/tasks/{taskId}/google-sharing:
+    put:
+      summary: Explicitly approve or revoke Google publication for an owner private task
+      parameters:
+        - { in: path, name: taskId, required: true, schema: { type: string } }
+      responses:
+        '200': { description: Sharing consent state }
+  /api/v1/integrations/google/disconnect-preview:
+    get:
+      summary: Preview remote tasks eligible for optional cleanup
+      responses:
+        '200': { description: Safe counts and consequences }
+  /api/v1/integrations/google/disconnect:
+    post:
+      summary: Disconnect and retain or remove only Na'aseh-origin remote tasks
+      responses:
+        '202': { description: Disconnect run identity }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-naaseh_session
+security:
+  - sessionCookie: []
+
+x-naaseh-mutation-controls:
+  csrf-header: X-CSRF-Token
+  optimistic-concurrency: expectedVersion
+  idempotency: mutationId
+  protected-fields-excluded-from-errors: true

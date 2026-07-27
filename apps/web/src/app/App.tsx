@@ -68,6 +68,7 @@ import { ProjectTree } from '../features/projects/ProjectTree.js';
 import { useWorkloadTree } from '../features/projects/useWorkloadTree.js';
 import { listLocalCompletionEvents } from '../db/completion-event-repository.js';
 import { CompletionDashboard } from '../features/reports/CompletionDashboard.js';
+import { GoogleSyncPage } from '../features/google-sync/GoogleSyncPage.js';
 
 const emptyFilters: Filters = {
   query: '',
@@ -95,7 +96,7 @@ export function App() {
   const [view, setView] = useState<'list' | 'postit'>('list');
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
-    'tasks' | 'lists' | 'groups' | 'archive' | 'projects' | 'dashboard' | 'admin'
+    'tasks' | 'lists' | 'groups' | 'archive' | 'projects' | 'dashboard' | 'google' | 'admin'
   >(initialRoute.section);
   const [selectedListId, setSelectedListId] = useState<string | undefined>(
     initialRoute.section === 'lists' ? initialRoute.listId : undefined,
@@ -288,6 +289,13 @@ export function App() {
           <nav aria-label="Main navigation">
             <button
               className="quiet"
+              aria-current={section === 'google' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'google' })}
+            >
+              Google
+            </button>
+            <button
+              className="quiet"
               aria-current={section === 'dashboard' ? 'page' : undefined}
               onClick={() => navigate({ section: 'dashboard' })}
             >
@@ -352,7 +360,9 @@ export function App() {
         </div>
       </header>
       <main>
-        {section === 'admin' ? (
+        {section === 'google' ? (
+          <GoogleSyncPage csrfToken={session.csrfToken} />
+        ) : section === 'admin' ? (
           <>
             <UsersAdminPage
               users={adminUsers}

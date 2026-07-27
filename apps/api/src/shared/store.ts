@@ -4,6 +4,7 @@ import {
   GetCommand,
   PutCommand,
   QueryCommand,
+  ScanCommand,
   TransactWriteCommand,
   type TransactWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
@@ -50,12 +51,33 @@ export async function listOwnerTasks(ownerId: string): Promise<Task[]> {
   const result = await document.send(
     new QueryCommand({
       TableName: table,
-      IndexName: 'GSI1',
-      KeyConditionExpression: 'GSI1PK = :pk',
+      IndexName: 'GSI2',
+      KeyConditionExpression: 'GSI2PK = :pk',
       ExpressionAttributeValues: { ':pk': `TASK#OWNER#${ownerId}` },
     }),
   );
-  return (result.Items ?? []).map((item) => item.data as Task);
+  const tasks = new Map(
+    (result.Items ?? []).map((item) => [(item.data as Task).id, item.data as Task]),
+  );
+  // Compatibility scan keeps pre-index records eligible until normal writes backfill GSI2.
+  let startKey: Record<string, unknown> | undefined;
+  do {
+    const legacy = await document.send(
+      new ScanCommand({
+        TableName: table,
+        FilterExpression: 'SK=:current AND #data.#ownerId=:owner',
+        ExpressionAttributeNames: { '#data': 'data', '#ownerId': 'ownerId' },
+        ExpressionAttributeValues: { ':current': 'CURRENT', ':owner': ownerId },
+        ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+      }),
+    );
+    for (const item of legacy.Items ?? []) {
+      const task = item.data as Task;
+      tasks.set(task.id, task);
+    }
+    startKey = legacy.LastEvaluatedKey;
+  } while (startKey);
+  return [...tasks.values()];
 }
 export function buildTaskTransaction(
   task: Task,
@@ -74,6 +96,8 @@ export function buildTaskTransaction(
             SK: 'CURRENT',
             GSI1PK: task.visibility === 'public' ? 'TASK#PUBLIC' : `TASK#OWNER#${task.ownerId}`,
             GSI1SK: task.updatedAt,
+            GSI2PK: `TASK#OWNER#${task.ownerId}`,
+            GSI2SK: task.updatedAt,
             data: task,
           },
           ConditionExpression: 'attribute_not_exists(PK) OR #data.#version = :base',

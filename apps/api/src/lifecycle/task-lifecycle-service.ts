@@ -19,6 +19,7 @@ export interface TaskLifecycleRequest {
   expectedVersion: number;
   action: 'complete' | 'archive' | 'restore';
   now?: Date;
+  sourceClientId?: string;
 }
 
 export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promise<Task> {
@@ -47,12 +48,21 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
       request.mutationId,
       'completeAndArchive',
       result.completionEvent,
+      request.sourceClientId,
     );
     return result.task;
   }
   if (request.action === 'archive') {
     const next = archiveTask(current, request.actorId, now);
-    await saveTaskLifecycleMutation(next, current, request.actorId, request.mutationId, 'archive');
+    await saveTaskLifecycleMutation(
+      next,
+      current,
+      request.actorId,
+      request.mutationId,
+      'archive',
+      undefined,
+      request.sourceClientId,
+    );
     return next;
   }
   const event = current.currentCompletionEventId
@@ -66,6 +76,7 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
     request.mutationId,
     'reopenAndRestore',
     restored.completionEvent,
+    request.sourceClientId,
   );
   return restored.task;
 }

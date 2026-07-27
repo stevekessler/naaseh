@@ -1,6 +1,6 @@
 # First AWS deployment
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-25
 
 Production is served at **https://gsd.thepandas.link**. CDK deploys two CloudFormation stacks:
 
@@ -19,17 +19,20 @@ at `gsd.thepandas.link`.
 ## Prerequisites
 
 The setup operator needs Node.js 24, npm, AWS CLI v2, an approved non-root administrative AWS
-session for one-time setup, Route 53 access, and permission to configure GitHub environments. Do
-not create an IAM user for GitHub or store long-lived AWS keys there.
+session for one-time setup, Route 53 access, and permission to configure GitHub environments. Google
+Tasks synchronization additionally requires the Google Cloud CLI, `jq`, a separate Google Cloud
+project for each environment, and permission to configure Google Auth Platform. Do not create an IAM
+user for GitHub or store long-lived AWS keys there.
 
-| Setting            | Production value             |
-| ------------------ | ---------------------------- |
-| AWS account        | `093733938983`               |
-| Application Region | `us-west-2`                  |
-| Edge Region        | `us-east-1`                  |
-| Hosted zone        | `thepandas.link`             |
-| Hosted-zone ID     | `Z03233042WRAYW9S16I7T`      |
-| Site URL           | `https://gsd.thepandas.link` |
+| Setting            | Production value                                                 |
+| ------------------ | ---------------------------------------------------------------- |
+| AWS account        | `093733938983`                                                   |
+| Application Region | `us-west-2`                                                      |
+| Edge Region        | `us-east-1`                                                      |
+| Hosted zone        | `thepandas.link`                                                 |
+| Hosted-zone ID     | `Z03233042WRAYW9S16I7T`                                          |
+| Site URL           | `https://gsd.thepandas.link`                                     |
+| Google callback    | `https://gsd.thepandas.link/api/v1/integrations/google/callback` |
 
 Confirm the operator identity before changing AWS. Stop if the ARN ends in `:root`; use an
 approved assumed role instead.
@@ -37,6 +40,8 @@ approved assumed role instead.
 ```console
 node --version
 aws sts get-caller-identity --profile PROFILE
+gcloud version
+jq --version
 npm ci
 npm run validate:pre-aws
 ```
@@ -75,7 +80,7 @@ Create the following Identity Center resources:
 
 | Type           | Name                   | Configuration                                               |
 | -------------- | ---------------------- | ----------------------------------------------------------- |
-| User           | `stevekessler-admin`   | Normal administrative email and MFA                         |
+| User           | `stevekessler-admin`   | `stevekessleradmin@gmail.com`; separate MFA                 |
 | Group          | `NaasehAdministrators` | Contains `stevekessler-admin`                               |
 | Permission set | `NaasehBootstrapAdmin` | AWS-managed `AdministratorAccess`; one- or two-hour session |
 
@@ -83,6 +88,13 @@ Under **Multi-account permissions > AWS accounts**, assign group `NaasehAdminist
 permission set `NaasehBootstrapAdmin` to account `093733938983`. Wait for provisioning to finish.
 The broad permission set is for initial account setup and CDK bootstrapping; routine GitHub
 deployment uses the separate OIDC role below.
+
+If a user was created with the AWS CLI, it has no initial password. As a root or Identity Center
+administrator, open **IAM Identity Center > Users**, select the user, choose **Reset password**, and
+generate a one-time password. Give that password to the intended user through a secure channel.
+At the first access-portal sign-in, the user sets a permanent password and registers MFA. Do not use
+the self-service **Forgot password?** path before MFA enrollment; an MFA-required configuration can
+prevent that reset from completing.
 
 ### Configure and verify the administrative CLI profile
 
@@ -124,30 +136,36 @@ export AWS_PROFILE=naaseh-admin
 aws sts get-caller-identity
 ```
 
-### Remove the root CLI access key
+### Isolate the retained legacy root CLI access key
 
-Only after the `naaseh-admin` profile works:
+This account currently retains its root access key because other legacy projects still depend on
+it. Do not deactivate, delete, rotate, relocate, or overwrite that key as part of the Naaseh setup.
+The key is a temporary legacy exception, not a Naaseh credential:
 
-1. In the root console, open **Security credentials > Access keys**.
-2. Deactivate the root access key.
-3. Run `aws sso login --profile naaseh-admin` and verify the assumed-role identity again.
-4. Delete the root access key in the console.
-5. Remove its values from the `default` section of `~/.aws/credentials`.
-6. Clear any credentials exported into the current shell:
+1. Always use the explicit `--profile naaseh-admin` option or set `AWS_PROFILE=naaseh-admin` when
+   administering or deploying Naaseh.
+2. Before a consequential command, run `aws sts get-caller-identity` and stop if the ARN ends in
+   `:root`.
+3. Never copy the root key into this repository, GitHub secrets, GitHub Actions, application
+   configuration, chat, or documentation.
+4. Keep root MFA enabled and retain secure access to the account-owner email and telephone number.
+5. Inventory each legacy consumer, then replace its root key with a workload-specific role or
+   least-privilege identity. Test each migration independently before eventually retiring the key.
+6. Clear any credentials exported directly into a shell before starting Naaseh work:
 
 ```console
 unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
 ```
 
-After cleanup, an unqualified identity request should fail unless `AWS_PROFILE` selects a safe
-profile, while the named profile must succeed:
+The named Naaseh profile must succeed and return the `NaasehBootstrapAdmin` assumed role:
 
 ```console
-aws sts get-caller-identity
 aws sts get-caller-identity --profile naaseh-admin
 ```
 
-Use root only for the small set of account-owner operations that require it.
+Do not change the machine's default credential behavior until the legacy dependencies have been
+identified. AWS root access keys cannot be permission-scoped, so migrating those projects remains
+a security follow-up even though it is not a prerequisite for the first Naaseh deployment.
 
 ## 2. Create the recovery operator and break-glass role
 
@@ -266,12 +284,35 @@ Configure a distinct SSO profile and session:
 
 ```console
 aws configure sso --profile naaseh-recovery-operator
-aws sso login --profile naaseh-recovery-operator
 ```
 
-Use the same access-portal URL and Region, account `093733938983`, role
-`NaasehRecoveryOperator`, and SSO session name `naaseh-recovery-session`. Authenticate as the
-separate recovery user. Test role assumption without printing temporary credentials:
+Enter the following values. At the registration-scopes prompt, press **Return** to accept the
+displayed `sso:account:access` default. Do not enter the AWS account number there; the wizard asks
+you to select account `093733938983` only after browser authentication succeeds.
+
+```text
+SSO session name: naaseh-recovery-session
+SSO start URL: https://ssoins-790787ff84bd25cc.portal.us-west-2.app.aws
+SSO region: us-west-2
+SSO registration scopes: sso:account:access
+AWS account: 093733938983
+Role: NaasehRecoveryOperator
+Default client Region: us-west-2
+Output format: json
+Profile name: naaseh-recovery-operator
+```
+
+Authenticate as the separate recovery user. If the normal browser redirect cannot complete, rerun
+the configuration with `--use-device-code` and follow the displayed device-login instructions.
+
+```console
+aws sso login --profile naaseh-recovery-operator
+aws sts get-caller-identity --profile naaseh-recovery-operator
+```
+
+The first verification must return an assumed-role ARN containing
+`AWSReservedSSO_NaasehRecoveryOperator_` and must not return the root ARN. Then test role assumption
+without printing temporary credentials:
 
 ```console
 aws sts assume-role \
@@ -339,9 +380,20 @@ thresholds appropriate for other workloads already in this account.
 
 ## 4. Create the GitHub OIDC deployment role
 
-Configure the account-wide GitHub provider with URL
-`https://token.actions.githubusercontent.com` and audience `sts.amazonaws.com`. Create a distinct
-role for each environment whose trust condition is restricted to the repository environment:
+Account `093733938983` already has the account-wide GitHub provider
+`arn:aws:iam::093733938983:oidc-provider/token.actions.githubusercontent.com` with audience
+`sts.amazonaws.com`. Do not create a duplicate provider. Verify it:
+
+```console
+aws iam get-open-id-connect-provider --profile naaseh-admin \
+  --open-id-connect-provider-arn \
+  arn:aws:iam::093733938983:oidc-provider/token.actions.githubusercontent.com \
+  --query '{Url:Url,ClientIDList:ClientIDList}' --output json
+```
+
+Create `/tmp/naaseh-production-github-trust.json` with this exact production trust policy. The
+environment-qualified `sub` claim means that a branch, pull request, fork, or another repository
+cannot use the role merely by knowing its ARN:
 
 ```json
 {
@@ -350,13 +402,13 @@ role for each environment whose trust condition is restricted to the repository 
     {
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": "arn:aws:iam::093733938983:oidc-provider/token.actions.githubusercontent.com"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:stevekessler/naaseh:environment:ENVIRONMENT"
+          "token.actions.githubusercontent.com:sub": "repo:stevekessler/naaseh:environment:production"
         }
       }
     }
@@ -364,7 +416,9 @@ role for each environment whose trust condition is restricted to the repository 
 }
 ```
 
-The role needs permission to assume and tag the CDK bootstrap roles in both Regions:
+Create `/tmp/naaseh-github-cdk-policy.json` with the only permissions granted directly to the
+GitHub role. CDK will exchange these credentials for its bootstrapped deployment, lookup, and asset
+publishing roles:
 
 ```json
 {
@@ -374,20 +428,73 @@ The role needs permission to assume and tag the CDK bootstrap roles in both Regi
       "Effect": "Allow",
       "Action": ["sts:AssumeRole", "sts:TagSession"],
       "Resource": [
-        "arn:aws:iam::ACCOUNT_ID:role/cdk-hnb659fds-*-role-ACCOUNT_ID-us-east-1",
-        "arn:aws:iam::ACCOUNT_ID:role/cdk-hnb659fds-*-role-ACCOUNT_ID-us-west-2"
+        "arn:aws:iam::093733938983:role/cdk-hnb659fds-*-role-093733938983-us-east-1",
+        "arn:aws:iam::093733938983:role/cdk-hnb659fds-*-role-093733938983-us-west-2"
       ]
     }
   ]
 }
 ```
 
-Replace the qualifier if the account does not use `hnb659fds`.
+Create and verify the production role:
+
+```console
+aws iam create-role --profile naaseh-admin \
+  --role-name naaseh-github-production-deploy \
+  --description "GitHub Actions OIDC deployment role for Naaseh production" \
+  --max-session-duration 3600 \
+  --assume-role-policy-document file:///tmp/naaseh-production-github-trust.json
+
+aws iam put-role-policy --profile naaseh-admin \
+  --role-name naaseh-github-production-deploy \
+  --policy-name AssumeNaasehCdkBootstrapRoles \
+  --policy-document file:///tmp/naaseh-github-cdk-policy.json
+
+aws iam get-role --profile naaseh-admin \
+  --role-name naaseh-github-production-deploy \
+  --query 'Role.Arn' --output text
+
+aws iam get-role-policy --profile naaseh-admin \
+  --role-name naaseh-github-production-deploy \
+  --policy-name AssumeNaasehCdkBootstrapRoles
+```
+
+The role ARN must be
+`arn:aws:iam::093733938983:role/naaseh-github-production-deploy`. Do not attach
+`AdministratorAccess`, store AWS access keys in GitHub, or allow this role to assume
+`naaseh-recovery-break-glass`.
+
+Do not create or run the staging deployment role yet. The current CDK entry point uses the fixed
+stack IDs `NaasehEdge` and `NaasehProd`; the staging workflow would target the production stacks.
+First implement stage-specific stack IDs and a separate staging hostname, then create a staging
+role with an exact `repo:stevekessler/naaseh:environment:staging` subject.
 
 ## 5. Configure GitHub Actions
 
-Create protected `staging` and `production` environments. Restrict production to `main` and add
-required reviewers where supported.
+The repository is public, its default branch is `main`, and no GitHub environments, Actions
+variables, or Actions secrets existed at the time of initial setup. Create the production
+environment and restrict it to the `main` branch from the command line:
+
+```console
+jq -n '{
+  wait_timer: 0,
+  deployment_branch_policy: {
+    protected_branches: false,
+    custom_branch_policies: true
+  }
+}' | gh api --method PUT \
+  repos/stevekessler/naaseh/environments/production --input -
+
+gh api --method POST \
+  repos/stevekessler/naaseh/environments/production/deployment-branch-policies \
+  -f name=main -f type=branch
+```
+
+If another trusted operator is available, add that person as a required reviewer under
+**Repository Settings > Environments > production**. Do not enable “prevent self-review” when the
+repository has only one authorized operator, or no production deployment can be approved. The
+`prevent_self_review` API field must be omitted entirely when no `reviewers` list is configured;
+GitHub rejects the request even if that field is explicitly set to `false`.
 
 | Type     | Production name                 | Production value                    |
 | -------- | ------------------------------- | ----------------------------------- |
@@ -401,9 +508,39 @@ required reviewers where supported.
 | Variable | `PRODUCTION_BASE_URL`           | `https://gsd.thepandas.link`        |
 | Variable | `VITE_WEB_PUSH_PUBLIC_KEY`      | Public VAPID key, when enabled      |
 
-Configure the three DNS variables in staging with a delegated staging hostname and zone. The
-staging workflow deliberately rejects `gsd.thepandas.link`. Configure its two AWS role secrets and
-optional public Web Push key too.
+Set the production role and non-secret configuration:
+
+```console
+gh secret set AWS_DEPLOY_ROLE_ARN --env production \
+  --body 'arn:aws:iam::093733938983:role/naaseh-github-production-deploy'
+gh secret set RECOVERY_BREAK_GLASS_ROLE_ARN --env production \
+  --body 'arn:aws:iam::093733938983:role/naaseh-recovery-break-glass'
+
+gh variable set NAASEH_DOMAIN_NAME --env production --body 'gsd.thepandas.link'
+gh variable set NAASEH_HOSTED_ZONE_ID --env production --body 'Z03233042WRAYW9S16I7T'
+gh variable set NAASEH_HOSTED_ZONE_NAME --env production --body 'thepandas.link'
+gh variable set PRODUCTION_BASE_URL --env production --body 'https://gsd.thepandas.link'
+```
+
+After the first local deployment, create a dedicated active application smoke-test user. Enter its
+credentials interactively so they do not appear in shell history:
+
+```console
+gh secret set PRODUCTION_SMOKE_USERNAME --env production
+gh secret set PRODUCTION_SMOKE_PASSWORD --env production
+```
+
+Set `VITE_WEB_PUSH_PUBLIC_KEY` only after Web Push is enabled; it is a public value and belongs in
+an environment variable, not a secret. Verify names without revealing secret values:
+
+```console
+gh variable list --env production
+gh secret list --env production
+gh api repos/stevekessler/naaseh/environments/production
+```
+
+Do not create the `staging` GitHub environment until the staging stack isolation described above is
+implemented.
 
 The workflows use pinned versions of `actions/checkout`, `actions/setup-node`, and
 `aws-actions/configure-aws-credentials`. Permit those repositories if organization policy blocks
@@ -425,6 +562,29 @@ CloudFront alias with TLS 1.2 minimum, Route 53 A and AAAA aliases, private vers
 web deployment/invalidation, on-demand DynamoDB with PITR, retained KMS keys and secrets, locked
 same-Region backup vault, restore testing, alarms, and notification resources. They must not
 contain a global-table replica, cross-Region backup copy, or passive application stack.
+
+Do not load even disposable Google credentials until the IAM/KMS implementation and its negative
+infrastructure assertions are complete. This command must produce no output before importing an
+OAuth client:
+
+```console
+rg -n '^- \[ \] T(011|012)\b' specs/004-google-tasks-sync/tasks.md
+```
+
+After T011 and T012 are completed, run the focused infrastructure and security assertions again:
+
+```console
+npx vitest run \
+  infra/test/google-sync.test.ts \
+  tests/security/google-sync.security.test.ts \
+  tests/security/google-sync-controls.security.test.ts
+```
+
+The assertions must prove that the stream function has no Secrets Manager or KMS access and only
+the DynamoDB actions required to consume and enqueue owner-scoped operations. The reconciler must
+read only the Google OAuth secret, use only the token-encryption key, and have KMS permissions
+restricted by the approved encryption-context keys and purpose. A test that merely finds a KMS
+grant somewhere in the template is not sufficient.
 
 ## 7. Perform the one-time production bootstrap
 
@@ -456,7 +616,147 @@ approved. Run [Argon2id calibration](argon2-calibration.md), configure responder
 verify alarms and backups, and run the authenticated production smoke test. Record the deployed
 commit SHA as the known-good `rollback_ref` for the next release.
 
-## 8. Use GitHub for subsequent releases
+## 8. Configure Google Tasks OAuth and the AWS secret
+
+Do this independently for staging and production. Never reuse a Google Cloud project or OAuth
+client between environments. The examples below use production values; replace the project and
+callback for staging.
+
+### Enable the Google Tasks API from the CLI
+
+Choose the existing production project ID, authenticate with an approved Google administrator, and
+verify the active account and project before enabling anything:
+
+```console
+export NAASEH_GOOGLE_PROJECT='YOUR_PRODUCTION_GOOGLE_PROJECT_ID'
+export NAASEH_GOOGLE_REDIRECT_URI='https://gsd.thepandas.link/api/v1/integrations/google/callback'
+
+gcloud auth login
+gcloud config set project "$NAASEH_GOOGLE_PROJECT"
+gcloud auth list --filter=status:ACTIVE --format='value(account)'
+gcloud projects describe "$NAASEH_GOOGLE_PROJECT" \
+  --format='table(projectId,name,projectNumber)'
+gcloud services enable tasks.googleapis.com --project "$NAASEH_GOOGLE_PROJECT"
+gcloud services list --enabled --project "$NAASEH_GOOGLE_PROJECT" \
+  --filter='config.name:tasks.googleapis.com' \
+  --format='value(config.name)'
+```
+
+The final command must print exactly `tasks.googleapis.com`.
+
+### Configure the Google OAuth application
+
+Google does not provide a supported `gcloud` command for creating a general-purpose Web application
+OAuth client, so this is the one console procedure in this section. In Google Auth Platform for the
+selected project:
+
+1. Configure Branding with the Naaseh name, support email, home page, privacy-policy URL, and
+   authorized production domain.
+2. Configure Audience as External. While testing, add only approved test users; publish the app and
+   complete verification before general production use when Google requires it.
+3. Configure Data Access with exactly `https://www.googleapis.com/auth/tasks`. Do not add Drive,
+   Calendar, profile, email, or incremental authorization scopes.
+4. Create a **Web application** client with exactly one authorized redirect URI: the value of
+   `NAASEH_GOOGLE_REDIRECT_URI`. Scheme, host, path, case, and trailing slash must match exactly.
+5. Download the client JSON once to a location outside the repository. Do not commit it, attach it to
+   a ticket, paste it into chat, or store it in GitHub Actions.
+
+### Import the OAuth client into Secrets Manager
+
+The CDK deployment creates the secret before it has a value. Point to the downloaded Google file,
+discover the CDK-managed secret from CloudFormation, and construct the application's strict JSON
+schema in a mode-`0600` temporary file. Keep shell tracing disabled so secret material is not echoed.
+
+```console
+set +x
+umask 077
+export AWS_PROFILE=naaseh-admin
+export NAASEH_AWS_REGION=us-west-2
+export NAASEH_GOOGLE_CLIENT_DOWNLOAD='/absolute/path/to/client_secret.json'
+
+NAASEH_GOOGLE_SECRET_ID="$(aws cloudformation list-stack-resources \
+  --profile "$AWS_PROFILE" \
+  --region "$NAASEH_AWS_REGION" \
+  --stack-name NaasehProd \
+  --query "StackResourceSummaries[?ResourceType=='AWS::SecretsManager::Secret' && contains(LogicalResourceId, 'GoogleOAuthCredentials')].PhysicalResourceId | [0]" \
+  --output text)"
+
+test -n "$NAASEH_GOOGLE_SECRET_ID"
+test "$NAASEH_GOOGLE_SECRET_ID" != 'None'
+aws secretsmanager describe-secret \
+  --profile "$AWS_PROFILE" \
+  --region "$NAASEH_AWS_REGION" \
+  --secret-id "$NAASEH_GOOGLE_SECRET_ID" \
+  --query '{ARN:ARN,KmsKeyId:KmsKeyId,RotationOwner:Tags[?Key==`NaasehRotationOwner`].Value|[0]}'
+
+NAASEH_GOOGLE_SECRET_FILE="$(mktemp /tmp/naaseh-google-oauth.XXXXXX.json)"
+jq --arg redirectUri "$NAASEH_GOOGLE_REDIRECT_URI" '
+  if (.web.client_id | type) != "string" or (.web.client_id | length) == 0 then
+    error("download does not contain web.client_id")
+  elif (.web.client_secret | type) != "string" or (.web.client_secret | length) == 0 then
+    error("download does not contain web.client_secret")
+  elif ((.web.redirect_uris // []) | index($redirectUri)) == null then
+    error("download does not authorize the exact Naaseh callback")
+  else
+    {clientId: .web.client_id, clientSecret: .web.client_secret, redirectUri: $redirectUri}
+  end
+' "$NAASEH_GOOGLE_CLIENT_DOWNLOAD" > "$NAASEH_GOOGLE_SECRET_FILE"
+chmod 600 "$NAASEH_GOOGLE_SECRET_FILE"
+
+aws secretsmanager put-secret-value \
+  --profile "$AWS_PROFILE" \
+  --region "$NAASEH_AWS_REGION" \
+  --secret-id "$NAASEH_GOOGLE_SECRET_ID" \
+  --secret-string "file://$NAASEH_GOOGLE_SECRET_FILE" \
+  --query '{VersionId:VersionId,VersionStages:VersionStages}'
+```
+
+Do not pass `clientSecret` directly on the command line: shell history and process inspection can
+expose it. Validate the stored version without printing its value, then remove both plaintext files.
+Confirm the two paths before running `rm`.
+
+```console
+aws secretsmanager get-secret-value \
+  --profile "$AWS_PROFILE" \
+  --region "$NAASEH_AWS_REGION" \
+  --secret-id "$NAASEH_GOOGLE_SECRET_ID" \
+  --query SecretString \
+  --output text | jq -e --arg redirectUri "$NAASEH_GOOGLE_REDIRECT_URI" '
+    type == "object" and
+    (.clientId | type == "string" and length > 0) and
+    (.clientSecret | type == "string" and length > 0) and
+    .redirectUri == $redirectUri and
+    (keys | sort) == (["clientId", "clientSecret", "redirectUri"] | sort)
+  ' >/dev/null
+
+printf 'Temporary secret: %s\nDownloaded client: %s\n' \
+  "$NAASEH_GOOGLE_SECRET_FILE" "$NAASEH_GOOGLE_CLIENT_DOWNLOAD"
+rm -- "$NAASEH_GOOGLE_SECRET_FILE" "$NAASEH_GOOGLE_CLIENT_DOWNLOAD"
+unset NAASEH_GOOGLE_CLIENT_DOWNLOAD NAASEH_GOOGLE_SECRET_FILE
+```
+
+Do not retrieve the secret again for routine checks. The safe verification surface is secret
+metadata, CloudTrail, the focused security tests, and a disposable owner connection. Perform the
+connection, bidirectional-sync, disconnect, failed-revocation, and restore-invalidation checks in
+`specs/004-google-tasks-sync/quickstart.md`; record evidence in
+`specs/004-google-tasks-sync/validation-results.md`. Keep production blocked until every security
+task above is complete and the validation records pass.
+
+Immediately before enabling production synchronization, this broader release-gate check must
+produce no output. T054 uses only the isolated disposable environment and its test OAuth client;
+it must never exercise production user data.
+
+```console
+rg -n '^- \[ \] T(006|011|012|037|041|051|053|054)\b' \
+  specs/004-google-tasks-sync/tasks.md
+```
+
+For rotation, create a new Google client secret, import it as a new `AWSCURRENT` version using the
+same file-based procedure, validate a disposable connection, and revoke the old Google credential.
+Never delete a retained AWS secret or KMS key while a live record or backup still references it. See
+[Google Tasks synchronization operations](google-tasks-sync.md) and [key rotation](key-rotation.md).
+
+## 9. Use GitHub for subsequent releases
 
 Run **Actions > Deploy production** with an approved change ticket and the full 40-character SHA
 of the currently deployed known-good commit. The workflow validates, builds, deploys both stacks,
@@ -468,3 +768,7 @@ procedure above; the guarded **Deploy production** workflow is the only GitHub p
 AWS references: [CloudFront certificate Region](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html),
 [WAF CloudFront scope](https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-associating-aws-resource.html),
 and [AWS Backup service opt-in](https://docs.aws.amazon.com/aws-backup/latest/devguide/assigning-resources.html).
+Google/AWS credential references: [enable services with `gcloud`](https://docs.cloud.google.com/sdk/gcloud/reference/services/enable),
+[Google Web application OAuth](https://developers.google.com/identity/protocols/oauth2/web-server),
+[AWS CLI `put-secret-value`](https://docs.aws.amazon.com/cli/latest/reference/secretsmanager/put-secret-value.html),
+and [mitigating CLI secret exposure](https://docs.aws.amazon.com/secretsmanager/latest/userguide/security_cli-exposure-risks.html).

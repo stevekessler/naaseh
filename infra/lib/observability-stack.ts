@@ -34,6 +34,7 @@ export function createOperationalVisibility(
     auth: lambda.IFunction;
     sync: lambda.IFunction;
     reporting?: lambda.IFunction;
+    googleSync?: lambda.IFunction;
   },
   table: dynamodb.ITable,
 ) {
@@ -55,6 +56,12 @@ export function createOperationalVisibility(
   if (functions.reporting)
     new cloudwatch.Alarm(scope, 'ReportingErrors', {
       metric: functions.reporting.metricErrors({ period: Duration.minutes(5) }),
+      threshold: 1,
+      evaluationPeriods: 1,
+    });
+  if (functions.googleSync)
+    new cloudwatch.Alarm(scope, 'GoogleSyncLambdaErrors', {
+      metric: functions.googleSync.metricErrors({ period: Duration.minutes(5) }),
       threshold: 1,
       evaluationPeriods: 1,
     });
@@ -143,11 +150,13 @@ export function createOperationalVisibility(
         functions.task.metricErrors(),
         functions.sync.metricErrors(),
         functions.auth.metricErrors(),
+        ...(functions.googleSync ? [functions.googleSync.metricErrors()] : []),
       ],
       right: [
         functions.task.metricThrottles(),
         functions.sync.metricThrottles(),
         functions.auth.metricThrottles(),
+        ...(functions.googleSync ? [functions.googleSync.metricThrottles()] : []),
       ],
     }),
     new cloudwatch.GraphWidget({

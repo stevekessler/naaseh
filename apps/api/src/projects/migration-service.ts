@@ -53,6 +53,8 @@ export async function migrateLegacyTask(task: Task) {
     version: next.version,
     GSI1PK: task.visibility === 'public' ? 'TASK#PUBLIC' : `TASK#OWNER#${task.ownerId}`,
     GSI1SK: next.updatedAt,
+    GSI2PK: `TASK#OWNER#${task.ownerId}`,
+    GSI2SK: next.updatedAt,
   });
   if (task.completedAt && task.completedBy && !task.currentCompletionEventId) {
     const event = completionEventSchema.parse({

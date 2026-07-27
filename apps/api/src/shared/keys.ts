@@ -92,4 +92,29 @@ export const keys = {
     PK: `${jobType}JOB#${id}`,
     SK: `CHECKPOINT#${checkpoint}`,
   }),
+  googleConnection: (userId: string) => ({ PK: `USER#${userId}`, SK: 'GOOGLE#CONNECTION' }),
+  googleConnectionById: (connectionId: string) => ({
+    PK: `GOOGLECONN#${connectionId}`,
+    SK: 'CONNECTION',
+  }),
+  googleOAuthState: (stateHash: string) => ({ PK: `OAUTHSTATE#${stateHash}`, SK: 'GOOGLE' }),
+  googleTaskLink: (taskId: string) => ({ PK: `TASK#${taskId}`, SK: 'GOOGLE#LINK' }),
+  googleTaskReverseLink: (connectionId: string, googleTaskId: string) => ({
+    PK: `GOOGLETASK#${connectionId}#${googleTaskId}`,
+    SK: 'LINK',
+  }),
+  googleOperation: (connectionId: string, state: string, createdAt: string, id: string) => ({
+    PK: `GOOGLECONN#${connectionId}`,
+    SK: `OP#${state}#${createdAt}#${id}`,
+  }),
+  googleConflict: (connectionId: string, id: string) => ({
+    PK: `GOOGLECONN#${connectionId}`,
+    SK: `CONFLICT#${id}`,
+  }),
+  googleRun: (connectionId: string, startedAt: string, id: string) => ({
+    PK: `GOOGLECONN#${connectionId}`,
+    SK: `RUN#${startedAt}#${id}`,
+  }),
+  googleRunById: (id: string) => ({ PK: `GOOGLERUN#${id}`, SK: 'RUN' }),
+  googleTaskSharing: (taskId: string) => ({ PK: `TASK#${taskId}`, SK: 'GOOGLE#SHARING' }),
 };

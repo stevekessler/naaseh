@@ -24,3 +24,4 @@ export * from './completion-event.js';
 export * from './deletion.js';
 export * from './workload.js';
 export * from './crypto/hidden-memo-package.js';
+export * from './google-sync.js';
