@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createMemoCiphertext, decryptMemo } from '../../crypto/hidden-memo.js';
 import { derivePinKey, unwrapDekWithPin, wrapDekWithPin } from '../../crypto/pin-wrap.js';
 import { recoverMemoDek } from '../../crypto/pin-recovery-client.js';
@@ -19,6 +19,7 @@ export function HiddenMemoTestHarness() {
   const [showUnlock, setShowUnlock] = useState(true);
   const [showPinChange, setShowPinChange] = useState(false);
   const [recoveryMessage, setRecoveryMessage] = useState('');
+  const inactivityTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     void (async () => {
@@ -48,7 +49,22 @@ export function HiddenMemoTestHarness() {
     })();
   }, []);
 
+  useEffect(
+    () => () => {
+      if (inactivityTimer.current !== undefined)
+        window.clearTimeout(inactivityTimer.current);
+    },
+    [],
+  );
+
+  function clearInactivityTimer() {
+    if (inactivityTimer.current === undefined) return;
+    window.clearTimeout(inactivityTimer.current);
+    inactivityTimer.current = undefined;
+  }
+
   function lock() {
+    clearInactivityTimer();
     setPlaintext('');
     setShowUnlock(true);
     setShowPinChange(false);
@@ -56,12 +72,13 @@ export function HiddenMemoTestHarness() {
 
   async function reveal(dek: CryptoKey) {
     if (!memo) return;
+    clearInactivityTimer();
     setPlaintext(
       await decryptMemo({ ciphertext: memo.memoCiphertext, iv: memo.iv, aad: memo.aad }, dek),
     );
     setShowUnlock(false);
     // The short duration lets browser automation prove the same inactivity-lock path.
-    window.setTimeout(lock, 1_500);
+    inactivityTimer.current = window.setTimeout(lock, 1_500);
   }
 
   if (!memo) return <p role="status">Preparing hidden memo…</p>;
