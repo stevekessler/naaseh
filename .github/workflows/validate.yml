@@ -19,7 +19,8 @@ jobs:
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: npm run validate:workflows
-      - run: npm audit --omit=dev --audit-level=high
+      - name: Audit deployed runtime dependencies
+        run: npm audit --omit=dev --audit-level=high --workspace @naaseh/api --workspace @naaseh/web
       - run: npm run validate
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:e2e

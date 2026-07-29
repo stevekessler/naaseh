@@ -35,7 +35,9 @@ describe('GitHub Actions supply-chain controls', () => {
     expect(workflow).toContain(
       "cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}",
     );
-    expect(workflow).toContain('- run: npm audit --omit=dev --audit-level=high');
+    expect(workflow).toContain(
+      'run: npm audit --omit=dev --audit-level=high --workspace @naaseh/api --workspace @naaseh/web',
+    );
     expect(workflow).toContain('- run: npm run test:e2e');
   });
 });
