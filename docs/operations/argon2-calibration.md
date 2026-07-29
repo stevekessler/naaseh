@@ -9,6 +9,7 @@ After deployment, read the `Argon2CalibrationFunctionName` stack output and run:
 ```bash
 npm run calibrate:argon2 -- \
   --function-name FUNCTION_NAME \
+  --region us-west-2 \
   --invocations 8 \
   --verify-samples 8 \
   --output docs/operations/argon2-deployed-evidence.json

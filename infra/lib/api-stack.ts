@@ -22,6 +22,7 @@ import { createNotificationResources } from './notification-stack.js';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { createDeletionResources } from './deletion-stack.js';
 import { createGoogleSyncResources } from './google-sync-stack.js';
+import { withArgon2Bundling } from './native-node-bundling.js';
 
 export const sharedLambdaDefaults = (
   environment: Record<string, string>,
@@ -92,7 +93,7 @@ export function createApplicationApi(
     handler: 'handler',
     memorySize: 1024,
     reservedConcurrentExecutions: 5,
-    bundling: { ...defaults.bundling, nodeModules: ['@node-rs/argon2'] },
+    bundling: withArgon2Bundling(defaults.bundling),
     logGroup: options.logGroups.auth,
   });
   const authCalibration = new nodejs.NodejsFunction(scope, 'Argon2CalibrationFunction', {
@@ -104,7 +105,7 @@ export function createApplicationApi(
     memorySize: 1024,
     reservedConcurrentExecutions: 1,
     timeout: Duration.minutes(5),
-    bundling: { ...defaults.bundling, nodeModules: ['@node-rs/argon2'] },
+    bundling: withArgon2Bundling(defaults.bundling),
     logGroup: options.logGroups.auth,
   });
   const sync = new nodejs.NodejsFunction(scope, 'SyncFunction', {
@@ -321,11 +322,9 @@ export function createApplicationApi(
   const integrationFor = (fn: lambda.IFunction) => {
     const existing = integrationsByFunction.get(fn);
     if (existing) return existing;
-    const integration = new integrations.HttpLambdaIntegration(
-      `${fn.node.id}Integration`,
-      fn,
-      { scopePermissionToRoute: false },
-    );
+    const integration = new integrations.HttpLambdaIntegration(`${fn.node.id}Integration`, fn, {
+      scopePermissionToRoute: false,
+    });
     integrationsByFunction.set(fn, integration);
     return integration;
   };

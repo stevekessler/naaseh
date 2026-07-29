@@ -10,10 +10,13 @@ const argument = (name) => {
   return index >= 0 ? process.argv[index + 1] : undefined;
 };
 const functionName = argument('--function-name') ?? process.env.ARGON2_CALIBRATION_FUNCTION;
+const region =
+  argument('--region') ?? process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION ?? 'us-west-2';
 const invocationSamples = Number(argument('--invocations') ?? '8');
 const verifySamples = Number(argument('--verify-samples') ?? '8');
 const outputPath = argument('--output');
 if (!functionName) throw new Error('Provide --function-name or ARGON2_CALIBRATION_FUNCTION.');
+if (region !== 'us-west-2') throw new Error('--region must be us-west-2 for Naaseh v1.');
 if (!Number.isInteger(invocationSamples) || invocationSamples < 2 || invocationSamples > 30)
   throw new Error('--invocations must be an integer from 2 through 30.');
 if (!Number.isInteger(verifySamples) || verifySamples < 1 || verifySamples > 30)
@@ -30,6 +33,8 @@ try {
       [
         'lambda',
         'invoke',
+        '--region',
+        region,
         '--function-name',
         functionName,
         '--cli-binary-format',
@@ -57,6 +62,7 @@ try {
   const evidence = {
     schema: 'naaseh-argon2-deployed-evidence/v1',
     functionName,
+    region,
     measuredAt: new Date().toISOString(),
     observations,
     warm: summarize(warm),

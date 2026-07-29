@@ -11,6 +11,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as notifications from 'aws-cdk-lib/aws-s3-notifications';
 import type { Construct } from 'constructs';
 import { fileURLToPath } from 'node:url';
+import { withArgon2Bundling, withSharpBundling } from './native-node-bundling.js';
 
 export const adminControls = {
   adminRoutes: true,
@@ -46,7 +47,7 @@ export function createAdminFunctions(
     memorySize: 512,
     reservedConcurrentExecutions: 5,
     logGroup: options.logGroup,
-    bundling: { minify: true, sourceMap: true, nodeModules: ['@node-rs/argon2'] },
+    bundling: withArgon2Bundling({ minify: true, sourceMap: true }),
   });
   const provisionUser = new nodejs.NodejsFunction(scope, 'ProvisionUserFunction', {
     ...common,
@@ -57,7 +58,7 @@ export function createAdminFunctions(
     memorySize: 1024,
     reservedConcurrentExecutions: 2,
     logGroup: options.logGroup,
-    bundling: { minify: true, sourceMap: true, nodeModules: ['@node-rs/argon2'] },
+    bundling: withArgon2Bundling({ minify: true, sourceMap: true }),
   });
   const processor = new nodejs.NodejsFunction(scope, 'ProfilePictureProcessor', {
     ...common,
@@ -68,7 +69,7 @@ export function createAdminFunctions(
     memorySize: 1024,
     reservedConcurrentExecutions: 2,
     logGroup: options.logGroup,
-    bundling: { minify: true, sourceMap: true, nodeModules: ['sharp'] },
+    bundling: withSharpBundling({ minify: true, sourceMap: true }),
   });
   const categories = new nodejs.NodejsFunction(scope, 'CategoryAdminFunction', {
     ...common,

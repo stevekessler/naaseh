@@ -1,0 +1,130 @@
+{
+  "schema": "naaseh-argon2-deployed-evidence/v1",
+  "functionName": "NaasehProd-Argon2CalibrationFunction107C3BD0-UOuvRXzWtP8B",
+  "region": "us-west-2",
+  "measuredAt": "2026-07-28T20:55:23.195Z",
+  "observations": [
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 435.511133,
+      "p95Ms": 480.6638229999953,
+      "maximumMs": 480.6638229999953,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4614.760333
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 430.0428020000036,
+      "p95Ms": 488.05584900000395,
+      "maximumMs": 488.05584900000395,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4566.720917000001
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 438.89902399999846,
+      "p95Ms": 481.1508210000029,
+      "maximumMs": 481.1508210000029,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4830.980625
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 428.2560369999992,
+      "p95Ms": 490.56444100000226,
+      "maximumMs": 490.56444100000226,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4529.437000000002
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 435.07720100000734,
+      "p95Ms": 485.2602099999931,
+      "maximumMs": 485.2602099999931,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4796.662334000001
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 458.14178099999845,
+      "p95Ms": 519.5119859999977,
+      "maximumMs": 519.5119859999977,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4798.706042000002
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 472.2037629999977,
+      "p95Ms": 517.308063000004,
+      "maximumMs": 517.308063000004,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4862.573041000003
+    },
+    {
+      "schema": "naaseh-argon2-calibration/v1",
+      "coldStart": false,
+      "samples": 8,
+      "p50Ms": 442.52892599999905,
+      "p95Ms": 499.36375400000543,
+      "maximumMs": 499.36375400000543,
+      "parameters": {
+        "memoryKiB": 102400,
+        "iterations": 3,
+        "parallelism": 1
+      },
+      "roundTripMs": 4669.096707999997
+    }
+  ],
+  "warm": {
+    "samples": 8,
+    "handlerP95Ms": 519.5119859999977,
+    "roundTripP95Ms": 4862.573041000003
+  },
+  "cold": {
+    "samples": 0
+  },
+  "passed": true,
+  "note": "One execution environment cannot establish cold p95; repeat after publishing fresh versions."
+}

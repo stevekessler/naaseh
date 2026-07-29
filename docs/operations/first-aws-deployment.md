@@ -616,6 +616,129 @@ approved. Run [Argon2id calibration](argon2-calibration.md), configure responder
 verify alarms and backups, and run the authenticated production smoke test. Record the deployed
 commit SHA as the known-good `rollback_ref` for the next release.
 
+### Complete the post-deployment handoff
+
+1. Ensure the exact locally deployed commit is pushed to `origin/main`. A clean status and matching
+   full SHAs are required; a local-only commit cannot be rebuilt by GitHub Actions:
+
+   ```console
+   git status --short --branch
+   git push origin main
+   git rev-parse HEAD
+   git rev-parse origin/main
+   ```
+
+2. Confirm both stacks and the public endpoint:
+
+   ```console
+   aws cloudformation describe-stacks --profile naaseh-admin --region us-east-1 \
+     --stack-name NaasehEdge --query 'Stacks[0].StackStatus' --output text
+   aws cloudformation describe-stacks --profile naaseh-admin --region us-west-2 \
+     --stack-name NaasehProd --query 'Stacks[0].StackStatus' --output text
+   curl --fail --silent --show-error --head https://gsd.thepandas.link
+   curl --silent --output /dev/null --write-out '%{http_code} %{redirect_url}\n' \
+     http://gsd.thepandas.link
+   ```
+
+   Both stacks must be `CREATE_COMPLETE` or `UPDATE_COMPLETE`, HTTPS must return `200`, and HTTP
+   must return `301` or `302` with an HTTPS location.
+
+3. Confirm the AWS SNS subscription request delivered to the configured responder address. Open
+   the email from AWS Notifications and choose **Confirm subscription**. Verify that
+   `SubscriptionArn` is no longer `PendingConfirmation`:
+
+   ```console
+   CRITICAL_TOPIC="$(aws cloudformation describe-stacks --profile naaseh-admin \
+     --region us-west-2 --stack-name NaasehProd \
+     --query "Stacks[0].Outputs[?OutputKey=='CriticalAlertsTopicArn'].OutputValue | [0]" \
+     --output text)"
+   aws sns list-subscriptions-by-topic --profile naaseh-admin --region us-west-2 \
+     --topic-arn "$CRITICAL_TOPIC" \
+     --query 'Subscriptions[].{Endpoint:Endpoint,SubscriptionArn:SubscriptionArn}'
+   ```
+
+4. Calibrate deployed password hashing without supplying real credentials:
+
+   ```console
+   ARGON2_FUNCTION="$(aws cloudformation describe-stacks --profile naaseh-admin \
+     --region us-west-2 --stack-name NaasehProd \
+     --query "Stacks[0].Outputs[?OutputKey=='Argon2CalibrationFunctionName'].OutputValue | [0]" \
+     --output text)"
+   AWS_PROFILE=naaseh-admin npm run calibrate:argon2 -- \
+     --function-name "$ARGON2_FUNCTION" \
+     --region us-west-2 \
+     --invocations 8 --verify-samples 8 \
+     --output docs/operations/argon2-deployed-evidence.json
+   ```
+
+   Review the evidence according to [Argon2id calibration](argon2-calibration.md). Never use a
+   production password, PIN, username, salt, hash, or pepper as calibration input.
+
+5. Provision the first application administrator and the dedicated smoke-test user. The bootstrap
+   SSO administrator already has temporary administrative access, so do not manually modify an
+   `AWSReservedSSO_*` role. Discover the Lambda name and use the interactive script so passwords
+   and PINs stay out of shell history:
+
+   ```console
+   PROVISION_FUNCTION="$(aws cloudformation describe-stacks --profile naaseh-admin \
+     --region us-west-2 --stack-name NaasehProd \
+     --query "Stacks[0].Outputs[?OutputKey=='ProvisionUserFunctionName'].OutputValue | [0]" \
+     --output text)"
+   python3 -m venv /tmp/naaseh-provisioning-venv
+   /tmp/naaseh-provisioning-venv/bin/pip install -r scripts/requirements.txt
+   /tmp/naaseh-provisioning-venv/bin/python scripts/create_user.py \
+     --profile naaseh-admin --function-name "$PROVISION_FUNCTION" \
+     --username steve --display-name 'Steve Kessler' --role admin
+   /tmp/naaseh-provisioning-venv/bin/python scripts/create_user.py \
+     --profile naaseh-admin --function-name "$PROVISION_FUNCTION" \
+     --username naaseh-smoke --display-name 'Production Smoke Test' --role user
+   ```
+
+   Use distinct passwords and PINs. Sign in manually as each account over HTTPS. Confirm the
+   administrator can reach administration and that the smoke user has only ordinary user access.
+
+6. Replace the GitHub smoke secrets with the exact smoke-user credentials. Enter values only at the
+   hidden prompts:
+
+   ```console
+   gh secret set PRODUCTION_SMOKE_USERNAME --env production
+   gh secret set PRODUCTION_SMOKE_PASSWORD --env production
+   gh secret list --env production
+   ```
+
+7. Verify malware scanning, backup ownership, and alarms without uploading private data:
+
+   ```console
+   aws cloudformation list-stack-resources --profile naaseh-admin --region us-west-2 \
+     --stack-name NaasehProd \
+     --query "StackResourceSummaries[?ResourceType=='AWS::GuardDuty::MalwareProtectionPlan' || ResourceType=='AWS::Backup::BackupVault' || ResourceType=='AWS::Backup::BackupPlan'].{Type:ResourceType,Status:ResourceStatus,PhysicalId:PhysicalResourceId}"
+   aws cloudwatch describe-alarms --profile naaseh-admin --region us-west-2 \
+     --alarm-name-prefix NaasehProd \
+     --query 'MetricAlarms[].{Name:AlarmName,State:StateValue}'
+   ```
+
+   GuardDuty must be active and the critical resources must be CloudFormation-managed. After the
+   first scheduled backup, verify that the production vault has recovery points. Do not remove or
+   weaken Vault Lock after accepting the retention configuration.
+
+8. Treat the deployed full SHA as known-good only after the manual login and smoke checks pass.
+   Then run the first GitHub-managed production release from `main`:
+
+   ```console
+   RELEASE_SHA="$(git rev-parse origin/main)"
+   test "$RELEASE_SHA" = "$(git rev-parse HEAD)"
+   gh workflow run deploy-production.yml --ref main \
+     -f change_ticket=initial-production-handoff \
+     -f rollback_ref="$RELEASE_SHA"
+   gh run list --workflow deploy-production.yml --limit 1
+   ```
+
+   Follow the run in GitHub Actions or use `gh run watch RUN_ID`. The deploy, authenticated smoke,
+   and rollback jobs must all have the expected results before closing the handoff.
+
+9. Leave Google Tasks disconnected until the production release gates in section 8 are complete.
+   An empty or placeholder Secrets Manager value is not authorization to connect production users.
+
 ## 8. Configure Google Tasks OAuth and the AWS secret
 
 Do this independently for staging and production. Never reuse a Google Cloud project or OAuth
@@ -762,8 +885,9 @@ Run **Actions > Deploy production** with an approved change ticket and the full 
 of the currently deployed known-good commit. The workflow validates, builds, deploys both stacks,
 tests `https://gsd.thepandas.link`, and redeploys the known-good commit if the smoke test fails.
 
-Use **Deploy staging** for staging. The first production bootstrap follows the local administrator
-procedure above; the guarded **Deploy production** workflow is the only GitHub production path.
+The first production bootstrap follows the local administrator procedure above; the guarded
+**Deploy production** workflow is the only GitHub production path. Do not run **Deploy staging**
+until stage-specific stack IDs and a separate staging hostname have been implemented and reviewed.
 
 AWS references: [CloudFront certificate Region](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html),
 [WAF CloudFront scope](https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-associating-aws-resource.html),
