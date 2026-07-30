@@ -11,6 +11,7 @@ interface HarnessMemo extends PinChangePackage {
 }
 
 const encode = (value: Uint8Array) => btoa(String.fromCharCode(...value));
+const deterministicDekBytes = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
 
 /** Test-build-only host for exercising the real browser cryptography in Playwright. */
 export function HiddenMemoTestHarness() {
@@ -25,7 +26,7 @@ export function HiddenMemoTestHarness() {
     void (async () => {
       const deterministicDek = await crypto.subtle.importKey(
         'raw',
-        new Uint8Array(32),
+        deterministicDekBytes,
         { name: 'AES-GCM' },
         true,
         ['encrypt', 'decrypt'],
