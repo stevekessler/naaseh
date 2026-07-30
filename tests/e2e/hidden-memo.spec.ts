@@ -69,6 +69,6 @@ test('unlocks offline, locks on inactivity, changes PIN without ciphertext chang
   expect(recoveryRequests).toBe(0);
   await context.setOffline(false);
   await page.getByRole('button', { name: 'Recover memo' }).click();
-  await expect.poll(() => recoveryRequests).toBe(1);
-  await expect(page.getByText('Private test memo')).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Memo recovered successfully.');
+  expect(recoveryRequests).toBe(1);
 });

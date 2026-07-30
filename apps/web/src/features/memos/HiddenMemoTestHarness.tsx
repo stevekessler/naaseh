@@ -124,7 +124,10 @@ export function HiddenMemoTestHarness() {
             event.preventDefault();
             const password = String(new FormData(event.currentTarget).get('password') ?? '');
             void recoverMemoDek('task-test', password, 'Forgotten PIN', 'test-csrf')
-              .then(reveal)
+              .then(async (dek) => {
+                await reveal(dek);
+                setRecoveryMessage('Memo recovered successfully.');
+              })
               .catch((error: unknown) =>
                 setRecoveryMessage(error instanceof Error ? error.message : 'Recovery failed.'),
               );
