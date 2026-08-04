@@ -11,6 +11,8 @@ test('preserves offline work in the live tab and across a Chromium app-shell rel
   context,
 }, testInfo) => {
   await signIn(page);
+  if (testInfo.project.name === 'chromium')
+    await page.evaluate(() => navigator.serviceWorker.ready);
   await context.setOffline(true);
   await page.getByLabel('Task label').fill('Written offline');
   await page.getByRole('button', { name: 'Add task' }).click();
