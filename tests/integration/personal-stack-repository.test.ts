@@ -22,7 +22,7 @@ const workRef = (index: number, workType: 'task' | 'list' = 'task') => ({
   membershipEpoch: `PUBLIC:${String(index + 1).padStart(20, '0')}`,
 });
 
-const simpleMove = (version: number, moved: number, after: number) => ({
+const simpleMove = (version: number, moved: number, following: number) => ({
   id: `01K${String(version).padStart(23, '0')}`,
   mutationId: `01M${String(version).padStart(23, '0')}`,
   userId: scope.userId,
@@ -31,7 +31,7 @@ const simpleMove = (version: number, moved: number, after: number) => ({
   version,
   kind: 'simple_move' as const,
   movedWork: workRef(moved),
-  afterWork: workRef(after),
+  afterWork: workRef(following),
   affectedCount: 1,
   sourceClientId: 'client-a',
   acceptedAt: `2026-08-05T12:00:${String(version).padStart(2, '0')}.000Z`,
@@ -161,8 +161,8 @@ describe('personal stack repository', () => {
     expect(compacted.throughVersion).toBe(2);
     expect(validateStackSnapshot(compacted)).toEqual([
       workRef(2),
-      workRef(0),
       workRef(1),
+      workRef(0),
       workRef(3),
       workRef(4),
     ]);
