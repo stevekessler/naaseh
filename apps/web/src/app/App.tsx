@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { effectiveDirectoryFields, type ListItem, type Task } from '@naaseh/domain';
+import {
+  effectiveDirectoryFields,
+  matchesUrgencySet,
+  workReferenceIdentity,
+  type ListItem,
+  type Task,
+} from '@naaseh/domain';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database.js';
 import { listLocalTasks, saveNewTask, updateTask } from '../db/task-repository.js';
 import { listCategories, listRevisions } from '../db/reminder-repository.js';
-import { filterTasks, type Filters } from '../search/task-search.js';
+import { filterTasks, normalizeSearch, type Filters } from '../search/task-search.js';
 import { Login } from '../features/auth/Login.js';
 import { TaskForm } from '../features/tasks/TaskForm.js';
 import { TaskListPage } from '../features/tasks/TaskListPage.js';
@@ -69,6 +75,18 @@ import { useWorkloadTree } from '../features/projects/useWorkloadTree.js';
 import { listLocalCompletionEvents } from '../db/completion-event-repository.js';
 import { CompletionDashboard } from '../features/reports/CompletionDashboard.js';
 import { GoogleSyncPage } from '../features/google-sync/GoogleSyncPage.js';
+import { purgePrivateStackStateForSession } from '../sync/privacy-purge.js';
+import {
+  initializeLocalStack,
+  listLocalStackConflicts,
+  listPendingStackOperations,
+  readLocalStack,
+  resolveLocalStackConflict,
+  type LocalStackScope,
+} from '../db/personal-stack-repository.js';
+import { selectLocalStackItems } from '../features/stacks/stack-selectors.js';
+import { queuePersonalStackReorder } from '../sync/sync-engine.js';
+import { PersonalStackPage } from '../features/stacks/PersonalStackPage.js';
 
 const emptyFilters: Filters = {
   query: '',
@@ -79,7 +97,15 @@ const emptyFilters: Filters = {
   to: '',
   contentType: 'all',
   lifecycle: 'active',
+  urgencies: [],
 };
+
+async function searchBasisHash(query: string) {
+  const normalized = normalizeSearch(query);
+  if (!normalized) return undefined;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
 
 export function App() {
   if (import.meta.env.MODE === 'test' && location.pathname === '/__test/hidden-memo')
@@ -96,8 +122,18 @@ export function App() {
   const [view, setView] = useState<'list' | 'postit'>('list');
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
-    'tasks' | 'lists' | 'groups' | 'archive' | 'projects' | 'dashboard' | 'google' | 'admin'
+    | 'tasks'
+    | 'lists'
+    | 'groups'
+    | 'archive'
+    | 'projects'
+    | 'dashboard'
+    | 'stack'
+    | 'google'
+    | 'admin'
   >(initialRoute.section);
+  const [stackScope, setStackScope] = useState<LocalStackScope>({ scopeType: 'overall' });
+  const [stackAnnouncement, setStackAnnouncement] = useState('');
   const [selectedListId, setSelectedListId] = useState<string | undefined>(
     initialRoute.section === 'lists' ? initialRoute.listId : undefined,
   );
@@ -112,7 +148,8 @@ export function App() {
   const projects = useLiveQuery(() => listLocalProjects(), []) ?? [];
   const groups = useLiveQuery(() => listLocalGroups(), []) ?? [];
   const lists = useLiveQuery(() => listLocalLists(), []) ?? [];
-  const archive = useLiveQuery(() => listLocalArchive(), []) ?? [];
+  const archive =
+    useLiveQuery(() => listLocalArchive('', filters.urgencies), [filters.urgencies]) ?? [];
   const completionEvents =
     useLiveQuery(
       () => (session ? listLocalCompletionEvents(session.userId) : Promise.resolve([])),
@@ -137,6 +174,98 @@ export function App() {
     ) ?? [];
   const pending = useLiveQuery(() => db.outbox.count(), []) ?? 0;
   const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
+  const eligibleStackWork = useMemo(
+    () => [
+      ...tasks
+        .filter(
+          (task) =>
+            task.status === 'open' &&
+            (task.lifecycle ?? 'active') === 'active' &&
+            task.completionState !== 'completed',
+        )
+        .map((task) => ({
+          reference: {
+            workType: 'task' as const,
+            workId: task.id,
+            membershipEpoch: task.createdAt,
+          },
+          label: task.label,
+          urgency: task.urgency,
+          ...(task.projectId ? { projectId: task.projectId } : {}),
+          ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
+          ...(task.categoryId ? { categoryId: task.categoryId } : {}),
+          ...(task.dueAt ? { dueAt: task.dueAt } : {}),
+          contentType: 'todos' as const,
+        })),
+      ...lists
+        .filter((list) => list.status === 'active' && (list.lifecycle ?? 'active') === 'active')
+        .map((list) => ({
+          reference: {
+            workType: 'list' as const,
+            workId: list.id,
+            membershipEpoch: list.createdAt,
+          },
+          label: list.name,
+          urgency: list.urgency,
+          ...(list.projectId ? { projectId: list.projectId } : {}),
+          assigneeId: undefined,
+          categoryId: undefined,
+          dueAt: undefined,
+          contentType: 'lists' as const,
+        })),
+    ],
+    [tasks, lists],
+  );
+  const allRankedStackItems =
+    useLiveQuery(
+      () =>
+        session
+          ? selectLocalStackItems({
+              ownerId: session.userId,
+              eligibleWork: eligibleStackWork,
+              scope: stackScope,
+            })
+          : Promise.resolve([]),
+      [
+        session?.userId,
+        stackScope.scopeType,
+        'scopeId' in stackScope ? stackScope.scopeId : '',
+        eligibleStackWork,
+      ],
+    ) ?? [];
+  const rankedStackItems = useMemo(
+    () =>
+      allRankedStackItems.filter(({ work }) =>
+        Boolean(
+          matchesUrgencySet(work.urgency, filters.urgencies) &&
+            (!filters.query ||
+              work.label.toLocaleLowerCase().includes(filters.query.toLocaleLowerCase())) &&
+            (!filters.assigneeId || work.assigneeId === filters.assigneeId) &&
+            (!filters.categoryId || work.categoryId === filters.categoryId) &&
+            (!filters.projectId ||
+              (filters.projectId === 'unassigned'
+                ? !work.projectId
+                : work.projectId === filters.projectId)) &&
+            (!filters.from || Boolean(work.dueAt && work.dueAt >= filters.from)) &&
+            (!filters.to || Boolean(work.dueAt && work.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
+            (filters.contentType === 'all' ||
+              filters.contentType === undefined ||
+              work.contentType === filters.contentType) &&
+            filters.lifecycle !== 'archive',
+        ),
+      ),
+    [allRankedStackItems, filters],
+  );
+  const pendingStackOperations =
+    useLiveQuery(
+      () => (session ? listPendingStackOperations(session.userId) : Promise.resolve([])),
+      [session?.userId],
+    ) ?? [];
+  const stackConflicts =
+    useLiveQuery(
+      () => (session ? listLocalStackConflicts(session.userId) : Promise.resolve([])),
+      [session?.userId],
+    ) ?? [];
   const [syncError, setSyncError] = useState<string>();
   const [applyUpdate, setApplyUpdate] = useState<(() => void) | undefined>();
   const syncing = useRef(false);
@@ -144,7 +273,19 @@ export function App() {
   const matchingLists = useMemo(() => {
     if (filters.contentType === 'todos') return [];
     const query = filters.query.normalize('NFKC').trim().toLocaleLowerCase();
-    const scopedLists = lists.filter((list) => list.lifecycle !== 'archived');
+    const scopedLists = lists.filter(
+      (list) =>
+        list.lifecycle !== 'archived' &&
+        matchesUrgencySet(list.urgency, filters.urgencies) &&
+        (!filters.projectId ||
+          (filters.projectId === 'unassigned'
+            ? !list.projectId
+            : list.projectId === filters.projectId)) &&
+        !filters.assigneeId &&
+        !filters.categoryId &&
+        !filters.from &&
+        !filters.to,
+    );
     if (!query) return filters.contentType === 'lists' ? scopedLists : [];
     const directory = new Map(directoryItems.map((item) => [item.id, item]));
     return scopedLists.filter(
@@ -163,7 +304,7 @@ export function App() {
             .includes(query),
         ),
     );
-  }, [filters.contentType, filters.query, lists, listItems, directoryItems]);
+  }, [filters, lists, listItems, directoryItems]);
   useEffect(() => {
     void loadView().then(setView);
   }, []);
@@ -289,6 +430,13 @@ export function App() {
           <nav aria-label="Main navigation">
             <button
               className="quiet"
+              aria-current={section === 'stack' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'stack' })}
+            >
+              Personal Stack
+            </button>
+            <button
+              className="quiet"
               aria-current={section === 'google' ? 'page' : undefined}
               onClick={() => navigate({ section: 'google' })}
             >
@@ -352,7 +500,7 @@ export function App() {
             className="quiet"
             onClick={() => {
               sessionStorage.removeItem('naaseh-session-view');
-              setSession(null);
+              void purgePrivateStackStateForSession(session.userId).finally(() => setSession(null));
             }}
           >
             Sign out
@@ -360,7 +508,116 @@ export function App() {
         </div>
       </header>
       <main>
-        {section === 'google' ? (
+        {section === 'stack' ? (
+          <PersonalStackPage
+            scope={stackScope}
+            projects={projects
+              .filter((project) => project.lifecycle === 'active')
+              .map((project) => ({ id: project.id, name: project.name }))}
+            items={rankedStackItems.map(({ work, rank }) => ({
+              reference: work.reference,
+              label: work.label,
+              urgency: work.urgency,
+              overallPosition: rank.overallPosition,
+              ...(rank.projectPosition === undefined
+                ? {}
+                : { projectPosition: rank.projectPosition }),
+            }))}
+            announcement={stackAnnouncement}
+            pendingOperationIds={pendingStackOperations.map((operation) => operation.operationId)}
+            conflictCount={stackConflicts.length}
+            filters={filters}
+            changeFilters={setFilters}
+            changeScope={setStackScope}
+            move={async (work, destinationPosition) => {
+              const displayed = rankedStackItems.map((item) => item.work.reference);
+              const fullScope = allRankedStackItems.map((item) => item.work.reference);
+              const currentPosition =
+                displayed.findIndex(
+                  (reference) => workReferenceIdentity(reference) === workReferenceIdentity(work),
+                ) + 1;
+              if (currentPosition < 1 || currentPosition === destinationPosition) return;
+              const existing = await readLocalStack(session.userId, stackScope);
+              const existingIdentities = new Set(existing?.work.map(workReferenceIdentity) ?? []);
+              const needsReconciliation =
+                !existing ||
+                fullScope.length !== existing.work.length ||
+                fullScope.some(
+                  (reference) => !existingIdentities.has(workReferenceIdentity(reference)),
+                );
+              const current = needsReconciliation
+                ? await initializeLocalStack({
+                    ownerId: session.userId,
+                    scope: stackScope,
+                    version: existing?.version ?? 0,
+                    work: fullScope,
+                  })
+                : existing;
+              const isFiltered = displayed.length !== fullScope.length;
+              const destinationIndex = Math.max(
+                0,
+                Math.min(displayed.length - 1, destinationPosition - 1),
+              );
+              const remaining = current.work.filter(
+                (reference) => workReferenceIdentity(reference) !== workReferenceIdentity(work),
+              );
+              const fullDestinationIndex = Math.max(
+                0,
+                Math.min(remaining.length, destinationPosition - 1),
+              );
+              const beforeWork = remaining[fullDestinationIndex - 1];
+              const afterWork = remaining[fullDestinationIndex];
+              const queryHash = isFiltered ? await searchBasisHash(filters.query) : undefined;
+              await queuePersonalStackReorder({
+                ownerId: session.userId,
+                scope: stackScope,
+                baseVersion: current.version,
+                move: isFiltered
+                  ? {
+                      kind: 'filtered_permutation',
+                      movedWork: work,
+                      destinationIndex,
+                      affectedWork: displayed,
+                      filterBasis: {
+                        ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
+                        ...(filters.from ? { from: filters.from } : {}),
+                        ...(filters.to ? { to: filters.to } : {}),
+                        ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
+                        ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+                        ...(filters.projectId ? { projectId: filters.projectId } : {}),
+                        lifecycle: 'active',
+                        contentType: filters.contentType ?? 'all',
+                        ...(queryHash ? { searchBasisHash: queryHash } : {}),
+                      },
+                    }
+                  : {
+                      kind: 'simple_move',
+                      movedWork: work,
+                      ...(beforeWork ? { beforeWork } : {}),
+                      ...(afterWork ? { afterWork } : {}),
+                    },
+              });
+              const moved = eligibleStackWork.find(
+                (item) => workReferenceIdentity(item.reference) === workReferenceIdentity(work),
+              );
+              const scopeName =
+                stackScope.scopeType === 'overall'
+                  ? 'Overall stack'
+                  : `${projects.find((project) => project.id === stackScope.scopeId)?.name ?? 'Project'} Project stack`;
+              setStackAnnouncement(
+                `Moved ${moved?.label ?? 'work'} to position ${destinationPosition} of ${displayed.length} in ${scopeName}.`,
+              );
+            }}
+            reapplyConflicts={async () => {
+              for (const conflict of stackConflicts)
+                await resolveLocalStackConflict(conflict.id, 'reapply');
+            }}
+            discardConflicts={async () => {
+              for (const conflict of stackConflicts)
+                await resolveLocalStackConflict(conflict.id, 'discard');
+            }}
+          />
+        ) : section === 'google' ? (
           <GoogleSyncPage csrfToken={session.csrfToken} />
         ) : section === 'admin' ? (
           <>
@@ -423,6 +680,8 @@ export function App() {
           <ArchivePage
             entries={archive}
             csrfToken={session.csrfToken}
+            filters={filters}
+            changeFilters={setFilters}
             restore={async (entry) => {
               if (entry.task) await updateTask(entry.task, { status: 'open' }, session.userId);
               if (entry.list)
@@ -440,8 +699,8 @@ export function App() {
             groups={groups.map((group) => ({ id: group.id, name: group.name }))}
             categories={categories}
             projects={projects}
-            createList={async (name, projectId) => {
-              await saveNewList(name, session.userId, projectId);
+            createList={async (name, projectId, urgency) => {
+              await saveNewList(name, session.userId, projectId, urgency);
             }}
             addItem={async (listId, name) => {
               await addLocalListItem(listId, name, session.userId);
@@ -502,7 +761,11 @@ export function App() {
                 setValue={(query) => setFilters({ ...filters, query })}
                 count={visible.length + matchingLists.length}
               />
-              <TaskFilters value={filters} change={setFilters} />
+              <TaskFilters
+                value={filters}
+                change={setFilters}
+                resultCount={visible.length + matchingLists.length}
+              />
               {(filters.query ||
                 filters.from ||
                 filters.to ||

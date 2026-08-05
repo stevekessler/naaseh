@@ -1,10 +1,19 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { createUlid } from '@naaseh/domain';
+import { createUlid, parseUrgencySet } from '@naaseh/domain';
 import { errorResponse, json, problem, SafeApiError } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
 import { listAuthorizedArchive } from './archive-service.js';
 import { changeListLifecycle } from './list-lifecycle-service.js';
 import { changeTaskLifecycle } from './task-lifecycle-service.js';
+import {
+  createPaginationCursorCodec,
+  dynamoPersistedCursorRepository,
+} from '../shared/persistent-pagination-cursor.js';
+
+const lifecycleCursorCodec = createPaginationCursorCodec(
+  process.env.CURSOR_SIGNING_SECRET ?? 'local-lifecycle-cursor-secret',
+  dynamoPersistedCursorRepository,
+);
 
 export function validateLifecyclePreconditions(headers: Record<string, string | undefined>) {
   const rawVersion = headers['if-match'];
@@ -23,7 +32,13 @@ export function validateLifecyclePreconditions(headers: Record<string, string | 
 
 const actorFor = (event: Parameters<APIGatewayProxyHandlerV2>[0]) => {
   const claims = (event.requestContext as any).authorizer?.lambda as
-    | { userId?: string; role?: 'admin' | 'user'; csrfToken?: string; groupIds?: string }
+    | {
+        userId?: string;
+        role?: 'admin' | 'user';
+        csrfToken?: string;
+        groupIds?: string;
+        accessEpoch?: number;
+      }
     | undefined;
   return {
     actor: {
@@ -33,12 +48,13 @@ const actorFor = (event: Parameters<APIGatewayProxyHandlerV2>[0]) => {
       groupIds: claims?.groupIds?.split(',').filter(Boolean) ?? [],
     },
     csrfToken: claims?.csrfToken ?? '',
+    accessEpoch: claims?.accessEpoch ?? 0,
   };
 };
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const correlationId = event.requestContext.requestId;
-  const { actor, csrfToken } = actorFor(event);
+  const { actor, csrfToken, accessEpoch } = actorFor(event);
   if (!actor.id) return problem(401, 'unauthorized', 'Authentication required.', correlationId);
   try {
     if (event.requestContext.http.method === 'GET' && /\/archive\/?$/.test(event.rawPath)) {
@@ -54,6 +70,17 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           ...(event.queryStringParameters?.projectId
             ? { projectId: event.queryStringParameters.projectId }
             : {}),
+          ...(event.queryStringParameters?.urgencies
+            ? { urgencies: parseUrgencySet(event.queryStringParameters.urgencies) }
+            : {}),
+          ...(event.queryStringParameters?.cursor
+            ? { cursor: event.queryStringParameters.cursor }
+            : {}),
+          ...(event.queryStringParameters?.limit
+            ? { limit: Number(event.queryStringParameters.limit) }
+            : {}),
+          accessEpoch,
+          cursorCodec: lifecycleCursorCodec,
         }),
       );
     }

@@ -1,3 +1,13 @@
+export type PersonalStackKeyScope =
+  | { userId: string; scopeType: 'overall' }
+  | { userId: string; scopeType: 'project'; scopeId: string };
+
+const paddedStackNumber = (value: number) => String(value).padStart(12, '0');
+const personalStackPartition = (scope: PersonalStackKeyScope) =>
+  scope.scopeType === 'overall'
+    ? `STACK#USER#${scope.userId}#OVERALL`
+    : `STACK#USER#${scope.userId}#PROJECT#${scope.scopeId}`;
+
 export const keys = {
   user: (id: string) => ({ PK: `USER#${id}`, SK: 'PROFILE' }),
   username: (name: string) => ({ PK: `USERNAME#${name}`, SK: 'USER' }),
@@ -12,6 +22,52 @@ export const keys = {
   mutation: (userId: string, id: string) => ({
     PK: `USER#${userId}`,
     SK: `MUTATION#${id}`,
+  }),
+  personalStackMetadata: (scope: PersonalStackKeyScope) => ({
+    PK: personalStackPartition(scope),
+    SK: 'META',
+  }),
+  personalStackOperation: (scope: PersonalStackKeyScope, version: number, operationId: string) => ({
+    PK: personalStackPartition(scope),
+    SK: `OP#${paddedStackNumber(version)}#${operationId}`,
+  }),
+  personalStackOperationChunk: (
+    scope: PersonalStackKeyScope,
+    version: number,
+    operationId: string,
+    chunkIndex: number,
+  ) => ({
+    PK: personalStackPartition(scope),
+    SK: `OP#${paddedStackNumber(version)}#${operationId}#CHUNK#${paddedStackNumber(chunkIndex)}`,
+  }),
+  // Stack mutation IDs are idempotent across every scope owned by the user.
+  personalStackMutationReceipt: (userId: string, mutationId: string) => ({
+    PK: `USER#${userId}`,
+    SK: `MUTATION#${mutationId}`,
+  }),
+  personalStackSnapshotChunk: (
+    scope: PersonalStackKeyScope,
+    generation: number,
+    chunkIndex: number,
+  ) => ({
+    PK: personalStackPartition(scope),
+    SK: `SNAPSHOT#${paddedStackNumber(generation)}#CHUNK#${paddedStackNumber(chunkIndex)}`,
+  }),
+  personalStackAudit: (scope: PersonalStackKeyScope, acceptedAt: string, operationId: string) => ({
+    PK: personalStackPartition(scope),
+    SK: `AUDIT#${acceptedAt}#${operationId}`,
+  }),
+  personalStackOwnerFeedCounter: (userId: string) => ({
+    PK: `FEED#OWNER#${userId}`,
+    SK: 'COUNTER',
+  }),
+  personalStackOwnerFeedEntry: (userId: string, sequence: number) => ({
+    PK: `FEED#OWNER#${userId}`,
+    SK: `CHANGE#${String(sequence).padStart(20, '0')}`,
+  }),
+  paginationCursor: (userId: string, cursorId: string) => ({
+    PK: `USER#${userId}`,
+    SK: `CURSOR#${cursorId}`,
   }),
   entity: (entityType: string, id: string) => ({
     PK: `${entityType.toUpperCase()}#${id}`,
@@ -52,6 +108,10 @@ export const keys = {
     SK: `COMPLETION#${occurredAt}#${id}`,
   }),
   completionEventById: (id: string) => ({ PK: `COMPLETION#${id}`, SK: 'EVENT' }),
+  completionDetail: (userId: string, occurredAt: string, id: string) => ({
+    PK: `COMPLETIONDETAIL#USER#${userId}`,
+    SK: `EVENT#${occurredAt}#${id}`,
+  }),
   workloadCounter: (audience: string, scopeType: string, scopeId: string, workType: string) => ({
     PK: `WORKLOAD#${audience}`,
     SK: `COUNT#${scopeType}#${scopeId}#${workType}`,

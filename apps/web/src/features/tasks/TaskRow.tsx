@@ -1,6 +1,7 @@
 import type { Task } from '@naaseh/domain';
 import { ReminderStatus } from '../reminders/ReminderStatus.js';
 import { useCompletionFeedback } from './useCompletionFeedback.js';
+import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 export function TaskRow({
   task,
   onToggle,
@@ -33,6 +34,7 @@ export function TaskRow({
           {task.version}
         </small>{' '}
         <ReminderStatus task={task} />
+        <UrgencyBadge urgency={task.urgency} />
       </div>
       {task.visibility === 'private' && <span title="Private">🔒</span>}
       <span className="visually-hidden" role="status" aria-live="polite">

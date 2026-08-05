@@ -5,6 +5,7 @@ import {
   completeAndArchiveTask,
   restoreArchivedTask,
   transitionTask,
+  matchesUrgencySet,
   taskSchema,
   type Task,
   type TaskInput,
@@ -54,6 +55,7 @@ export async function taskToEncryptedRecord(task: Task) {
     id: task.id,
     ownerId: task.ownerId,
     status: task.status,
+    urgency: task.urgency,
     ...(task.dueAt ? { dueAt: task.dueAt } : {}),
     ...(task.dueTimeZone ? { dueTimeZone: task.dueTimeZone } : {}),
     ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
@@ -72,6 +74,7 @@ async function encryptMutationPayload(mutationId: string, payload: unknown) {
   return encryptText(JSON.stringify(payload), await deviceKey(), `mutation:${mutationId}`);
 }
 const safeRevisionFields = new Set<keyof Task>([
+  'urgency',
   'link',
   'dueAt',
   'dueTimeZone',
@@ -129,6 +132,11 @@ export async function listLocalTasks(): Promise<Task[]> {
     ),
   );
 }
+
+export async function listLocalTasksByUrgency(urgencies: readonly Task['urgency'][]) {
+  const tasks = await listLocalTasks();
+  return tasks.filter((task) => matchesUrgencySet(task.urgency, urgencies));
+}
 export async function decryptMutation(record: import('./database.js').StoredMutation) {
   const payload = record.payload as unknown;
   if (payload && typeof payload === 'object' && 'ciphertext' in payload && 'iv' in payload)
@@ -145,6 +153,7 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
   const task = createTask(input, actorId);
   const id = createUlid();
   const sourceClientId = await getClientId();
+  const changedFields = [...new Set([...Object.keys(input), 'urgency'])];
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -154,8 +163,8 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
     version: 1,
     changedAt: task.createdAt,
     operation: 'create',
-    changedFields: Object.keys(input),
-    after: localRevisionValues(task, Object.keys(input)),
+    changedFields,
+    after: localRevisionValues(task, changedFields),
     syncOutcome: 'local-pending',
   };
   const [storedTask, payload, storedRevision] = await Promise.all([

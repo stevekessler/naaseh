@@ -20,6 +20,7 @@ export interface EncryptedTaskRecord {
   dueTimeZone?: string;
   parentId?: string;
   visibility: Task['visibility'];
+  urgency?: string;
   updatedAt: string;
   value: Ciphertext;
 }
@@ -43,6 +44,18 @@ export interface EncryptedEntityRecord {
   reversedAt?: string;
   updatedAt?: string;
   mutationId?: string;
+  urgency?: string;
+  urgencyAtCompletion?: string;
+  scopeType?: string;
+  scopeId?: string;
+  scopeKey?: string;
+  workType?: string;
+  workId?: string;
+  membershipEpoch?: string;
+  operationId?: string;
+  stackVersion?: number;
+  generation?: number;
+  chunkIndex?: number;
   value: Ciphertext;
 }
 
@@ -67,6 +80,12 @@ class NaasehDatabase extends Dexie {
   secureCompletionEvents!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureDeletionJobs!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureGoogleSync!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureStackScopes!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureStackMemberships!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureStackOperations!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureStackOperationChunks!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureStackSnapshots!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureStackConflicts!: EntityTable<EncryptedEntityRecord, 'id'>;
   constructor() {
     super('naaseh');
     this.version(1).stores({
@@ -198,6 +217,36 @@ class NaasehDatabase extends Dexie {
       secureAttachments: 'id,taskId,updatedAt',
       secureJobs: 'id,updatedAt',
       secureGoogleSync: 'id,updatedAt',
+    });
+    this.version(10).stores({
+      tasks: 'id,ownerId,status,dueAt,assigneeId,categoryId,parentId,visibility,updatedAt',
+      secureTasks:
+        'id,ownerId,status,lifecycle,completionState,urgency,dueAt,dueTimeZone,assigneeId,categoryId,projectId,groupId,parentId,visibility,updatedAt',
+      revisions: 'id,taskId,changedAt',
+      outbox: 'id,entityId,entityType,createdAt,attempts',
+      settings: 'key',
+      cryptoKeys: 'id',
+      secureCategories: 'id,lifecycle,updatedAt',
+      secureProjects: 'id,categoryId,lifecycle,updatedAt',
+      secureCompletionEvents:
+        'id,taskId,completedBy,occurredAt,projectId,categoryId,urgencyAtCompletion,reversedAt,updatedAt',
+      secureDeletionJobs: 'id,taskId,updatedAt',
+      secureRevisions: 'id,taskId,mutationId,updatedAt',
+      secureReminders: 'id,taskId,updatedAt',
+      secureConflicts: 'id,updatedAt',
+      secureGroups: 'id,updatedAt',
+      secureLists: 'id,projectId,lifecycle,urgency,updatedAt',
+      secureListItems: 'id,taskId,updatedAt',
+      secureDirectoryItems: 'id,updatedAt',
+      secureAttachments: 'id,taskId,updatedAt',
+      secureJobs: 'id,updatedAt',
+      secureGoogleSync: 'id,updatedAt',
+      secureStackScopes: 'id,ownerId,scopeType,scopeId,updatedAt',
+      secureStackMemberships: 'id,ownerId,scopeKey,workType,workId,membershipEpoch,updatedAt',
+      secureStackOperations: 'id,ownerId,scopeKey,stackVersion,mutationId,updatedAt',
+      secureStackOperationChunks: 'id,ownerId,scopeKey,operationId,chunkIndex,updatedAt',
+      secureStackSnapshots: 'id,ownerId,scopeKey,generation,chunkIndex,updatedAt',
+      secureStackConflicts: 'id,ownerId,scopeKey,operationId,updatedAt',
     });
   }
 }

@@ -34,6 +34,7 @@ const mutableTaskFields = new Set<keyof Task>([
   'groupId',
   'parentId',
   'visibility',
+  'urgency',
   'status',
 ]);
 

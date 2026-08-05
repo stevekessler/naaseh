@@ -7,6 +7,7 @@ import {
 } from '@naaseh/domain';
 import { getCategory } from '../categories/category-repository.js';
 import { createProjectRecord, getProject, updateProjectRecord } from './project-repository.js';
+import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 
 export async function createManagedProject(input: {
   categoryId: string;
@@ -52,11 +53,14 @@ export async function resolveProjectAssignment(projectId: string | null) {
 export const assignWorkToProject = <T extends Task | List>(
   work: T,
   assignment: { projectId?: string; categoryId?: string },
-): T =>
-  ({
+): T => {
+  const next = {
     ...work,
     projectId: assignment.projectId,
     ...('categoryId' in work ? { categoryId: assignment.categoryId } : {}),
     updatedAt: new Date().toISOString(),
     version: work.version + 1,
-  }) as T;
+  } as T;
+  notifyStackMembershipWorkChange('label' in work ? 'task' : 'list', work, next, 'project');
+  return next;
+};

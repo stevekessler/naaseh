@@ -1,12 +1,16 @@
+import { urgencyLabels, urgencyValues, type Urgency } from '@naaseh/domain';
 import type { Filters } from '../../search/task-search.js';
 
 export function TaskFilters({
   value,
   change,
+  resultCount,
 }: {
   value: Filters;
   change: (next: Filters) => void;
+  resultCount?: number;
 }) {
+  const selectedUrgencies = value.urgencies ?? [];
   const active = [
     ['from', value.from],
     ['to', value.to],
@@ -18,6 +22,48 @@ export function TaskFilters({
   return (
     <fieldset className="filter-fields">
       <legend>Filters</legend>
+      <fieldset aria-label="Urgency levels" className="urgency-filter-group">
+        <legend>Urgency</legend>
+        {urgencyValues.map((urgency) => (
+          <label key={urgency}>
+            <input
+              type="checkbox"
+              value={urgency}
+              checked={selectedUrgencies.includes(urgency)}
+              onChange={(event) => {
+                const selected = event.currentTarget.checked
+                  ? [...selectedUrgencies, urgency]
+                  : selectedUrgencies.filter((item) => item !== urgency);
+                change({
+                  ...value,
+                  urgencies: urgencyValues.filter((item) => selected.includes(item)),
+                });
+              }}
+            />
+            <span>{urgencyLabels[urgency]}</span>
+          </label>
+        ))}
+        {selectedUrgencies.length ? (
+          <>
+            <p>
+              {selectedUrgencies.length} urgency level{selectedUrgencies.length === 1 ? '' : 's'}{' '}
+              selected:{' '}
+              {selectedUrgencies.map((urgency: Urgency) => urgencyLabels[urgency]).join(', ')}
+            </p>
+            <button
+              type="button"
+              className="quiet"
+              aria-label="Clear urgency filters"
+              onClick={() => change({ ...value, urgencies: [] })}
+            >
+              Clear urgency filters
+            </button>
+          </>
+        ) : null}
+        {selectedUrgencies.length > 0 && resultCount === 0 ? (
+          <p role="status">No work matches the selected urgency levels.</p>
+        ) : null}
+      </fieldset>
       <label>
         <span>Project</span>
         <input

@@ -116,6 +116,30 @@ export function createApplicationApi(
     reservedConcurrentExecutions: 10,
     logGroup: options.logGroups.sync,
   });
+  const stackCompactor = new nodejs.NodejsFunction(scope, 'StackCompactorFunction', {
+    ...defaults,
+    entry: fileURLToPath(new URL('../../apps/api/src/ranking/stack-compactor.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 1024,
+    timeout: Duration.minutes(5),
+    reservedConcurrentExecutions: 2,
+    logGroup: options.logGroups.sync,
+  });
+  const ranking = new nodejs.NodejsFunction(scope, 'RankingFunction', {
+    ...sharedLambdaDefaults({
+      ...options.environment,
+      STACK_COMPACTOR_FUNCTION_NAME: stackCompactor.functionName,
+    }),
+    entry: fileURLToPath(new URL('../../apps/api/src/ranking/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    timeout: Duration.seconds(30),
+    reservedConcurrentExecutions: 10,
+    logGroup: options.logGroups.sync,
+  });
+  stackCompactor.grantInvoke(ranking);
+  sync.addEnvironment('STACK_COMPACTOR_FUNCTION_NAME', stackCompactor.functionName);
+  stackCompactor.grantInvoke(sync);
   const contentEnvironment = {
     ...options.environment,
     NAASEH_ATTACHMENT_BUCKET: options.media.bucketName,
@@ -252,6 +276,8 @@ export function createApplicationApi(
     task,
     auth,
     sync,
+    ranking,
+    stackCompactor,
     authorizerFunction,
     list,
     lifecycle,
@@ -278,6 +304,13 @@ export function createApplicationApi(
   options.table.grantReadData(reporting);
   reporting.addToRolePolicy(
     new iam.PolicyStatement({
+      actions: ['dynamodb:PutItem', 'dynamodb:DeleteItem'],
+      resources: [options.table.tableArn],
+      conditions: { 'ForAllValues:StringLike': { 'dynamodb:LeadingKeys': ['CURSOR#*'] } },
+    }),
+  );
+  reporting.addToRolePolicy(
+    new iam.PolicyStatement({
       effect: iam.Effect.DENY,
       actions: ['kms:ScheduleKeyDeletion', 'secretsmanager:DeleteSecret'],
       resources: ['*'],
@@ -287,6 +320,8 @@ export function createApplicationApi(
   // and provisioning receive their grants in their isolated stacks.
   options.pepper.grantRead(auth);
   options.dataKey.grantEncryptDecrypt(task);
+  options.dataKey.grantEncryptDecrypt(ranking);
+  options.dataKey.grantEncryptDecrypt(stackCompactor);
   options.recoveryWrappingKey.grant(sync, 'kms:GetPublicKey');
   options.manifestSigningKey.grant(sync, 'kms:GetPublicKey', 'kms:Sign');
   options.media.grantReadWrite(task);
@@ -426,6 +461,31 @@ export function createApplicationApi(
   route('SyncIntegration', '/api/v1/sync/push', [apigwv2.HttpMethod.POST], sync);
   route('SyncPullIntegration', '/api/v1/sync/pull', [apigwv2.HttpMethod.POST], sync);
   route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
+  route('OverallStackIntegration', '/api/v1/stacks/overall', [apigwv2.HttpMethod.GET], ranking);
+  route(
+    'OverallStackReorderIntegration',
+    '/api/v1/stacks/overall/reorders',
+    [apigwv2.HttpMethod.POST],
+    ranking,
+  );
+  route(
+    'ProjectStackIntegration',
+    '/api/v1/projects/{projectId}/stack',
+    [apigwv2.HttpMethod.GET],
+    ranking,
+  );
+  route(
+    'ProjectStackReorderIntegration',
+    '/api/v1/projects/{projectId}/stack/reorders',
+    [apigwv2.HttpMethod.POST],
+    ranking,
+  );
+  route(
+    'StackOperationIntegration',
+    '/api/v1/stack-operations/{operationId}',
+    [apigwv2.HttpMethod.GET],
+    ranking,
+  );
   route(
     'GoogleSyncStatusIntegration',
     '/api/v1/integrations/google/status',
@@ -660,6 +720,8 @@ export function createApplicationApi(
       auth,
       authCalibration,
       sync,
+      ranking,
+      stackCompactor,
       group,
       recovery,
       admin,

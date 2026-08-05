@@ -7,6 +7,82 @@ export interface PreparedFeedChange {
   expectedSequence: number;
 }
 
+export interface PersonalStackFeedChange {
+  audience: string;
+  sequence: number;
+  entityId: string;
+  entityType: 'personalStackOperation';
+  version?: number;
+  operation: 'upsert';
+  payload: {
+    operationId: string;
+    status?: 'applied' | 'pending_compaction' | 'conflict' | 'rejected';
+    scope?: 'overall' | 'project';
+    projectId?: string;
+  };
+  changedAt?: string;
+}
+
+export type SyncFeedChange = SyncChange | PersonalStackFeedChange;
+
+const rankFields = new Set([
+  'rank',
+  'overallRank',
+  'projectRank',
+  'overallPosition',
+  'projectPosition',
+  'stackPosition',
+]);
+
+export function assertFeedChangePrivacy(change: SyncFeedChange) {
+  if (change.entityType !== 'personalStackOperation') return;
+  if (!change.audience.startsWith('OWNER#'))
+    throw new Error('Personal stack operations may only use an owner feed.');
+  if (Object.keys(change.payload).some((field) => rankFields.has(field)))
+    throw new Error('Personal rank values cannot be serialized into synchronization feeds.');
+}
+
+export function deserializeAudienceFeedItems(
+  audience: string,
+  items: Array<{ SK?: unknown; data?: unknown }>,
+): SyncFeedChange[] {
+  const changes: SyncFeedChange[] = [];
+  for (const item of items) {
+    const data = item.data as Record<string, unknown> | undefined;
+    if (data?.entityType !== 'personalStackOperation') {
+      changes.push(data as unknown as SyncChange);
+      continue;
+    }
+    if (!audience.startsWith('OWNER#')) continue;
+    const operationId = String(data.operationId ?? data.entityId ?? '');
+    if (!operationId) throw new Error('Owner stack feed record has no operation identifier.');
+    const sequence = Number(data.sequence ?? String(item.SK ?? '').slice('CHANGE#'.length));
+    if (!Number.isSafeInteger(sequence) || sequence < 1)
+      throw new Error('Owner stack feed record has an invalid sequence.');
+    const statuses = ['applied', 'pending_compaction', 'conflict', 'rejected'] as const;
+    const status = statuses.find((candidate) => candidate === data.status);
+    const payload: PersonalStackFeedChange['payload'] = {
+      operationId,
+      ...(status ? { status } : {}),
+      ...(data.scope === 'overall' || data.scope === 'project' ? { scope: data.scope } : {}),
+      ...(typeof data.projectId === 'string' ? { projectId: data.projectId } : {}),
+    };
+    const change: PersonalStackFeedChange = {
+      audience,
+      sequence,
+      entityId: operationId,
+      entityType: 'personalStackOperation',
+      ...(typeof data.version === 'number' ? { version: data.version } : {}),
+      operation: 'upsert',
+      payload,
+      ...(typeof data.changedAt === 'string' ? { changedAt: data.changedAt } : {}),
+    };
+    assertFeedChangePrivacy(change);
+    changes.push(change);
+  }
+  return changes;
+}
+
 export const feedAudience = {
   public: () => 'PUBLIC',
   owner: (ownerId: string) => `OWNER#${ownerId}`,
@@ -63,7 +139,7 @@ export async function pullAudience(
   audience: string,
   after: number,
   limit = 200,
-): Promise<SyncChange[]> {
+): Promise<SyncFeedChange[]> {
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: tableName,
@@ -75,7 +151,7 @@ export async function pullAudience(
       Limit: limit,
     }),
   );
-  return (result.Items ?? []).map((item) => item.data as SyncChange);
+  return deserializeAudienceFeedItems(audience, result.Items ?? []);
 }
 export async function appendAudienceChange(change: Omit<SyncChange, 'sequence'>) {
   const prepared = await prepareAudienceChange(change);

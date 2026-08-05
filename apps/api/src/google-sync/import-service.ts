@@ -1,6 +1,7 @@
 import {
   createTask,
   createUlid,
+  defaultUrgency,
   googleSyncConflictSchema,
   googleTaskLinkSchema,
   type GoogleConnection,
@@ -81,7 +82,13 @@ export async function applyMergedLocal(
     );
   if (Object.keys(patch).length) {
     const changedFields = Object.keys(patch);
-    const next = { ...task, ...patch, version: task.version + 1, updatedAt: now.toISOString() };
+    const next = {
+      ...task,
+      ...patch,
+      urgency: task.urgency,
+      version: task.version + 1,
+      updatedAt: now.toISOString(),
+    };
     const result = await saveTaskMutation(
       next,
       connection.userId,
@@ -142,7 +149,12 @@ export async function importGoogleTask(input: {
       connection.defaultTimeZone,
     );
     let task = createTask(
-      { label: remoteSnapshot.title, ...due, visibility: 'public' },
+      {
+        label: remoteSnapshot.title,
+        ...due,
+        visibility: 'public',
+        urgency: defaultUrgency,
+      },
       connection.userId,
       now,
     );
@@ -151,7 +163,7 @@ export async function importGoogleTask(input: {
       connection.userId,
       `google-import:${remote.id}:${revisionKey(remote)}`,
       'create',
-      ['label', 'dueAt', 'dueTimeZone', 'visibility'],
+      ['label', 'dueAt', 'dueTimeZone', 'visibility', 'urgency'],
       undefined,
       undefined,
       'google-tasks',

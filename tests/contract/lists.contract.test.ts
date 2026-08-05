@@ -11,7 +11,10 @@ import { createList, createListItem } from '@naaseh/domain';
 
 describe('list HTTP contracts', () => {
   it('validates create, patch, ordering, value override, and completion bodies', () => {
-    expect(listCreateSchema.parse({ name: 'Groceries' })).toEqual({ name: 'Groceries' });
+    expect(listCreateSchema.parse({ name: 'Groceries' })).toEqual({
+      name: 'Groceries',
+      urgency: 'medium',
+    });
     expect(listPatchSchema.parse({ locked: true })).toEqual({ locked: true });
     expect(listItemCreateSchema.parse({ name: 'Milk', amountMinor: -499 })).toMatchObject({
       amountMinor: -499,

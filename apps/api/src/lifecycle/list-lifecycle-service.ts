@@ -2,6 +2,7 @@ import { archiveList, finishList, restoreList, type List } from '@naaseh/domain'
 import { listAudienceChanges } from '../lists/list-audience.js';
 import { findList, saveListLifecycleMutation } from '../lists/list-repository.js';
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
+import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 
 export interface ListLifecycleRequest {
   listId: string;
@@ -31,6 +32,12 @@ export async function changeListLifecycle(request: ListLifecycleRequest): Promis
     request.mutationId,
     request.action,
     feeds,
+  );
+  notifyStackMembershipWorkChange(
+    'list',
+    current,
+    next,
+    request.action === 'restore' ? 'restore' : 'archive',
   );
   return next;
 }

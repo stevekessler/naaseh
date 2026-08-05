@@ -1,4 +1,10 @@
-import type { List, ListItem, Task } from '@naaseh/domain';
+import {
+  matchesUrgencySet,
+  type List,
+  type ListItem,
+  type Task,
+  type Urgency,
+} from '@naaseh/domain';
 import { db } from './database.js';
 import { listLocalListItems, listLocalLists } from './list-repository.js';
 import { listLocalTasks } from './task-repository.js';
@@ -12,7 +18,10 @@ export interface LocalArchiveEntry {
   conflicted: boolean;
 }
 
-export async function listLocalArchive(query = ''): Promise<LocalArchiveEntry[]> {
+export async function listLocalArchive(
+  query = '',
+  urgencies: readonly Urgency[] = [],
+): Promise<LocalArchiveEntry[]> {
   const [tasks, lists, mutations, conflicts] = await Promise.all([
     listLocalTasks(),
     listLocalLists(),
@@ -26,6 +35,7 @@ export async function listLocalArchive(query = ''): Promise<LocalArchiveEntry[]>
     .filter(
       (task) =>
         task.lifecycle === 'archived' &&
+        matchesUrgencySet(task.urgency, urgencies) &&
         (!normalized ||
           task.label.toLocaleLowerCase().includes(normalized) ||
           (!task.memoHidden && task.memo.toLocaleLowerCase().includes(normalized))),
@@ -38,7 +48,7 @@ export async function listLocalArchive(query = ''): Promise<LocalArchiveEntry[]>
     }));
   const listEntries = await Promise.all(
     lists
-      .filter((list) => list.lifecycle === 'archived')
+      .filter((list) => list.lifecycle === 'archived' && matchesUrgencySet(list.urgency, urgencies))
       .map(async (list): Promise<LocalArchiveEntry | undefined> => {
         const items = await listLocalListItems(list.id);
         if (

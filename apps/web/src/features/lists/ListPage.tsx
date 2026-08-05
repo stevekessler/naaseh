@@ -39,7 +39,11 @@ export function ListPage({
 }: {
   lists: List[];
   items: Map<string, ListItem[]>;
-  createList: (name: string, projectId?: string) => Promise<void>;
+  createList: (
+    name: string,
+    projectId?: string,
+    urgency?: import('@naaseh/domain').Urgency,
+  ) => Promise<void>;
   addItem: (listId: string, name: string) => Promise<void>;
   toggle: (item: ListItem) => void;
   remove: (item: ListItem) => void;

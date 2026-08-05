@@ -106,4 +106,35 @@ describe('Google publication', () => {
     expect(client.createTask).not.toHaveBeenCalled();
     expect(repository.saveGoogleTaskLink).toHaveBeenCalledOnce();
   });
+
+  it('publishes without overwriting or transmitting Naaseh urgency', async () => {
+    const task = createTask(
+      {
+        label: 'Critical locally',
+        urgency: 'critical',
+        dueAt: '2026-07-25T15:00:00.000Z',
+        dueTimeZone: 'America/Denver',
+      },
+      'owner',
+      now,
+    );
+    repository.findGoogleTaskLink.mockResolvedValue(undefined);
+    const client = {
+      findMarker: vi.fn().mockResolvedValue(undefined),
+      createTask: vi.fn().mockResolvedValue({
+        id: 'remote-critical',
+        title: task.label,
+        due: '2026-07-25T00:00:00.000Z',
+        status: 'needsAction',
+      }),
+    };
+
+    await publishGoogleTask({ connection, task, client: client as never, now });
+
+    expect(task.urgency).toBe('critical');
+    expect(client.createTask).toHaveBeenCalledWith(
+      'list',
+      expect.not.objectContaining({ urgency: expect.anything() }),
+    );
+  });
 });

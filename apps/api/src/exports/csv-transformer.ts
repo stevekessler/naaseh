@@ -15,6 +15,10 @@ export const CSV_HEADERS = [
   'dueTimeZone',
   'assigneeId',
   'categoryId',
+  'projectId',
+  'urgency',
+  'overallRank',
+  'projectRank',
   'groupId',
   'visibility',
   'locked',
@@ -53,9 +57,15 @@ const safeAttachments = (items: readonly Attachment[]) =>
 export function transformTodosToCsv(
   tasks: readonly Task[],
   attachments: ReadonlyMap<string, readonly Attachment[]>,
+  viewerRanks: ReadonlyMap<
+    string,
+    { overallRank?: number; projectRank?: number; viewerId?: string }
+  > = new Map(),
 ) {
   const rows = [CSV_HEADERS.join(',')];
   for (const task of [...tasks].sort((a, b) => a.id.localeCompare(b.id))) {
+    const active = task.status === 'open' && (task.lifecycle ?? 'active') === 'active';
+    const ranks = active ? viewerRanks.get(task.id) : undefined;
     const values: Record<(typeof CSV_HEADERS)[number], unknown> = {
       id: task.id,
       parentId: task.parentId ?? '',
@@ -72,6 +82,10 @@ export function transformTodosToCsv(
       dueTimeZone: task.dueTimeZone ?? '',
       assigneeId: task.assigneeId ?? '',
       categoryId: task.categoryId ?? '',
+      projectId: task.projectId ?? '',
+      urgency: task.urgency,
+      overallRank: ranks?.overallRank ?? '',
+      projectRank: ranks?.projectRank ?? '',
       groupId: task.groupId ?? '',
       visibility: task.visibility,
       locked: task.visibility === 'private',

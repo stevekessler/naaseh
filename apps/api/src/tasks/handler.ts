@@ -22,6 +22,7 @@ import { sanitizeTaskPatch } from './task-service.js';
 import { syncTaskReminder } from '../notifications/web-push.js';
 import { recordTaskAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
+import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 
 async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const correlationId = event.requestContext.requestId || randomUUID();
@@ -100,11 +101,12 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       actorId,
       mutationId,
       'create',
-      Object.keys(input as object),
+      [...new Set([...Object.keys(input as object), 'urgency'])],
       undefined,
       undefined,
       event.headers['x-client-id'],
     );
+    if (!saved.replayed) notifyStackMembershipWorkChange('task', undefined, saved.task, 'create');
     await syncTaskReminder(saved.task);
     return json(saved.replayed ? 200 : 201, saved.task);
   }
@@ -198,6 +200,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       undefined,
       event.headers['x-client-id'],
     );
+    if (!saved.replayed) notifyStackMembershipWorkChange('task', current, saved.task);
     await syncTaskReminder(saved.task);
     return json(200, saved.task);
   }

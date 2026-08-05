@@ -72,7 +72,7 @@ describe('single-region recovery infrastructure', () => {
   });
 
   it('keeps secrets and private versioned media in one region without replication', () => {
-    template.resourceCountIs('AWS::SecretsManager::Secret', 4);
+    template.resourceCountIs('AWS::SecretsManager::Secret', 5);
     template.hasResourceProperties('AWS::SecretsManager::Secret', {
       Tags: Match.arrayWith([Match.objectLike({ Key: 'NaasehRotationReviewDays', Value: '90' })]),
     });
@@ -104,9 +104,18 @@ describe('single-region recovery infrastructure', () => {
           Match.objectLike({
             ScheduleExpression: 'cron(0 5 * * ? *)',
             Lifecycle: { DeleteAfterDays: 35 },
+            RecoveryPointTags: {
+              NaasehPersonalStackCanonicalOperations: 'included',
+              NaasehPersonalStackSnapshots: 'rebuildable',
+            },
           }),
         ]),
       },
+    });
+    template.hasResourceProperties('AWS::Backup::BackupSelection', {
+      BackupSelection: Match.objectLike({
+        SelectionName: 'CanonicalOperationsAndDurableResources',
+      }),
     });
     expect(JSON.stringify(template.toJSON())).not.toContain('CopyActions');
   });
@@ -122,6 +131,10 @@ describe('single-region recovery infrastructure', () => {
     });
     const rendered = JSON.stringify(template.toJSON());
     expect(rendered).toContain('RECOVERY_MEMO_WRAPPING_KEY_ARN');
+    expect(rendered).toContain('PERSONAL_STACK_CANONICAL_OPERATIONS_REQUIRED');
+    expect(rendered).toContain('PERSONAL_STACK_SNAPSHOTS_REBUILDABLE');
+    expect(rendered).toContain('PERSONAL_STACK_CORRUPT_SCOPE_POLICY');
+    expect(rendered).toContain('fail-closed');
     expect(rendered).not.toContain('PRIMARY_MEMO_WRAPPING_KEY_ARN');
   });
 });

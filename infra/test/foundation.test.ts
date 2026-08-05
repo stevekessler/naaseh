@@ -36,8 +36,8 @@ describe('foundation infrastructure', () => {
   it('keeps the production template below the resource budget', () => {
     const resourceCount = Object.keys(template.toJSON().Resources ?? {}).length;
     expect(resourceCount).toBeLessThanOrEqual(400);
-    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 17);
-    template.resourceCountIs('AWS::Lambda::Permission', 23);
+    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 18);
+    template.resourceCountIs('AWS::Lambda::Permission', 24);
   });
 
   it('keeps focused helpers inside one deployable stack', () => {
@@ -121,6 +121,11 @@ describe('foundation infrastructure', () => {
     });
     for (const route of [
       'POST /api/v1/sync/push',
+      'GET /api/v1/stacks/overall',
+      'POST /api/v1/stacks/overall/reorders',
+      'GET /api/v1/projects/{projectId}/stack',
+      'POST /api/v1/projects/{projectId}/stack/reorders',
+      'GET /api/v1/stack-operations/{operationId}',
       'POST /api/v1/tasks',
       'GET /api/v1/groups',
       'POST /api/v1/groups/{groupId}/join',
@@ -200,9 +205,9 @@ describe('foundation infrastructure', () => {
   });
 
   it('creates retained log groups, only critical alarms, and a dashboard', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 9);
+    template.resourceCountIs('AWS::Logs::LogGroup', 10);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 8);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 18);
     template.resourceCountIs('AWS::SNS::Topic', 1);
     template.resourceCountIs('AWS::SNS::TopicPolicy', 1);
     template.hasResourceProperties('AWS::SNS::Subscription', {
@@ -210,7 +215,7 @@ describe('foundation infrastructure', () => {
       Endpoint: 'alerts@example.com',
     });
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
-    expect(alarms).toHaveLength(8);
+    expect(alarms).toHaveLength(18);
     for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
     const rendered = JSON.stringify(template.toJSON());
     for (const alarm of [
@@ -220,6 +225,10 @@ describe('foundation infrastructure', () => {
       'AttachmentThreatAlarm',
       'WorkloadProjectionDriftAlarm',
       'OrganizationDeleteFailureAlarm',
+      'StackReorderFailureAlarm',
+      'StackCompactionFailureAlarm',
+      'StackReorderConflictAlarm',
+      'StackOperationLatencyAlarm',
       'BackupFailureAlarm',
       'RestoreWorkflowFailureAlarm',
     ])

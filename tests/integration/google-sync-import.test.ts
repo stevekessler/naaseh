@@ -75,7 +75,9 @@ describe('Google import reconciliation', () => {
       label: 'Imported',
       dueAt: '2026-07-25T15:00:00.000Z',
       dueTimeZone: 'America/Denver',
+      urgency: 'medium',
     });
+    expect(tasks.saveTaskMutation.mock.calls[0]?.[4]).toContain('urgency');
     expect(tasks.saveTaskMutation.mock.calls[0]?.[7]).toBe('google-tasks');
     expect(repository.saveGoogleTaskLink).toHaveBeenCalledOnce();
   });

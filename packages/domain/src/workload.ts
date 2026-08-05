@@ -1,4 +1,23 @@
+import { z } from 'zod';
+import { urgencyCountsSchema, zeroUrgencyCounts } from './urgency.js';
+
 export type WorkloadLifecycle = 'active' | 'archived' | 'deleting' | undefined;
+
+export const workloadCountsSchema = z
+  .object({
+    tasks: z.number().int().nonnegative(),
+    lists: z.number().int().nonnegative(),
+    urgencyCounts: urgencyCountsSchema,
+  })
+  .strict();
+
+export type WorkloadCounts = z.infer<typeof workloadCountsSchema>;
+
+export const zeroWorkloadCounts = (): WorkloadCounts => ({
+  tasks: 0,
+  lists: 0,
+  urgencyCounts: zeroUrgencyCounts(),
+});
 
 export const includeInWorkload = (work: { lifecycle?: WorkloadLifecycle }) =>
   (work.lifecycle ?? 'active') === 'active';

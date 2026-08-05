@@ -1,5 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { createUlid } from '@naaseh/domain';
+import { createUlid, type Urgency } from '@naaseh/domain';
 import {
   completionRequestSchema,
   listCreateSchema,
@@ -27,6 +27,7 @@ import { listAudienceChanges, listItemAudienceChanges } from './list-audience.js
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { recordListAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
+import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 const actorFor = (event: any) => ({
   id: event.requestContext.authorizer?.lambda?.userId as string,
   role: (event.requestContext.authorizer?.lambda?.role ?? 'user') as 'admin' | 'user',
@@ -58,12 +59,20 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     const mutationId = event.headers['x-client-mutation-id'] ?? createUlid();
     if (method === 'POST' && !listId) {
       const input = listCreateSchema.parse(JSON.parse(event.body ?? '{}'));
+      const urgency = (input as typeof input & { urgency?: Urgency }).urgency;
       const assignment = await resolveProjectAssignment(input.projectId ?? null);
-      const value = createOwnedList(input.name, actor.id, new Date(), assignment.projectId);
+      const value = createOwnedList(
+        input.name,
+        actor.id,
+        new Date(),
+        assignment.projectId,
+        urgency,
+      );
       const feeds = await Promise.all(
         listAudienceChanges(undefined, value).map(prepareAudienceChange),
       );
-      await saveList(value, actor.id, mutationId, 'create', ['name'], 0, feeds);
+      await saveList(value, actor.id, mutationId, 'create', ['name', 'urgency'], 0, feeds);
+      notifyStackMembershipWorkChange('list', undefined, value, 'create');
       return json(201, value);
     }
     if (!current || !authorizeList(current, actor, 'edit').allowed)
@@ -87,7 +96,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
           Object.entries(parsed).filter(([, value]) => value !== undefined && value !== null),
         ),
         ...(assignment ? { projectId: assignment.projectId } : {}),
-      } as Pick<Partial<typeof current>, 'name' | 'groupId' | 'locked' | 'status' | 'projectId'>;
+      } as Pick<
+        Partial<typeof current>,
+        'name' | 'groupId' | 'locked' | 'status' | 'projectId' | 'urgency'
+      >;
       const value = updateOwnedList(current, patch, actor.id);
       const feeds = await Promise.all(
         listAudienceChanges(current, value).map(prepareAudienceChange),
@@ -101,6 +113,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         current.version,
         feeds,
       );
+      notifyStackMembershipWorkChange('list', current, value);
       return json(200, value);
     }
     if (method === 'POST' && event.rawPath.endsWith('/items')) {

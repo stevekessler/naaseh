@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ulidSchema } from './primitives.js';
+import { urgencySchema } from './urgency.js';
 
 export const completionEventSchema = z
   .object({
@@ -7,6 +8,7 @@ export const completionEventSchema = z
     taskId: ulidSchema,
     completedBy: z.string().min(1),
     occurredAt: z.string().datetime(),
+    urgencyAtCompletion: urgencySchema,
     projectIdAtCompletion: ulidSchema.optional(),
     projectNameAtCompletion: z.string().trim().min(1).max(80).optional(),
     categoryIdAtCompletion: ulidSchema.optional(),

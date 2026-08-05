@@ -27,6 +27,10 @@ export function createLogGroups(scope: Construct) {
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.RETAIN,
     }),
+    ranking: new logs.LogGroup(scope, 'RankingLogs', {
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: RemovalPolicy.RETAIN,
+    }),
   };
 }
 export function createOperationalVisibility(
@@ -52,11 +56,32 @@ export function createOperationalVisibility(
     ['AttachmentThreatAlarm', 'AttachmentThreats'],
     ['WorkloadProjectionDriftAlarm', 'WorkloadProjectionDrift'],
     ['OrganizationDeleteFailureAlarm', 'OrganizationDeleteFailures'],
+    ['StackReorderFailureAlarm', 'StackReorderFailures'],
+    ['StackCompactionFailureAlarm', 'StackCompactionFailures'],
+    ['UrgencyTotalConsistencyAlarm', 'UrgencyTotalConsistencyFailures'],
+    ['ProjectionReconciliationAlarm', 'ProjectionReconciliationFailures'],
+    ['FilteredReadFailureAlarm', 'FilteredReadFailures'],
+    ['ReportExportFailureAlarm', 'UrgencyReportExportFailures'],
   ] as const) {
     const alarm = new cloudwatch.Alarm(scope, id, {
       metric: applicationMetric(metricName),
       threshold: 1,
       evaluationPeriods: 1,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    alarm.addAlarmAction(new actions.SnsAction(alerts));
+  }
+  for (const [id, metricName, threshold] of [
+    ['StackReorderConflictAlarm', 'StackReorderConflicts', 10],
+    ['StackOperationLatencyAlarm', 'StackOperationLatency', 1_000],
+    ['CursorContextRestartAlarm', 'PaginationContextRestarts', 10],
+    ['CursorExpiryAlarm', 'PaginationCursorExpiries', 10],
+  ] as const) {
+    const alarm = new cloudwatch.Alarm(scope, id, {
+      metric: applicationMetric(metricName, metricName.endsWith('Latency') ? 'p95' : 'Sum'),
+      threshold,
+      evaluationPeriods: 3,
+      datapointsToAlarm: 2,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     alarm.addAlarmAction(new actions.SnsAction(alerts));
@@ -92,8 +117,21 @@ export function createOperationalVisibility(
     }),
     new cloudwatch.GraphWidget({
       title: 'Completion reporting',
-      left: [applicationMetric('CompletionReportLatency', 'p95')],
-      right: [functions.reporting?.metricErrors() ?? applicationMetric('CompletionReportErrors')],
+      left: [
+        applicationMetric('CompletionReportLatency', 'p95'),
+        applicationMetric('FilteredReadLatency', 'p95'),
+        applicationMetric('FilteredReadAmplification', 'p95'),
+      ],
+      right: [
+        functions.reporting?.metricErrors() ?? applicationMetric('CompletionReportErrors'),
+        applicationMetric('UrgencyTotalConsistencyFailures'),
+        applicationMetric('ProjectionReconciliationFailures'),
+        applicationMetric('PaginationContextRestarts'),
+        applicationMetric('PaginationCursorExpiries'),
+        applicationMetric('FilteredShortPages'),
+        applicationMetric('FilteredReadUnits'),
+        applicationMetric('FilteredReadBytes'),
+      ],
     }),
     new cloudwatch.GraphWidget({
       title: 'DynamoDB throttles',
@@ -113,6 +151,20 @@ export function createOperationalVisibility(
       right: [
         applicationMetric('WebPushDeliveryFailures'),
         applicationMetric('SyncBacklogDepth', 'Maximum'),
+      ],
+    }),
+    new cloudwatch.GraphWidget({
+      title: 'Personal stack operations and compaction',
+      left: [
+        applicationMetric('StackOperationLatency', 'p95'),
+        applicationMetric('StackCompactionLatency', 'p95'),
+      ],
+      right: [
+        applicationMetric('StackReorders'),
+        applicationMetric('StackReorderConflicts'),
+        applicationMetric('StackReorderFailures'),
+        applicationMetric('StackCompactions'),
+        applicationMetric('StackCompactionFailures'),
       ],
     }),
     new cloudwatch.GraphWidget({

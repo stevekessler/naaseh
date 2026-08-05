@@ -71,6 +71,7 @@ interface ErrorLike {
   name?: string;
   code?: string;
   statusCode?: number;
+  status?: number;
   $metadata?: { httpStatusCode?: number };
 }
 
@@ -88,6 +89,18 @@ export function classifyError(error: unknown): SafeApiError {
     return new SafeApiError(400, 'invalid_request', 'The request is invalid.', 'validation');
 
   const candidate = (error && typeof error === 'object' ? error : {}) as ErrorLike;
+  if (
+    (candidate.status === 400 || candidate.status === 409 || candidate.status === 410) &&
+    (candidate.code === 'invalid_cursor' ||
+      candidate.code === 'pagination_context_changed' ||
+      candidate.code === 'cursor_expired')
+  )
+    return new SafeApiError(
+      candidate.status,
+      candidate.code,
+      error instanceof Error ? error.message : 'Pagination must be restarted.',
+      candidate.status === 409 ? 'conflict' : 'validation',
+    );
   if (candidate.statusCode === 401)
     return new SafeApiError(401, 'unauthorized', 'Authentication required.', 'authorization');
   if (candidate.statusCode === 403)

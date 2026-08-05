@@ -14,6 +14,7 @@ const event = (
   taskId: id.padEnd(26, '1'),
   completedBy: 'owner',
   occurredAt,
+  urgencyAtCompletion: 'medium',
   counted: true,
   createdAt: occurredAt,
   ...patch,

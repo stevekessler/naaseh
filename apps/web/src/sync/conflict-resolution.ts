@@ -1,4 +1,9 @@
 import type { SyncConflict, Task } from '@naaseh/domain';
+import {
+  listLocalStackConflicts,
+  resolveLocalStackConflict,
+  type LocalStackConflict,
+} from '../db/personal-stack-repository.js';
 export type Resolution = 'keep-local' | 'keep-remote';
 export const resolveConflict = (conflict: SyncConflict, resolution: Resolution): Task =>
   resolution === 'keep-local'
@@ -42,4 +47,29 @@ export function resolveEntityConflict<T extends { version: number }>(
     return conflict.remote;
   }
   return { ...conflict.local, version: (conflict.remote?.version ?? conflict.local.version) + 1 };
+}
+
+export type PersonalStackConflictResolution = 'reapply' | 'discard';
+
+export const canReapplyPersonalStackConflict = (conflict: LocalStackConflict) =>
+  !['authorization_changed', 'lifecycle_changed', 'project_changed', 'hard_deleted'].includes(
+    conflict.reason,
+  );
+
+export async function listPersonalStackConflicts(ownerId: string) {
+  const conflicts = await listLocalStackConflicts(ownerId);
+  return conflicts.map((conflict) => ({
+    ...conflict,
+    canReapply: canReapplyPersonalStackConflict(conflict),
+  }));
+}
+
+export async function resolvePersonalStackConflict(
+  conflict: LocalStackConflict,
+  resolution: PersonalStackConflictResolution,
+) {
+  if (resolution === 'reapply' && !canReapplyPersonalStackConflict(conflict)) {
+    throw new Error('This stack conflict can only be discarded after refreshing authorized work.');
+  }
+  return resolveLocalStackConflict(conflict.id, resolution);
 }

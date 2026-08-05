@@ -7,7 +7,8 @@ describe('organization lifecycle boundaries', () => {
       actorId: 'admin',
       targetUserId: 'owner',
     });
-    expect(Object.keys(detail)).toEqual(['operation', 'actorId', 'targetUserId']);
+    expect(Object.keys(detail)).toEqual(['operation', 'targetClass']);
+    expect(detail.targetClass).toBe('delegated');
     expect(JSON.stringify(detail)).not.toContain('PAAO');
   });
 });

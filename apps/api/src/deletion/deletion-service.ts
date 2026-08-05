@@ -6,6 +6,7 @@ import { keys } from '../shared/keys.js';
 import { putRecord } from '../shared/store.js';
 import { appendAudienceChange, contentAudiences } from '../sync/change-feed-repository.js';
 import { findTask } from '../tasks/task-repository.js';
+import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 import {
   deletePartition,
   removeReferenceKeys,
@@ -88,6 +89,8 @@ async function lockResource(job: DeletionJob) {
     { '#version': 'version' },
     { ':expected': resource.version },
   );
+  if (job.resourceType === 'task' || job.resourceType === 'list')
+    notifyStackMembershipWorkChange(job.resourceType, resource, next, 'delete');
 }
 
 async function publishDeletionTombstones(job: DeletionJob) {

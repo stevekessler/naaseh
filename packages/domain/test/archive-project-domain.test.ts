@@ -67,6 +67,7 @@ describe('archive/project foundational domain', () => {
       taskId: '01J00000000000000000000030',
       completedBy: 'owner',
       occurredAt: '2026-07-24T11:00:00.000Z',
+      urgencyAtCompletion: 'medium',
       categoryIdAtCompletion: categoryId,
       categoryNameAtCompletion: 'PAAO',
       projectIdAtCompletion: projectId,

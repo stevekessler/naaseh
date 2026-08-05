@@ -7,6 +7,7 @@ const base: CompletionEvent = {
   taskId: '01J00000000000000000000111',
   completedBy: 'owner',
   occurredAt: '2026-07-01T12:00:00.000Z',
+  urgencyAtCompletion: 'medium',
   projectIdAtCompletion: '01J00000000000000000000020',
   projectNameAtCompletion: 'API',
   categoryIdAtCompletion: '01J00000000000000000000010',
