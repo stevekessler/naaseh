@@ -15,6 +15,8 @@ import { CopyListAction } from './CopyListAction.js';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { listLocalDirectoryItems } from '../../db/directory-repository.js';
 import { PermanentDeleteDialog } from '../archive/PermanentDeleteDialog.js';
+import { UrgencyBadge } from '../../components/UrgencyBadge.js';
+import { UrgencyField } from '../../components/UrgencyField.js';
 export function ListPage({
   lists,
   items,
@@ -83,6 +85,11 @@ export function ListPage({
           .map((list) => (
             <article className="named-list" key={list.id}>
               <h2>{list.name}</h2>
+              <UrgencyBadge urgency={list.urgency} />
+              <UrgencyField
+                value={list.urgency}
+                onChange={(urgency) => void changeList(list, { urgency })}
+              />
               <button
                 type="button"
                 className="quiet"

@@ -1,6 +1,8 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { signIn } from './enhanced-helpers.js';
 
+test.use({ serviceWorkers: 'block' });
+
 const ids = {
   project: '01K00000000000000000000010',
   first: '01K00000000000000000000100',
@@ -57,7 +59,10 @@ async function createFilteredTask(
 
 async function selectUrgencies(page: Page, labels: string[]) {
   const group = urgencyFiltersFor(page);
-  for (const label of labels) await group.getByRole('checkbox', { name: label }).check();
+  for (const label of labels) {
+    await group.getByRole('checkbox', { name: label, exact: true }).click();
+    await expect(group.getByRole('checkbox', { name: label, exact: true })).toBeChecked();
+  }
 }
 
 test('filters by one or many urgency levels with every existing filter online', async ({
@@ -101,14 +106,14 @@ test('filters by one or many urgency levels with every existing filter online', 
   await filters.getByLabel('Project').fill(organization.projectId);
   await filters.getByLabel('Scope').selectOption('active');
   await filters.getByLabel('Content').selectOption('todos');
-  await expect(filters.getByRole('status')).toHaveText('2 results');
+  await expect(filters.getByRole('status').first()).toHaveText('2 results');
   await expect(page).toHaveURL(/urgenc(?:y|ies)=/);
 
   await filters.getByLabel('Content').selectOption('lists');
-  await expect(filters.getByRole('status')).toHaveText('0 results');
+  await expect(filters.getByRole('status').first()).toHaveText('0 results');
   await filters.getByLabel('Content').selectOption('all');
   await filters.getByLabel('Scope').selectOption('archive');
-  await expect(filters.getByRole('status')).toHaveText('0 results');
+  await expect(filters.getByRole('status').first()).toHaveText('0 results');
 });
 
 test('preserves overall and Project stack order and archive filtering from a warmed offline cache', async ({
@@ -139,7 +144,7 @@ test('preserves overall and Project stack order and archive filtering from a war
   await page.getByLabel('Stack scope').selectOption(`project:${organization.projectId}`);
   await expect(page.locator('.stack-row')).toHaveCount(2);
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Archive' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
 
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Personal Stack' }).click();
@@ -151,7 +156,7 @@ test('preserves overall and Project stack order and archive filtering from a war
 
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await selectUrgencies(page, ['Critical']);
-  await expect(page.getByRole('status')).toContainText(/archived work|result/i);
+  await expect(page.getByText(/No archived work matches this search/i)).toBeVisible();
   await context.setOffline(false);
 });
 

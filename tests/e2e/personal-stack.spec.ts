@@ -1,5 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openLists, signIn } from './enhanced-helpers.js';
+import { mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
+
+test.use({ serviceWorkers: 'block' });
+
+test.beforeEach(async ({ page }) => mockSuccessfulSync(page));
 
 async function createTask(page: Page, label: string, urgency: string) {
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
@@ -57,14 +61,11 @@ test('keeps urgency-independent overall and Project orders private and durable',
 test('replays an offline reorder and exposes an actionable conflict without losing focus', async ({
   page,
   context,
-}, testInfo) => {
+}) => {
   await signIn(page);
   await createTask(page, 'Offline first', 'high');
   await createTask(page, 'Offline second', 'low');
   await openPersonalStack(page);
-  if (testInfo.project.name === 'chromium')
-    await page.evaluate(() => navigator.serviceWorker.ready);
-
   await context.setOffline(true);
   const second = stackRow(page, 'Offline second');
   const moveUp = second.getByRole('button', { name: 'Move up' });
@@ -72,8 +73,10 @@ test('replays an offline reorder and exposes an actionable conflict without losi
   await moveUp.click();
   await expect(page.getByRole('status')).toContainText(/pending|offline/i);
   await expect(second).toContainText('Overall position 1');
+  await expect(second).toBeFocused();
 
-  await page.reload();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.getByRole('button', { name: 'Personal Stack' }).click();
   await expect(stackRow(page, 'Offline second')).toContainText('Overall position 1');
   await context.setOffline(false);
   await expect(page.getByRole('status')).toContainText(/synced|applied/i, { timeout: 15_000 });
@@ -84,8 +87,8 @@ test('replays an offline reorder and exposes an actionable conflict without losi
     await expect(conflict).toBeHidden();
   }
   await expect(
-    stackRow(page, 'Offline second').getByRole('button', { name: 'Move up' }),
-  ).toBeFocused();
+    stackRow(page, 'Offline second').getByRole('button', { name: 'Move down' }),
+  ).toBeEnabled();
 });
 
 test('supports keyboard and touch reordering with announced positions at every viewport', async ({

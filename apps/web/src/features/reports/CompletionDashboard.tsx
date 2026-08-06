@@ -62,6 +62,13 @@ export interface CompletionDashboardProps {
   retry?: () => void;
   restart?: () => void;
   refreshAfterReconnect?: () => void;
+  remoteReport?: {
+    total: number;
+    urgencyCounts: UrgencyCounts;
+    buckets: Array<{ key: string; count: number }>;
+  };
+  changeFilters?: (value: CompletionFilterValue) => void;
+  exportCsv?: () => void;
 }
 
 const cursorErrorCopy: Partial<Record<CompletionReportError, string>> = {
@@ -87,6 +94,9 @@ export function CompletionDashboard({
   retry,
   restart,
   refreshAfterReconnect,
+  remoteReport,
+  changeFilters,
+  exportCsv,
 }: CompletionDashboardProps) {
   const initialUrgencies = normalizeUrgencySet(selectedUrgencies as Urgency[]);
   const [filters, setFilters] = useState<CompletionFilterValue>({
@@ -116,7 +126,9 @@ export function CompletionDashboard({
       }),
     [events, filters],
   );
-  const maximum = Math.max(1, ...report.buckets.map((bucket) => bucket.count));
+  const displayedBuckets = remoteReport?.buckets ?? report.buckets;
+  const displayedTotal = remoteReport?.total ?? report.total;
+  const maximum = Math.max(1, ...displayedBuckets.map((bucket) => bucket.count));
   const sortedRows = [...detailRows].sort((left, right) => {
     if (orderBy === 'overallRank')
       return (left.overallRank ?? Infinity) - (right.overallRank ?? Infinity);
@@ -132,7 +144,7 @@ export function CompletionDashboard({
           <p className="eyebrow">Your completed to-dos</p>
           <h1 id="completion-dashboard-heading">Completion dashboard</h1>
         </div>
-        <strong aria-label={`${report.total} completed to-dos`}>{report.total} completed</strong>
+        <strong aria-label={`${displayedTotal} completed to-dos`}>{displayedTotal} completed</strong>
       </header>
       <CompletionFilters
         value={filters}
@@ -141,6 +153,7 @@ export function CompletionDashboard({
         change={(next) => {
           setFilters(next);
           changeUrgencies?.(next.urgencies);
+          changeFilters?.(next);
           void saveReportingPreferences({
             timeZone: next.timeZone,
             weekStartsOn: next.weekStartsOn,
@@ -149,9 +162,14 @@ export function CompletionDashboard({
       />
       <p className="muted">This report uses the urgency captured when each to-do was completed.</p>
       <UrgencyBreakdown
-        counts={urgencyCounts ?? report.urgencyCounts}
+        counts={urgencyCounts ?? remoteReport?.urgencyCounts ?? report.urgencyCounts}
         label="Urgency at completion"
       />
+      {exportCsv ? (
+        <button type="button" onClick={exportCsv}>
+          Export CSV
+        </button>
+      ) : null}
       {reportState?.offline && reportState.source === 'cache' ? (
         <p role="status">Offline · showing previously synchronized report</p>
       ) : null}
@@ -201,7 +219,7 @@ export function CompletionDashboard({
           : 'Up to date.'}
       </p>
       <ol className="completion-chart" aria-label="Completion totals by period">
-        {report.buckets.map((bucket) => (
+        {displayedBuckets.map((bucket) => (
           <li key={bucket.key}>
             <span>{bucket.key}</span>
             <span

@@ -87,6 +87,25 @@ import {
 import { selectLocalStackItems } from '../features/stacks/stack-selectors.js';
 import { queuePersonalStackReorder } from '../sync/sync-engine.js';
 import { PersonalStackPage } from '../features/stacks/PersonalStackPage.js';
+import {
+  readFilteredStack,
+  StackReadProblem,
+  type StackReadError,
+} from '../features/stacks/stack-client.js';
+import type { StackDisplayItem } from '../features/stacks/StackRow.js';
+import type { CompletionFilterValue } from '../features/reports/CompletionFilters.js';
+import {
+  downloadCompletionCsv,
+  fetchCompletionReport,
+  readCompletionReportCache,
+  saveCompletionReportCache,
+  ReportProblem,
+  type CompletionReportPayload,
+} from '../features/reports/report-client.js';
+import type {
+  CompletionDetailRow,
+  CompletionReportState,
+} from '../features/reports/CompletionDashboard.js';
 
 const emptyFilters: Filters = {
   query: '',
@@ -134,6 +153,23 @@ export function App() {
   >(initialRoute.section);
   const [stackScope, setStackScope] = useState<LocalStackScope>({ scopeType: 'overall' });
   const [stackAnnouncement, setStackAnnouncement] = useState('');
+  const [remoteStackItems, setRemoteStackItems] = useState<StackDisplayItem[]>();
+  const [stackReadError, setStackReadError] = useState<StackReadError>();
+  const [stackReadAttempt, setStackReadAttempt] = useState(0);
+  const [completionFilters, setCompletionFilters] = useState<CompletionFilterValue>({
+    period: 'day',
+    categoryId: '',
+    projectId: '',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    weekStartsOn: 0,
+    urgencies: [],
+  });
+  const [completionReport, setCompletionReport] = useState<CompletionReportPayload>();
+  const [completionReportState, setCompletionReportState] = useState<CompletionReportState>();
+  const [completionReportAttempt, setCompletionReportAttempt] = useState(0);
+  const [projectReportOrder, setProjectReportOrder] = useState<'overallRank' | 'projectRank'>(
+    'overallRank',
+  );
   const [selectedListId, setSelectedListId] = useState<string | undefined>(
     initialRoute.section === 'lists' ? initialRoute.listId : undefined,
   );
@@ -256,6 +292,35 @@ export function App() {
       ),
     [allRankedStackItems, filters],
   );
+  const localStackLabels = useMemo(
+    () =>
+      new Map(
+        eligibleStackWork.map((item) => [workReferenceIdentity(item.reference), item.label] as const),
+      ),
+    [eligibleStackWork],
+  );
+  useEffect(() => {
+    if (section !== 'stack' || !filters.urgencies.length || !navigator.onLine) {
+      setRemoteStackItems(undefined);
+      setStackReadError(undefined);
+      return;
+    }
+    let active = true;
+    void readFilteredStack(stackScope, filters, localStackLabels)
+      .then((items) => {
+        if (!active) return;
+        setRemoteStackItems(items);
+        setStackReadError(undefined);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setRemoteStackItems(undefined);
+        setStackReadError(error instanceof StackReadProblem ? error.kind : 'failed');
+      });
+    return () => {
+      active = false;
+    };
+  }, [section, stackScope, filters, localStackLabels, stackReadAttempt]);
   const pendingStackOperations =
     useLiveQuery(
       () => (session ? listPendingStackOperations(session.userId) : Promise.resolve([])),
@@ -270,6 +335,50 @@ export function App() {
   const [applyUpdate, setApplyUpdate] = useState<(() => void) | undefined>();
   const syncing = useRef(false);
   const visible = useMemo(() => filterTasks(tasks, filters), [tasks, filters]);
+  useEffect(() => {
+    if (section !== 'dashboard' || !session) return;
+    let active = true;
+    if (!navigator.onLine) {
+      void readCompletionReportCache(session.userId).then((cached) => {
+        if (!active) return;
+        setCompletionReport(cached);
+        setCompletionReportState({
+          source: 'cache',
+          offline: true,
+          stale: true,
+          pendingUrgencyChanges: pending,
+        });
+      });
+      return () => {
+        active = false;
+      };
+    }
+    void fetchCompletionReport(completionFilters)
+      .then(async (report) => {
+        await saveCompletionReportCache(session.userId, report);
+        if (!active) return;
+        setCompletionReport(report);
+        setCompletionReportState({
+          source: 'network',
+          lastSyncedAt: new Date().toISOString(),
+          pendingUrgencyChanges: pending,
+          stale: false,
+        });
+      })
+      .catch(async (error) => {
+        const cached = await readCompletionReportCache(session.userId);
+        if (!active) return;
+        if (cached) setCompletionReport(cached);
+        setCompletionReportState({
+          ...(cached ? { source: 'cache' as const, stale: true } : {}),
+          pendingUrgencyChanges: pending,
+          error: error instanceof ReportProblem ? error.kind : 'calculation_failed',
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [section, session, completionFilters, completionReportAttempt, pending]);
   const matchingLists = useMemo(() => {
     if (filters.contentType === 'todos') return [];
     const query = filters.query.normalize('NFKC').trim().toLocaleLowerCase();
@@ -305,6 +414,36 @@ export function App() {
         ),
     );
   }, [filters, lists, listItems, directoryItems]);
+  const projectDetailRows = useMemo(
+    () =>
+      allRankedStackItems
+        .filter(({ work }) => matchesUrgencySet(work.urgency, filters.urgencies))
+        .map(({ work, rank }) => ({
+          id: workReferenceIdentity(work.reference),
+          label: work.label,
+          urgency: work.urgency,
+          overallRank: rank.overallPosition,
+          ...(rank.projectPosition === undefined ? {} : { projectRank: rank.projectPosition }),
+        })),
+    [allRankedStackItems, filters.urgencies],
+  );
+  const completionDetailRows = useMemo<CompletionDetailRow[]>(
+    () =>
+      completionEvents.map((event) => {
+        const task = tasks.find((candidate) => candidate.id === event.taskId);
+        const rank = allRankedStackItems.find(
+          ({ work }) => work.reference.workType === 'task' && work.reference.workId === event.taskId,
+        )?.rank;
+        return {
+          id: event.id,
+          label: task?.label ?? `To-do ${event.taskId}`,
+          urgencyAtCompletion: event.urgencyAtCompletion,
+          ...(rank?.overallPosition === undefined ? {} : { overallRank: rank.overallPosition }),
+          ...(rank?.projectPosition === undefined ? {} : { projectRank: rank.projectPosition }),
+        };
+      }),
+    [completionEvents, tasks, allRankedStackItems],
+  );
   useEffect(() => {
     void loadView().then(setView);
   }, []);
@@ -356,10 +495,14 @@ export function App() {
   useEffect(() => {
     // Browser automation and some WebKit builds dispatch `online` just before
     // navigator.onLine settles. Defer one turn so the guard sees the new state.
-    const online = () => window.setTimeout(() => void synchronize(), 0);
+    const online = () =>
+      window.setTimeout(() => {
+        void synchronize();
+        if (section === 'dashboard') setCompletionReportAttempt((value) => value + 1);
+      }, 0);
     window.addEventListener('online', online);
     return () => window.removeEventListener('online', online);
-  }, [synchronize]);
+  }, [synchronize, section]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -514,23 +657,31 @@ export function App() {
             projects={projects
               .filter((project) => project.lifecycle === 'active')
               .map((project) => ({ id: project.id, name: project.name }))}
-            items={rankedStackItems.map(({ work, rank }) => ({
-              reference: work.reference,
-              label: work.label,
-              urgency: work.urgency,
-              overallPosition: rank.overallPosition,
-              ...(rank.projectPosition === undefined
-                ? {}
-                : { projectPosition: rank.projectPosition }),
-            }))}
+            items={
+              remoteStackItems ??
+              rankedStackItems.map(({ work, rank }) => ({
+                reference: work.reference,
+                label: work.label,
+                urgency: work.urgency,
+                overallPosition: rank.overallPosition,
+                ...(rank.projectPosition === undefined
+                  ? {}
+                  : { projectPosition: rank.projectPosition }),
+              }))
+            }
             announcement={stackAnnouncement}
             pendingOperationIds={pendingStackOperations.map((operation) => operation.operationId)}
             conflictCount={stackConflicts.length}
             filters={filters}
             changeFilters={setFilters}
             changeScope={setStackScope}
+            {...(stackReadError ? { readError: stackReadError } : {})}
+            retryRead={() => setStackReadAttempt((value) => value + 1)}
+            restartRead={() => setStackReadAttempt((value) => value + 1)}
             move={async (work, destinationPosition) => {
-              const displayed = rankedStackItems.map((item) => item.work.reference);
+              const displayed =
+                remoteStackItems?.map((item) => item.reference) ??
+                rankedStackItems.map((item) => item.work.reference);
               const fullScope = allRankedStackItems.map((item) => item.work.reference);
               const currentPosition =
                 displayed.findIndex(
@@ -668,13 +819,37 @@ export function App() {
             }}
           />
         ) : section === 'projects' ? (
-          <ProjectTree tree={workloadTree} />
+          <ProjectTree
+            tree={workloadTree}
+            selectedUrgencies={filters.urgencies}
+            changeUrgencies={(urgencies) =>
+              setFilters((current) => ({ ...current, urgencies: urgencies as Filters['urgencies'] }))
+            }
+            detailRows={projectDetailRows}
+            detailScope={
+              filters.projectId && filters.projectId !== 'unassigned' ? 'project' : 'category'
+            }
+            orderBy={projectReportOrder}
+            changeOrder={setProjectReportOrder}
+          />
         ) : section === 'dashboard' ? (
           <CompletionDashboard
             events={completionEvents}
             categories={categories}
             projects={projects}
             pending={pending}
+            {...(completionReport
+              ? { urgencyCounts: completionReport.urgencyCounts, remoteReport: completionReport }
+              : {})}
+            selectedUrgencies={completionFilters.urgencies}
+            changeFilters={setCompletionFilters}
+            detailRows={completionDetailRows}
+            orderBy="completedAt"
+            {...(completionReportState ? { reportState: completionReportState } : {})}
+            retry={() => setCompletionReportAttempt((value) => value + 1)}
+            restart={() => setCompletionReportAttempt((value) => value + 1)}
+            refreshAfterReconnect={() => setCompletionReportAttempt((value) => value + 1)}
+            exportCsv={() => downloadCompletionCsv(completionDetailRows)}
           />
         ) : section === 'archive' ? (
           <ArchivePage

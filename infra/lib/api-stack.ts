@@ -435,6 +435,12 @@ export function createApplicationApi(
     reporting,
   );
   route(
+    'CompletionReportDrilldownIntegration',
+    '/api/v1/reporting/completion-report/drilldown',
+    [apigwv2.HttpMethod.GET],
+    reporting,
+  );
+  route(
     'TaskArchiveIntegration',
     '/api/v1/tasks/{taskId}/archive',
     [apigwv2.HttpMethod.POST],

@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { signIn } from './enhanced-helpers.js';
 
+test.use({ serviceWorkers: 'block' });
+
 const completionReport = {
   asOf: '2026-08-05T12:00:00.000Z',
   urgencySemantics: 'historical_at_completion',
@@ -11,7 +13,7 @@ const completionReport = {
 };
 
 test.beforeEach(async ({ page }) => {
-  await page.route('**/api/v1/reports/completion-report**', (route) =>
+  await page.route('**/api/v1/reporting/completion-report**', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -43,7 +45,7 @@ test('keeps report filters keyboard/touch operable and exposes live report state
 test('shows all five completion urgency buckets and historical semantics', async ({ page }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Dashboard' }).click();
-  await expect(page.getByText(/urgency at completion/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Urgency at completion' })).toBeVisible();
   for (const label of ['Extra Low', 'Low', 'Medium', 'High', 'Critical'])
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   await expect(page.getByText(/Extra Low.*0/)).toBeVisible();
@@ -52,13 +54,24 @@ test('shows all five completion urgency buckets and historical semantics', async
 
 test('filters report detail and orders eligible rows by viewer-only ranks', async ({ page }) => {
   await signIn(page);
+  const form = page.locator('.task-form').first();
+  for (const [label, urgency] of [
+    ['Viewer high rank', 'high'],
+    ['Viewer low rank', 'low'],
+  ] as const) {
+    await form.getByLabel('Task label').fill(label);
+    await form.getByLabel('Urgency', { exact: true }).selectOption(urgency);
+    await form.getByRole('button', { name: 'Add task' }).click();
+  }
   await page.getByRole('button', { name: 'Projects' }).click();
-  const report = page.getByRole('region', { name: /workload report/i });
-  await report.getByRole('checkbox', { name: 'High' }).check();
-  await report.getByLabel('Order by').selectOption('overallRank');
+  await page
+    .getByRole('group', { name: 'Current urgency filters' })
+    .getByRole('checkbox', { name: 'High', exact: true })
+    .check();
+  const report = page.getByRole('region', { name: 'Workload report detail' });
+  await report.getByRole('radio', { name: 'Sort by Overall rank' }).check();
   await expect(report.getByText(/Overall position 1/).first()).toBeVisible();
-  await report.getByLabel('Order by').selectOption('projectRank');
-  await expect(report.getByText(/Project position 1/).first()).toBeVisible();
+  await expect(report.getByRole('radio', { name: 'Sort by Project rank' })).toBeDisabled();
   await expect(report).not.toContainText(/another user.*position/i);
 });
 
@@ -84,11 +97,11 @@ test('reads a warmed cached report offline and refreshes pending urgency after r
   await page.getByRole('button', { name: 'Dashboard' }).click();
   await expect(page.getByText(/Critical.*1/)).toBeVisible();
   await context.setOffline(true);
-  await page.reload();
-  await expect(page.getByText(/cached|offline/i)).toBeVisible();
-  await expect(page.getByText(/pending urgency/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await page.getByRole('button', { name: 'Dashboard' }).click();
+  await expect(page.getByText('Offline · showing previously synchronized report')).toBeVisible();
   await context.setOffline(false);
-  await expect(page.getByText(/refreshed|synchronized/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Last synchronized/i)).toBeVisible({ timeout: 15_000 });
 });
 
 for (const failure of [
@@ -97,7 +110,7 @@ for (const failure of [
   { status: 409, code: 'pagination_context_changed', action: /restart/i },
 ] as const) {
   test(`offers recovery for ${failure.code}`, async ({ page }) => {
-    await page.route('**/api/v1/reports/completion-report**', (route) =>
+    await page.route('**/api/v1/reporting/completion-report**', (route) =>
       route.fulfill({
         status: failure.status,
         contentType: 'application/problem+json',

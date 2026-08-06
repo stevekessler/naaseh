@@ -19,7 +19,18 @@ export interface PersonalStackPageProps {
   discardConflicts?: () => void | Promise<void>;
   filters?: Filters;
   changeFilters?: (filters: Filters) => void;
+  readError?: 'invalid_cursor' | 'expired_cursor' | 'context_changed' | 'failed' | 'timeout';
+  retryRead?: () => void;
+  restartRead?: () => void;
 }
+
+const readErrorCopy = {
+  invalid_cursor: 'Invalid filtered stack cursor.',
+  expired_cursor: 'The filtered stack cursor expired.',
+  context_changed: 'The stack or access context changed; restart the filtered read.',
+  failed: 'Unable to read the filtered stack.',
+  timeout: 'The filtered stack read timed out.',
+} as const;
 
 export function PersonalStackPage({
   scope,
@@ -34,6 +45,9 @@ export function PersonalStackPage({
   discardConflicts,
   filters,
   changeFilters,
+  readError,
+  retryRead,
+  restartRead,
 }: PersonalStackPageProps) {
   const pendingCount = pendingOperationIds.length;
   return (
@@ -77,6 +91,17 @@ export function PersonalStackPage({
             <button type="button" onClick={() => void discardConflicts()}>
               Discard
             </button>
+          ) : null}
+        </div>
+      ) : null}
+
+      {readError ? (
+        <div role="alert">
+          <p>{readErrorCopy[readError]}</p>
+          {readError === 'failed' || readError === 'timeout' ? (
+            retryRead ? <button onClick={retryRead}>Retry filtered read</button> : null
+          ) : restartRead ? (
+            <button onClick={restartRead}>Restart filtered read</button>
           ) : null}
         </div>
       ) : null}
