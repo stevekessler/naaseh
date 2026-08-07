@@ -60,7 +60,8 @@ async function createFilteredTask(
 async function selectUrgencies(page: Page, labels: string[]) {
   const group = urgencyFiltersFor(page);
   for (const label of labels) {
-    await group.getByRole('checkbox', { name: label, exact: true }).click();
+    const checkbox = group.getByRole('checkbox', { name: label, exact: true });
+    if (!(await checkbox.isChecked())) await checkbox.click();
     await expect(group.getByRole('checkbox', { name: label, exact: true })).toBeChecked();
   }
 }
