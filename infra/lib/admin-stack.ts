@@ -1,8 +1,9 @@
-import { Duration } from 'aws-cdk-lib';
+import { Duration, Stack } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -27,6 +28,7 @@ export function createAdminFunctions(
     table: dynamodb.ITable;
     media: s3.IBucket;
     passwordPepper: secretsmanager.ISecret;
+    passwordPepperKey: kms.IKey;
     deletionConfirmationSecret: secretsmanager.ISecret;
     logGroup: logs.ILogGroup;
   },
@@ -99,6 +101,17 @@ export function createAdminFunctions(
   );
   options.passwordPepper.grantRead(admin);
   options.passwordPepper.grantRead(provisionUser);
+  provisionUser.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['kms:Decrypt'],
+      resources: [options.passwordPepperKey.keyArn],
+      conditions: {
+        StringEquals: {
+          'kms:ViaService': `secretsmanager.${Stack.of(scope).region}.${Stack.of(scope).urlSuffix}`,
+        },
+      },
+    }),
+  );
   options.deletionConfirmationSecret.grantRead(categories);
   options.deletionConfirmationSecret.grantRead(projects);
   options.table.grantReadWriteData(processor);

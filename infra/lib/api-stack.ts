@@ -65,6 +65,7 @@ export function createApplicationApi(
     allowedOrigin: string;
     table: dynamodb.Table;
     pepper: secretsmanager.ISecret;
+    pepperKey: kms.IKey;
     dataKey: kms.IKey;
     media: s3.IBucket;
     exportBucket: s3.IBucket;
@@ -247,6 +248,7 @@ export function createApplicationApi(
       table: options.table,
       media: options.media,
       passwordPepper: options.pepper,
+      passwordPepperKey: options.pepperKey,
       deletionConfirmationSecret: deletion.secret,
       logGroup: options.logGroups.auth,
     });

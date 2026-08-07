@@ -46,10 +46,13 @@ export class NaasehStack extends Stack {
       breakGlassRoleArn: props.breakGlassRoleArn,
       alerts: criticalAlerts,
     });
-    const { pepper, webPushSecret, googleOAuthSecret, cursorSigningSecret } = createRuntimeSecrets(
-      this,
-      criticalAlerts,
-    );
+    const {
+      primaryKey: runtimeSecretsKey,
+      pepper,
+      webPushSecret,
+      googleOAuthSecret,
+      cursorSigningSecret,
+    } = createRuntimeSecrets(this, criticalAlerts);
     const { distribution, responseHeadersPolicy } = createWebResources(this, {
       certificateArn: props.certificateArn,
       domainName: props.domainName,
@@ -105,6 +108,7 @@ export class NaasehStack extends Stack {
       allowedOrigin: `https://${props.domainName}`,
       table,
       pepper,
+      pepperKey: runtimeSecretsKey,
       dataKey,
       media,
       exportBucket: exportResources.bucket,

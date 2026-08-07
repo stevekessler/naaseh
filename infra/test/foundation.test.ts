@@ -148,6 +148,19 @@ describe('foundation infrastructure', () => {
       );
     });
     expect(pepperReaders).toHaveLength(5);
+    template.hasResourceProperties('AWS::IAM::Policy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: 'kms:Decrypt',
+            Effect: 'Allow',
+            Condition: {
+              StringEquals: { 'kms:ViaService': Match.anyValue() },
+            },
+          }),
+        ]),
+      },
+    });
   });
 
   it('throttles group joins independently and scopes profile-media access', () => {
