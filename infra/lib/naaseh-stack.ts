@@ -1,5 +1,6 @@
-import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
+import { ArnFormat, CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
@@ -131,6 +132,29 @@ export class NaasehStack extends Stack {
       criticalAlerts,
     );
     const backup = createBackupResources(this, { dataKey, table, media, alerts: criticalAlerts });
+    const restoreLogGroupArnPattern = this.formatArn({
+      service: 'logs',
+      resource: 'log-group',
+      resourceName: `${this.stackName}-RestoreWorkflowLogs*`,
+      arnFormat: ArnFormat.COLON_RESOURCE_NAME,
+    });
+    dataKey.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'AllowCloudWatchLogsForRestoreWorkflow',
+        principals: [new iam.ServicePrincipal(`logs.${this.region}.${this.urlSuffix}`)],
+        actions: [
+          'kms:Encrypt',
+          'kms:Decrypt',
+          'kms:ReEncrypt*',
+          'kms:GenerateDataKey*',
+          'kms:Describe*',
+        ],
+        resources: ['*'],
+        conditions: {
+          ArnLike: { 'kms:EncryptionContext:aws:logs:arn': restoreLogGroupArnPattern },
+        },
+      }),
+    );
     const restoreLogs = new logs.LogGroup(this, 'RestoreWorkflowLogs', {
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: RemovalPolicy.RETAIN,

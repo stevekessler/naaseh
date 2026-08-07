@@ -207,6 +207,31 @@ describe('foundation infrastructure', () => {
   it('creates retained log groups, only critical alarms, and a dashboard', () => {
     template.resourceCountIs('AWS::Logs::LogGroup', 10);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
+    template.hasResourceProperties('AWS::Logs::LogGroup', {
+      KmsKeyId: Match.anyValue(),
+      RetentionInDays: 90,
+    });
+    template.hasResourceProperties('AWS::KMS::Key', {
+      KeyPolicy: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: 'AllowCloudWatchLogsForRestoreWorkflow',
+            Effect: 'Allow',
+            Principal: { Service: Match.anyValue() },
+            Action: Match.arrayWith(['kms:Encrypt', 'kms:Decrypt', 'kms:GenerateDataKey*']),
+            Condition: {
+              ArnLike: {
+                'kms:EncryptionContext:aws:logs:arn': Match.anyValue(),
+              },
+            },
+          }),
+        ]),
+      },
+    });
+    const rendered = JSON.stringify(template.toJSON());
+    expect(rendered).toContain('logs.us-west-2.');
+    expect(rendered).toContain('AWS::URLSuffix');
+    expect(rendered).toContain('Test-RestoreWorkflowLogs*');
     template.resourceCountIs('AWS::CloudWatch::Alarm', 18);
     template.resourceCountIs('AWS::SNS::Topic', 1);
     template.resourceCountIs('AWS::SNS::TopicPolicy', 1);
@@ -217,7 +242,6 @@ describe('foundation infrastructure', () => {
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
     expect(alarms).toHaveLength(18);
     for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
-    const rendered = JSON.stringify(template.toJSON());
     for (const alarm of [
       'RecoveryKeyPolicyChangeAlarm',
       'RuntimeSecretPolicyChangeAlarm',
