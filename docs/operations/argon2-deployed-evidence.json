@@ -2,128 +2,130 @@
   "schema": "naaseh-argon2-deployed-evidence/v1",
   "functionName": "NaasehProd-Argon2CalibrationFunction107C3BD0-UOuvRXzWtP8B",
   "region": "us-west-2",
-  "measuredAt": "2026-07-28T20:55:23.195Z",
+  "measuredAt": "2026-08-07T18:54:41.746Z",
   "observations": [
     {
       "schema": "naaseh-argon2-calibration/v1",
-      "coldStart": false,
+      "coldStart": true,
       "samples": 8,
-      "p50Ms": 435.511133,
-      "p95Ms": 480.6638229999953,
-      "maximumMs": 480.6638229999953,
+      "p50Ms": 483.776261,
+      "p95Ms": 493.7470100000005,
+      "maximumMs": 493.7470100000005,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4614.760333
+      "roundTripMs": 5615.828834
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 430.0428020000036,
-      "p95Ms": 488.05584900000395,
-      "maximumMs": 488.05584900000395,
+      "p50Ms": 452.25046100000054,
+      "p95Ms": 501.5435660000003,
+      "maximumMs": 501.5435660000003,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4566.720917000001
+      "roundTripMs": 4619.405583999999
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 438.89902399999846,
-      "p95Ms": 481.1508210000029,
-      "maximumMs": 481.1508210000029,
+      "p50Ms": 453.58525499999996,
+      "p95Ms": 494.76439800000117,
+      "maximumMs": 494.76439800000117,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4830.980625
+      "roundTripMs": 4684.654792000001
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 428.2560369999992,
-      "p95Ms": 490.56444100000226,
-      "maximumMs": 490.56444100000226,
+      "p50Ms": 447.5594769999989,
+      "p95Ms": 498.84943399999975,
+      "maximumMs": 498.84943399999975,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4529.437000000002
+      "roundTripMs": 4618.278
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 435.07720100000734,
-      "p95Ms": 485.2602099999931,
-      "maximumMs": 485.2602099999931,
+      "p50Ms": 434.0423970000011,
+      "p95Ms": 499.9654469999987,
+      "maximumMs": 499.9654469999987,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4796.662334000001
+      "roundTripMs": 4599.932958999998
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 458.14178099999845,
-      "p95Ms": 519.5119859999977,
-      "maximumMs": 519.5119859999977,
+      "p50Ms": 430.06640000000334,
+      "p95Ms": 476.16901399999915,
+      "maximumMs": 476.16901399999915,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4798.706042000002
+      "roundTripMs": 4485.764833000001
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 472.2037629999977,
-      "p95Ms": 517.308063000004,
-      "maximumMs": 517.308063000004,
+      "p50Ms": 426.3181629999999,
+      "p95Ms": 481.56218699999954,
+      "maximumMs": 481.56218699999954,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4862.573041000003
+      "roundTripMs": 4541.115666999998
     },
     {
       "schema": "naaseh-argon2-calibration/v1",
       "coldStart": false,
       "samples": 8,
-      "p50Ms": 442.52892599999905,
-      "p95Ms": 499.36375400000543,
-      "maximumMs": 499.36375400000543,
+      "p50Ms": 422.7638349999979,
+      "p95Ms": 475.7625530000005,
+      "maximumMs": 475.7625530000005,
       "parameters": {
         "memoryKiB": 102400,
         "iterations": 3,
         "parallelism": 1
       },
-      "roundTripMs": 4669.096707999997
+      "roundTripMs": 4460.667125
     }
   ],
   "warm": {
-    "samples": 8,
-    "handlerP95Ms": 519.5119859999977,
-    "roundTripP95Ms": 4862.573041000003
+    "samples": 7,
+    "handlerP95Ms": 501.5435660000003,
+    "roundTripP95Ms": 4684.654792000001
   },
   "cold": {
-    "samples": 0
+    "samples": 1,
+    "handlerP95Ms": 493.7470100000005,
+    "roundTripP95Ms": 5615.828834
   },
   "passed": true,
   "note": "One execution environment cannot establish cold p95; repeat after publishing fresh versions."
