@@ -1,9 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
-  // WebKit's four device projects can exhaust the local preview process when
-  // the complete suite fans out; two workers keeps the release gate stable.
-  workers: 2,
+  // Give hosted CI runners the full machine while retaining local parallelism.
+  workers: process.env.CI ? 1 : 2,
+  // A retry gets a fresh worker and browser without rerunning the entire workflow.
+  retries: process.env.CI ? 1 : 0,
   metadata: { featureSet: 'enhanced-list-management' },
   testDir: './tests/e2e',
   webServer: process.env.PRODUCTION_BASE_URL

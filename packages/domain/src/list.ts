@@ -5,6 +5,7 @@ import {
   directorySnapshotSchema,
   valueOverrideSchema,
 } from './directory-item.js';
+import { defaultUrgency, urgencySchema } from './urgency.js';
 
 export const listSchema = z
   .object({
@@ -14,6 +15,7 @@ export const listSchema = z
     groupId: z.string().min(1).optional(),
     projectId: ulidSchema.optional(),
     locked: z.boolean(),
+    urgency: urgencySchema.default(defaultUrgency),
     status: z.enum(['active', 'archived']),
     lifecycle: z.enum(['active', 'archived', 'deleting']).optional(),
     archiveReason: z.enum(['finished', 'manual']).optional(),
@@ -25,6 +27,16 @@ export const listSchema = z
   })
   .strict();
 export type List = z.infer<typeof listSchema>;
+
+export const listInputSchema = z
+  .object({
+    name: z.string().trim().min(1).max(300),
+    groupId: z.string().min(1).optional(),
+    projectId: ulidSchema.optional(),
+    urgency: urgencySchema.default(defaultUrgency),
+  })
+  .strict();
+export type ListInput = z.input<typeof listInputSchema>;
 
 export const listItemSchema = z
   .object({
@@ -53,18 +65,16 @@ export const listItemSchema = z
   });
 export type ListItem = z.infer<typeof listItemSchema>;
 
-export function createList(
-  input: { name: string; groupId?: string; projectId?: string },
-  ownerId: string,
-  now = new Date(),
-): List {
+export function createList(input: ListInput, ownerId: string, now = new Date()): List {
   const timestamp = now.toISOString();
+  const parsed = listInputSchema.parse(input);
   return listSchema.parse({
     id: createUlid(now.getTime()),
     ownerId,
-    name: input.name,
-    ...(input.groupId ? { groupId: input.groupId } : {}),
-    ...(input.projectId ? { projectId: input.projectId } : {}),
+    name: parsed.name,
+    ...(parsed.groupId ? { groupId: parsed.groupId } : {}),
+    ...(parsed.projectId ? { projectId: parsed.projectId } : {}),
+    urgency: parsed.urgency,
     locked: false,
     status: 'active',
     lifecycle: 'active',

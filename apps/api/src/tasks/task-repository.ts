@@ -15,8 +15,13 @@ import {
   workloadProjectionChanges,
   workloadProjectionWrites,
 } from '../reporting/workload-projection-repository.js';
+import {
+  workViewProjectionChanges,
+  workViewProjectionWrites,
+  type ProjectedWorkView,
+} from '../reporting/work-view-repository.js';
 
-const projectedTask = (task: Task | undefined) =>
+const projectedTask = (task: Task | undefined): ProjectedWorkView | undefined =>
   task
     ? {
         id: task.id,
@@ -26,9 +31,19 @@ const projectedTask = (task: Task | undefined) =>
           locked: task.visibility === 'private',
           ...(task.groupId ? { groupId: task.groupId } : {}),
         }).ordinary,
-        lifecycle: task.lifecycle,
-        projectId: task.projectId,
-        categoryId: task.categoryId,
+        audiences: [
+          `OWNER#${task.ownerId}`,
+          task.visibility === 'private'
+            ? `OWNER#${task.ownerId}`
+            : task.groupId
+              ? `GROUP#${task.groupId}`
+              : 'PUBLIC',
+        ],
+        lifecycle: task.lifecycle ?? (task.status === 'archived' ? 'archived' : 'active'),
+        ...(task.projectId ? { projectId: task.projectId } : {}),
+        ...(task.categoryId ? { categoryId: task.categoryId } : {}),
+        urgency: task.urgency,
+        sortKey: task.updatedAt,
       }
     : undefined;
 
@@ -76,6 +91,7 @@ const revisionFieldAllowlist = new Set<keyof Task>([
   'groupId',
   'parentId',
   'visibility',
+  'urgency',
   'status',
   'completedAt',
   'completedBy',
@@ -120,15 +136,14 @@ export async function saveTaskMutation(
     if (dependencies.administratorFeed) feedChanges.push(administratorTaskFeedChange(task));
     const changes = await Promise.all(feedChanges.map(dependencies.prepareChange));
     try {
-      await dependencies.commit(
-        task,
-        revision,
-        mutationId,
-        changes,
-        workloadProjectionWrites(
+      await dependencies.commit(task, revision, mutationId, changes, [
+        ...workloadProjectionWrites(
           workloadProjectionChanges(projectedTask(previous), projectedTask(task)),
         ),
-      );
+        ...workViewProjectionWrites(
+          workViewProjectionChanges(projectedTask(previous), projectedTask(task)),
+        ),
+      ]);
       return { task, revision, replayed: false };
     } catch (error) {
       lastError = error;
@@ -204,7 +219,56 @@ export async function saveTaskLifecycleMutation(
         {
           Put: {
             TableName: tableName,
-            Item: { ...keys.completionEventById(completionEvent.id), data: completionEvent },
+            Item: {
+              ...keys.completionEventById(completionEvent.id),
+              data: completionEvent,
+              GSI1PK: `COMPLETIONS#USER#${completionEvent.completedBy}`,
+              GSI1SK: `${completionEvent.occurredAt}#${completionEvent.id}`,
+            },
+          },
+        },
+        {
+          Update: {
+            TableName: tableName,
+            Key: {
+              PK: `COMPLETIONDETAIL#USER#${completionEvent.completedBy}`,
+              SK: 'META',
+            },
+            UpdateExpression: 'ADD sourceEpoch :one SET updatedAt=:now',
+            ExpressionAttributeValues: { ':one': 1, ':now': task.updatedAt },
+          },
+        },
+        {
+          Update: {
+            TableName: tableName,
+            Key: keys.completionProjection(
+              completionEvent.completedBy,
+              completionEvent.occurredAt.slice(0, 10),
+              completionEvent.categoryIdAtCompletion ?? 'unassigned',
+              completionEvent.projectIdAtCompletion ?? 'unassigned',
+            ),
+            UpdateExpression: 'ADD #count :delta, #urgency :delta SET updatedAt=:now',
+            ExpressionAttributeNames: {
+              '#count': 'count',
+              '#urgency': `urgency_${completionEvent.urgencyAtCompletion}`,
+            },
+            ExpressionAttributeValues: {
+              ':delta': completionEvent.counted ? 1 : -1,
+              ':now': task.updatedAt,
+            },
+          },
+        },
+        {
+          Put: {
+            TableName: tableName,
+            Item: {
+              ...keys.completionDetail(
+                completionEvent.completedBy,
+                completionEvent.occurredAt,
+                completionEvent.id,
+              ),
+              data: completionEvent,
+            },
           },
         },
         {
@@ -226,6 +290,9 @@ export async function saveTaskLifecycleMutation(
     ...additionalWrites,
     ...workloadProjectionWrites(
       workloadProjectionChanges(projectedTask(previous), projectedTask(task)),
+    ),
+    ...workViewProjectionWrites(
+      workViewProjectionChanges(projectedTask(previous), projectedTask(task)),
     ),
   ]);
   return { task, revision, completionEvent, replayed: false };

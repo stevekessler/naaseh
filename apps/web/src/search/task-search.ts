@@ -1,5 +1,5 @@
 import MiniSearch from 'minisearch';
-import type { Task } from '@naaseh/domain';
+import { matchesUrgencySet, type Task, type Urgency } from '@naaseh/domain';
 export interface Filters {
   query: string;
   assigneeId: string;
@@ -9,6 +9,7 @@ export interface Filters {
   to: string;
   contentType?: 'all' | 'lists' | 'todos';
   lifecycle?: 'active' | 'archive' | 'all';
+  urgencies: Urgency[];
 }
 export const normalizeSearch = (value: string) =>
   value.normalize('NFKC').trim().toLocaleLowerCase();
@@ -47,6 +48,7 @@ export function filterTasks(tasks: Task[], filters: Filters): Task[] {
           ? !task.projectId
           : task.projectId === filters.projectId)) &&
       (!filters.from || Boolean(task.dueAt && task.dueAt >= filters.from)) &&
-      (!filters.to || Boolean(task.dueAt && task.dueAt <= `${filters.to}T23:59:59.999Z`)),
+      (!filters.to || Boolean(task.dueAt && task.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
+      matchesUrgencySet(task.urgency, filters.urgencies),
   );
 }

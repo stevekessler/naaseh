@@ -1,4 +1,11 @@
-import type { CategoryRecord, Project } from '@naaseh/domain';
+import {
+  normalizeUrgencySet,
+  urgencyLabels,
+  urgencyValues,
+  type CategoryRecord,
+  type Project,
+  type Urgency,
+} from '@naaseh/domain';
 import type { CompletionPeriod } from './completion-bucketing.js';
 
 export interface CompletionFilterValue {
@@ -7,6 +14,7 @@ export interface CompletionFilterValue {
   projectId: string;
   timeZone: string;
   weekStartsOn: number;
+  urgencies: Urgency[];
 }
 
 export function CompletionFilters({
@@ -90,6 +98,28 @@ export function CompletionFilters({
           </select>
         </label>
       )}
+      <fieldset aria-label="Completion urgency filters">
+        <legend>Urgency at completion</legend>
+        {urgencyValues.map((urgency) => (
+          <label key={urgency}>
+            <input
+              type="checkbox"
+              checked={value.urgencies.includes(urgency)}
+              onChange={(event) =>
+                change({
+                  ...value,
+                  urgencies: normalizeUrgencySet(
+                    event.target.checked
+                      ? [...value.urgencies, urgency]
+                      : value.urgencies.filter((value) => value !== urgency),
+                  ),
+                })
+              }
+            />
+            {urgencyLabels[urgency]}
+          </label>
+        ))}
+      </fieldset>
     </fieldset>
   );
 }

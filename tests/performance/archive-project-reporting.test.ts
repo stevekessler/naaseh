@@ -24,6 +24,7 @@ describe('integrated archive/project/reporting scale', () => {
         taskId: `01K${String(index).padStart(23, '0')}`,
         completedBy: 'owner',
         occurredAt: `2026-07-${String((index % 30) + 1).padStart(2, '0')}T12:00:00.000Z`,
+        urgencyAtCompletion: 'medium',
         counted: true,
         createdAt: '2026-07-01T00:00:00.000Z',
       }),

@@ -1,0 +1,1046 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Urgency and Personal Stack Ranking API
+  version: 4.0.0
+  description: >-
+    Feature contract for shared urgency, viewer-private overall and Project stack ranking,
+    urgency-aware reporting, and sync contract version 4. Existing unchanged API fields are
+    intentionally abbreviated where this contract only defines the feature extension.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+
+paths:
+  /stacks/overall:
+    get:
+      operationId: getOverallStack
+      summary: Read the authenticated user's personal overall stack
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Urgencies'
+        - $ref: '#/components/parameters/ContentType'
+      responses:
+        '200':
+          description: Authorized active work in personal overall order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StackPage'
+        '400':
+          $ref: '#/components/responses/InvalidCursor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/PaginationContextChanged'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+
+  /stacks/overall/reorders:
+    post:
+      operationId: reorderOverallStack
+      summary: Reorder the authenticated user's personal overall stack
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ReorderRequest'
+                - type: object
+                  properties:
+                    scope:
+                      const: overall
+                  required: [scope]
+      responses:
+        '200':
+          description: Reorder applied and visible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderResult'
+        '202':
+          description: Reorder accepted durably; derived compaction remains pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderResult'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Same-user stack version or eligibility conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/StackConflictProblem'
+
+  /projects/{projectId}/stack:
+    get:
+      operationId: getProjectStack
+      summary: Read the authenticated user's personal stack for one Project
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Urgencies'
+        - $ref: '#/components/parameters/ContentType'
+      responses:
+        '200':
+          description: Authorized active Project work in the user's personal Project order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StackPage'
+        '400':
+          $ref: '#/components/responses/InvalidCursor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/PaginationContextChanged'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /projects/{projectId}/stack/reorders:
+    post:
+      operationId: reorderProjectStack
+      summary: Reorder the authenticated user's personal stack for one Project
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ReorderRequest'
+                - type: object
+                  properties:
+                    scope:
+                      const: project
+                  required: [scope]
+      responses:
+        '200':
+          description: Reorder applied and visible
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderResult'
+        '202':
+          description: Reorder accepted durably; derived compaction remains pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderResult'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Same-user stack version or eligibility conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/StackConflictProblem'
+
+  /stack-operations/{operationId}:
+    get:
+      operationId: getStackOperation
+      summary: Read the authenticated owner's reorder operation status
+      parameters:
+        - name: operationId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Ulid'
+      responses:
+        '200':
+          description: Owner-visible operation status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /tasks/{taskId}:
+    patch:
+      operationId: patchTaskUrgency
+      summary: Existing Task patch extended with urgency
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Ulid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                urgency:
+                  $ref: '#/components/schemas/Urgency'
+              minProperties: 1
+              additionalProperties: true
+      responses:
+        '200':
+          description: Updated Task with unchanged personal stack positions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /lists/{listId}:
+    patch:
+      operationId: patchListUrgency
+      summary: Existing List patch extended with urgency
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/Ulid'
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClientId'
+        - $ref: '#/components/parameters/MutationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                urgency:
+                  $ref: '#/components/schemas/Urgency'
+              minProperties: 1
+              additionalProperties: true
+      responses:
+        '200':
+          description: Updated List with unchanged personal stack positions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkItem'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /reporting/completion-report:
+    get:
+      operationId: getUrgencyCompletionReport
+      summary: Existing completion report extended with historical urgency filtering and buckets
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: day
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: timeZone
+          in: query
+          schema:
+            type: string
+            default: UTC
+        - name: weekStartsOn
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 6
+            default: 1
+        - name: assignment
+          in: query
+          schema:
+            type: string
+            enum: [all, unassigned, category, project]
+            default: all
+        - name: userId
+          in: query
+          description: Defaults to the caller; another user requires existing reporting authority.
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Urgencies'
+      responses:
+        '200':
+          description: Authorized completion report using urgency captured at completion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompletionReport'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /reporting/completion-report/drilldown:
+    get:
+      operationId: getUrgencyCompletionDrilldown
+      summary: Read authorized completion-event details separately from aggregate buckets
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+        - name: timeZone
+          in: query
+          schema: { type: string, default: UTC }
+        - name: weekStartsOn
+          in: query
+          schema: { type: integer, minimum: 0, maximum: 6, default: 1 }
+        - name: assignment
+          in: query
+          schema: { type: string, enum: [all, unassigned, category, project], default: all }
+        - name: userId
+          in: query
+          description: Defaults to the caller; another user requires existing reporting authority.
+          schema: { type: string }
+        - name: categoryId
+          in: query
+          schema: { type: string }
+        - name: projectId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Urgencies'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Completion details ordered by completion time descending; reversal state is evaluated at the pinned asOf instant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompletionDetailPage'
+        '400':
+          $ref: '#/components/responses/InvalidCursor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/PaginationContextChanged'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+
+  /archive:
+    get:
+      operationId: getUrgencyArchive
+      summary: Existing archive read extended with current urgency filtering
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 500 }
+        - name: categoryId
+          in: query
+          schema: { type: string }
+        - name: projectId
+          in: query
+          schema: { type: string }
+        - $ref: '#/components/parameters/Urgencies'
+        - $ref: '#/components/parameters/ContentType'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Authorized archived Tasks/Lists; personal ranks are absent
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [asOf, items, nextCursor]
+                properties:
+                  asOf:
+                    type: string
+                    format: date-time
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WorkDetail'
+                  nextCursor:
+                    type: [string, 'null']
+                    description: May be non-null when items is shorter than limit, including empty.
+        '400':
+          $ref: '#/components/responses/InvalidCursor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/PaginationContextChanged'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+
+  /reporting/organization-tree:
+    get:
+      operationId: getUrgencyOrganizationTree
+      summary: Existing workload tree extended with current-urgency filters and breakdowns
+      parameters:
+        - $ref: '#/components/parameters/Urgencies'
+      responses:
+        '200':
+          description: Authorized Category/Project workload with current urgency breakdowns
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, unassigned]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrganizationNode'
+                  unassigned:
+                    $ref: '#/components/schemas/WorkloadCounts'
+
+  /reporting/organization-tree/drilldown:
+    get:
+      operationId: getUrgencyWorkloadDrilldown
+      summary: Existing workload drill-down extended with urgency and viewer-private rank overlay
+      parameters:
+        - name: categoryId
+          in: query
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          schema:
+            type: string
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [unassigned]
+        - name: orderBy
+          in: query
+          description: projectRank is valid only when projectId selects exactly one Project.
+          schema:
+            type: string
+            enum: [overallRank, projectRank]
+            default: overallRank
+        - $ref: '#/components/parameters/Urgencies'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Authorized current-work detail rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [asOf, items, nextCursor]
+                properties:
+                  asOf:
+                    type: string
+                    format: date-time
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StackItem'
+                  nextCursor:
+                    type: [string, 'null']
+                    description: May be non-null when items is shorter than limit, including empty.
+        '400':
+          $ref: '#/components/responses/InvalidCursor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/PaginationContextChanged'
+        '410':
+          $ref: '#/components/responses/CursorExpired'
+
+  /sync/push:
+    post:
+      operationId: pushUrgencyAndStackMutations
+      summary: Existing sync push extended to contract version 4
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - $ref: '#/components/parameters/ClientId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contractVersion, mutations]
+              properties:
+                contractVersion:
+                  const: 4
+                mutations:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  items:
+                    oneOf:
+                      - $ref: '#/components/schemas/WorkUrgencyMutation'
+                      - $ref: '#/components/schemas/StackSyncMutation'
+      responses:
+        '200':
+          description: Stable per-mutation results
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MutationResult'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: naaseh_session
+
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/Ulid'
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+        maxLength: 4096
+      description: >-
+        Opaque actor/endpoint/scope/filter-bound continuation. It resumes after the last candidate
+        examined, not the last item returned. A page may be short or empty while this cursor remains
+        non-null. Single-source state is encrypted and signed inline; multi-source state uses a signed
+        opaque ID for an owner-scoped encrypted TTL record. Cursors expire after 15 minutes.
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 100
+      description: Maximum authorized matching items returned; the server may examine more candidates.
+    Urgencies:
+      name: urgencies
+      in: query
+      description: Comma-delimited unique urgency wire values; omitted means all five levels
+      schema:
+        type: string
+        pattern: '^(extra_low|low|medium|high|critical)(,(extra_low|low|medium|high|critical))*$'
+    ContentType:
+      name: contentType
+      in: query
+      schema:
+        type: string
+        enum: [all, todos, lists]
+        default: all
+    CsrfToken:
+      name: x-csrf-token
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+    ClientId:
+      name: x-client-id
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 200
+    MutationId:
+      name: x-client-mutation-id
+      in: header
+      required: true
+      schema:
+        $ref: '#/components/schemas/Ulid'
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+
+    Urgency:
+      type: string
+      enum: [extra_low, low, medium, high, critical]
+
+    UrgencyCounts:
+      type: object
+      additionalProperties: false
+      required: [extra_low, low, medium, high, critical]
+      properties:
+        extra_low: { type: integer, minimum: 0 }
+        low: { type: integer, minimum: 0 }
+        medium: { type: integer, minimum: 0 }
+        high: { type: integer, minimum: 0 }
+        critical: { type: integer, minimum: 0 }
+
+    WorkReference:
+      type: object
+      additionalProperties: false
+      required: [workType, workId, membershipEpoch]
+      properties:
+        workType:
+          type: string
+          enum: [task, list]
+        workId:
+          $ref: '#/components/schemas/Ulid'
+        membershipEpoch:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    WorkItem:
+      type: object
+      required: [id, workType, urgency, lifecycle, version]
+      properties:
+        id:
+          $ref: '#/components/schemas/Ulid'
+        workType:
+          type: string
+          enum: [task, list]
+        urgency:
+          $ref: '#/components/schemas/Urgency'
+        lifecycle:
+          type: string
+          enum: [active, archived, deleting]
+        projectId:
+          $ref: '#/components/schemas/Ulid'
+        version:
+          type: integer
+          minimum: 1
+      additionalProperties: true
+
+    RankOverlay:
+      type: object
+      additionalProperties: false
+      required: [overallPosition]
+      properties:
+        overallPosition:
+          type: integer
+          minimum: 1
+        projectPosition:
+          type: integer
+          minimum: 1
+
+    StackItem:
+      type: object
+      additionalProperties: false
+      required: [work, rank]
+      properties:
+        work:
+          $ref: '#/components/schemas/WorkItem'
+        rank:
+          $ref: '#/components/schemas/RankOverlay'
+
+    WorkDetail:
+      type: object
+      additionalProperties: false
+      required: [work]
+      properties:
+        work:
+          $ref: '#/components/schemas/WorkItem'
+        rank:
+          $ref: '#/components/schemas/RankOverlay'
+
+    StackPage:
+      type: object
+      additionalProperties: false
+      required: [scope, version, snapshotThroughVersion, asOf, items, nextCursor]
+      properties:
+        scope:
+          type: string
+          enum: [overall, project]
+        projectId:
+          $ref: '#/components/schemas/Ulid'
+        version:
+          type: integer
+          minimum: 0
+        snapshotThroughVersion:
+          type: integer
+          minimum: 0
+        asOf:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StackItem'
+        nextCursor:
+          type: [string, 'null']
+          description: May be non-null when items is shorter than limit, including empty.
+        pendingOperationIds:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ulid'
+
+    FilterBasis:
+      type: object
+      additionalProperties: false
+      properties:
+        urgencies:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/Urgency'
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        assigneeId: { type: string, minLength: 1 }
+        categoryId: { type: string, minLength: 1 }
+        projectId: { type: string, minLength: 1 }
+        contentType:
+          type: string
+          enum: [all, todos, lists]
+        searchBasisHash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+
+    SimpleMove:
+      type: object
+      additionalProperties: false
+      required: [kind, movedWork]
+      properties:
+        kind:
+          const: simple_move
+        movedWork:
+          $ref: '#/components/schemas/WorkReference'
+        beforeWork:
+          $ref: '#/components/schemas/WorkReference'
+        afterWork:
+          $ref: '#/components/schemas/WorkReference'
+
+    FilteredPermutation:
+      type: object
+      additionalProperties: false
+      required: [kind, movedWork, destinationIndex, affectedWork, filterBasis]
+      properties:
+        kind:
+          const: filtered_permutation
+        movedWork:
+          $ref: '#/components/schemas/WorkReference'
+        destinationIndex:
+          type: integer
+          minimum: 0
+        affectedWork:
+          type: array
+          minItems: 2
+          maxItems: 50000
+          items:
+            $ref: '#/components/schemas/WorkReference'
+        filterBasis:
+          $ref: '#/components/schemas/FilterBasis'
+
+    ReorderRequest:
+      type: object
+      additionalProperties: false
+      required: [scope, baseVersion, move]
+      properties:
+        scope:
+          type: string
+          enum: [overall, project]
+        baseVersion:
+          type: integer
+          minimum: 0
+        move:
+          oneOf:
+            - $ref: '#/components/schemas/SimpleMove'
+            - $ref: '#/components/schemas/FilteredPermutation'
+
+    ReorderResult:
+      type: object
+      additionalProperties: false
+      required: [operationId, mutationId, status, stackVersion]
+      properties:
+        operationId:
+          $ref: '#/components/schemas/Ulid'
+        mutationId:
+          $ref: '#/components/schemas/Ulid'
+        status:
+          type: string
+          enum: [applied, pending_compaction, conflict, rejected]
+        stackVersion:
+          type: integer
+          minimum: 0
+        retryAfterSeconds:
+          type: integer
+          minimum: 1
+
+    CompletionBucket:
+      type: object
+      additionalProperties: false
+      required: [key, count, urgencyCounts]
+      properties:
+        key: { type: string }
+        count: { type: integer, minimum: 0 }
+        urgencyCounts:
+          $ref: '#/components/schemas/UrgencyCounts'
+
+    CompletionReport:
+      type: object
+      additionalProperties: false
+      required: [period, timeZone, from, to, asOf, buckets, total, urgencyCounts]
+      properties:
+        period:
+          type: string
+          enum: [day, week, month]
+        timeZone: { type: string }
+        from: { type: string, format: date }
+        to: { type: string, format: date }
+        asOf: { type: string, format: date-time }
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompletionBucket'
+        total: { type: integer, minimum: 0 }
+        urgencyCounts:
+          $ref: '#/components/schemas/UrgencyCounts'
+
+    CompletionDetail:
+      type: object
+      additionalProperties: false
+      required: [eventId, workId, workType, completedAt, urgencyAtCompletion]
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Ulid'
+        workId:
+          $ref: '#/components/schemas/Ulid'
+        workType:
+          const: task
+        completedAt:
+          type: string
+          format: date-time
+        urgencyAtCompletion:
+          $ref: '#/components/schemas/Urgency'
+        categoryId:
+          type: string
+        projectId:
+          type: string
+        reversedAt:
+          type: string
+          format: date-time
+
+    CompletionDetailPage:
+      type: object
+      additionalProperties: false
+      required: [asOf, items, nextCursor]
+      properties:
+        asOf:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompletionDetail'
+        nextCursor:
+          type: [string, 'null']
+          description: May be non-null when items is shorter than limit, including empty.
+
+    WorkloadCounts:
+      type: object
+      additionalProperties: false
+      required: [tasks, lists, urgencyCounts]
+      properties:
+        tasks: { type: integer, minimum: 0 }
+        lists: { type: integer, minimum: 0 }
+        urgencyCounts:
+          $ref: '#/components/schemas/UrgencyCounts'
+
+    OrganizationNode:
+      type: object
+      required: [id, name, counts]
+      properties:
+        id:
+          $ref: '#/components/schemas/Ulid'
+        name: { type: string }
+        counts:
+          $ref: '#/components/schemas/WorkloadCounts'
+        projects:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrganizationNode'
+      additionalProperties: true
+
+    WorkUrgencyMutation:
+      type: object
+      additionalProperties: false
+      required: [id, entityId, entityType, operation, baseVersion, payload, createdAt, attempts]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        entityId: { $ref: '#/components/schemas/Ulid' }
+        entityType:
+          type: string
+          enum: [task, list]
+        operation:
+          const: update
+        baseVersion: { type: integer, minimum: 0 }
+        payload:
+          type: object
+          additionalProperties: false
+          required: [urgency]
+          properties:
+            urgency: { $ref: '#/components/schemas/Urgency' }
+        createdAt: { type: string, format: date-time }
+        attempts: { type: integer, minimum: 0 }
+
+    StackSyncMutation:
+      type: object
+      additionalProperties: false
+      required: [id, entityId, entityType, operation, baseVersion, payload, createdAt, attempts]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        entityId: { type: string, minLength: 1, maxLength: 300 }
+        entityType:
+          const: personalStackOperation
+        operation:
+          const: reorder
+        baseVersion: { type: integer, minimum: 0 }
+        payload:
+          $ref: '#/components/schemas/ReorderRequest'
+        createdAt: { type: string, format: date-time }
+        attempts: { type: integer, minimum: 0 }
+
+    MutationResult:
+      type: object
+      additionalProperties: false
+      required: [mutationId, status]
+      properties:
+        mutationId:
+          $ref: '#/components/schemas/Ulid'
+        status:
+          type: string
+          enum: [applied, alreadyApplied, duplicate, conflict, rejected, retry]
+        version:
+          type: integer
+          minimum: 0
+        operationId:
+          $ref: '#/components/schemas/Ulid'
+
+    Problem:
+      type: object
+      additionalProperties: true
+      required: [code, message, correlationId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlationId: { type: string }
+
+    StackConflictProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          required: [reason, currentVersion]
+          properties:
+            reason:
+              type: string
+              enum:
+                - version_mismatch
+                - anchor_removed
+                - authorization_changed
+                - lifecycle_changed
+                - project_changed
+                - filter_basis_changed
+                - hard_deleted
+            currentVersion:
+              type: integer
+              minimum: 0
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Forbidden:
+      description: Authenticated but operation is not permitted
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Resource is absent or deliberately hidden by authorization
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvalidRequest:
+      description: Request validation failed
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InvalidCursor:
+      description: Cursor is malformed or does not match the actor, endpoint, scope, filters, or order
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    PaginationContextChanged:
+      description: Stack, access, or source context changed; restart pagination without the cursor
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    CursorExpired:
+      description: Cursor expired; restart pagination without the cursor
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    Conflict:
+      description: Optimistic version conflict
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'

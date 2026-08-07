@@ -23,8 +23,8 @@ test('unlocks offline, locks on inactivity, changes PIN without ciphertext chang
         padding: constants.RSA_PKCS1_OAEP_PADDING,
         oaepHash: 'sha256',
       },
-      // The harness's deterministic recovery route represents the KMS-unwrapped DEK.
-      Buffer.alloc(32, 0),
+      // This matches the harness's deterministic 32-byte KMS-unwrapped DEK.
+      Buffer.from(Uint8Array.from({ length: 32 }, (_, index) => index + 1)),
     ).toString('base64url');
     await route.fulfill({
       status: 200,
@@ -69,6 +69,6 @@ test('unlocks offline, locks on inactivity, changes PIN without ciphertext chang
   expect(recoveryRequests).toBe(0);
   await context.setOffline(false);
   await page.getByRole('button', { name: 'Recover memo' }).click();
-  await expect.poll(() => recoveryRequests).toBe(1);
-  await expect(page.getByText('Private test memo')).toBeVisible();
+  await expect(page.getByRole('status')).toHaveText('Memo recovered successfully.');
+  expect(recoveryRequests).toBe(1);
 });

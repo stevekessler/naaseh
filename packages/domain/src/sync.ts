@@ -53,6 +53,98 @@ export const stableMutationStatusSchema = z.enum([
 ]);
 export type StableMutationStatus = z.infer<typeof stableMutationStatusSchema>;
 
+export const supportedSyncContractVersionSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(4),
+]);
+export type SupportedSyncContractVersion = z.infer<typeof supportedSyncContractVersionSchema>;
+
+const mutationResultIdSchema = z.string().min(1).max(300);
+const syncProblemEnvelopeBaseSchema = z
+  .object({
+    code: z.string().min(1).max(200),
+    message: z.string().min(1).max(1_000),
+    correlationId: z.string().min(1).max(200),
+  })
+  .strict();
+
+/** The stable per-mutation result emitted by sync contract version 4. */
+export const contractV4MutationResultSchema = z
+  .object({
+    mutationId: mutationResultIdSchema,
+    status: stableMutationStatusSchema,
+    version: z.number().int().nonnegative().optional(),
+    operationId: mutationResultIdSchema.optional(),
+  })
+  .strict();
+export type ContractV4MutationResult = z.infer<typeof contractV4MutationResultSchema>;
+
+/** Actionable problem returned when a sync operation can be retried safely. */
+export const syncRetryEnvelopeSchema = syncProblemEnvelopeBaseSchema
+  .extend({ retryAfterSeconds: z.number().int().positive() })
+  .strict();
+export type SyncRetryEnvelope = z.infer<typeof syncRetryEnvelopeSchema>;
+
+export const stackConflictReasonSchema = z.enum([
+  'version_mismatch',
+  'anchor_removed',
+  'authorization_changed',
+  'lifecycle_changed',
+  'project_changed',
+  'filter_basis_changed',
+  'hard_deleted',
+]);
+export type StackConflictReason = z.infer<typeof stackConflictReasonSchema>;
+
+/** Actionable problem returned for a rejected personal-stack ordering basis. */
+export const syncConflictEnvelopeSchema = syncProblemEnvelopeBaseSchema
+  .extend({
+    reason: stackConflictReasonSchema,
+    currentVersion: z.number().int().nonnegative(),
+  })
+  .strict();
+export type SyncConflictEnvelope = z.infer<typeof syncConflictEnvelopeSchema>;
+
+/*
+ * Contracts 1-3 used `entityVersion` and could echo hydrated entity/problem
+ * data. Keep that read shape isolated here so new writers expose only the v4
+ * result fields while upgraded clients can drain an older durable outbox.
+ */
+export const compatibleMutationResultSchema = z.union([
+  contractV4MutationResultSchema,
+  z
+    .object({
+      mutationId: mutationResultIdSchema,
+      status: stableMutationStatusSchema,
+      version: z.number().int().nonnegative().optional(),
+      entityVersion: z.number().int().nonnegative().optional(),
+      operationId: mutationResultIdSchema.optional(),
+      entity: z.unknown().optional(),
+      current: z.unknown().optional(),
+      conflict: z.unknown().optional(),
+      problem: z.unknown().optional(),
+    })
+    .passthrough(),
+]);
+export type CompatibleMutationResult = z.infer<typeof compatibleMutationResultSchema>;
+
+export function normalizeMutationResult(value: unknown): ContractV4MutationResult {
+  const parsed = compatibleMutationResultSchema.parse(value);
+  const legacyVersion = 'entityVersion' in parsed ? parsed.entityVersion : undefined;
+  return contractV4MutationResultSchema.parse({
+    mutationId: parsed.mutationId,
+    status: parsed.status,
+    ...(parsed.version !== undefined
+      ? { version: parsed.version }
+      : legacyVersion !== undefined
+        ? { version: legacyVersion }
+        : {}),
+    ...(parsed.operationId ? { operationId: parsed.operationId } : {}),
+  });
+}
+
 export interface Mutation {
   id: string;
   entityId: string;

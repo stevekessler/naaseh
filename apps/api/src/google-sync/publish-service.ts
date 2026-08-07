@@ -93,6 +93,7 @@ export async function publishGoogleTask(input: {
   const { connection, task, client } = input;
   if (!connection.selectedTaskListId) throw new Error('Google task list is not selected.');
   if (!(await isGoogleTaskEligible(task, connection))) return { outcome: 'ineligible' as const };
+  // Publish only Google's supported snapshot; urgency remains local and unchanged.
   const snapshot = taskSnapshot(task);
   if (!snapshot) return { outcome: 'ineligible' as const };
   const existingLink = await findGoogleTaskLink(task.id);

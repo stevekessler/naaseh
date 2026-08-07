@@ -50,6 +50,10 @@ test('uses a non-motion completion treatment when reduced motion is requested', 
   const note = page.locator('.postit', { hasText: 'Cedar post-it' });
   await note.getByRole('button', { name: 'Complete Cedar post-it' }).click();
   await expect(note).toBeHidden();
+  await expect(note).toHaveCount(0);
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
+  await expect(
+    page.locator('.archive-results').getByRole('heading', { name: 'Cedar post-it' }),
+  ).toBeVisible({ timeout: 15_000 });
 });

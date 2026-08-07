@@ -21,6 +21,7 @@
     "test:e2e": "playwright test",
     "test:safari-preview": "node tools/safari-technology-preview-smoke.mjs",
     "test:performance": "vitest run tests/performance",
+    "test:performance:urgency-stack-ranking": "vitest run tests/performance/urgency-stack-ranking.test.ts",
     "calibrate:argon2": "node tools/calibrate-argon2-lambda.mjs",
     "test:observability": "vitest run packages/observability/test tests/security/operational-telemetry.security.test.ts infra/test/foundation.test.ts",
     "cdk:synth": "npm run synth -w @naaseh/infra --",

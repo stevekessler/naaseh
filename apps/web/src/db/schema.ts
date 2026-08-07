@@ -1,19 +1,47 @@
-export const currentSchemaVersion = 8;
-export const enhancedEncryptedStores = [
-  'secureLists',
-  'secureListItems',
-  'secureDirectoryItems',
-  'secureAttachments',
-  'secureJobs',
-  'secureProjects',
-  'secureCompletionEvents',
-  'secureDeletionJobs',
+export const currentSchemaVersion = 10;
+
+const storeIntroductions = [
+  {
+    version: 7,
+    stores: [
+      'secureLists',
+      'secureListItems',
+      'secureDirectoryItems',
+      'secureAttachments',
+      'secureJobs',
+    ],
+  },
+  {
+    version: 8,
+    stores: ['secureProjects', 'secureCompletionEvents', 'secureDeletionJobs'],
+  },
+  { version: 9, stores: ['secureGoogleSync'] },
+  {
+    version: 10,
+    stores: [
+      'secureStackScopes',
+      'secureStackMemberships',
+      'secureStackOperations',
+      'secureStackOperationChunks',
+      'secureStackSnapshots',
+      'secureStackConflicts',
+    ],
+  },
+] as const;
+
+export const enhancedEncryptedStores = storeIntroductions.flatMap(({ stores }) => stores);
+export const preservedEncryptedStores = [
+  'settings',
+  'cryptoKeys',
+  'outbox',
+  'secureConflicts',
 ] as const;
 
 export interface EnhancedSchemaMigrationPlan {
   from: number;
   to: typeof currentSchemaVersion;
   preserveOutbox: true;
+  preservedStores: typeof preservedEncryptedStores;
   storesToAdd: readonly string[];
 }
 
@@ -24,7 +52,10 @@ export function planEnhancedSchemaMigration(from: number): EnhancedSchemaMigrati
     from,
     to: currentSchemaVersion,
     preserveOutbox: true,
-    storesToAdd: from < currentSchemaVersion ? [...enhancedEncryptedStores] : [],
+    preservedStores: preservedEncryptedStores,
+    storesToAdd: storeIntroductions
+      .filter(({ version }) => version > from)
+      .flatMap(({ stores }) => [...stores]),
   };
 }
 export interface Migration {

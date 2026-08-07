@@ -11,6 +11,7 @@ describe('completion report security', () => {
           taskId: '01J00000000000000000000121',
           completedBy: 'other',
           occurredAt: '2026-07-01T00:00:00.000Z',
+          urgencyAtCompletion: 'medium',
           counted: true,
           createdAt: '2026-07-01T00:00:00.000Z',
         },
@@ -18,13 +19,12 @@ describe('completion report security', () => {
       { userId: 'owner', timeZone: 'UTC', period: 'day', from: '2026-07-01', to: '2026-07-01' },
     );
     expect(result.total).toBe(0);
-    expect(
-      JSON.stringify(
-        reportingTelemetry('completion-report.success', {
-          actorId: 'owner',
-          targetUserId: 'owner',
-        }),
-      ),
-    ).not.toMatch(/title|projectName|categoryName/);
+    const telemetry = JSON.stringify(
+      reportingTelemetry('completion-report.success', {
+        actorId: 'owner',
+        targetUserId: 'owner',
+      }),
+    );
+    expect(telemetry).not.toMatch(/title|projectName|categoryName|owner/);
   });
 });

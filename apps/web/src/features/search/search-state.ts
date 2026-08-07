@@ -1,4 +1,5 @@
 import type { Filters } from '../../search/task-search.js';
+import { parseUrgencySet, serializeUrgencySet } from '@naaseh/domain';
 const allowed = [
   'from',
   'to',
@@ -11,6 +12,8 @@ const allowed = [
 export function safeSearchState(_query: string, filters: Filters) {
   const params = new URLSearchParams();
   for (const key of allowed) if (filters[key]) params.set(key, filters[key]);
+  const urgencies = serializeUrgencySet(filters.urgencies);
+  if (urgencies) params.set('urgencies', urgencies);
   return params.toString();
 }
 export function filtersFromSearch(search: string): Filters {
@@ -34,5 +37,6 @@ export function filtersFromSearch(search: string): Filters {
         : params.get('contentType') === 'todos'
           ? 'todos'
           : 'all',
+    urgencies: parseUrgencySet(params.get('urgencies')),
   };
 }

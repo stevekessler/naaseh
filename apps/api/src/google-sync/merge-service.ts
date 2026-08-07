@@ -64,6 +64,8 @@ export function replaceTaskDueDate(
 }
 
 export function taskSnapshot(task: Task): GoogleTaskSnapshot | undefined {
+  // Urgency is intentionally absent: Google Tasks has no equivalent field,
+  // so merges can never derive or overwrite Na'aseh urgency.
   const dueDate = localDateForTask(task);
   if (!dueDate) return undefined;
   return {

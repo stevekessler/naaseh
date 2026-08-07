@@ -1,4 +1,19 @@
 import { db } from '../db/database.js';
+import {
+  purgeLocalPersonalStack,
+  removeLocalStackMembership,
+} from '../db/personal-stack-repository.js';
+
+export const purgePrivateStackStateForSession = purgeLocalPersonalStack;
+
+export async function purgeRevokedOrDeletedStackWork(
+  ownerId: string,
+  entityType: 'task' | 'list' | 'listItem',
+  entityId: string,
+) {
+  if (entityType === 'listItem') return;
+  await removeLocalStackMembership(ownerId, entityType, entityId);
+}
 export async function purgeRevokedGroup(groupId: string, entityIds: string[]) {
   await db.transaction(
     'rw',

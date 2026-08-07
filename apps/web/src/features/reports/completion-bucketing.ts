@@ -1,4 +1,9 @@
-import type { CompletionEvent } from '@naaseh/domain';
+import {
+  matchesUrgencySet,
+  zeroUrgencyCounts,
+  type CompletionEvent,
+  type Urgency,
+} from '@naaseh/domain';
 
 export type CompletionPeriod = 'day' | 'week' | 'month';
 
@@ -15,6 +20,7 @@ export interface CompletionBucketOptions {
   weekStartsOn?: number;
   categoryId?: string | 'unassigned';
   projectId?: string | 'unassigned';
+  urgencies?: readonly Urgency[];
 }
 
 const dateFormatter = (timeZone: string) =>
@@ -96,13 +102,20 @@ export function bucketCompletionEvents(
 ) {
   assertIanaTimeZone(options.timeZone);
   const counts = new Map(emptyPeriodKeys(options).map((key) => [key, 0]));
+  const urgencyCounts = zeroUrgencyCounts();
   for (const event of events) {
     if (!event.counted || event.completedBy.length === 0 || !matchesScope(event, options)) continue;
+    if (!matchesUrgencySet(event.urgencyAtCompletion, options.urgencies)) continue;
     const localDate = localDateKey(event.occurredAt, options.timeZone);
     if (localDate < options.from || localDate > options.to) continue;
     const key = periodKey(localDate, options.period, options.weekStartsOn);
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    urgencyCounts[event.urgencyAtCompletion] += 1;
   }
   const buckets = [...counts].map(([key, count]) => ({ key, count }));
-  return { buckets, total: buckets.reduce((sum, bucket) => sum + bucket.count, 0) };
+  return {
+    buckets,
+    total: buckets.reduce((sum, bucket) => sum + bucket.count, 0),
+    urgencyCounts,
+  };
 }

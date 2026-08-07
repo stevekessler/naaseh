@@ -6,4 +6,4 @@ export async function readCursor(): Promise<VectorCursor> {
 }
 export const saveCursor = (cursor: VectorCursor) =>
   db.settings.put({ key: 'sync-cursor', value: JSON.stringify(cursor) });
-export const supportedLocalSchema = (version: number) => version === 7;
+export const supportedLocalSchema = (version: number) => version === 10;

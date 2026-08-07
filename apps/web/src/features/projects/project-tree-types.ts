@@ -1,14 +1,20 @@
-import type { CategoryRecord, Project } from '@naaseh/domain';
+import type { CategoryRecord, Project, UrgencyCounts } from '@naaseh/domain';
+
+interface WorkloadCount {
+  taskCount: number;
+  listCount: number;
+  urgencyCounts?: UrgencyCounts;
+}
 
 export interface ReturnTypeWorkloadTree {
   categories: Array<{
     category: CategoryRecord;
-    count: { taskCount: number; listCount: number };
+    count: WorkloadCount;
     projects: Array<{
       project: Project;
-      count: { taskCount: number; listCount: number };
+      count: WorkloadCount;
     }>;
   }>;
-  unassigned: { taskCount: number; listCount: number };
+  unassigned: WorkloadCount;
   asOf: string;
 }

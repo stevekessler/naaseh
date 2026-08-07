@@ -7,11 +7,18 @@ import {
   exportJobSchema,
   groupPinSchema,
   mutationOperationSchema,
+  defaultUrgency,
+  urgencySchema,
   taskInputSchema,
+  taskSchema,
   listItemSchema,
   listSchema,
   ulidSchema,
 } from '@naaseh/domain';
+import {
+  stackSyncMutationSchema,
+  urgencyStackRankingContractVersionSchema,
+} from './urgency-stack-ranking-openapi.js';
 export const enhancedListContractVersion = 2 as const;
 export const enhancedListContractVersionSchema = z.literal(enhancedListContractVersion);
 export const archiveProjectContractVersionSchema = z.literal(3);
@@ -19,11 +26,37 @@ export const loginRequestSchema = z
   .object({ username: z.string().trim().min(1).max(100), password: z.string().min(1).max(1024) })
   .strict();
 export const taskCreateSchema = taskInputSchema;
+const taskHttpsUrlSchema = z
+  .string()
+  .url()
+  .refine((value) => new URL(value).protocol === 'https:', 'Task links must use HTTPS.');
+export const taskPatchSchema = z
+  .object({
+    label: z.string().trim().min(1).max(300).optional(),
+    link: taskHttpsUrlSchema.or(z.literal('')).optional(),
+    memo: z.string().max(20_000).optional(),
+    memoHidden: z.boolean().optional(),
+    encryptedMemo: z.string().optional(),
+    dueAt: z.string().datetime().optional(),
+    dueTimeZone: z.string().min(1).optional(),
+    assigneeId: z.string().min(1).optional(),
+    categoryId: z.string().min(1).optional(),
+    projectId: ulidSchema.nullable().optional(),
+    groupId: z.string().min(1).optional(),
+    parentId: z.string().min(1).optional(),
+    visibility: z.enum(['public', 'private']).optional(),
+    status: z.enum(['open', 'completed', 'archived']).optional(),
+    urgency: urgencySchema.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'Patch cannot be empty.');
+export const taskResponseSchema = taskSchema;
 export const listCreateSchema = z
   .object({
     name: z.string().trim().min(1).max(300),
     groupId: z.string().min(1).optional(),
     projectId: ulidSchema.nullable().optional(),
+    urgency: urgencySchema.default(defaultUrgency),
   })
   .strict();
 export const listPatchSchema = z
@@ -33,6 +66,7 @@ export const listPatchSchema = z
     locked: z.boolean().optional(),
     status: z.enum(['active', 'archived']).optional(),
     projectId: ulidSchema.nullable().optional(),
+    urgency: urgencySchema.optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'Patch cannot be empty.');
@@ -141,9 +175,17 @@ export const mutationSchema = enhancedMutationSchema;
 export const pushRequestSchema = z
   .object({
     contractVersion: z
-      .union([z.literal(1), enhancedListContractVersionSchema, archiveProjectContractVersionSchema])
+      .union([
+        z.literal(1),
+        enhancedListContractVersionSchema,
+        archiveProjectContractVersionSchema,
+        urgencyStackRankingContractVersionSchema,
+      ])
       .default(1),
-    mutations: z.array(enhancedMutationSchema).min(1).max(100),
+    mutations: z
+      .array(z.union([enhancedMutationSchema, stackSyncMutationSchema]))
+      .min(1)
+      .max(100),
     backlog: z
       .object({
         depth: z.number().int().min(1).max(100_000),
@@ -154,6 +196,16 @@ export const pushRequestSchema = z
   })
   .strict()
   .superRefine((request, context) => {
+    if (request.contractVersion !== 4) {
+      request.mutations.forEach((mutation, index) => {
+        if (stackSyncMutationSchema.safeParse(mutation).success)
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Personal stack operations require contract version 4',
+            path: ['mutations', index],
+          });
+      });
+    }
     if (request.contractVersion !== 1) return;
     request.mutations.forEach((mutation, index) => {
       if (!legacyMutationSchema.safeParse(mutation).success) {

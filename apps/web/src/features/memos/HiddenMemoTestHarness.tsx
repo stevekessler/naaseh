@@ -11,6 +11,7 @@ interface HarnessMemo extends PinChangePackage {
 }
 
 const encode = (value: Uint8Array) => btoa(String.fromCharCode(...value));
+const deterministicDekBytes = Uint8Array.from({ length: 32 }, (_, index) => index + 1);
 
 /** Test-build-only host for exercising the real browser cryptography in Playwright. */
 export function HiddenMemoTestHarness() {
@@ -25,7 +26,7 @@ export function HiddenMemoTestHarness() {
     void (async () => {
       const deterministicDek = await crypto.subtle.importKey(
         'raw',
-        new Uint8Array(32),
+        deterministicDekBytes,
         { name: 'AES-GCM' },
         true,
         ['encrypt', 'decrypt'],
@@ -124,7 +125,10 @@ export function HiddenMemoTestHarness() {
             event.preventDefault();
             const password = String(new FormData(event.currentTarget).get('password') ?? '');
             void recoverMemoDek('task-test', password, 'Forgotten PIN', 'test-csrf')
-              .then(reveal)
+              .then(async (dek) => {
+                await reveal(dek);
+                setRecoveryMessage('Memo recovered successfully.');
+              })
               .catch((error: unknown) =>
                 setRecoveryMessage(error instanceof Error ? error.message : 'Recovery failed.'),
               );

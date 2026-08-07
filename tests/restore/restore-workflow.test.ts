@@ -77,6 +77,44 @@ const restoredItems = [
   { PK: `TASK#${restoredTask.id}`, SK: 'CURRENT', data: restoredTask },
 ];
 
+const restoredStackRows = [
+  {
+    PK: 'STACK#USER#owner-1#OVERALL',
+    SK: 'META',
+    data: {
+      userId: 'owner-1',
+      scopeType: 'overall',
+      version: 0,
+      snapshotThroughVersion: 0,
+      currentSnapshotGeneration: 1,
+    },
+  },
+  {
+    PK: 'STACK#USER#owner-1#OVERALL',
+    SK: `MEMBERSHIP#task#${restoredTask.id}`,
+    data: {
+      userId: 'owner-1',
+      scopeType: 'overall',
+      workType: 'task',
+      workId: restoredTask.id,
+      membershipEpoch: 'epoch-1',
+      admittedSequence: 1,
+      active: true,
+    },
+  },
+  {
+    PK: 'STACK#USER#owner-1#OVERALL',
+    SK: 'SNAPSHOT#000000000001#CHUNK#000000000000',
+    data: {
+      userId: 'owner-1',
+      scopeType: 'overall',
+      throughVersion: 0,
+      workRefs: [],
+      checksum: 'corrupt-derived-snapshot',
+    },
+  },
+];
+
 function dependencies(
   overrides: Record<string, unknown> = {},
   items: Array<{ PK: string; SK: string; data: unknown }> = restoredItems,
@@ -204,6 +242,39 @@ describe('isolated restore workflow', () => {
       expect.any(DescribeTableCommand),
       expect.any(ScanCommand),
     ]);
+  });
+
+  it('rebuilds derived personal-stack snapshots while requiring canonical continuity', async () => {
+    const job = await runRestoreTestingAction(
+      'ValidateRestoreJob',
+      restoreEvent,
+      dependencies().value,
+    );
+    const rebuildable = dependencies({}, [...restoredItems, ...restoredStackRows]);
+    await expect(
+      runRestoreTestingAction('ValidateRestoredResource', { job }, rebuildable.value),
+    ).resolves.toMatchObject({
+      probe: {
+        integrity: {
+          personalStackIntegrity: {
+            canonicalOperationsVerified: true,
+            snapshotsRebuildable: true,
+            snapshotRepairRequired: true,
+          },
+        },
+      },
+    });
+
+    const versionGapRows = restoredStackRows.map((row) =>
+      row.SK === 'META' ? { ...row, data: { ...row.data, version: 1 } } : row,
+    );
+    await expect(
+      runRestoreTestingAction(
+        'ValidateRestoredResource',
+        { job },
+        dependencies({}, [...restoredItems, ...versionGapRows]).value,
+      ),
+    ).rejects.toThrow(/version gap|continuity/iu);
   });
 
   it('rejects inconsistent job evidence and an RTO over four hours', async () => {

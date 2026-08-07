@@ -8,11 +8,36 @@ export async function signIn(page: Page) {
   await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
 }
 
+export async function mockSuccessfulSync(page: Page) {
+  await page.route('**/api/v1/sync/push', async (route) => {
+    const body = route.request().postDataJSON() as {
+      mutations?: Array<{ id: string; baseVersion?: number }>;
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        results: (body.mutations ?? []).map((mutation) => ({
+          mutationId: mutation.id,
+          operationId: mutation.id,
+          status: 'applied',
+          version: (mutation.baseVersion ?? 0) + 1,
+        })),
+      }),
+    });
+  });
+  await page.route('**/api/v1/sync/pull', async (route) => {
+    const body = route.request().postDataJSON() as { cursor?: Record<string, number> };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ changes: [], cursor: body.cursor ?? {} }),
+    });
+  });
+}
+
 export async function openLists(page: Page) {
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
-  await page
-    .waitForURL(/\/lists(?:\/|$)/, { timeout: 1_000 })
-    .catch(async () => page.goto('/lists'));
   await expect(page.getByRole('heading', { name: 'Lists', exact: true })).toBeVisible();
 }
 

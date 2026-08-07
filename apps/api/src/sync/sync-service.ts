@@ -1,13 +1,115 @@
 import type {
   EntityType,
+  List,
   Mutation,
   StableMutationResult,
+  SyncChange,
   Task,
   VectorCursor,
 } from '@naaseh/domain';
+import { listSchema, taskSchema } from '@naaseh/domain';
+import {
+  contractV4MutationResultSchema,
+  personalStackMoveSchema,
+  personalStackScopeSchema,
+  type ContractV4MutationResult,
+  type PersonalStackScope,
+  type ContentActor,
+} from '@naaseh/domain';
+import { stackSyncMutationSchema } from '@naaseh/contracts';
+import type { PersonalStackService } from '../ranking/stack-service.js';
 
 export type MutationDispatcher = (mutation: Mutation) => Promise<StableMutationResult>;
 export type MutationDispatchers = Partial<Record<EntityType, MutationDispatcher>>;
+
+export type PersonalStackSyncMutation = ReturnType<typeof stackSyncMutationSchema.parse>;
+
+export async function dispatchPersonalStackSyncMutation(input: {
+  actorId: string;
+  actor?: ContentActor;
+  sourceClientId: string;
+  mutation: unknown;
+  service: PersonalStackService;
+  onPendingCompaction?: (scope: PersonalStackScope, actor: ContentActor) => Promise<void>;
+}): Promise<ContractV4MutationResult> {
+  const mutation = stackSyncMutationSchema.parse(input.mutation);
+  const request = mutation.payload;
+  if (mutation.baseVersion !== request.baseVersion)
+    throw new Error('Personal stack mutation versions do not match.');
+  const scope = personalStackScopeSchema.parse(
+    request.scope === 'overall'
+      ? { userId: input.actorId, scopeType: 'overall' }
+      : { userId: input.actorId, scopeType: 'project', scopeId: mutation.entityId },
+  ) as PersonalStackScope;
+  const result = await input.service.reorder({
+    actorId: input.actorId,
+    ...(input.actor ? { actor: input.actor } : {}),
+    scope,
+    mutationId: mutation.id,
+    sourceClientId: input.sourceClientId,
+    baseVersion: request.baseVersion,
+    move: personalStackMoveSchema.parse(request.move),
+  });
+  if (result.status === 'pending_compaction' && input.actor && input.onPendingCompaction)
+    await input.onPendingCompaction(scope, input.actor);
+  return contractV4MutationResultSchema.parse({
+    mutationId: mutation.id,
+    status: result.status === 'pending_compaction' ? 'applied' : result.status,
+    version: result.stackVersion,
+    operationId: mutation.entityId,
+  });
+}
+
+const personalRankFields = new Set([
+  'rank',
+  'overallRank',
+  'projectRank',
+  'overallPosition',
+  'projectPosition',
+  'stackPosition',
+]);
+
+function sharedWorkPayload(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Shared work mutation payload must be an object.');
+  const payload = value as Record<string, unknown>;
+  if (Object.keys(payload).some((field) => personalRankFields.has(field)))
+    throw new Error('Personal stack positions cannot be written through shared work sync.');
+  return payload;
+}
+
+export function applySharedWorkSyncPayload(
+  entityType: 'task',
+  current: Task | undefined,
+  payload: unknown,
+  version: number,
+  updatedAt: string,
+): Task;
+export function applySharedWorkSyncPayload(
+  entityType: 'list',
+  current: List | undefined,
+  payload: unknown,
+  version: number,
+  updatedAt: string,
+): List;
+export function applySharedWorkSyncPayload(
+  entityType: 'task' | 'list',
+  current: Task | List | undefined,
+  value: unknown,
+  version: number,
+  updatedAt: string,
+) {
+  const payload = sharedWorkPayload(value);
+  const candidate = current ? { ...current, ...payload, version, updatedAt } : payload;
+  return entityType === 'task' ? taskSchema.parse(candidate) : listSchema.parse(candidate);
+}
+
+export function serializeSharedWorkChange(change: SyncChange): SyncChange {
+  if (change.operation !== 'upsert' || !change.payload) return change;
+  if (change.entityType === 'task') return { ...change, payload: taskSchema.parse(change.payload) };
+  if (change.entityType === 'list') return { ...change, payload: listSchema.parse(change.payload) };
+  return change;
+}
 
 export async function dispatchMutations(
   mutations: readonly Mutation[],

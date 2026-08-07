@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ulidSchema } from './primitives.js';
 import { entityTypeSchema } from './sync.js';
+import { urgencySchema } from './urgency.js';
 
 export const revisionOperationSchema = z.enum([
   'create',
@@ -27,10 +28,16 @@ export const revisionOperationSchema = z.enum([
 ]);
 
 export const revisionSyncOutcomeSchema = z.enum(['local-pending', 'applied', 'replayed', 'merged']);
-export const revisionValuesSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.number(), z.boolean(), z.null()]),
-);
+export const revisionValuesSchema = z
+  .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
+  .superRefine((values, context) => {
+    if ('urgency' in values && !urgencySchema.safeParse(values.urgency).success)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['urgency'],
+        message: 'Revision urgency must be categorical.',
+      });
+  });
 
 export const taskRevisionSchema = z
   .object({

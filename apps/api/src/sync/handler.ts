@@ -10,26 +10,46 @@ import { findTask, saveTaskMutation } from '../tasks/task-repository.js';
 import {
   directoryItemSchema,
   listItemSchema,
-  listSchema,
   taskSchema,
+  type ContentActor,
   type Mutation,
 } from '@naaseh/domain';
-import { applyTaskMutation } from './sync-service.js';
-import { pullAudience } from './change-feed-repository.js';
+import { pushRequestSchema, stackSyncMutationSchema } from '@naaseh/contracts';
+import {
+  applySharedWorkSyncPayload,
+  applyTaskMutation,
+  dispatchPersonalStackSyncMutation,
+  serializeSharedWorkChange,
+} from './sync-service.js';
+import { pullAudience, type SyncFeedChange } from './change-feed-repository.js';
 import { keys } from '../shared/keys.js';
 import { loadPublicKeyRegistry } from '../crypto-recovery/public-key-registry.js';
 import { metric } from '@naaseh/observability';
 import { listUserMemberships } from '../groups/group-repository.js';
 import { findList, findListItem, saveList, saveListItem } from '../lists/list-repository.js';
 import { findDirectoryItem, saveDirectoryItemRecord } from '../directory/directory-repository.js';
+import { defaultPersonalStackService, dispatchStackCompaction } from '../ranking/runtime.js';
 const MAX_BODY_BYTES = 1_000_000;
 async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const context = event.requestContext as typeof event.requestContext & {
-    authorizer?: { lambda?: { userId?: string; csrfToken?: string; role?: 'admin' | 'user' } };
+    authorizer?: {
+      lambda?: {
+        userId?: string;
+        csrfToken?: string;
+        role?: 'admin' | 'user';
+        groupIds?: string;
+      };
+    };
   };
   const actorId = context.authorizer?.lambda?.userId;
   if (!actorId)
     return problem(401, 'unauthorized', 'Authentication required.', event.requestContext.requestId);
+  const actor: ContentActor = {
+    id: actorId,
+    role: context.authorizer?.lambda?.role ?? 'user',
+    active: true,
+    groupIds: context.authorizer?.lambda?.groupIds?.split(',').filter(Boolean) ?? [],
+  };
   if (Buffer.byteLength(event.body ?? '', 'utf8') > MAX_BODY_BYTES)
     return problem(
       413,
@@ -41,7 +61,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     const [shared, owned] = await Promise.all([listPublicTasks(), listOwnerTasks(actorId)]);
     const keyRegistry = await loadPublicKeyRegistry();
     return json(200, {
-      tasks: [...shared, ...owned],
+      tasks: [...shared, ...owned].map((task) => taskSchema.parse(task)),
       keyRegistry,
       cursor: { public: 0, owner: 0 },
     });
@@ -77,7 +97,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         return { name, after, changes };
       }),
     );
-    const deduped = new Map<string, (typeof pulled)[number]['changes'][number]>();
+    const deduped = new Map<string, SyncFeedChange>();
     for (const { changes } of pulled)
       for (const change of changes) {
         const key = `${change.entityType ?? 'task'}:${change.entityId}`;
@@ -89,7 +109,9 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           deduped.set(key, change);
       }
     return json(200, {
-      changes: [...deduped.values()],
+      changes: [...deduped.values()].map((change) =>
+        change.entityType === 'personalStackOperation' ? change : serializeSharedWorkChange(change),
+      ),
       cursor: Object.fromEntries(
         pulled.map(({ name, after, changes }) => [name, changes.at(-1)?.sequence ?? after]),
       ),
@@ -101,6 +123,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     event.headers['x-csrf-token'],
   );
   const body = parsed as {
+    contractVersion?: number;
     mutations?: Mutation[];
     backlog?: { depth?: number; oldestAgeSeconds?: number };
   };
@@ -118,6 +141,10 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         actorId,
       },
     );
+  const includesPersonalStackOperation = body.mutations.some(
+    (mutation) => (mutation as { entityType?: string }).entityType === 'personalStackOperation',
+  );
+  if (includesPersonalStackOperation) pushRequestSchema.parse(parsed);
   const results = [];
   const backlogDepth = Number(body.backlog?.depth);
   const oldestAgeSeconds = Number(body.backlog?.oldestAgeSeconds);
@@ -133,6 +160,27 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     metric('SyncOldestPendingAge', oldestAgeSeconds, 'Seconds');
   }
   for (const mutation of body.mutations) {
+    if (stackSyncMutationSchema.safeParse(mutation).success) {
+      const sourceClientId = event.headers['x-client-id'];
+      if (!sourceClientId)
+        throw new SafeApiError(
+          400,
+          'missing_client_id',
+          'A client identifier is required for personal stack synchronization.',
+          'validation',
+        );
+      results.push(
+        await dispatchPersonalStackSyncMutation({
+          actorId,
+          actor,
+          sourceClientId,
+          mutation,
+          service: defaultPersonalStackService,
+          onPendingCompaction: dispatchStackCompaction,
+        }),
+      );
+      continue;
+    }
     const mutationKey = keys.mutation(actorId, mutation.id);
     const prior = await getRecord<{
       version: number;
@@ -151,15 +199,12 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       const current = await findList(mutation.entityId);
       try {
         const payload = mutation.payload as Record<string, unknown>;
-        const next = listSchema.parse(
-          current
-            ? {
-                ...current,
-                ...payload,
-                version: current.version + 1,
-                updatedAt: new Date().toISOString(),
-              }
-            : payload,
+        const next = applySharedWorkSyncPayload(
+          'list',
+          current,
+          payload,
+          (current?.version ?? 0) + 1,
+          new Date().toISOString(),
         );
         if (next.ownerId !== actorId || mutation.baseVersion !== (current?.version ?? 0)) {
           results.push({
@@ -289,15 +334,12 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     }
     try {
       const payload = mutation.payload as Record<string, unknown>;
-      const next = taskSchema.parse(
-        current
-          ? {
-              ...current,
-              ...payload,
-              version: outcome.version,
-              updatedAt: new Date().toISOString(),
-            }
-          : payload,
+      const next = applySharedWorkSyncPayload(
+        'task',
+        current,
+        payload,
+        outcome.version ?? (current?.version ?? 0) + 1,
+        new Date().toISOString(),
       );
       if (next.ownerId !== actorId) {
         results.push({ mutationId: mutation.id, status: 'rejected' });

@@ -7,6 +7,7 @@ export type AppRoute =
   | { section: 'archive' }
   | { section: 'projects' }
   | { section: 'dashboard' }
+  | { section: 'stack' }
   | { section: 'google' }
   | { section: 'admin' };
 
@@ -21,6 +22,7 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (/^\/archive\/?$/.test(pathname)) return { section: 'archive' };
   if (/^\/projects\/?$/.test(pathname)) return { section: 'projects' };
   if (/^\/dashboard\/?$/.test(pathname)) return { section: 'dashboard' };
+  if (/^\/stack\/?$/.test(pathname)) return { section: 'stack' };
   if (/^\/google\/?$/.test(pathname)) return { section: 'google' };
   if (/^\/admin\/?$/.test(pathname)) return { section: 'admin' };
   return { section: 'tasks' };

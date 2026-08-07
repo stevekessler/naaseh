@@ -15,6 +15,11 @@ import {
   workloadProjectionChanges,
   workloadProjectionWrites,
 } from '../reporting/workload-projection-repository.js';
+import {
+  workViewProjectionChanges,
+  workViewProjectionWrites,
+  type ProjectedWorkView,
+} from '../reporting/work-view-repository.js';
 export async function findList(id: string) {
   return (await getRecord<{ data: List }>(`LIST#${id}`, 'CURRENT'))?.data;
 }
@@ -43,7 +48,24 @@ function revision(
   changedFields: string[],
   changedAt: string,
   mutationId: string,
+  before?: List | ListItem,
+  after?: List | ListItem,
 ): EntityRevision {
+  const safeValues = (value: List | ListItem | undefined) =>
+    Object.fromEntries(
+      changedFields
+        .filter((field) =>
+          ['locked', 'status', 'orderKey', 'groupId', 'urgency', 'version'].includes(field),
+        )
+        .map((field) => [
+          field,
+          field === 'version'
+            ? version
+            : field === 'urgency' && value && 'urgency' in value
+              ? value.urgency
+              : null,
+        ]),
+    );
   return {
     id: createUlid(),
     entityType,
@@ -54,11 +76,10 @@ function revision(
     changedAt,
     operation,
     changedFields,
-    after: Object.fromEntries(
-      changedFields
-        .filter((field) => ['locked', 'status', 'orderKey', 'groupId', 'version'].includes(field))
-        .map((field) => [field, field === 'version' ? version : null]),
-    ),
+    ...(before && changedFields.includes('urgency') && 'urgency' in before
+      ? { before: { urgency: before.urgency } }
+      : {}),
+    after: safeValues(after),
     syncOutcome: 'applied',
   };
 }
@@ -72,7 +93,7 @@ export async function saveList(
   feedChanges: Parameters<typeof commitEntity>[0]['feedChanges'] = [],
 ) {
   const previous = expectedVersion > 0 ? await findList(value.id) : undefined;
-  const projected = async (list: List | undefined) => {
+  const projected = async (list: List | undefined): Promise<ProjectedWorkView | undefined> => {
     if (!list) return undefined;
     const project = list.projectId ? await getProject(list.projectId) : undefined;
     return {
@@ -83,9 +104,15 @@ export async function saveList(
         locked: list.locked,
         ...(list.groupId ? { groupId: list.groupId } : {}),
       }).ordinary,
-      lifecycle: list.lifecycle,
-      projectId: list.projectId,
-      categoryId: project?.categoryId,
+      audiences: [
+        `OWNER#${list.ownerId}`,
+        list.locked ? `OWNER#${list.ownerId}` : list.groupId ? `GROUP#${list.groupId}` : 'PUBLIC',
+      ],
+      lifecycle: list.lifecycle ?? list.status,
+      ...(list.projectId ? { projectId: list.projectId } : {}),
+      ...(project?.categoryId ? { categoryId: project.categoryId } : {}),
+      urgency: list.urgency,
+      sortKey: list.updatedAt,
     };
   };
   const [beforeProjection, afterProjection] = await Promise.all([
@@ -111,14 +138,17 @@ export async function saveList(
       changedFields,
       value.updatedAt,
       mutationId,
+      previous,
+      value,
     ),
     actorId,
     mutationResult: result,
     expectedVersion,
     feedChanges,
-    additionalWrites: workloadProjectionWrites(
-      workloadProjectionChanges(beforeProjection, afterProjection),
-    ),
+    additionalWrites: [
+      ...workloadProjectionWrites(workloadProjectionChanges(beforeProjection, afterProjection)),
+      ...workViewProjectionWrites(workViewProjectionChanges(beforeProjection, afterProjection)),
+    ],
   });
   return value;
 }
@@ -150,6 +180,8 @@ export async function saveListItem(
       changedFields,
       value.updatedAt,
       mutationId,
+      undefined,
+      value,
     ),
     actorId,
     mutationResult: result,

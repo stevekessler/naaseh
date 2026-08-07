@@ -48,3 +48,17 @@ export function publicExportJob(job: ExportJob) {
   delete safe.resultKey;
   return safe;
 }
+
+/** Build an owner-private rank overlay; callers must pass only the requesting viewer's ranks. */
+export async function viewerExportRanks(
+  workIds: readonly string[],
+  loadRank: (workId: string) => Promise<{ overallRank?: number; projectRank?: number } | undefined>,
+) {
+  return new Map(
+    (
+      await Promise.all(workIds.map(async (workId) => [workId, await loadRank(workId)] as const))
+    ).filter((entry): entry is readonly [string, { overallRank?: number; projectRank?: number }] =>
+      Boolean(entry[1]),
+    ),
+  );
+}

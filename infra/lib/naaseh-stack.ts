@@ -45,7 +45,7 @@ export class NaasehStack extends Stack {
       breakGlassRoleArn: props.breakGlassRoleArn,
       alerts: criticalAlerts,
     });
-    const { pepper, webPushSecret, googleOAuthSecret } = createRuntimeSecrets(
+    const { pepper, webPushSecret, googleOAuthSecret, cursorSigningSecret } = createRuntimeSecrets(
       this,
       criticalAlerts,
     );
@@ -86,6 +86,7 @@ export class NaasehStack extends Stack {
       BACKUP_MANIFEST_SIGNING_KEY_ARN: recoveryKeys.manifestSigningKey.keyArn,
       RECOVERY_PUBLIC_KEY_REGISTRY: recoveryKeys.publicRegistryValue,
       VERBOSE_LOGGING: 'false',
+      CURSOR_SIGNING_SECRET: cursorSigningSecret.secretValue.unsafeUnwrap(),
     };
     const logGroups = createLogGroups(this);
     createArchiveProjectMigration(this, {
@@ -133,6 +134,7 @@ export class NaasehStack extends Stack {
     const restoreLogs = new logs.LogGroup(this, 'RestoreWorkflowLogs', {
       retention: logs.RetentionDays.THREE_MONTHS,
       removalPolicy: RemovalPolicy.RETAIN,
+      encryptionKey: dataKey,
     });
     const restoreWorkflow = createRestoreWorkflow(this, {
       restoreTestingPlanArn: backup.restoreTestingPlan.attrRestoreTestingPlanArn,

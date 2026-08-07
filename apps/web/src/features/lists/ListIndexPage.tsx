@@ -1,4 +1,5 @@
 import type { List } from '@naaseh/domain';
+import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 
 export function ListIndexPage({
   lists,
@@ -24,6 +25,7 @@ export function ListIndexPage({
               {list.locked ? '🔒 ' : ''}
               {list.name}
             </button>
+            <UrgencyBadge urgency={list.urgency} />
           </li>
         ))}
       </ul>

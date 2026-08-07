@@ -19,6 +19,15 @@ export const restoreStates = [
 export type RestoreState = (typeof restoreStates)[number];
 export const restoreFailureStates = ['RecordFailure', 'NotifyFailure'] as const;
 
+export const personalStackRestoreControls = {
+  canonicalOperationsRequired: true,
+  snapshotsRebuildable: true,
+  corruptScopePolicy: 'fail-closed',
+  urgencyFieldsRequired: true,
+  completionUrgencySnapshotsRequired: true,
+  urgencyTotalsReconciliationRequired: true,
+} as const;
+
 export type RestoreExecution = {
   status: 'SUCCEEDED' | 'FAILED';
   executed: Array<RestoreState | (typeof restoreFailureStates)[number]>;
@@ -70,6 +79,20 @@ export function createRestoreWorkflow(
       MANIFEST_SIGNING_KEY_ARN: options.manifestSigningKey.keyArn,
       RECOVERY_MEMO_WRAPPING_KEY_ARN: options.recoveryWrappingKey.keyArn,
       DELETION_LEDGER_TABLE: options.deletionLedgerTable.tableName,
+      PERSONAL_STACK_CANONICAL_OPERATIONS_REQUIRED: String(
+        personalStackRestoreControls.canonicalOperationsRequired,
+      ),
+      PERSONAL_STACK_SNAPSHOTS_REBUILDABLE: String(
+        personalStackRestoreControls.snapshotsRebuildable,
+      ),
+      PERSONAL_STACK_CORRUPT_SCOPE_POLICY: personalStackRestoreControls.corruptScopePolicy,
+      URGENCY_FIELDS_REQUIRED: String(personalStackRestoreControls.urgencyFieldsRequired),
+      COMPLETION_URGENCY_SNAPSHOTS_REQUIRED: String(
+        personalStackRestoreControls.completionUrgencySnapshotsRequired,
+      ),
+      URGENCY_TOTALS_RECONCILIATION_REQUIRED: String(
+        personalStackRestoreControls.urgencyTotalsReconciliationRequired,
+      ),
     },
     bundling: { minify: true, sourceMap: true },
   });

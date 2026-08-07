@@ -38,10 +38,17 @@ export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
     encryptionKey: primaryKey,
     removalPolicy: RemovalPolicy.RETAIN,
   });
+  const cursorSigningSecret = new secretsmanager.Secret(scope, 'PaginationCursorSigningSecret', {
+    description: 'Encryption and signing key material for opaque pagination cursors.',
+    encryptionKey: primaryKey,
+    generateSecretString: { passwordLength: 64, excludePunctuation: true },
+    removalPolicy: RemovalPolicy.RETAIN,
+  });
   for (const [secret, owner] of [
     [pepper, 'authentication'],
     [webPushSecret, 'notifications'],
     [googleOAuthSecret, 'google-sync'],
+    [cursorSigningSecret, 'pagination'],
   ] as const) {
     Tags.of(secret).add('NaasehRotationOwner', owner);
     Tags.of(secret).add('NaasehRotationReviewDays', String(secretControls.rotationReviewDays));
@@ -69,5 +76,12 @@ export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
     evaluationPeriods: 1,
   });
   policyChangeAlarm.addAlarmAction(new actions.SnsAction(alerts));
-  return { primaryKey, pepper, webPushSecret, googleOAuthSecret, policyChangeAlarm };
+  return {
+    primaryKey,
+    pepper,
+    webPushSecret,
+    googleOAuthSecret,
+    cursorSigningSecret,
+    policyChangeAlarm,
+  };
 }

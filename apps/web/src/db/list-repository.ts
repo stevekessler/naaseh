@@ -2,12 +2,15 @@ import {
   createList,
   createListItem,
   createUlid,
+  matchesUrgencySet,
   archiveList,
   finishList,
   restoreList,
   transitionListItem,
+  listSchema,
   type List,
   type ListItem,
+  type Urgency,
 } from '@naaseh/domain';
 import { db, type EncryptedEntityRecord } from './database.js';
 import { decryptLocalValue, encryptLocalValue } from './task-repository.js';
@@ -21,6 +24,7 @@ async function record(
     parentId?: string;
     projectId?: string | undefined;
     lifecycle?: string | undefined;
+    urgency?: Urgency | undefined;
   },
 ): Promise<EncryptedEntityRecord> {
   return {
@@ -28,6 +32,7 @@ async function record(
     ...((value.listId ?? value.parentId) ? { taskId: value.listId ?? value.parentId } : {}),
     ...(value.projectId ? { projectId: value.projectId } : {}),
     ...(value.lifecycle ? { lifecycle: value.lifecycle } : {}),
+    ...(value.urgency ? { urgency: value.urgency } : {}),
     updatedAt: value.updatedAt,
     value: await encryptLocalValue(namespace, value.id, value),
   };
@@ -66,7 +71,16 @@ async function queue(
 }
 export async function listLocalLists(): Promise<List[]> {
   const rows = await db.secureLists.orderBy('updatedAt').reverse().toArray();
-  return Promise.all(rows.map((row) => decryptLocalValue<List>('list', row.id, row.value)));
+  return Promise.all(
+    rows.map(async (row) =>
+      listSchema.parse(await decryptLocalValue<List>('list', row.id, row.value)),
+    ),
+  );
+}
+
+export async function listLocalListsByUrgency(urgencies: readonly List['urgency'][]) {
+  const lists = await listLocalLists();
+  return lists.filter((list) => matchesUrgencySet(list.urgency, urgencies));
 }
 export async function listLocalListItems(listId: string): Promise<ListItem[]> {
   const rows = await db.secureListItems.toArray();
@@ -81,8 +95,16 @@ export async function saveNewList(
   name: string,
   ownerId: string,
   projectId?: string,
+  urgency?: Urgency,
 ): Promise<List> {
-  const value = createList({ name, ...(projectId ? { projectId } : {}) }, ownerId);
+  const value = createList(
+    {
+      name,
+      ...(projectId ? { projectId } : {}),
+      ...(urgency ? { urgency } : {}),
+    },
+    ownerId,
+  );
   const [stored, mutation] = await Promise.all([
     record('list', value),
     queue('list', value.id, 'create', 0, value, value.createdAt),
@@ -118,7 +140,7 @@ export async function updateLocalList(current: List, patch: Partial<List>): Prom
           updatedAt: new Date().toISOString(),
           version: current.version + 1,
         };
-  const next = { ...transitioned, ...patch };
+  const next = listSchema.parse({ ...transitioned, ...patch });
   const [stored, mutation] = await Promise.all([
     record('list', next),
     queue('list', next.id, operation, current.version, patch, next.updatedAt),

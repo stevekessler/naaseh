@@ -11,6 +11,7 @@ import {
 } from '../tasks/task-repository.js';
 import { getProject } from '../projects/project-repository.js';
 import { getCategory } from '../categories/category-repository.js';
+import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 
 export interface TaskLifecycleRequest {
   taskId: string;
@@ -50,6 +51,7 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
       result.completionEvent,
       request.sourceClientId,
     );
+    notifyStackMembershipWorkChange('task', current, result.task, 'archive');
     return result.task;
   }
   if (request.action === 'archive') {
@@ -63,6 +65,7 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
       undefined,
       request.sourceClientId,
     );
+    notifyStackMembershipWorkChange('task', current, next, 'archive');
     return next;
   }
   const event = current.currentCompletionEventId
@@ -78,5 +81,6 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
     restored.completionEvent,
     request.sourceClientId,
   );
+  notifyStackMembershipWorkChange('task', current, restored.task, 'restore');
   return restored.task;
 }

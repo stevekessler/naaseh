@@ -1,4 +1,9 @@
-import type { CompletionEvent } from '@naaseh/domain';
+import {
+  matchesUrgencySet,
+  zeroUrgencyCounts,
+  type CompletionEvent,
+  type Urgency,
+} from '@naaseh/domain';
 import { listCompletionEventsForUser } from './completion-event-repository.js';
 
 export type ReportPeriod = 'day' | 'week' | 'month';
@@ -11,6 +16,9 @@ export interface CompletionReportQuery {
   weekStartsOn?: number;
   categoryId?: string | 'unassigned';
   projectId?: string | 'unassigned';
+  urgencies?: readonly Urgency[];
+  /** Pins reversal evaluation for a stable report traversal. */
+  asOf?: string;
 }
 
 const parseDate = (value: string) => {
@@ -98,27 +106,51 @@ export function calculateCompletionReport(
   const days = Math.round((to.valueOf() - from.valueOf()) / 86_400_000);
   if (days < 0 || days > 366) throw new Error('Report range must be between 0 and 366 days.');
   const counts = new Map<string, number>();
+  const urgencyByPeriod = new Map<string, ReturnType<typeof zeroUrgencyCounts>>();
   for (let day = query.from; day <= query.to; day = addDays(day, 1))
-    counts.set(completionPeriodKey(day, query.period, query.weekStartsOn), 0);
+    urgencyByPeriod.set(
+      completionPeriodKey(day, query.period, query.weekStartsOn),
+      zeroUrgencyCounts(),
+    );
+  for (const key of urgencyByPeriod.keys()) counts.set(key, 0);
+  const asOf = query.asOf ?? new Date().toISOString();
+  const urgencyCounts = zeroUrgencyCounts();
   const matchingEvents: CompletionEvent[] = [];
   for (const event of events) {
-    if (!event.counted || event.completedBy !== query.userId || !eventMatchesScope(event, query))
+    const countedAtAsOf = event.counted || Boolean(event.reversedAt && event.reversedAt > asOf);
+    if (
+      !countedAtAsOf ||
+      event.occurredAt > asOf ||
+      event.completedBy !== query.userId ||
+      !eventMatchesScope(event, query) ||
+      !matchesUrgencySet(event.urgencyAtCompletion, query.urgencies)
+    )
       continue;
     const localDate = completionLocalDate(event.occurredAt, query.timeZone);
     if (localDate < query.from || localDate > query.to) continue;
     const key = completionPeriodKey(localDate, query.period, query.weekStartsOn);
     counts.set(key, (counts.get(key) ?? 0) + 1);
+    urgencyByPeriod.get(key)![event.urgencyAtCompletion] += 1;
+    urgencyCounts[event.urgencyAtCompletion] += 1;
     matchingEvents.push(event);
   }
-  const buckets = [...counts].map(([key, count]) => ({ key, count }));
+  const buckets = [...counts].map(([key, count]) => ({
+    key,
+    count,
+    urgencyCounts: urgencyByPeriod.get(key) ?? zeroUrgencyCounts(),
+  }));
   return {
     userId: query.userId,
     period: query.period,
     timeZone: query.timeZone,
     from: query.from,
     to: query.to,
+    asOf,
     buckets,
     total: matchingEvents.length,
+    urgencyCounts,
+    // Kept as a transitional internal alias for existing report consumers.
+    urgencyBreakdown: urgencyCounts,
     events: matchingEvents,
   };
 }
@@ -127,5 +159,15 @@ export async function getCompletionReport(
   query: CompletionReportQuery,
   loadEvents = listCompletionEventsForUser,
 ) {
-  return calculateCompletionReport(await loadEvents(query.userId), query);
+  const report = calculateCompletionReport(await loadEvents(query.userId), query);
+  return {
+    period: report.period,
+    timeZone: report.timeZone,
+    from: report.from,
+    to: report.to,
+    asOf: report.asOf,
+    buckets: report.buckets,
+    total: report.total,
+    urgencyCounts: report.urgencyCounts,
+  };
 }

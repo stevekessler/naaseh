@@ -1,6 +1,14 @@
-import { type FormEvent } from 'react';
-import type { CategoryRecord, Project, Task, TaskInput } from '@naaseh/domain';
+import { type FormEvent, useState } from 'react';
+import {
+  defaultUrgency,
+  type CategoryRecord,
+  type Project,
+  type Task,
+  type TaskInput,
+  type Urgency,
+} from '@naaseh/domain';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
+import { UrgencyField } from '../../components/UrgencyField.js';
 export function TaskForm({
   save,
   task,
@@ -14,6 +22,7 @@ export function TaskForm({
   projects?: Project[];
   submitLabel?: string;
 }) {
+  const [urgency, setUrgency] = useState<Urgency>(task?.urgency ?? defaultUrgency);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -40,8 +49,12 @@ export function TaskForm({
       ...(value('groupId') ? { groupId: value('groupId') } : {}),
       ...(value('parentId') ? { parentId: value('parentId') } : {}),
       visibility: data.get('private') ? 'private' : 'public',
+      urgency,
     });
-    if (!task) form.reset();
+    if (!task) {
+      form.reset();
+      setUrgency(defaultUrgency);
+    }
   }
   return (
     <form className="task-form" onSubmit={submit}>
@@ -58,6 +71,10 @@ export function TaskForm({
         <textarea name="memo" maxLength={20000} defaultValue={task?.memo} />
       </label>
       <div className="form-grid">
+        <label>
+          Urgency
+          <UrgencyField value={urgency} onChange={setUrgency} />
+        </label>
         <label>
           Due date and time
           <input name="dueAt" type="datetime-local" defaultValue={task?.dueAt?.slice(0, 16)} />

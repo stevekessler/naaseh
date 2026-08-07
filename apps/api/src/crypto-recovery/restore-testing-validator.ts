@@ -17,7 +17,11 @@ import { DecryptCommand, KMSClient } from '@aws-sdk/client-kms';
 import {
   backupManifestSchema,
   hiddenMemoPackageSchema,
+  completionEventSchema,
+  listSchema,
   taskSchema,
+  urgencyValues,
+  zeroUrgencyCounts,
   type BackupManifest,
   type HiddenMemoPackage,
 } from '@naaseh/domain';
@@ -27,6 +31,7 @@ import { verifyStoredManifest } from './manifest-service.js';
 import { MAX_RTO_SECONDS } from './restore-validator.js';
 import { validateEnhancedRecoveryRows } from './backup-manifest.js';
 import { assertDeletionLedgerApplied } from './deletion-ledger-validator.js';
+import { validatePersonalStackRestore } from './personal-stack-restore-validator.js';
 
 const restoreEventSchema = z
   .object({
@@ -305,7 +310,64 @@ async function probeRestoredResource(
   };
 }
 
-type RestoredItem = { PK?: unknown; SK?: unknown; data?: unknown };
+export type RestoredItem = { PK?: unknown; SK?: unknown; data?: unknown; count?: unknown };
+
+export function validateUrgencyRestore(items: RestoredItem[]) {
+  let currentWork = 0;
+  let completionSnapshots = 0;
+  for (const item of items) {
+    const pk = typeof item.PK === 'string' ? item.PK : '';
+    if (item.SK === 'CURRENT' && (pk.startsWith('TASK#') || pk.startsWith('LIST#'))) {
+      const raw = item.data as Record<string, unknown> | undefined;
+      if (
+        !raw ||
+        !Object.hasOwn(raw, 'urgency') ||
+        !urgencyValues.includes(raw.urgency as (typeof urgencyValues)[number])
+      )
+        throw new Error('Restored current work is missing its urgency field.');
+      const parsed = pk.startsWith('TASK#') ? taskSchema.safeParse(raw) : listSchema.safeParse(raw);
+      if (!parsed.success) throw new Error('Restored current work has invalid urgency data.');
+      currentWork += 1;
+    }
+    if (pk.startsWith('COMPLETION#') && item.SK === 'EVENT') {
+      const parsed = completionEventSchema.safeParse(item.data);
+      if (!parsed.success)
+        throw new Error('Restored completion event is missing its urgency-at-completion snapshot.');
+      completionSnapshots += 1;
+    }
+  }
+
+  const totals = new Map<string, number>();
+  const urgencyTotals = new Map<string, ReturnType<typeof zeroUrgencyCounts>>();
+  for (const item of items) {
+    if (typeof item.PK !== 'string' || !item.PK.startsWith('WORKLOAD#')) continue;
+    if (typeof item.SK !== 'string' || !item.SK.startsWith('COUNT#')) continue;
+    const match =
+      /^(COUNT#.+#(?:task|list))(?:#URGENCY#(extra_low|low|medium|high|critical))?$/u.exec(item.SK);
+    if (!match || !Number.isInteger(item.count) || Number(item.count) < 0)
+      throw new Error('Restored workload urgency counter is invalid.');
+    const key = `${item.PK}|${match[1]}`;
+    if (match[2]) {
+      const counts = urgencyTotals.get(key) ?? zeroUrgencyCounts();
+      counts[match[2] as (typeof urgencyValues)[number]] = Number(item.count);
+      urgencyTotals.set(key, counts);
+    } else totals.set(key, Number(item.count));
+  }
+  for (const [key, counts] of urgencyTotals) {
+    const expected = totals.get(key);
+    if (
+      expected === undefined ||
+      Object.values(counts).reduce((sum, value) => sum + value, 0) !== expected
+    )
+      throw new Error('Restored workload urgency totals require reconciliation.');
+  }
+  return {
+    currentWork,
+    completionSnapshots,
+    urgencyCounterGroups: totals.size,
+    urgencyTotalsReconciled: true as const,
+  };
+}
 
 export function googleRestoreSafetyPlan(items: RestoredItem[]) {
   let connectionsRequiringReauthorization = 0;
@@ -335,8 +397,8 @@ async function readDynamoItems(tableName: string, client: CommandClient) {
     const page = (await client.send(
       new ScanCommand({
         TableName: tableName,
-        ProjectionExpression: 'PK, SK, #data',
-        ExpressionAttributeNames: { '#data': 'data' },
+        ProjectionExpression: 'PK, SK, #data, #count',
+        ExpressionAttributeNames: { '#data': 'data', '#count': 'count' },
         ExclusiveStartKey: exclusiveStartKey,
       }),
     )) as ScanCommandOutput;
@@ -375,6 +437,19 @@ export async function validateRestoredInventory(
 
   const actualCounts = countRestoredEntities(items);
   const enhancedIntegrity = validateEnhancedRecoveryRows(items);
+  const personalStackRows = items
+    .filter(
+      (item): item is { PK: string; SK: string; data: Record<string, unknown> } =>
+        typeof item.PK === 'string' &&
+        item.PK.startsWith('STACK#USER#') &&
+        typeof item.SK === 'string' &&
+        Boolean(item.data) &&
+        typeof item.data === 'object' &&
+        !Array.isArray(item.data),
+    )
+    .map((item) => ({ PK: item.PK, SK: item.SK, data: item.data }));
+  const personalStackIntegrity = validatePersonalStackRestore(personalStackRows);
+  const urgencyIntegrity = validateUrgencyRestore(items);
   const discrepancies = Object.entries(manifest.entityCounts)
     .filter(([name, expected]) => (actualCounts[normalizeEntityName(name)] ?? 0) !== expected)
     .map(([name]) => name)
@@ -421,6 +496,14 @@ export async function validateRestoredInventory(
     recoveryWrapVersions: [...observedVersions].sort(),
     manifestVerified: true as const,
     enhancedIntegrity,
+    personalStackIntegrity: {
+      canonicalOperationsVerified: true as const,
+      snapshotsRebuildable: true as const,
+      snapshotRepairRequired: personalStackIntegrity.scopes.some(
+        (scope) => scope.snapshotStatus === 'rebuilt',
+      ),
+    },
+    urgencyIntegrity,
   };
 }
 

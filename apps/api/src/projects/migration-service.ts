@@ -62,6 +62,7 @@ export async function migrateLegacyTask(task: Task) {
       taskId: task.id,
       completedBy: task.completedBy,
       occurredAt: task.completedAt,
+      urgencyAtCompletion: task.urgency,
       projectIdAtCompletion: project.id,
       projectNameAtCompletion: project.name,
       categoryIdAtCompletion: project.categoryId,

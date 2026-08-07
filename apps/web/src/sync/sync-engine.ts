@@ -1,4 +1,4 @@
-import type { EntityType, Task, VectorCursor } from '@naaseh/domain';
+import type { EntityType, StackConflictReason, Task, VectorCursor } from '@naaseh/domain';
 import {
   attachmentSchema,
   copyJobSchema,
@@ -11,6 +11,7 @@ import {
   projectSchema,
   categorySchema,
   nextRetryDelay,
+  personalStackOperationSchema,
   taskSchema,
 } from '@naaseh/domain';
 import { db } from '../db/database.js';
@@ -32,12 +33,67 @@ import {
 import { getClientId } from '../db/client-id.js';
 import { listLocalLists } from '../db/list-repository.js';
 import { refreshGoogleSyncCache } from '../features/google-sync/google-sync-client.js';
+import {
+  acknowledgeLocalStackOperation,
+  applyOwnerStackChange,
+  conflictLocalStackOperation,
+  localStackScopeKey,
+  readLocalStack,
+  reorderLocalStack,
+  type LocalStackMove,
+  type LocalStackScope,
+} from '../db/personal-stack-repository.js';
 export type SyncState = 'offline' | 'idle' | 'syncing' | 'error';
 type MutationResult = {
   mutationId: string;
   status: 'applied' | 'duplicate' | 'alreadyApplied' | 'conflict' | 'rejected' | 'retry';
+  operationId?: string;
+  version?: number;
+  reason?: StackConflictReason;
+  currentVersion?: number;
+  problem?: { reason?: StackConflictReason; currentVersion?: number };
   current?: Task;
 };
+
+const serializedScopes = new Map<string, Promise<void>>();
+
+async function serializeScope<T>(scopeKey: string, action: () => Promise<T>): Promise<T> {
+  const previous = serializedScopes.get(scopeKey) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(action);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  serializedScopes.set(scopeKey, settled);
+  try {
+    return await result;
+  } finally {
+    if (serializedScopes.get(scopeKey) === settled) serializedScopes.delete(scopeKey);
+  }
+}
+
+export async function queuePersonalStackReorder(input: {
+  ownerId: string;
+  scope: LocalStackScope;
+  move: LocalStackMove;
+  baseVersion?: number;
+  sourceClientId?: string;
+}) {
+  const scopeKey = localStackScopeKey(input.ownerId, input.scope);
+  return serializeScope(scopeKey, async () => {
+    const current = await readLocalStack(input.ownerId, input.scope);
+    if (!current) throw new Error('Personal stack is unavailable.');
+    return reorderLocalStack({
+      ownerId: input.ownerId,
+      scope: input.scope,
+      baseVersion: input.baseVersion ?? current.version,
+      sourceClientId: input.sourceClientId ?? (await getClientId()),
+      move: input.move,
+    });
+  });
+}
+
+export const queueStackReorder = queuePersonalStackReorder;
 export function classifyMutationResults(results: MutationResult[]) {
   return {
     completed: results
@@ -57,6 +113,17 @@ async function pushMutation(
   backlog: { depth: number; oldestAgeSeconds: number } | undefined,
 ) {
   const clientId = await getClientId();
+  const isStackMutation = mutation.entityType === ('personalStackOperation' as string);
+  const wireMutation = {
+    id: mutation.id,
+    entityId: mutation.entityId,
+    entityType: mutation.entityType,
+    operation: mutation.operation,
+    baseVersion: mutation.baseVersion,
+    payload: mutation.payload,
+    createdAt: mutation.createdAt,
+    attempts: mutation.attempts,
+  };
   const response = await fetch('/api/v1/sync/push', {
     method: 'POST',
     credentials: 'include',
@@ -68,11 +135,13 @@ async function pushMutation(
     body: JSON.stringify({
       contractVersion: ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
         ? 3
-        : ['task', 'category', 'group'].includes(mutation.entityType)
-          ? 1
-          : 2,
-      mutations: [mutation],
-      backlog,
+        : isStackMutation
+          ? 4
+          : ['task', 'category', 'group'].includes(mutation.entityType)
+            ? 1
+            : 2,
+      mutations: [wireMutation],
+      ...(isStackMutation ? {} : { backlog }),
     }),
   });
   if (!response.ok) throw syncHttpError('Synchronization push', response.status);
@@ -87,17 +156,43 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
       const mutation = await decryptMutation(item);
       const result = await pushMutation(csrfToken, mutation, await durableBacklogSnapshot());
       if (!result) throw new Error('Synchronization returned no mutation result.');
+      const isStackMutation = (item.entityType as string) === 'personalStackOperation';
       if (['applied', 'duplicate', 'alreadyApplied'].includes(result.status)) {
-        await markRevisionSynced(item.id, result.status === 'applied' ? 'applied' : 'replayed');
-        await db.outbox.delete(item.id);
+        if (isStackMutation) {
+          await acknowledgeLocalStackOperation({
+            mutationId: item.id,
+            status: result.status as 'applied' | 'alreadyApplied' | 'duplicate',
+            ...(result.operationId ? { operationId: result.operationId } : {}),
+            ...(result.version === undefined ? {} : { version: result.version }),
+          });
+        } else {
+          await markRevisionSynced(item.id, result.status === 'applied' ? 'applied' : 'replayed');
+          await db.outbox.delete(item.id);
+        }
         continue;
       }
       if (result.status === 'conflict') {
-        const value = await encryptLocalValue('conflict', item.id, { mutation, result });
-        await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
-          await db.secureConflicts.put({ id: item.id, updatedAt: new Date().toISOString(), value });
-          await db.outbox.delete(item.id);
-        });
+        if (isStackMutation) {
+          await conflictLocalStackOperation({
+            mutationId: item.id,
+            reason: result.reason ?? result.problem?.reason ?? 'version_mismatch',
+            currentVersion:
+              result.currentVersion ??
+              result.problem?.currentVersion ??
+              result.version ??
+              item.baseVersion,
+          });
+        } else {
+          const value = await encryptLocalValue('conflict', item.id, { mutation, result });
+          await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
+            await db.secureConflicts.put({
+              id: item.id,
+              updatedAt: new Date().toISOString(),
+              value,
+            });
+            await db.outbox.delete(item.id);
+          });
+        }
         continue;
       }
       if (result.status === 'rejected')
@@ -113,7 +208,7 @@ export async function pullChanges(): Promise<void> {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ contractVersion: 3, cursor: current }),
+    body: JSON.stringify({ contractVersion: 4, cursor: current }),
   });
   if (!response.ok) throw syncHttpError('Synchronization pull', response.status);
   const body = (await response.json()) as {
@@ -143,6 +238,51 @@ export async function pullChanges(): Promise<void> {
   };
   for (const change of body.changes) {
     const entityType = change.entityType ?? 'task';
+    if (entityType === 'personalStackOperation') {
+      if (change.operation !== 'upsert') {
+        throw new Error('Personal stack operations cannot be tombstoned.');
+      }
+      const operation = personalStackOperationSchema.parse(change.payload);
+      if (operation.id !== change.entityId) {
+        throw new Error('Personal stack operation feed identity does not match its envelope.');
+      }
+      const scope: LocalStackScope =
+        operation.scopeType === 'project'
+          ? { scopeType: 'project', scopeId: operation.scopeId! }
+          : { scopeType: 'overall' };
+      const commonChange = {
+        id: operation.id,
+        mutationId: operation.mutationId,
+        userId: operation.userId,
+        scopeType: operation.scopeType,
+        ...(operation.scopeId ? { scopeId: operation.scopeId } : {}),
+        baseVersion: operation.baseVersion,
+        version: operation.version,
+        sourceClientId: operation.sourceClientId,
+        acceptedAt: operation.acceptedAt,
+      };
+      const ownerChange =
+        operation.kind === 'filtered_permutation'
+          ? {
+              ...commonChange,
+              kind: operation.kind,
+              movedWork: operation.movedWork,
+              destinationIndex: operation.destinationIndex,
+              affectedWork: operation.affectedWork,
+              filterBasis: operation.filterBasis,
+            }
+          : {
+              ...commonChange,
+              kind: operation.kind,
+              movedWork: operation.movedWork,
+              ...(operation.beforeWork ? { beforeWork: operation.beforeWork } : {}),
+              ...(operation.afterWork ? { afterWork: operation.afterWork } : {}),
+            };
+      await serializeScope(localStackScopeKey(operation.userId, scope), () =>
+        applyOwnerStackChange(ownerChange),
+      );
+      continue;
+    }
     if (!isSupportedEntityType(entityType))
       throw new Error(`Unsupported synchronized entity: ${entityType}`);
     if (entityType !== 'task') {

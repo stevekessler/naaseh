@@ -8,6 +8,7 @@ import {
   revokeMembership,
   updateMembership,
 } from './group-repository.js';
+import { notifyStackAuthorizationChange } from '../ranking/stack-membership-lifecycle.js';
 
 export type GroupPolicyFailure =
   | 'group_inactive'
@@ -84,6 +85,12 @@ export async function joinGroup(
     joinedBy: userId,
   });
   await putMembership(membership);
+  notifyStackAuthorizationChange({
+    userId,
+    groupId: group.id,
+    active: true,
+    changedAt: membership.joinedAt,
+  });
   return membership;
 }
 
@@ -93,14 +100,16 @@ export async function removeGroupMember(group: GroupRecord, actorId: string, use
   const membership = await getMembership(group.id, userId);
   if (!membership || membership.status !== 'active' || membership.role === 'owner')
     throw new GroupPolicyError('membership_not_active');
+  const changedAt = new Date().toISOString();
   await revokeMembership(membership, {
     audience: `ACCESS#${userId}`,
     entityType: 'accessControl',
     entityId: group.id,
     operation: 'tombstone',
     payload: { kind: 'group-revoked', groupId: group.id },
-    changedAt: new Date().toISOString(),
+    changedAt,
   });
+  notifyStackAuthorizationChange({ userId, groupId: group.id, active: false, changedAt });
 }
 
 export async function changeGroupMemberRole(

@@ -17,6 +17,10 @@ export const backupControls = {
   crossAccount: false,
   vaultLockDays: 35,
   restoreTesting: true,
+  personalStack: {
+    canonicalOperations: 'included',
+    snapshots: 'rebuildable',
+  },
 } as const;
 
 export function createBackupResources(
@@ -45,10 +49,16 @@ export function createBackupResources(
         backupVault: vault,
         scheduleExpression: events.Schedule.cron({ minute: '0', hour: '5' }),
         deleteAfter: Duration.days(backupControls.vaultLockDays),
+        recoveryPointTags: {
+          NaasehPersonalStackCanonicalOperations: backupControls.personalStack.canonicalOperations,
+          NaasehPersonalStackSnapshots: backupControls.personalStack.snapshots,
+        },
       }),
     ],
   });
-  plan.addSelection('DurableResources', {
+  // The personal-stack operation log and its derived snapshots share the durable table. Selecting
+  // the table ARN (rather than row tags) guarantees a recovery point cannot omit operation chunks.
+  plan.addSelection('CanonicalOperationsAndDurableResources', {
     resources: [
       backup.BackupResource.fromDynamoDbTable(options.table),
       backup.BackupResource.fromArn(options.media.bucketArn),

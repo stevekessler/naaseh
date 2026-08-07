@@ -7,6 +7,7 @@ import {
   type CompletionEvent,
 } from './completion-event.js';
 import { authorizeContent } from './authorization.js';
+import { defaultUrgency, urgencySchema } from './urgency.js';
 
 export const visibilitySchema = z.enum(['public', 'private']);
 export const taskStatusSchema = z.enum(['open', 'completed', 'archived']);
@@ -40,6 +41,7 @@ const taskObjectSchema = z
     groupId: z.string().optional(),
     parentId: z.string().optional(),
     visibility: visibilitySchema.default('public'),
+    urgency: urgencySchema.default(defaultUrgency),
     status: taskStatusSchema.default('open'),
     lifecycle: z.enum(['active', 'archived', 'deleting']).optional(),
     completionState: z.enum(['open', 'completed']).optional(),
@@ -119,7 +121,7 @@ export const taskInputSchema = taskObjectSchema
     currentCompletionEventId: true,
   })
   .partial()
-  .required({ label: true })
+  .required({ label: true, urgency: true })
   .strict()
   .superRefine(validateTaskInvariants);
 
@@ -241,6 +243,7 @@ export function completeAndArchiveTask(
     taskId: task.id,
     completedBy: actorId,
     occurredAt: timestamp,
+    urgencyAtCompletion: task.urgency,
     ...(attribution.projectId ? { projectIdAtCompletion: attribution.projectId } : {}),
     ...(attribution.projectName ? { projectNameAtCompletion: attribution.projectName } : {}),
     ...(attribution.categoryId ? { categoryIdAtCompletion: attribution.categoryId } : {}),
