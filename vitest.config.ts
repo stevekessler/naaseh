@@ -9,7 +9,7 @@ export default defineConfig({
       'tests/**/*.test.ts',
     ],
     environment: 'node',
-    maxWorkers: 4,
+    maxWorkers: process.env.CI ? 2 : 4,
     coverage: {
       provider: 'v8',
       // Unit coverage protects portable business rules and synthesized infrastructure.
