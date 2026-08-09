@@ -56,9 +56,19 @@ export function createBackupResources(
       }),
     ],
   });
+  const backupRole = new iam.Role(scope, 'BackupSelectionRole', {
+    assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
+    managedPolicies: [
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AWSBackupServiceRolePolicyForBackup',
+      ),
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSBackupServiceRolePolicyForS3Backup'),
+    ],
+  });
   // The personal-stack operation log and its derived snapshots share the durable table. Selecting
   // the table ARN (rather than row tags) guarantees a recovery point cannot omit operation chunks.
   plan.addSelection('CanonicalOperationsAndDurableResources', {
+    role: backupRole,
     resources: [
       backup.BackupResource.fromDynamoDbTable(options.table),
       backup.BackupResource.fromArn(options.media.bucketArn),
@@ -71,6 +81,7 @@ export function createBackupResources(
       iam.ManagedPolicy.fromAwsManagedPolicyName(
         'service-role/AWSBackupServiceRolePolicyForRestores',
       ),
+      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSBackupServiceRolePolicyForS3Restore'),
     ],
   });
   const restoreTestingPlanName = 'NaasehQuarterlyRestoreTest';

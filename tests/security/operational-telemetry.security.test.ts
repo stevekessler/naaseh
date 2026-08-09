@@ -28,12 +28,15 @@ describe('operational telemetry', () => {
     'UserProvisionFailures',
     'UserStatusChanges',
     'CategoryAdminChanges',
-  ])('keeps the content-free %s metric on the dashboard without a dedicated alarm', (metricName) => {
-    const dashboard = JSON.stringify(template.findResources('AWS::CloudWatch::Dashboard'));
-    const alarms = JSON.stringify(template.findResources('AWS::CloudWatch::Alarm'));
-    expect(dashboard).toContain(metricName);
-    expect(alarms).not.toContain(metricName);
-  });
+  ])(
+    'keeps the content-free %s metric on the dashboard without a dedicated alarm',
+    (metricName) => {
+      const dashboard = JSON.stringify(template.findResources('AWS::CloudWatch::Dashboard'));
+      const alarms = JSON.stringify(template.findResources('AWS::CloudWatch::Alarm'));
+      expect(dashboard).toContain(metricName);
+      expect(alarms).not.toContain(metricName);
+    },
+  );
 
   it('keeps workflow execution data out of restore logs', () => {
     template.hasResourceProperties('AWS::StepFunctions::StateMachine', {

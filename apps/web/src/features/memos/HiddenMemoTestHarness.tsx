@@ -52,8 +52,7 @@ export function HiddenMemoTestHarness() {
 
   useEffect(
     () => () => {
-      if (inactivityTimer.current !== undefined)
-        window.clearTimeout(inactivityTimer.current);
+      if (inactivityTimer.current !== undefined) window.clearTimeout(inactivityTimer.current);
     },
     [],
   );

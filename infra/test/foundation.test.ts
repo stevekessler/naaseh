@@ -264,6 +264,21 @@ describe('foundation infrastructure', () => {
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
     expect(alarms).toHaveLength(18);
     for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
+    const [, runtimeSecretPolicyChangeAlarm] =
+      Object.entries(template.findResources('AWS::CloudWatch::Alarm')).find(([logicalId]) =>
+        logicalId.startsWith('RuntimeSecretPolicyChangeAlarm'),
+      ) ?? [];
+    expect(runtimeSecretPolicyChangeAlarm?.Properties).toMatchObject({
+      Dimensions: [
+        {
+          Name: 'RuleName',
+          Value: { Ref: expect.stringMatching(/^RuntimeSecretPolicyChangeRule/) },
+        },
+      ],
+      MetricName: 'MatchedEvents',
+      Namespace: 'AWS/Events',
+      TreatMissingData: 'notBreaching',
+    });
     for (const alarm of [
       'RecoveryKeyPolicyChangeAlarm',
       'RuntimeSecretPolicyChangeAlarm',

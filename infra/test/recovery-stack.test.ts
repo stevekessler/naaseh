@@ -114,10 +114,16 @@ describe('single-region recovery infrastructure', () => {
     });
     template.hasResourceProperties('AWS::Backup::BackupSelection', {
       BackupSelection: Match.objectLike({
+        IamRoleArn: Match.anyValue(),
         SelectionName: 'CanonicalOperationsAndDurableResources',
       }),
     });
-    expect(JSON.stringify(template.toJSON())).not.toContain('CopyActions');
+    const rendered = JSON.stringify(template.toJSON());
+    expect(rendered).toContain('AWSBackupServiceRolePolicyForBackup');
+    expect(rendered).toContain('AWSBackupServiceRolePolicyForS3Backup');
+    expect(rendered).toContain('AWSBackupServiceRolePolicyForRestores');
+    expect(rendered).toContain('AWSBackupServiceRolePolicyForS3Restore');
+    expect(rendered).not.toContain('CopyActions');
   });
 
   it('provisions quarterly isolated restore testing and safe failure alerts', () => {

@@ -69,11 +69,13 @@ export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
     metric: new cloudwatch.Metric({
       namespace: 'AWS/Events',
       metricName: 'MatchedEvents',
+      dimensionsMap: { RuleName: policyChangeRule.ruleName },
       period: Duration.minutes(5),
       statistic: 'Sum',
     }),
     threshold: 1,
     evaluationPeriods: 1,
+    treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
   policyChangeAlarm.addAlarmAction(new actions.SnsAction(alerts));
   return {
