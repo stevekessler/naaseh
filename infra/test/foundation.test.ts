@@ -148,19 +148,16 @@ describe('foundation infrastructure', () => {
       );
     });
     expect(pepperReaders).toHaveLength(5);
-    template.hasResourceProperties('AWS::IAM::Policy', {
-      PolicyDocument: {
-        Statement: Match.arrayWith([
-          Match.objectLike({
-            Action: 'kms:Decrypt',
-            Effect: 'Allow',
-            Condition: {
-              StringEquals: { 'kms:ViaService': Match.anyValue() },
-            },
-          }),
-        ]),
-      },
-    });
+    const provisionPolicy = Object.entries(template.findResources('AWS::IAM::Policy')).find(
+      ([logicalId]) => logicalId.startsWith('ProvisionUserFunctionServiceRoleDefaultPolicy'),
+    )?.[1];
+    expect(provisionPolicy).toBeDefined();
+    const renderedProvisionPolicy = JSON.stringify(provisionPolicy);
+    expect(renderedProvisionPolicy).toContain('RuntimeSecretsKey');
+    expect(renderedProvisionPolicy).toContain('secretsmanager.us-west-2.');
+    expect(renderedProvisionPolicy).toContain('DataKey');
+    expect(renderedProvisionPolicy).toContain('dynamodb.us-west-2.');
+    expect(renderedProvisionPolicy).toContain('kms:GenerateDataKey*');
   });
 
   it('throttles group joins independently and scopes profile-media access', () => {

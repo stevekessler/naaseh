@@ -26,6 +26,7 @@ export function createAdminFunctions(
   options: {
     environment: Record<string, string>;
     table: dynamodb.ITable;
+    dataKey: kms.IKey;
     media: s3.IBucket;
     passwordPepper: secretsmanager.ISecret;
     passwordPepperKey: kms.IKey;
@@ -97,6 +98,23 @@ export function createAdminFunctions(
       effect: iam.Effect.ALLOW,
       actions: ['dynamodb:GetItem', 'dynamodb:TransactWriteItems'],
       resources: [options.table.tableArn],
+    }),
+  );
+  provisionUser.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: [
+        'kms:Encrypt',
+        'kms:Decrypt',
+        'kms:ReEncrypt*',
+        'kms:GenerateDataKey*',
+        'kms:DescribeKey',
+      ],
+      resources: [options.dataKey.keyArn],
+      conditions: {
+        StringEquals: {
+          'kms:ViaService': `dynamodb.${Stack.of(scope).region}.${Stack.of(scope).urlSuffix}`,
+        },
+      },
     }),
   );
   options.passwordPepper.grantRead(admin);

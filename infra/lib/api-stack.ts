@@ -246,6 +246,7 @@ export function createApplicationApi(
     createAdminFunctions(scope, {
       environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
       table: options.table,
+      dataKey: options.dataKey,
       media: options.media,
       passwordPepper: options.pepper,
       passwordPepperKey: options.pepperKey,
