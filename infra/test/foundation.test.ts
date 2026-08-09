@@ -157,6 +157,9 @@ describe('foundation infrastructure', () => {
     expect(renderedProvisionPolicy).toContain('secretsmanager.us-west-2.');
     expect(renderedProvisionPolicy).toContain('DataKey');
     expect(renderedProvisionPolicy).toContain('dynamodb.us-west-2.');
+    expect(renderedProvisionPolicy).toContain('dynamodb:PutItem');
+    expect(renderedProvisionPolicy).toContain('dynamodb:EnclosingOperation');
+    expect(renderedProvisionPolicy).toContain('TransactWriteItems');
     expect(renderedProvisionPolicy).toContain('kms:GenerateDataKey*');
   });
 

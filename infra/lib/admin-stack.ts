@@ -96,8 +96,20 @@ export function createAdminFunctions(
   provisionUser.addToRolePolicy(
     new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
-      actions: ['dynamodb:GetItem', 'dynamodb:TransactWriteItems'],
+      actions: ['dynamodb:GetItem'],
       resources: [options.table.tableArn],
+    }),
+  );
+  provisionUser.addToRolePolicy(
+    new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['dynamodb:PutItem'],
+      resources: [options.table.tableArn],
+      conditions: {
+        'ForAnyValue:StringEquals': {
+          'dynamodb:EnclosingOperation': 'TransactWriteItems',
+        },
+      },
     }),
   );
   provisionUser.addToRolePolicy(
