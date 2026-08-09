@@ -295,7 +295,9 @@ export function App() {
   const localStackLabels = useMemo(
     () =>
       new Map(
-        eligibleStackWork.map((item) => [workReferenceIdentity(item.reference), item.label] as const),
+        eligibleStackWork.map(
+          (item) => [workReferenceIdentity(item.reference), item.label] as const,
+        ),
       ),
     [eligibleStackWork],
   );
@@ -432,7 +434,8 @@ export function App() {
       completionEvents.map((event) => {
         const task = tasks.find((candidate) => candidate.id === event.taskId);
         const rank = allRankedStackItems.find(
-          ({ work }) => work.reference.workType === 'task' && work.reference.workId === event.taskId,
+          ({ work }) =>
+            work.reference.workType === 'task' && work.reference.workId === event.taskId,
         )?.rank;
         return {
           id: event.id,
@@ -823,7 +826,10 @@ export function App() {
             tree={workloadTree}
             selectedUrgencies={filters.urgencies}
             changeUrgencies={(urgencies) =>
-              setFilters((current) => ({ ...current, urgencies: urgencies as Filters['urgencies'] }))
+              setFilters((current) => ({
+                ...current,
+                urgencies: urgencies as Filters['urgencies'],
+              }))
             }
             detailRows={projectDetailRows}
             detailScope={

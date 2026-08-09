@@ -144,7 +144,9 @@ export function CompletionDashboard({
           <p className="eyebrow">Your completed to-dos</p>
           <h1 id="completion-dashboard-heading">Completion dashboard</h1>
         </div>
-        <strong aria-label={`${displayedTotal} completed to-dos`}>{displayedTotal} completed</strong>
+        <strong aria-label={`${displayedTotal} completed to-dos`}>
+          {displayedTotal} completed
+        </strong>
       </header>
       <CompletionFilters
         value={filters}

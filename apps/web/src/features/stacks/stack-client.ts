@@ -3,10 +3,18 @@ import type { Filters } from '../../search/task-search.js';
 import type { LocalStackScope } from '../../db/personal-stack-repository.js';
 import type { StackDisplayItem } from './StackRow.js';
 
-export type StackReadError = 'invalid_cursor' | 'expired_cursor' | 'context_changed' | 'failed' | 'timeout';
+export type StackReadError =
+  | 'invalid_cursor'
+  | 'expired_cursor'
+  | 'context_changed'
+  | 'failed'
+  | 'timeout';
 
 export class StackReadProblem extends Error {
-  constructor(public readonly kind: StackReadError, message: string) {
+  constructor(
+    public readonly kind: StackReadError,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -69,7 +77,10 @@ export async function readFilteredStack(
       window.clearTimeout(timeout);
     }
     if (!response.ok) {
-      const problem = (await response.json().catch(() => ({}))) as { code?: string; message?: string };
+      const problem = (await response.json().catch(() => ({}))) as {
+        code?: string;
+        message?: string;
+      };
       throw new StackReadProblem(
         problemKind(response.status, problem.code),
         problem.message ?? `Unable to read the filtered stack (${response.status}).`,

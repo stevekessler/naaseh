@@ -99,7 +99,9 @@ export function PersonalStackPage({
         <div role="alert">
           <p>{readErrorCopy[readError]}</p>
           {readError === 'failed' || readError === 'timeout' ? (
-            retryRead ? <button onClick={retryRead}>Retry filtered read</button> : null
+            retryRead ? (
+              <button onClick={retryRead}>Retry filtered read</button>
+            ) : null
           ) : restartRead ? (
             <button onClick={restartRead}>Restart filtered read</button>
           ) : null}

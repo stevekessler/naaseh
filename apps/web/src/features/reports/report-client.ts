@@ -12,7 +12,10 @@ export interface CompletionReportPayload {
 }
 
 export class ReportProblem extends Error {
-  constructor(public readonly kind: CompletionReportError, message: string) {
+  constructor(
+    public readonly kind: CompletionReportError,
+    message: string,
+  ) {
     super(message);
   }
 }
@@ -33,12 +36,18 @@ async function readJson<T>(url: string): Promise<T> {
   try {
     response = await fetch(url, { credentials: 'include', signal: controller.signal });
   } catch {
-    throw new ReportProblem('calculation_failed', 'The report request timed out. Retry the report.');
+    throw new ReportProblem(
+      'calculation_failed',
+      'The report request timed out. Retry the report.',
+    );
   } finally {
     window.clearTimeout(timeout);
   }
   if (!response.ok) {
-    const problem = (await response.json().catch(() => ({}))) as { code?: string; message?: string };
+    const problem = (await response.json().catch(() => ({}))) as {
+      code?: string;
+      message?: string;
+    };
     throw new ReportProblem(
       errorKind(response.status, problem.code),
       problem.message ?? `Unable to calculate this report (${response.status}).`,
@@ -95,9 +104,7 @@ export async function fetchCompletionDetail(filters: CompletionFilterValue, curs
       projectRank?: number;
     }>;
     nextCursor: string | null;
-  }>(
-    `/api/v1/reporting/completion-report/drilldown?${completionReportQuery(filters, cursor)}`,
-  );
+  }>(`/api/v1/reporting/completion-report/drilldown?${completionReportQuery(filters, cursor)}`);
   return {
     rows: page.items.map(
       (item): CompletionDetailRow => ({
@@ -113,7 +120,12 @@ export async function fetchCompletionDetail(filters: CompletionFilterValue, curs
 }
 
 export function emptyCompletionReport(): CompletionReportPayload {
-  return { asOf: new Date().toISOString(), total: 0, urgencyCounts: zeroUrgencyCounts(), buckets: [] };
+  return {
+    asOf: new Date().toISOString(),
+    total: 0,
+    urgencyCounts: zeroUrgencyCounts(),
+    buckets: [],
+  };
 }
 
 const csvCell = (value: unknown) => `"${String(value ?? '').replaceAll('"', '""')}"`;
