@@ -408,13 +408,23 @@ cannot use the role merely by knowing its ARN:
       "Condition": {
         "StringEquals": {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:stevekessler/naaseh:environment:production"
+          "token.actions.githubusercontent.com:sub": "repo:stevekessler@867985/naaseh@1308539000:environment:production"
         }
       }
     }
   ]
 }
 ```
+
+GitHub's OIDC subject for this repository includes the immutable owner and repository IDs shown
+above. Verify the current prefix before creating or repairing the trust policy:
+
+```console
+gh api repos/stevekessler/naaseh/actions/oidc/customization/sub
+```
+
+The role condition must match the subject GitHub actually issues exactly. A name-only subject such
+as `repo:stevekessler/naaseh:environment:production` is rejected by AWS.
 
 Create `/tmp/naaseh-github-cdk-policy.json` with the only permissions granted directly to the
 GitHub role. CDK will exchange these credentials for its bootstrapped deployment, lookup, and asset

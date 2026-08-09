@@ -44,6 +44,20 @@ export function createWebResources(
     versioned: true,
     removalPolicy: RemovalPolicy.RETAIN,
   });
+  const spaRouteRewrite = new cloudfront.Function(scope, 'SpaRouteRewrite', {
+    code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  var isSafeMethod = request.method === 'GET' || request.method === 'HEAD';
+  var isApiPath = uri.indexOf('/api/') === 0;
+  var lastSegment = uri.substring(uri.lastIndexOf('/') + 1);
+  var isSpaRoute = uri.charAt(uri.length - 1) === '/' || lastSegment.indexOf('.') === -1;
+  if (isSafeMethod && !isApiPath && isSpaRoute) request.uri = '/index.html';
+  return request;
+}
+`),
+  });
   const distribution = new cloudfront.Distribution(scope, 'Distribution', {
     certificate: acm.Certificate.fromCertificateArn(
       scope,
@@ -58,9 +72,14 @@ export function createWebResources(
       origin: origins.S3BucketOrigin.withOriginAccessControl(web),
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       responseHeadersPolicy,
+      functionAssociations: [
+        {
+          function: spaRouteRewrite,
+          eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+        },
+      ],
     },
     defaultRootObject: 'index.html',
-    errorResponses: [{ httpStatus: 403, responseHttpStatus: 200, responsePagePath: '/index.html' }],
   });
   new s3deploy.BucketDeployment(scope, 'WebDeployment', {
     sources: [s3deploy.Source.asset(options.webAssetPath)],

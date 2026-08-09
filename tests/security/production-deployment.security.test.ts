@@ -23,6 +23,7 @@ describe('production deployment workflow', () => {
       "always() && needs.deploy.result == 'success' && needs.smoke.result == 'failure'",
     );
     expect(workflow).toContain('naaseh-production-rollback');
+    expect(workflow).toContain('Build known-good web assets for rollback');
     expect(workflow.match(/--rollback/g)?.length).toBeGreaterThanOrEqual(2);
   });
 });

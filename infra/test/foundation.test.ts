@@ -62,11 +62,20 @@ describe('foundation infrastructure', () => {
         Aliases: ['gsd.thepandas.link'],
         ViewerCertificate: Match.objectLike({ MinimumProtocolVersion: 'TLSv1.2_2021' }),
         WebACLId: webProps.webAclArn,
-        DefaultCacheBehavior: Match.objectLike({ ViewerProtocolPolicy: 'redirect-to-https' }),
+        DefaultCacheBehavior: Match.objectLike({
+          ViewerProtocolPolicy: 'redirect-to-https',
+          FunctionAssociations: Match.arrayWith([
+            Match.objectLike({ EventType: 'viewer-request' }),
+          ]),
+        }),
         CacheBehaviors: Match.arrayWith([
           Match.objectLike({ PathPattern: '/api/v1/*', ViewerProtocolPolicy: 'https-only' }),
         ]),
+        CustomErrorResponses: Match.absent(),
       }),
+    });
+    template.hasResourceProperties('AWS::CloudFront::Function', {
+      FunctionCode: Match.stringLikeRegexp("isApiPath.*request.uri = '/index.html'"),
     });
     template.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
       ResponseHeadersPolicyConfig: Match.objectLike({
