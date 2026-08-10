@@ -56,25 +56,23 @@ export function createBackupResources(
       }),
     ],
   });
-  const backupRole = new iam.Role(scope, 'BackupSelectionRole', {
-    assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
-    managedPolicies: [
-      iam.ManagedPolicy.fromAwsManagedPolicyName(
-        'service-role/AWSBackupServiceRolePolicyForBackup',
-      ),
-      iam.ManagedPolicy.fromAwsManagedPolicyName('AWSBackupServiceRolePolicyForS3Backup'),
-    ],
-  });
+
   // The personal-stack operation log and its derived snapshots share the durable table. Selecting
   // the table ARN (rather than row tags) guarantees a recovery point cannot omit operation chunks.
-  plan.addSelection('CanonicalOperationsAndDurableResources', {
-    role: backupRole,
+  const backupSelection = plan.addSelection('CanonicalOperationsAndDurableResources', {
     resources: [
       backup.BackupResource.fromDynamoDbTable(options.table),
       backup.BackupResource.fromArn(options.media.bucketArn),
     ],
   });
 
+  const generatedBackupRole = backupSelection.grantPrincipal;
+  if (!iam.Role.isRole(generatedBackupRole)) {
+    throw new Error('The AWS Backup selection must use its CDK-generated IAM role.');
+  }
+  generatedBackupRole.addManagedPolicy(
+    iam.ManagedPolicy.fromAwsManagedPolicyName('AWSBackupServiceRolePolicyForS3Backup'),
+  );
   const restoreRole = new iam.Role(scope, 'BackupRestoreTestingRole', {
     assumedBy: new iam.ServicePrincipal('backup.amazonaws.com'),
     managedPolicies: [
