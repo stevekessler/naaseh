@@ -112,12 +112,26 @@ describe('single-region recovery infrastructure', () => {
         ]),
       },
     });
-    template.hasResourceProperties('AWS::Backup::BackupSelection', {
-      BackupSelection: Match.objectLike({
-        IamRoleArn: Match.anyValue(),
-        SelectionName: 'CanonicalOperationsAndDurableResources',
-      }),
+    const backupSelectionLogicalId = 'BackupPlanCanonicalOperationsAndDurableResources105DAABD';
+    const generatedBackupRoleLogicalId =
+      'BackupPlanCanonicalOperationsAndDurableResourcesRoleD445105C';
+    const backupSelections = template.findResources('AWS::Backup::BackupSelection');
+    expect(backupSelections).toHaveProperty(backupSelectionLogicalId);
+    expect(backupSelections[backupSelectionLogicalId]?.Properties?.BackupSelection).toMatchObject({
+      IamRoleArn: {
+        'Fn::GetAtt': [generatedBackupRoleLogicalId, 'Arn'],
+      },
+      SelectionName: 'CanonicalOperationsAndDurableResources',
     });
+    const roles = template.findResources('AWS::IAM::Role');
+    expect(roles).toHaveProperty(generatedBackupRoleLogicalId);
+    expect(JSON.stringify(roles[generatedBackupRoleLogicalId])).toContain(
+      'AWSBackupServiceRolePolicyForBackup',
+    );
+    expect(JSON.stringify(roles[generatedBackupRoleLogicalId])).toContain(
+      'AWSBackupServiceRolePolicyForS3Backup',
+    );
+    expect(Object.keys(roles)).not.toContainEqual(expect.stringMatching(/^BackupSelectionRole/));
     const rendered = JSON.stringify(template.toJSON());
     expect(rendered).toContain('AWSBackupServiceRolePolicyForBackup');
     expect(rendered).toContain('AWSBackupServiceRolePolicyForS3Backup');
