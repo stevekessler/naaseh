@@ -19,6 +19,7 @@
     "test:python": "python3 -m unittest discover -s scripts/tests -p 'test_*.py'",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:quick": "playwright test --config playwright.quick.config.ts",
     "test:safari-preview": "node tools/safari-technology-preview-smoke.mjs",
     "test:performance": "vitest run tests/performance",
     "test:performance:urgency-stack-ranking": "vitest run tests/performance/urgency-stack-ranking.test.ts",

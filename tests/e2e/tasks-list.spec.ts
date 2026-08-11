@@ -56,6 +56,7 @@ test('shows nested subtasks in task details', async ({ page }) => {
 });
 
 test('keeps Tasks first and collapses the mobile header after scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 740 });
   await signIn(page);
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(navigation.getByRole('button').first()).toHaveText('Tasks');
@@ -64,7 +65,10 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
     'page',
   );
 
-  await page.evaluate(() => window.scrollTo(0, 220));
+  await page.evaluate(() => {
+    document.body.style.minHeight = '1400px';
+    window.scrollTo(0, 220);
+  });
   await expect(page.locator('.topbar')).toHaveClass(/topbar-collapsed/);
   await expect(page.locator('.topbar > img')).toBeHidden();
   await expect(navigation).toBeVisible();
