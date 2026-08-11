@@ -1,4 +1,4 @@
-# Archive, Projects, and Completion Dashboard
+# Archive, Projects, and Completed Tasks
 
 Completing a to-do automatically moves it to **Archive** and records one completion. Use
 **Archive without completing** when the work should disappear from active views without receiving
@@ -12,7 +12,8 @@ Assign a to-do or List to a Project, or choose Unassigned. Category is derived f
 The Projects page rolls Project counts up to each Category and shows separate to-do/List counts,
 end dates, overdue state, and exact drill-down links.
 
-The Dashboard groups personal to-do completions by day, week, or month in an IANA time zone.
+Completed Tasks groups personal to-do completions by day, week, or month in an IANA time zone. Empty
+periods are omitted from the chart while totals and exports continue to include the full report.
 Filters include Unassigned, Category, and Project; archived organization labels remain available
 because reports use the names captured at completion time. Pending offline changes are identified.
 

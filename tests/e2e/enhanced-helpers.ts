@@ -58,3 +58,29 @@ export async function addTask(page: Page, label: string) {
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: label })).toBeVisible();
 }
+
+export async function openCompletedTasks(page: Page) {
+  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await expect(page).toHaveURL(/\/dashboard(?:\?|$)/);
+  await expect(page.getByRole('heading', { name: 'Completed Tasks', exact: true })).toBeVisible();
+}
+
+export async function setOffline(page: Page, offline = true) {
+  await page.context().setOffline(offline);
+  await page.evaluate((isOffline) => {
+    window.dispatchEvent(new Event(isOffline ? 'offline' : 'online'));
+  }, offline);
+}
+
+export async function resizePreservingValue(
+  page: Page,
+  fieldLabel: string,
+  value: string,
+  width: number,
+  height: number,
+) {
+  const field = page.getByLabel(fieldLabel);
+  await field.fill(value);
+  await page.setViewportSize({ width, height });
+  await expect(field).toHaveValue(value);
+}

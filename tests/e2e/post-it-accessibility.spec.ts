@@ -23,7 +23,7 @@ test('supports keyboard operation, visible focus, announcements, and WCAG checks
   await expect(page.locator('.postit', { hasText: 'Accessible note' })).toBeHidden();
 
   for (const [name, control] of [
-    ['Tasks', page.getByRole('button', { name: 'Tasks' })],
+    ['Tasks', page.getByRole('button', { name: 'Tasks', exact: true })],
     ['Post-its', page.getByRole('button', { name: 'Post-its' })],
     ['Archive', page.getByRole('button', { name: 'Archive', exact: true })],
   ]) {

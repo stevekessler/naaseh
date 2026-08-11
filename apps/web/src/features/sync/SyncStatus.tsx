@@ -12,8 +12,8 @@ export function SyncStatus({
   retry: () => void;
 }) {
   return (
-    <div role="status">
-      <span>
+    <div className="sync-status" role="status">
+      <span className="sync-status-summary">
         {!online
           ? `Offline${pending ? ` · ${pending} pending` : ''}`
           : error
@@ -25,10 +25,10 @@ export function SyncStatus({
                 : 'Synced'}
       </span>
       {error && (
-        <>
+        <div className="sync-status-error" role="alert">
           <span>{error}</span>
           <button onClick={retry}>Retry</button>
-        </>
+        </div>
       )}
     </div>
   );

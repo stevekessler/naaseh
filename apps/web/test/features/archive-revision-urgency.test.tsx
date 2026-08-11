@@ -29,8 +29,8 @@ describe('archived and revised urgency display', () => {
     );
 
     expect(html).toContain('data-urgency="critical"');
-    expect(html).toContain('aria-label="Urgency: Critical"');
-    expect(html).toContain('Urgency: Critical');
+    expect(html).toContain('aria-label="Priority: Critical"');
+    expect(html).toContain('Priority: Critical');
   });
 
   it('combines offline archive urgency with Project, assignee, Category, date, and content type', () => {
@@ -114,7 +114,7 @@ describe('archived and revised urgency display', () => {
     };
     const html = renderToStaticMarkup(<RevisionLog revisions={[revision]} />);
 
-    expect(html).toContain('Urgency changed from');
+    expect(html).toContain('Priority changed from');
     expect(html).toContain('<strong>Extra Low</strong>');
     expect(html).toContain('<strong>Critical</strong>');
     expect(html).not.toContain('extra_low');

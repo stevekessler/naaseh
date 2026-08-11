@@ -21,12 +21,12 @@ function UrgencyRevision({ revision }: { revision: TaskRevision }) {
   if (!after) return null;
   return before ? (
     <p className="revision-urgency">
-      Urgency changed from <strong>{urgencyLabels[before]}</strong> to{' '}
+      Priority changed from <strong>{urgencyLabels[before]}</strong> to{' '}
       <strong>{urgencyLabels[after]}</strong>.
     </p>
   ) : (
     <p className="revision-urgency">
-      Urgency set to <strong>{urgencyLabels[after]}</strong>.
+      Priority set to <strong>{urgencyLabels[after]}</strong>.
     </p>
   );
 }

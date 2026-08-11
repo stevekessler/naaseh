@@ -3,9 +3,16 @@ import type { LocalArchiveEntry } from '../../db/archive-repository.js';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { UrgencyBreakdown } from '../../components/UrgencyBreakdown.js';
 import { PermanentDeleteDialog } from './PermanentDeleteDialog.js';
-import { matchesUrgencySet, zeroUrgencyCounts, type UrgencyCounts } from '@naaseh/domain';
+import {
+  matchesUrgencySet,
+  zeroUrgencyCounts,
+  type CategoryRecord,
+  type Project,
+  type UrgencyCounts,
+} from '@naaseh/domain';
 import { TaskFilters } from '../search/TaskFilters.js';
 import type { Filters } from '../../search/task-search.js';
+import type { AssigneeOption } from '../../components/AssigneePicker.js';
 
 export function matchesArchiveFilters(
   entry: LocalArchiveEntry,
@@ -50,6 +57,9 @@ export function ArchivePage({
   exportCsv,
   exportState = 'idle',
   retryExport,
+  categories = [],
+  projects = [],
+  assignees = [],
 }: {
   entries: LocalArchiveEntry[];
   restore: (entry: LocalArchiveEntry) => Promise<void>;
@@ -60,6 +70,9 @@ export function ArchivePage({
   exportCsv?: () => void;
   exportState?: 'idle' | 'pending' | 'failed';
   retryExport?: () => void;
+  categories?: readonly CategoryRecord[];
+  projects?: readonly Project[];
+  assignees?: readonly AssigneeOption[];
 }) {
   const [query, setQuery] = useState('');
   const archiveFilters = filters ? { ...filters, lifecycle: 'archive' as const } : undefined;
@@ -82,6 +95,9 @@ export function ArchivePage({
             value={archiveFilters!}
             change={(next) => changeFilters({ ...next, lifecycle: 'archive' })}
             resultCount={visible.length}
+            categories={categories}
+            projects={projects}
+            assignees={assignees}
           />
         </section>
       ) : null}
@@ -91,11 +107,11 @@ export function ArchivePage({
       </label>
       <UrgencyBreakdown
         counts={urgencyCounts ?? calculatedUrgencyCounts}
-        label="Archive urgency breakdown"
+        label="Archive priority breakdown"
       />
       {exportCsv ? (
         <section aria-label="Archive export">
-          <p>Export columns: Urgency, Overall rank, Project rank</p>
+          <p>Export columns: Priority, Overall rank, Project rank</p>
           <button type="button" onClick={exportCsv} disabled={exportState === 'pending'}>
             {exportState === 'pending' ? 'Exporting…' : 'Export CSV'}
           </button>

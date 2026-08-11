@@ -3,7 +3,7 @@ import { urgencyLabels, urgencySchema, urgencyValues, type Urgency } from '@naas
 export function UrgencyField({
   value,
   onChange,
-  label = 'Urgency',
+  label = 'Priority',
   name = 'urgency',
   disabled = false,
 }: {

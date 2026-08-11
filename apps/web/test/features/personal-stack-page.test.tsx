@@ -1,6 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { PersonalStackPage } from '../../src/features/stacks/PersonalStackPage.js';
+import {
+  formatStackSyncTime,
+  PersonalStackPage,
+} from '../../src/features/stacks/PersonalStackPage.js';
 import { StackMoveControls } from '../../src/features/stacks/StackMoveControls.js';
 import { stackRowFocusId } from '../../src/features/stacks/StackRow.js';
 import { StackScopePicker } from '../../src/features/stacks/StackScopePicker.js';
@@ -117,5 +120,47 @@ describe('personal stack accessibility contract', () => {
     expect(html).toContain(`aria-controls="${focusId}"`);
     expect(html).toContain(`data-focus-return="${focusId}"`);
     expect(html).toContain('1 change pending synchronization');
+  });
+
+  it('only reports synced changes after a successful stack acknowledgement', () => {
+    const neverSynced = renderToStaticMarkup(
+      <PersonalStackPage
+        scope={{ scopeType: 'overall' }}
+        projects={projects}
+        items={[]}
+        announcement=""
+        pendingOperationIds={[]}
+        conflictCount={0}
+        changeScope={vi.fn()}
+        move={vi.fn()}
+      />,
+    );
+    const syncedAt = '2026-08-10T20:15:30.000Z';
+    const synced = renderToStaticMarkup(
+      <PersonalStackPage
+        scope={{ scopeType: 'overall' }}
+        projects={projects}
+        items={[]}
+        announcement=""
+        pendingOperationIds={[]}
+        conflictCount={0}
+        lastSyncedAt={syncedAt}
+        changeScope={vi.fn()}
+        move={vi.fn()}
+      />,
+    );
+
+    expect(neverSynced).toContain('No stack changes have been synced yet');
+    expect(neverSynced).not.toContain('Stack changes synced');
+    expect(synced).toContain('Stack changes synced · Last sync');
+    expect(synced).toContain(formatStackSyncTime(syncedAt));
+  });
+
+  it('formats last sync time in the requested browser time zone', () => {
+    const formatted = formatStackSyncTime('2026-08-10T20:15:30.000Z', 'America/Denver');
+
+    expect(formatted).toContain('Aug 10, 2026');
+    expect(formatted).toContain('2:15:30');
+    expect(formatted).toMatch(/MDT|GMT-6/);
   });
 });

@@ -88,6 +88,7 @@ export function ListPage({
               <UrgencyBadge urgency={list.urgency} />
               <UrgencyField
                 value={list.urgency}
+                label="Priority"
                 onChange={(urgency) => void changeList(list, { urgency })}
               />
               <button

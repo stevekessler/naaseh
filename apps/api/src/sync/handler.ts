@@ -5,11 +5,18 @@ import type {
 } from 'aws-lambda';
 import { errorResponse, json, problem, recordError, SafeApiError } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
-import { getRecord, listOwnerTasks, listPublicTasks } from '../shared/store.js';
+import { getRecord, listOwnerTasks, listPublicTasks, putRecord } from '../shared/store.js';
 import { findTask, saveTaskMutation } from '../tasks/task-repository.js';
 import {
   directoryItemSchema,
   listItemSchema,
+  archiveCategory,
+  archiveProject,
+  categorySchema,
+  projectSchema,
+  restoreCategory,
+  restoreProject,
+  updateProject,
   taskSchema,
   type ContentActor,
   type Mutation,
@@ -29,7 +36,37 @@ import { listUserMemberships } from '../groups/group-repository.js';
 import { findList, findListItem, saveList, saveListItem } from '../lists/list-repository.js';
 import { findDirectoryItem, saveDirectoryItemRecord } from '../directory/directory-repository.js';
 import { defaultPersonalStackService, dispatchStackCompaction } from '../ranking/runtime.js';
+import {
+  createCategoryRecord,
+  getCategory,
+  updateCategoryRecord,
+} from '../categories/category-repository.js';
+import {
+  createProjectRecord,
+  getProject,
+  updateProjectRecord,
+} from '../projects/project-repository.js';
 const MAX_BODY_BYTES = 1_000_000;
+
+async function saveOrganizationMutationReceipt(
+  actorId: string,
+  mutationId: string,
+  entity: { id: string; version: number },
+) {
+  await putRecord(
+    {
+      ...keys.mutation(actorId, mutationId),
+      data: {
+        mutationId,
+        status: 'applied',
+        entityVersion: entity.version,
+        entity,
+      },
+      expiresAt: Math.floor(Date.now() / 1000) + 2_592_000,
+    },
+    'attribute_not_exists(PK)',
+  );
+}
 async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const context = event.requestContext as typeof event.requestContext & {
     authorizer?: {
@@ -193,6 +230,105 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         entityVersion: prior.data?.entityVersion ?? prior.version,
         entity: prior.data?.entity,
       });
+      continue;
+    }
+    if (mutation.entityType === 'category' || mutation.entityType === 'project') {
+      if (actor.role !== 'admin') {
+        results.push({ mutationId: mutation.id, status: 'rejected' });
+        continue;
+      }
+      try {
+        if (mutation.entityType === 'category') {
+          const current = await getCategory(mutation.entityId);
+          if (mutation.baseVersion !== (current?.version ?? 0)) {
+            results.push({
+              mutationId: mutation.id,
+              status: current ? 'conflict' : 'rejected',
+              entityVersion: current?.version,
+              ...(current ? { current } : {}),
+            });
+            continue;
+          }
+          const next = !current
+            ? categorySchema.parse(mutation.payload)
+            : mutation.operation === 'archiveOrganization'
+              ? archiveCategory(current, actorId)
+              : mutation.operation === 'restoreOrganization'
+                ? restoreCategory(current)
+                : categorySchema.parse({
+                    ...current,
+                    ...(mutation.payload as Record<string, unknown>),
+                    updatedAt: new Date().toISOString(),
+                    version: current.version + 1,
+                  });
+          if (next.id !== mutation.entityId || (!current && next.version !== 1))
+            throw new Error('Category mutation identity or version is invalid.');
+          if (current) await updateCategoryRecord(current, next);
+          else await createCategoryRecord(next);
+          await saveOrganizationMutationReceipt(actorId, mutation.id, next);
+          results.push({
+            mutationId: mutation.id,
+            status: 'applied',
+            entityVersion: next.version,
+            entity: next,
+          });
+        } else {
+          const current = await getProject(mutation.entityId);
+          if (mutation.baseVersion !== (current?.version ?? 0)) {
+            results.push({
+              mutationId: mutation.id,
+              status: current ? 'conflict' : 'rejected',
+              entityVersion: current?.version,
+              ...(current ? { current } : {}),
+            });
+            continue;
+          }
+          const next = !current
+            ? projectSchema.parse(mutation.payload)
+            : mutation.operation === 'archiveOrganization'
+              ? archiveProject(current, actorId)
+              : mutation.operation === 'restoreOrganization'
+                ? restoreProject(current)
+                : updateProject(
+                    current,
+                    mutation.payload as Parameters<typeof updateProject>[1],
+                  );
+          if (next.id !== mutation.entityId || (!current && next.version !== 1))
+            throw new Error('Project mutation identity or version is invalid.');
+          if (!(await getCategory(next.categoryId)))
+            throw new Error('Project category is unavailable.');
+          if (current) await updateProjectRecord(current, next);
+          else await createProjectRecord(next);
+          await saveOrganizationMutationReceipt(actorId, mutation.id, next);
+          results.push({
+            mutationId: mutation.id,
+            status: 'applied',
+            entityVersion: next.version,
+            entity: next,
+          });
+        }
+      } catch (error) {
+        const classified = recordError(error, {
+          correlationId: event.requestContext.requestId,
+          operation: 'sync.organizationMutation',
+          actorId,
+          resourceId: mutation.entityId,
+        });
+        results.push({
+          mutationId: mutation.id,
+          status:
+            classified.classification === 'conflict'
+              ? 'conflict'
+              : classified.retryable
+                ? 'retry'
+                : 'rejected',
+          problem: {
+            code: classified.code,
+            message: classified.safeMessage,
+            correlationId: event.requestContext.requestId,
+          },
+        });
+      }
       continue;
     }
     if (mutation.entityType === 'list') {

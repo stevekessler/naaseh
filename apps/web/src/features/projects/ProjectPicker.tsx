@@ -6,20 +6,40 @@ export function ProjectPicker({
   categories,
   projects,
   defaultValue,
+  value,
+  categoryId,
+  onChange,
+  allLabel,
   includeArchived = false,
 }: {
-  categories: CategoryRecord[];
-  projects: Project[];
+  categories: readonly CategoryRecord[];
+  projects: readonly Project[];
   defaultValue?: string;
+  value?: string;
+  categoryId?: string;
+  onChange?: (value: string) => void;
+  allLabel?: string;
   includeArchived?: boolean;
 }) {
   const grouped = projectsByCategory(projects);
+  const selected = value ?? defaultValue ?? '';
+  const selectedProject = projects.find((project) => project.id === selected);
+  const visibleCategories = categoryId
+    ? categories.filter((category) => category.id === categoryId)
+    : categories;
   return (
     <label>
       Project
-      <select name="projectId" defaultValue={defaultValue ?? ''}>
-        <option value="">Unassigned</option>
-        {categories.map((category) => {
+      <select
+        name="projectId"
+        {...(value === undefined ? { defaultValue: selected } : { value: selected })}
+        {...(onChange ? { onChange: (event) => onChange(event.target.value) } : {})}
+      >
+        <option value="">{allLabel ?? 'Unassigned'}</option>
+        {selectedProject && categoryId && selectedProject.categoryId !== categoryId ? (
+          <option value={selectedProject.id}>{selectedProject.name}</option>
+        ) : null}
+        {visibleCategories.map((category) => {
           const values = grouped.get(category.id) ?? [];
           const visible = includeArchived
             ? values

@@ -31,6 +31,8 @@ describe('completion report contract', () => {
     });
     expect(report).toMatchObject({ userId: 'owner', total: 0 });
     expect(report.buckets).toHaveLength(3);
+    expect(report.buckets.every(({ count }) => Number.isInteger(count) && count >= 0)).toBe(true);
+    expect(report.buckets.reduce((sum, { count }) => sum + count, 0)).toBe(report.total);
   });
 
   it('preserves period, week-start, assignment, user, and urgency query filters', () => {

@@ -14,6 +14,7 @@ import {
   saveReportingPreferences,
 } from '../../db/preferences-repository.js';
 import { bucketCompletionEvents } from './completion-bucketing.js';
+import { projectCompletionChart } from './completion-presentation.js';
 import { CompletionFilters, type CompletionFilterValue } from './CompletionFilters.js';
 
 const dateOffset = (days: number) => {
@@ -128,7 +129,10 @@ export function CompletionDashboard({
   );
   const displayedBuckets = remoteReport?.buckets ?? report.buckets;
   const displayedTotal = remoteReport?.total ?? report.total;
-  const maximum = Math.max(1, ...displayedBuckets.map((bucket) => bucket.count));
+  const chart = projectCompletionChart(
+    displayedBuckets,
+    Boolean(filters.categoryId || filters.projectId || filters.urgencies.length),
+  );
   const sortedRows = [...detailRows].sort((left, right) => {
     if (orderBy === 'overallRank')
       return (left.overallRank ?? Infinity) - (right.overallRank ?? Infinity);
@@ -142,7 +146,7 @@ export function CompletionDashboard({
       <header className="welcome">
         <div>
           <p className="eyebrow">Your completed to-dos</p>
-          <h1 id="completion-dashboard-heading">Completion dashboard</h1>
+          <h1 id="completion-dashboard-heading">Completed Tasks</h1>
         </div>
         <strong aria-label={`${displayedTotal} completed to-dos`}>
           {displayedTotal} completed
@@ -162,10 +166,10 @@ export function CompletionDashboard({
           });
         }}
       />
-      <p className="muted">This report uses the urgency captured when each to-do was completed.</p>
+      <p className="muted">This report uses the priority captured when each to-do was completed.</p>
       <UrgencyBreakdown
         counts={urgencyCounts ?? remoteReport?.urgencyCounts ?? report.urgencyCounts}
-        label="Urgency at completion"
+        label="Priority at completion"
       />
       {exportCsv ? (
         <button type="button" onClick={exportCsv}>
@@ -180,7 +184,7 @@ export function CompletionDashboard({
       ) : null}
       {reportState?.pendingUrgencyChanges ? (
         <p role="status">
-          {reportState.pendingUrgencyChanges} local urgency change
+          {reportState.pendingUrgencyChanges} local priority change
           {reportState.pendingUrgencyChanges === 1 ? '' : 's'} pending. Report includes pending
           local values.
         </p>
@@ -205,6 +209,16 @@ export function CompletionDashboard({
           ) : null}
         </div>
       ) : null}
+      {chart.kind === 'invalid' && reportState?.error !== 'calculation_failed' ? (
+        <div role="alert">
+          <p>Unable to calculate this report.</p>
+          {retry ? (
+            <button type="button" onClick={retry}>
+              Retry report
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {cursorError ? (
         <div role="alert">
           <p>{cursorError}</p>
@@ -220,23 +234,31 @@ export function CompletionDashboard({
           ? `${pending} local change${pending === 1 ? '' : 's'} pending sync.`
           : 'Up to date.'}
       </p>
-      <ol className="completion-chart" aria-label="Completion totals by period">
-        {displayedBuckets.map((bucket) => (
-          <li key={bucket.key}>
-            <span>{bucket.key}</span>
-            <span
-              className="completion-bar"
-              style={
-                {
-                  '--completion-percent': `${(bucket.count / maximum) * 100}%`,
-                } as React.CSSProperties
-              }
-            >
-              {bucket.count}
-            </span>
-          </li>
-        ))}
-      </ol>
+      {chart.kind === 'ready' ? (
+        <ol className="completion-chart" aria-label="Completion totals by period">
+          {chart.visiblePeriods.map((bucket) => (
+            <li key={bucket.key}>
+              <span>{bucket.key}</span>
+              <span
+                className="completion-bar"
+                style={
+                  {
+                    '--completion-percent': `${(bucket.count / chart.maximum) * 100}%`,
+                  } as React.CSSProperties
+                }
+              >
+                {bucket.count}
+              </span>
+            </li>
+          ))}
+        </ol>
+      ) : chart.kind === 'empty' ? (
+        <p className="empty completion-empty" role="status">
+          {chart.emptyReason === 'filtered'
+            ? 'No completed tasks match the current filters.'
+            : 'No completed tasks occurred in the selected range.'}
+        </p>
+      ) : null}
       {detailRows.length ? (
         <section aria-label="Completion report detail">
           {changeOrder ? (

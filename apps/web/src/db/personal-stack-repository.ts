@@ -283,6 +283,17 @@ export async function listPendingStackOperations(ownerId: string) {
   );
 }
 
+/** The latest time this browser received a successful server acknowledgement for stack work. */
+export async function latestAppliedStackOperationAt(ownerId: string) {
+  const applied = (await readOperations(ownerId)).filter(
+    (operation) => operation.status === 'applied',
+  );
+  return applied.reduce<string | undefined>(
+    (latest, operation) => (!latest || operation.updatedAt > latest ? operation.updatedAt : latest),
+    undefined,
+  );
+}
+
 export async function acknowledgeLocalStackOperation(result: {
   mutationId: string;
   operationId?: string;

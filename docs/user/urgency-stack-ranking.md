@@ -51,7 +51,7 @@ pending local data is included.
 ## Reports and exports
 
 Current workload, Category, Project, Unassigned, Archive, drill-down, and export reporting use each
-item's current urgency. Completion dashboards use the urgency captured when a to-do or subtask was
+item's current urgency. Completed Tasks uses the urgency captured when a to-do or subtask was
 completed, so later edits do not rewrite history. Lists appear in current/archive reporting but never
 create completion events.
 

@@ -23,7 +23,7 @@ describe('urgency controls', () => {
   it('gives each badge a screen-reader name and a non-color-only semantic cue', () => {
     const html = renderToStaticMarkup(<UrgencyBadge urgency="critical" />);
 
-    expect(html).toContain('aria-label="Urgency: Critical"');
+    expect(html).toContain('aria-label="Priority: Critical"');
     expect(html).toContain('data-urgency="critical"');
     expect(html).toContain('Critical');
   });
