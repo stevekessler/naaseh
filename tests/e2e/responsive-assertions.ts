@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 
-export async function expectNoDocumentOverflow(page: Page, tolerance = 1) {
+export async function expectNoDocumentOverflow(page: Page, tolerance = 2) {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );

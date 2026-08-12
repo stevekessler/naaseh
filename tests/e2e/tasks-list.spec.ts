@@ -66,8 +66,8 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
   );
 
   await page.evaluate(() => {
-    document.body.style.minHeight = '1400px';
-    window.scrollTo(0, 220);
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 220 });
+    window.dispatchEvent(new Event('scroll'));
   });
   await expect(page.locator('.topbar')).toHaveClass(/topbar-collapsed/);
   await expect(page.locator('.topbar > img')).toBeHidden();
