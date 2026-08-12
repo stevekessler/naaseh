@@ -180,6 +180,7 @@ export function App() {
   });
   const [view, setView] = useState<'list' | 'postit'>('list');
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
@@ -527,9 +528,7 @@ export function App() {
         setHeaderCollapsed(false);
         return;
       }
-      setHeaderCollapsed((collapsed) =>
-        collapsed ? window.scrollY > 16 : window.scrollY > 96,
-      );
+      setHeaderCollapsed((collapsed) => (collapsed ? window.scrollY > 16 : window.scrollY > 96));
     };
     updateHeader();
     window.addEventListener('scroll', updateHeader, { passive: true });
@@ -571,7 +570,11 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
-    const announce = () => (document.documentElement.dataset.online = String(navigator.onLine));
+    const announce = () => {
+      const current = navigator.onLine;
+      document.documentElement.dataset.online = String(current);
+      setOnline(current);
+    };
     announce();
     window.addEventListener('online', announce);
     window.addEventListener('offline', announce);
@@ -655,7 +658,7 @@ export function App() {
         <div className="topbar-actions">
           <div className="sync-state">
             <SyncStatus
-              online={navigator.onLine}
+              online={online}
               pending={pending}
               conflicts={conflicts}
               error={syncError}
@@ -874,7 +877,7 @@ export function App() {
             <UsersAdminPage
               users={adminUsers}
               currentUserId={session.userId}
-              online={navigator.onLine}
+              online={online}
               create={async (input) => {
                 const created = await createAdminUser(input, session.csrfToken);
                 setAdminUsers((users) => [
@@ -910,7 +913,7 @@ export function App() {
         ) : section === 'groups' ? (
           <GroupPage
             groups={groups}
-            online={navigator.onLine}
+            online={online}
             create={async (name, pin) => {
               await createRemoteGroup(name, pin, session.csrfToken);
             }}
