@@ -31,7 +31,7 @@ describe('GitHub Actions supply-chain controls', () => {
     const workflow = readFileSync('.github/workflows/validate.yml', 'utf8');
     expect(workflow.match(/runs-on: ubuntu-latest/g)).toHaveLength(1);
     expect(workflow.match(/- run: npm ci/g)).toHaveLength(1);
-    expect(workflow).toContain('timeout-minutes: 10');
+    expect(workflow).toContain('timeout-minutes: 15');
     expect(workflow).toContain(
       "cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}",
     );
