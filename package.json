@@ -29,6 +29,8 @@
     "validate:pre-aws": "node tools/run-local-release-gates.mjs",
     "validate:pre-aws:browsers": "node tools/run-local-release-gates.mjs --browsers",
     "validate:workflows": "node tools/validate-github-actions.mjs",
+    "validate:production:pre": "python3 scripts/validate_pre_deployment.py",
+    "validate:production:post": "python3 scripts/validate_post_deployment.py",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "check:runtime": "node -e \"if (Number(process.versions.node.split('.')[0]) !== 24) { throw new Error('Naaseh requires Node.js 24.x') }\"",
