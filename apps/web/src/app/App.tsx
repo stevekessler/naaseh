@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   effectiveDirectoryFields,
   matchesUrgencySet,
@@ -13,7 +13,6 @@ import { listCategories, listRevisions } from '../db/reminder-repository.js';
 import { filterTasks, normalizeSearch, type Filters } from '../search/task-search.js';
 import { Login } from '../features/auth/Login.js';
 import { TaskForm } from '../features/tasks/TaskForm.js';
-import { TaskListPage } from '../features/tasks/TaskListPage.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
 import { SyncStatus } from '../features/sync/SyncStatus.js';
 import { drainSequentially } from '../sync/sync-engine.js';
@@ -25,21 +24,19 @@ import { safeToActivateUpdate } from './service-worker-update.js';
 import { ViewSwitcher } from '../features/tasks/ViewSwitcher.js';
 import { loadView, saveView } from '../db/preferences-repository.js';
 import { listLocalGroups } from '../db/group-repository.js';
-import { GroupPage } from '../features/groups/GroupPage.js';
 import {
   createRemoteGroup,
   joinRemoteGroup,
   refreshGroups,
 } from '../features/groups/group-client.js';
 import { HiddenMemoTestHarness } from '../features/memos/HiddenMemoTestHarness.js';
-import { UsersAdminPage, type AdminUser } from '../features/admin/UsersAdminPage.js';
+import type { AdminUser } from '../features/admin/UsersAdminPage.js';
 import {
   changeAdminUserStatus,
   createAdminUser,
   listAdminUsers,
 } from '../features/admin/admin-client.js';
 import { ReminderSettings } from '../features/reminders/ReminderSettings.js';
-import { ListPage } from '../features/lists/ListPage.js';
 import {
   addLocalListItem,
   editLocalListItem,
@@ -57,7 +54,6 @@ import { CompletionSoundSetting } from '../features/tasks/CompletionSoundSetting
 import { SearchResults } from '../features/search/SearchResults.js';
 import { navigate, parseAppRoute } from './router.js';
 import { listLocalArchive } from '../db/archive-repository.js';
-import { ArchivePage } from '../features/archive/ArchivePage.js';
 import { listLocalProjects } from '../db/project-repository.js';
 import {
   changeLocalProjectLifecycle,
@@ -69,15 +65,12 @@ import {
   saveNewLocalCategory,
   updateLocalCategory,
 } from '../db/category-repository.js';
-import { CategoriesAdminPage } from '../features/admin/CategoriesAdminPage.js';
-import { ProjectTree } from '../features/projects/ProjectTree.js';
 import { useWorkloadTree } from '../features/projects/useWorkloadTree.js';
 import { listLocalCompletionEvents } from '../db/completion-event-repository.js';
-import { CompletionDashboard } from '../features/reports/CompletionDashboard.js';
-import { GoogleSyncPage } from '../features/google-sync/GoogleSyncPage.js';
 import { purgePrivateStackStateForSession } from '../sync/privacy-purge.js';
 import {
   initializeLocalStack,
+  latestAppliedStackOperationAt,
   listLocalStackConflicts,
   listPendingStackOperations,
   readLocalStack,
@@ -86,7 +79,6 @@ import {
 } from '../db/personal-stack-repository.js';
 import { selectLocalStackItems } from '../features/stacks/stack-selectors.js';
 import { queuePersonalStackReorder } from '../sync/sync-engine.js';
-import { PersonalStackPage } from '../features/stacks/PersonalStackPage.js';
 import {
   readFilteredStack,
   StackReadProblem,
@@ -106,6 +98,54 @@ import type {
   CompletionDetailRow,
   CompletionReportState,
 } from '../features/reports/CompletionDashboard.js';
+import type { AssigneeOption } from '../components/AssigneePicker.js';
+
+const ArchivePage = lazy(() =>
+  import('../features/archive/ArchivePage.js').then(({ ArchivePage }) => ({
+    default: ArchivePage,
+  })),
+);
+const CategoriesAdminPage = lazy(() =>
+  import('../features/admin/CategoriesAdminPage.js').then(({ CategoriesAdminPage }) => ({
+    default: CategoriesAdminPage,
+  })),
+);
+const CompletionDashboard = lazy(() =>
+  import('../features/reports/CompletionDashboard.js').then(({ CompletionDashboard }) => ({
+    default: CompletionDashboard,
+  })),
+);
+const GoogleSyncPage = lazy(() =>
+  import('../features/google-sync/GoogleSyncPage.js').then(({ GoogleSyncPage }) => ({
+    default: GoogleSyncPage,
+  })),
+);
+const GroupPage = lazy(() =>
+  import('../features/groups/GroupPage.js').then(({ GroupPage }) => ({ default: GroupPage })),
+);
+const ListPage = lazy(() =>
+  import('../features/lists/ListPage.js').then(({ ListPage }) => ({ default: ListPage })),
+);
+const PersonalStackPage = lazy(() =>
+  import('../features/stacks/PersonalStackPage.js').then(({ PersonalStackPage }) => ({
+    default: PersonalStackPage,
+  })),
+);
+const ProjectTree = lazy(() =>
+  import('../features/projects/ProjectTree.js').then(({ ProjectTree }) => ({
+    default: ProjectTree,
+  })),
+);
+const TaskListPage = lazy(() =>
+  import('../features/tasks/TaskListPage.js').then(({ TaskListPage }) => ({
+    default: TaskListPage,
+  })),
+);
+const UsersAdminPage = lazy(() =>
+  import('../features/admin/UsersAdminPage.js').then(({ UsersAdminPage }) => ({
+    default: UsersAdminPage,
+  })),
+);
 
 const emptyFilters: Filters = {
   query: '',
@@ -139,6 +179,8 @@ export function App() {
     return value ? JSON.parse(value) : null;
   });
   const [view, setView] = useState<'list' | 'postit'>('list');
+  const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const [online, setOnline] = useState(() => navigator.onLine);
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
@@ -208,6 +250,31 @@ export function App() {
       () => (selectedId ? listRevisions(selectedId) : Promise.resolve([])),
       [selectedId],
     ) ?? [];
+  const assignees = useMemo<AssigneeOption[]>(() => {
+    const known = new Map<string, AssigneeOption>();
+    for (const user of adminUsers) {
+      if (!user.active || user.username.replace(/^@/, '').toLocaleLowerCase() === 'naaseh-smoke')
+        continue;
+      known.set(user.id, {
+        id: user.id,
+        displayName: user.displayName,
+        username: user.username.replace(/^@/, ''),
+      });
+    }
+    if (session && !known.has(session.userId))
+      known.set(session.userId, { id: session.userId, displayName: session.displayName });
+    for (const id of [
+      ...tasks.map((task) => task.assigneeId),
+      ...categories.map((category) => category.defaultAssigneeId),
+    ]) {
+      if (!id || known.has(id) || id.replace(/^@/, '').toLocaleLowerCase() === 'naaseh-smoke')
+        continue;
+      known.set(id, { id, displayName: id });
+    }
+    return [...known.values()].sort((left, right) =>
+      left.displayName.localeCompare(right.displayName),
+    );
+  }, [adminUsers, session, tasks, categories]);
   const pending = useLiveQuery(() => db.outbox.count(), []) ?? 0;
   const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
   const eligibleStackWork = useMemo(
@@ -328,6 +395,10 @@ export function App() {
       () => (session ? listPendingStackOperations(session.userId) : Promise.resolve([])),
       [session?.userId],
     ) ?? [];
+  const lastStackSyncedAt = useLiveQuery(
+    () => (session ? latestAppliedStackOperationAt(session.userId) : Promise.resolve(undefined)),
+    [session?.userId],
+  );
   const stackConflicts =
     useLiveQuery(
       () => (session ? listLocalStackConflicts(session.userId) : Promise.resolve([])),
@@ -451,13 +522,30 @@ export function App() {
     void loadView().then(setView);
   }, []);
   useEffect(() => {
+    const mobile = window.matchMedia('(max-width: 900px)');
+    const updateHeader = () => {
+      if (!mobile.matches) {
+        setHeaderCollapsed(false);
+        return;
+      }
+      setHeaderCollapsed((collapsed) => (collapsed ? window.scrollY > 16 : window.scrollY > 96));
+    };
+    updateHeader();
+    window.addEventListener('scroll', updateHeader, { passive: true });
+    mobile.addEventListener('change', updateHeader);
+    return () => {
+      window.removeEventListener('scroll', updateHeader);
+      mobile.removeEventListener('change', updateHeader);
+    };
+  }, []);
+  useEffect(() => {
     if (section === 'groups' && session && navigator.onLine)
       void refreshGroups(session.csrfToken).catch((error) =>
         setSyncError(error instanceof Error ? error.message : 'Unable to refresh groups.'),
       );
   }, [section, session]);
   useEffect(() => {
-    if (section === 'admin' && session?.role === 'admin')
+    if (session?.role === 'admin')
       void listAdminUsers(session.csrfToken)
         .then(setAdminUsers)
         .catch(() => setSyncError('Administrative users could not be loaded.'));
@@ -469,11 +557,11 @@ export function App() {
   const synchronize = useCallback(async () => {
     if (!session || !navigator.onLine || syncing.current) return;
     syncing.current = true;
-    setSyncError(undefined);
     try {
       await drainSequentially(session.csrfToken, (delay) => {
         window.setTimeout(() => void synchronize(), delay);
       });
+      setSyncError(undefined);
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'Synchronization failed.');
     } finally {
@@ -482,7 +570,11 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
-    const announce = () => (document.documentElement.dataset.online = String(navigator.onLine));
+    const announce = () => {
+      const current = navigator.onLine;
+      document.documentElement.dataset.online = String(current);
+      setOnline(current);
+    };
     announce();
     window.addEventListener('online', announce);
     window.addEventListener('offline', announce);
@@ -561,12 +653,12 @@ export function App() {
           })()
         }
       />
-      <header className="topbar">
+      <header className={`topbar${headerCollapsed ? ' topbar-collapsed' : ''}`}>
         <img src="/naaseh_logo.png" alt="Na'aseh — We will do it" />
         <div className="topbar-actions">
           <div className="sync-state">
             <SyncStatus
-              online={navigator.onLine}
+              online={online}
               pending={pending}
               conflicts={conflicts}
               error={syncError}
@@ -574,6 +666,13 @@ export function App() {
             />
           </div>
           <nav aria-label="Main navigation">
+            <button
+              className="quiet"
+              aria-current={section === 'tasks' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'tasks' })}
+            >
+              Tasks
+            </button>
             <button
               className="quiet"
               aria-current={section === 'stack' ? 'page' : undefined}
@@ -593,7 +692,7 @@ export function App() {
               aria-current={section === 'dashboard' ? 'page' : undefined}
               onClick={() => navigate({ section: 'dashboard' })}
             >
-              Dashboard
+              Completed Tasks
             </button>
             <button
               className="quiet"
@@ -615,13 +714,6 @@ export function App() {
               onClick={() => navigate({ section: 'lists' })}
             >
               Lists
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'tasks' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'tasks' })}
-            >
-              Tasks
             </button>
             <button
               className="quiet"
@@ -660,6 +752,12 @@ export function App() {
             projects={projects
               .filter((project) => project.lifecycle === 'active')
               .map((project) => ({ id: project.id, name: project.name }))}
+            projectRecords={projects}
+            categories={categories}
+            assignees={assignees}
+            parentTasks={tasks}
+            defaultAssigneeId={session.userId}
+            createTask={addTask}
             items={
               remoteStackItems ??
               rankedStackItems.map(({ work, rank }) => ({
@@ -675,6 +773,7 @@ export function App() {
             announcement={stackAnnouncement}
             pendingOperationIds={pendingStackOperations.map((operation) => operation.operationId)}
             conflictCount={stackConflicts.length}
+            {...(lastStackSyncedAt ? { lastSyncedAt: lastStackSyncedAt } : {})}
             filters={filters}
             changeFilters={setFilters}
             changeScope={setStackScope}
@@ -778,7 +877,7 @@ export function App() {
             <UsersAdminPage
               users={adminUsers}
               currentUserId={session.userId}
-              online={navigator.onLine}
+              online={online}
               create={async (input) => {
                 const created = await createAdminUser(input, session.csrfToken);
                 setAdminUsers((users) => [
@@ -796,6 +895,7 @@ export function App() {
             <CategoriesAdminPage
               categories={categories}
               projects={projects}
+              assignees={assignees}
               createCategory={(value) => void saveNewLocalCategory(value)}
               updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
               createProject={(value) => void saveNewLocalProject(value)}
@@ -813,7 +913,7 @@ export function App() {
         ) : section === 'groups' ? (
           <GroupPage
             groups={groups}
-            online={navigator.onLine}
+            online={online}
             create={async (name, pin) => {
               await createRemoteGroup(name, pin, session.csrfToken);
             }}
@@ -863,6 +963,9 @@ export function App() {
             csrfToken={session.csrfToken}
             filters={filters}
             changeFilters={setFilters}
+            categories={categories}
+            projects={projects}
+            assignees={assignees}
             restore={async (entry) => {
               if (entry.task) await updateTask(entry.task, { status: 'open' }, session.userId);
               if (entry.list)
@@ -935,7 +1038,14 @@ export function App() {
                 }}
               />
             </section>
-            <TaskForm save={addTask} categories={categories} projects={projects} />
+            <TaskForm
+              save={addTask}
+              categories={categories}
+              projects={projects}
+              assignees={assignees}
+              parentTasks={tasks}
+              defaultAssigneeId={session.userId}
+            />
             <section className="filters" aria-label="Search and filters">
               <TaskSearchBar
                 value={filters.query}
@@ -946,6 +1056,9 @@ export function App() {
                 value={filters}
                 change={setFilters}
                 resultCount={visible.length + matchingLists.length}
+                categories={categories}
+                projects={projects}
+                assignees={assignees}
               />
               {(filters.query ||
                 filters.from ||
@@ -968,6 +1081,9 @@ export function App() {
                 csrfToken={session.csrfToken}
                 categories={categories}
                 projects={projects}
+                assignees={assignees}
+                parentTasks={tasks}
+                defaultAssigneeId={session.userId}
                 tasks={visible}
                 loading={taskResult === undefined}
                 selected={tasks.find((item) => item.id === selectedId)}

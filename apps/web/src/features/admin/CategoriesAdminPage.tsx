@@ -3,6 +3,7 @@ import type { CategoryRecord, Project } from '@naaseh/domain';
 import { CategoryForm } from './CategoryForm.js';
 import { ProjectForm } from './ProjectForm.js';
 import { PermanentDeleteDialog } from '../archive/PermanentDeleteDialog.js';
+import type { AssigneeOption } from '../../components/AssigneePicker.js';
 
 export function CategoriesAdminPage({
   categories,
@@ -15,6 +16,7 @@ export function CategoriesAdminPage({
   csrfToken,
   changeCategoryLifecycle,
   changeProjectLifecycle,
+  assignees = [],
 }: {
   categories: CategoryRecord[];
   projects: Project[];
@@ -34,6 +36,7 @@ export function CategoriesAdminPage({
     action: 'archive' | 'restore',
     actorId: string,
   ) => void;
+  assignees?: readonly AssigneeOption[];
 }) {
   const [editingCategory, setEditingCategory] = useState<CategoryRecord>();
   const [editingProject, setEditingProject] = useState<Project>();
@@ -42,6 +45,7 @@ export function CategoriesAdminPage({
       <h1 id="organization-heading">Categories and Projects</h1>
       <p>Categories are level one. Projects are level two and hold work assignments.</p>
       <CategoryForm
+        assignees={assignees}
         key={editingCategory?.id ?? 'new-category'}
         {...(editingCategory ? { initial: editingCategory } : {})}
         save={(value) => {

@@ -26,7 +26,7 @@ test('keeps report filters keyboard/touch operable and exposes live report state
   page,
 }, testInfo) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Dashboard' }).click();
+  await page.getByRole('button', { name: 'Completed Tasks' }).click();
   const filters = page.getByRole('group', { name: 'Completion urgency filters' });
   const high = filters.getByRole('checkbox', { name: 'High' });
   await high.focus();
@@ -44,8 +44,8 @@ test('keeps report filters keyboard/touch operable and exposes live report state
 
 test('shows all five completion urgency buckets and historical semantics', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Dashboard' }).click();
-  await expect(page.getByRole('heading', { name: 'Urgency at completion' })).toBeVisible();
+  await page.getByRole('button', { name: 'Completed Tasks' }).click();
+  await expect(page.getByRole('heading', { name: 'Priority at completion' })).toBeVisible();
   for (const label of ['Extra Low', 'Low', 'Medium', 'High', 'Critical'])
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   await expect(page.getByText(/Extra Low.*0/)).toBeVisible();
@@ -60,12 +60,12 @@ test('filters report detail and orders eligible rows by viewer-only ranks', asyn
     ['Viewer low rank', 'low'],
   ] as const) {
     await form.getByLabel('Task label').fill(label);
-    await form.getByLabel('Urgency', { exact: true }).selectOption(urgency);
+    await form.getByLabel('Priority', { exact: true }).selectOption(urgency);
     await form.getByRole('button', { name: 'Add task' }).click();
   }
   await page.getByRole('button', { name: 'Projects' }).click();
   await page
-    .getByRole('group', { name: 'Current urgency filters' })
+    .getByRole('group', { name: 'Current priorities' })
     .getByRole('checkbox', { name: 'High', exact: true })
     .check();
   const report = page.getByRole('region', { name: 'Workload report detail' });
@@ -79,7 +79,7 @@ test('exports urgency and current viewer ranks while archived ranks remain blank
   page,
 }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Dashboard' }).click();
+  await page.getByRole('button', { name: 'Completed Tasks' }).click();
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: /export csv/i }).click();
   const csv = await (await download).createReadStream();
@@ -94,20 +94,20 @@ test('reads a warmed cached report offline and refreshes pending urgency after r
   context,
 }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Dashboard' }).click();
+  await page.getByRole('button', { name: 'Completed Tasks' }).click();
   await expect(page.getByText(/Critical.*1/)).toBeVisible();
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await page.getByRole('button', { name: 'Dashboard' }).click();
+  await page.getByRole('button', { name: 'Completed Tasks' }).click();
   await expect(page.getByText('Offline · showing previously synchronized report')).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText(/Last synchronized/i)).toBeVisible({ timeout: 15_000 });
 });
 
 for (const failure of [
-  { status: 500, code: 'report_calculation_failed', action: /retry/i },
-  { status: 410, code: 'cursor_expired', action: /restart/i },
-  { status: 409, code: 'pagination_context_changed', action: /restart/i },
+  { status: 500, code: 'report_calculation_failed', action: 'Retry report' },
+  { status: 410, code: 'cursor_expired', action: 'Restart report' },
+  { status: 409, code: 'pagination_context_changed', action: 'Restart report' },
 ] as const) {
   test(`offers recovery for ${failure.code}`, async ({ page }) => {
     await page.route('**/api/v1/reporting/completion-report**', (route) =>
@@ -118,8 +118,10 @@ for (const failure of [
       }),
     );
     await signIn(page);
-    await page.getByRole('button', { name: 'Dashboard' }).click();
-    const alert = page.getByRole('alert');
+    await page.getByRole('button', { name: 'Completed Tasks' }).click();
+    const alert = page
+      .getByRole('alert')
+      .filter({ has: page.getByRole('button', { name: failure.action }) });
     await expect(alert).toBeVisible();
     await expect(alert.getByRole('button', { name: failure.action })).toBeVisible();
   });

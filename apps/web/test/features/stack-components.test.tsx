@@ -109,5 +109,28 @@ describe('personal stack component primitives', () => {
     expect(html).toContain('>Apply position</button>');
     expect(html).toContain(`aria-controls="${focusId}"`);
     expect(html).toContain('data-touch-alternative="true"');
+    expect(html).toContain('class="stack-move-controls"');
+    expect(html).toContain('class="stack-position-editor"');
+    expect(html.indexOf('Move up')).toBeLessThan(html.indexOf('Move down'));
+    expect(html.indexOf('Move down')).toBeLessThan(html.indexOf('Move to position'));
+  });
+
+  it.each([
+    [1, 1, true, true],
+    [1, 3, true, false],
+    [2, 3, false, false],
+    [3, 3, false, true],
+  ])('exposes non-color disabled states at position %s of %s', (position, total, up, down) => {
+    const html = renderToStaticMarkup(
+      <StackMoveControls
+        work={item.reference}
+        label={item.label}
+        position={position}
+        total={total}
+        move={vi.fn()}
+      />,
+    );
+    expect(/aria-label="Move up"[^>]*disabled/.test(html)).toBe(up);
+    expect(/aria-label="Move down"[^>]*disabled/.test(html)).toBe(down);
   });
 });

@@ -137,8 +137,8 @@ describe('urgency-aware reporting surfaces', () => {
     }
     expect(html).toContain('Low: 0');
     expect(html).toContain('Critical: 0');
-    expect(html).toContain('Urgency at completion');
-    expect(html).toContain('uses the urgency captured when each to-do was completed');
+    expect(html).toContain('Priority at completion');
+    expect(html).toContain('uses the priority captured when each to-do was completed');
   });
 
   it('renders current urgency breakdowns throughout Category, Project, and unassigned workload tree', () => {
@@ -150,9 +150,9 @@ describe('urgency-aware reporting surfaces', () => {
       />,
     );
 
-    expect(html).toContain('Current urgency breakdown for Launch');
-    expect(html).toContain('Current urgency breakdown for Release');
-    expect(html).toContain('Current urgency breakdown for Unassigned');
+    expect(html).toContain('Current priority breakdown for Launch');
+    expect(html).toContain('Current priority breakdown for Release');
+    expect(html).toContain('Current priority breakdown for Unassigned');
     expect(html).toContain('Extra Low: 1');
     expect(html).toContain('Low: 0');
     expect(html).toContain('Critical: 0');
@@ -239,10 +239,10 @@ describe('urgency-aware reporting surfaces', () => {
       />,
     );
 
-    expect(html).toContain('Archive urgency breakdown');
+    expect(html).toContain('Archive priority breakdown');
     expect(html).toContain('Critical: 1');
     expect(html).toContain('Export CSV');
-    expect(html).toContain('Urgency, Overall rank, Project rank');
+    expect(html).toContain('Priority, Overall rank, Project rank');
     expect(html).not.toContain('Overall position');
     expect(html).not.toContain('Project position');
   });
@@ -262,7 +262,7 @@ describe('urgency-aware reporting surfaces', () => {
 
     expect(html).toContain('Offline · showing previously synchronized report');
     expect(html).toContain('Last synchronized');
-    expect(html).toContain('1 local urgency change pending');
+    expect(html).toContain('1 local priority change pending');
     expect(html).toContain('Report includes pending local values');
   });
 
@@ -281,6 +281,75 @@ describe('urgency-aware reporting surfaces', () => {
     expect(staleHtml).toContain('Refresh after reconnect');
     expect(failedHtml).toContain('Unable to calculate this report.');
     expect(failedHtml).toContain('Retry report');
+  });
+
+  it('projects remote periods without zeros while preserving total, detail, and offline status', () => {
+    const html = renderToStaticMarkup(
+      dashboard({
+        pending: 2,
+        detailRows: [{ id: 'detail', label: 'Preserved detail', urgencyAtCompletion: 'high' }],
+        remoteReport: {
+          total: 3,
+          urgencyCounts: zeroFilled,
+          buckets: [
+            { key: 'zero-period', count: 0 },
+            { key: 'positive-period', count: 3 },
+          ],
+        },
+        reportState: { source: 'cache', offline: true, stale: true },
+      }),
+    );
+
+    expect(html).toContain('Completed Tasks');
+    expect(html).not.toContain('zero-period');
+    expect(html).toContain('positive-period');
+    expect(html).toContain('3 completed');
+    expect(html).toContain('Preserved detail');
+    expect(html).toContain('2 local changes pending sync');
+    expect(html).toContain('Offline · showing previously synchronized report');
+    expect(html).toContain('This cached report may be out of date.');
+  });
+
+  it('shows an empty range state and retains independent status when all periods are zero', () => {
+    const html = renderToStaticMarkup(
+      dashboard({
+        pending: 1,
+        remoteReport: {
+          total: 0,
+          urgencyCounts: zeroFilled,
+          buckets: [{ key: 'zero-period', count: 0 }],
+        },
+      }),
+    );
+    expect(html).toContain('No completed tasks occurred in the selected range.');
+    expect(html).toContain('1 local change pending sync');
+    expect(html).not.toContain('Completion totals by period');
+  });
+
+  it('uses filtered empty copy when a priority filter is active', () => {
+    const html = renderToStaticMarkup(
+      dashboard({
+        selectedUrgencies: ['critical'],
+        remoteReport: { total: 0, urgencyCounts: zeroFilled, buckets: [] },
+      }),
+    );
+    expect(html).toContain('No completed tasks match the current filters.');
+  });
+
+  it('uses the safe recovery path for invalid source periods', () => {
+    const html = renderToStaticMarkup(
+      dashboard({
+        retry: vi.fn(),
+        remoteReport: {
+          total: 1,
+          urgencyCounts: zeroFilled,
+          buckets: [{ key: 'invalid', count: -1 }],
+        },
+      }),
+    );
+    expect(html).toContain('Unable to calculate this report.');
+    expect(html).toContain('Retry report');
+    expect(html).not.toContain('Completion totals by period');
   });
 
   it.each([

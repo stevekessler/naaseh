@@ -75,6 +75,7 @@ export function StackMoveControls({
         Move to position
       </button>
       <form
+        className="stack-position-editor"
         hidden={!positionEditorOpen}
         onSubmit={(event) => {
           event.preventDefault();

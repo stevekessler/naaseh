@@ -41,8 +41,8 @@ export function ListForm({
         />
       </label>
       <label>
-        Urgency
-        <UrgencyField value={urgency} onChange={setUrgency} />
+        Priority
+        <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
       </label>
       <ProjectPicker categories={categories} projects={projects} />
       <button disabled={busy}>{busy ? 'Saving…' : label}</button>

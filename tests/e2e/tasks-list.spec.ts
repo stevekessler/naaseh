@@ -14,10 +14,10 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await signIn(page);
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Call the contractor');
-  await form.getByLabel('HTTPS link').fill('https://example.com/project');
+  await form.getByLabel('Link', { exact: true }).fill('https://example.com/project');
   await form.getByLabel('Memo').fill('Ask for an updated estimate');
   await form.getByLabel('Due date and time').fill('2020-01-01T09:00');
-  await form.getByLabel('Assignee').fill('steve');
+  await expect(form.getByLabel('Assignee')).toHaveValue('local-steve');
   await form.getByLabel('Group').fill('family');
   await form.getByLabel('Private task').check();
   await form.getByRole('button', { name: 'Add task' }).click();
@@ -45,12 +45,31 @@ test('shows nested subtasks in task details', async ({ page }) => {
   await form.getByRole('button', { name: 'Add task' }).click();
   await page.getByRole('heading', { name: 'Parent task' }).click();
   const detail = page.getByLabel('Task details');
-  const parentId = await detail.getAttribute('data-task-id');
-  expect(parentId).toBeTruthy();
   await detail.getByRole('button', { name: 'Close details' }).click();
   await form.getByLabel('Task label').fill('Child task');
-  await form.getByLabel('Parent task').fill(parentId!);
+  await form.getByLabel('Parent task').selectOption({ label: 'Parent task' });
   await form.getByRole('button', { name: 'Add task' }).click();
   await page.getByRole('heading', { name: 'Parent task' }).click();
-  await expect(page.getByLabel('Task details').getByText('Child task')).toBeVisible();
+  await expect(
+    page.getByLabel('Task details').getByRole('listitem').filter({ hasText: 'Child task' }),
+  ).toBeVisible();
+});
+
+test('keeps Tasks first and collapses the mobile header after scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 740 });
+  await signIn(page);
+  const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+  await expect(navigation.getByRole('button').first()).toHaveText('Tasks');
+  await expect(navigation.getByRole('button', { name: 'Tasks', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+
+  await page.evaluate(() => {
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 220 });
+    window.dispatchEvent(new Event('scroll'));
+  });
+  await expect(page.locator('.topbar')).toHaveClass(/topbar-collapsed/);
+  await expect(page.locator('.topbar > img')).toBeHidden();
+  await expect(navigation).toBeVisible();
 });

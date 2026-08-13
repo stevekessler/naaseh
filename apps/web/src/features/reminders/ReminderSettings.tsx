@@ -11,15 +11,18 @@ function decodeVapidKey(value: string) {
 }
 
 export function ReminderSettings({ csrfToken }: { csrfToken: string }) {
+  const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined;
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
+  // Do not offer a control that cannot work in this deployment.
+  if (!publicKey) return null;
+  const configuredPublicKey = publicKey;
+
   async function enable() {
     setBusy(true);
     setStatus('');
     try {
-      const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined;
-      if (!publicKey) throw new Error('Push reminders are not configured for this deployment.');
-      const subscription = await enablePush(decodeVapidKey(publicKey));
+      const subscription = await enablePush(decodeVapidKey(configuredPublicKey));
       await savePushSubscription(subscription, await getClientId(), csrfToken);
       setStatus(
         'Connected reminders are enabled. Offline reminders still require Na’aseh to be open.',

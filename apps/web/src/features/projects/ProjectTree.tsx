@@ -1,6 +1,7 @@
-import { normalizeUrgencySet, urgencyLabels, urgencyValues, type Urgency } from '@naaseh/domain';
+import { normalizeUrgencySet, type Urgency } from '@naaseh/domain';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { UrgencyBreakdown } from '../../components/UrgencyBreakdown.js';
+import { PriorityFilter } from '../../components/PriorityFilter.js';
 import type { ReturnTypeWorkloadTree } from './project-tree-types.js';
 import { ProjectStatus } from './ProjectStatus.js';
 
@@ -65,27 +66,7 @@ export function ProjectTree({
         </div>
       </header>
       {changeUrgencies ? (
-        <fieldset aria-label="Current urgency filters">
-          <legend>Filter workload by urgency</legend>
-          {urgencyValues.map((urgency) => (
-            <label key={urgency}>
-              <input
-                type="checkbox"
-                checked={selected.includes(urgency)}
-                onChange={(event) =>
-                  changeUrgencies(
-                    normalizeUrgencySet(
-                      event.target.checked
-                        ? [...selected, urgency]
-                        : selected.filter((value) => value !== urgency),
-                    ),
-                  )
-                }
-              />
-              {urgencyLabels[urgency]}
-            </label>
-          ))}
-        </fieldset>
+        <PriorityFilter value={selected} change={changeUrgencies} ariaLabel="Current priorities" />
       ) : null}
       <ul className="project-workload-tree">
         {tree.categories.map(({ category, count, projects }) => (
@@ -98,7 +79,7 @@ export function ProjectTree({
               </summary>
               <UrgencyBreakdown
                 counts={count.urgencyCounts}
-                label={`Current urgency breakdown for ${category.name}`}
+                label={`Current priority breakdown for ${category.name}`}
               />
               <ul>
                 {projects.map(({ project, count: projectCount }) => (
@@ -114,7 +95,7 @@ export function ProjectTree({
                     />
                     <UrgencyBreakdown
                       counts={projectCount.urgencyCounts}
-                      label={`Current urgency breakdown for ${project.name}`}
+                      label={`Current priority breakdown for ${project.name}`}
                     />
                   </li>
                 ))}
@@ -128,7 +109,7 @@ export function ProjectTree({
           <span className="count-badge">{tree.unassigned.listCount} lists</span>
           <UrgencyBreakdown
             counts={tree.unassigned.urgencyCounts}
-            label="Current urgency breakdown for Unassigned"
+            label="Current priority breakdown for Unassigned"
           />
         </li>
       </ul>

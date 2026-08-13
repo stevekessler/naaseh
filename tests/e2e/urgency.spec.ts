@@ -17,20 +17,20 @@ const urgencyLabels: Record<Urgency, string> = {
 };
 
 async function chooseUrgency(container: Locator, urgency: Urgency) {
-  await container.getByLabel('Urgency', { exact: true }).selectOption(urgency);
+  await container.getByLabel('Priority', { exact: true }).selectOption(urgency);
 }
 
-async function createTask(page: Page, label: string, urgency: Urgency, parentId?: string) {
+async function createTask(page: Page, label: string, urgency: Urgency, parentLabel?: string) {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
   await chooseUrgency(form, urgency);
-  if (parentId) await form.getByLabel('Parent task').fill(parentId);
+  if (parentLabel) await form.getByLabel('Parent task').selectOption({ label: parentLabel });
   await form.getByRole('button', { name: 'Add task' }).click();
   const row = page
     .locator('li')
     .filter({ has: page.getByRole('heading', { name: label }) })
     .first();
-  await expect(row.getByLabel(`Urgency: ${urgencyLabels[urgency]}`)).toBeVisible();
+  await expect(row.getByLabel(`Priority: ${urgencyLabels[urgency]}`)).toBeVisible();
   return row;
 }
 
@@ -38,7 +38,7 @@ async function editSelectedTaskUrgency(page: Page, urgency: Urgency) {
   const detail = page.getByLabel('Task details');
   await chooseUrgency(detail, urgency);
   await detail.getByRole('button', { name: 'Save changes' }).click();
-  await expect(detail.getByLabel('Urgency', { exact: true })).toHaveValue(urgency);
+  await expect(detail.getByLabel('Priority', { exact: true })).toHaveValue(urgency);
 }
 
 async function createList(page: Page, name: string, urgency: Urgency) {
@@ -48,7 +48,7 @@ async function createList(page: Page, name: string, urgency: Urgency) {
   await chooseUrgency(form, urgency);
   await form.getByRole('button', { name: 'Create list' }).click();
   const list = page.locator('.named-list').filter({ hasText: name });
-  await expect(list.getByLabel(`Urgency: ${urgencyLabels[urgency]}`)).toBeVisible();
+  await expect(list.getByLabel(`Priority: ${urgencyLabels[urgency]}`)).toBeVisible();
   return list;
 }
 
@@ -72,7 +72,7 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
   await expect(urgencyRevision.getByText(/"after"[\s\S]*Extra Low/i)).toBeVisible();
   await detail.getByRole('button', { name: 'Close details' }).click();
 
-  await createTask(page, 'Urgent child', 'high', parentId!);
+  await createTask(page, 'Urgent child', 'high', 'Urgent parent');
   await page.getByRole('heading', { name: 'Urgent child' }).click();
   await editSelectedTaskUrgency(page, 'medium');
   await page.getByLabel('Task details').getByRole('button', { name: 'Close details' }).click();
@@ -82,14 +82,14 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
 
   const list = await createList(page, 'Urgent checklist', 'low');
   await chooseUrgency(list, 'critical');
-  await expect(list.getByLabel('Urgency: Critical')).toBeVisible();
+  await expect(list.getByLabel('Priority: Critical')).toBeVisible();
   await list.getByRole('button', { name: 'Finish and archive list' }).click();
 
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   const archivedTask = page.locator('article').filter({ hasText: 'Urgent parent' });
   const archivedList = page.locator('article').filter({ hasText: 'Urgent checklist' });
-  await expect(archivedTask.getByLabel('Urgency: Extra Low')).toBeVisible();
-  await expect(archivedList.getByLabel('Urgency: Critical')).toBeVisible();
+  await expect(archivedTask.getByLabel('Priority: Extra Low')).toBeVisible();
+  await expect(archivedList.getByLabel('Priority: Critical')).toBeVisible();
 });
 
 test('preserves offline urgency creation and edits through reconnect synchronization', async ({
@@ -104,7 +104,7 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
   await page.getByLabel('Task details').getByRole('button', { name: 'Close details' }).click();
 
   await context.setOffline(true);
-  await createTask(page, 'Offline urgent child', 'extra_low', parentId!);
+  await createTask(page, 'Offline urgent child', 'extra_low', 'Online urgency seed');
   await page.getByRole('heading', { name: 'Online urgency seed' }).click();
   await editSelectedTaskUrgency(page, 'critical');
   await page.getByLabel('Task details').getByRole('button', { name: 'Close details' }).click();
@@ -123,13 +123,13 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
     page
       .locator('li')
       .filter({ has: page.getByRole('heading', { name: 'Online urgency seed' }) })
-      .getByLabel('Urgency: Critical'),
+      .getByLabel('Priority: Critical'),
   ).toBeVisible();
   await expect(
     page
       .locator('li')
       .filter({ has: page.getByRole('heading', { name: 'Offline urgent child' }) })
-      .getByLabel('Urgency: Extra Low'),
+      .getByLabel('Priority: Extra Low'),
   ).toBeVisible();
 
   await openLists(page);
@@ -137,7 +137,7 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
     page
       .locator('.named-list')
       .filter({ hasText: 'Offline urgent list' })
-      .getByLabel('Urgency: Low'),
+      .getByLabel('Priority: Low'),
   ).toBeVisible();
 });
 
@@ -146,7 +146,7 @@ test('keeps urgency controls accessible to keyboard, touch, and screen readers a
 }, testInfo) => {
   await signIn(page);
   const form = page.locator('.task-form').first();
-  const urgency = form.getByLabel('Urgency', { exact: true });
+  const urgency = form.getByLabel('Priority', { exact: true });
 
   await urgency.focus();
   await expect(urgency).toBeFocused();

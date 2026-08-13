@@ -391,9 +391,11 @@ export async function drainSequentially(
     await syncNow(csrfToken);
   } catch (error) {
     const item = await db.outbox.orderBy('createdAt').first();
-    const delay = nextRetryDelay(item?.attempts ?? 0);
-    if (item) await db.outbox.update(item.id, { attempts: item.attempts + 1 });
-    onRetry(delay);
+    if (item) {
+      const delay = nextRetryDelay(item.attempts);
+      await db.outbox.update(item.id, { attempts: item.attempts + 1 });
+      onRetry(delay);
+    }
     throw error instanceof Error ? error : new Error('Pending changes remain safely stored.');
   }
 }

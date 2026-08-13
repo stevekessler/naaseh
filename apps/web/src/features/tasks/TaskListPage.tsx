@@ -5,6 +5,7 @@ import { TaskActions } from './TaskActions.js';
 import { SubtaskTree } from './SubtaskTree.js';
 import { RevisionLog } from './RevisionLog.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
+import type { AssigneeOption } from '../../components/AssigneePicker.js';
 export function TaskListPage({
   tasks,
   loading = false,
@@ -18,6 +19,9 @@ export function TaskListPage({
   csrfToken,
   categories = [],
   projects = [],
+  assignees = [],
+  parentTasks = tasks,
+  defaultAssigneeId,
 }: {
   tasks: Task[];
   loading?: boolean;
@@ -31,6 +35,9 @@ export function TaskListPage({
   csrfToken: string;
   categories?: CategoryRecord[];
   projects?: Project[];
+  assignees?: AssigneeOption[];
+  parentTasks?: Task[];
+  defaultAssigneeId?: string;
 }) {
   if (loading) return <p role="status">Loading tasks…</p>;
   if (error)
@@ -58,6 +65,9 @@ export function TaskListPage({
             task={selected}
             categories={categories}
             projects={projects}
+            assignees={assignees}
+            parentTasks={parentTasks}
+            {...(defaultAssigneeId ? { defaultAssigneeId } : {})}
             submitLabel="Save changes"
             save={(patch) => onUpdate(selected, patch as Partial<Task>)}
           />

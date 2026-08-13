@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './app/App.js';
@@ -16,6 +16,8 @@ const applyServiceWorkerUpdate = registerSW({
 });
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <Suspense fallback={<p role="status">Loading…</p>}>
+      <App />
+    </Suspense>
   </StrictMode>,
 );

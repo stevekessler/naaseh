@@ -13,7 +13,7 @@ test('persists archive/report state across an offline restart and keeps deletion
   await page.evaluate(() => location.reload());
   await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Dashboard', exact: true }).click();
+  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
   await expect(page.getByLabel('1 completed to-dos')).toBeVisible();
   await context.setOffline(false);
 });

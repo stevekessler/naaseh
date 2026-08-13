@@ -9,7 +9,7 @@ async function createTask(page: Page, label: string, urgency: string) {
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
-  await form.getByLabel('Urgency', { exact: true }).selectOption(urgency);
+  await form.getByLabel('Priority', { exact: true }).selectOption(urgency);
   await form.getByRole('button', { name: 'Add task' }).click();
 }
 
@@ -17,7 +17,7 @@ async function createList(page: Page, name: string, urgency: string) {
   await openLists(page);
   const form = page.locator('form').filter({ has: page.getByLabel('List name') });
   await form.getByLabel('List name').fill(name);
-  await form.getByLabel('Urgency', { exact: true }).selectOption(urgency);
+  await form.getByLabel('Priority', { exact: true }).selectOption(urgency);
   await form.getByRole('button', { name: 'Create list' }).click();
 }
 
@@ -71,7 +71,7 @@ test('replays an offline reorder and exposes an actionable conflict without losi
   const moveUp = second.getByRole('button', { name: 'Move up' });
   await moveUp.focus();
   await moveUp.click();
-  await expect(page.getByRole('status')).toContainText(/pending|offline/i);
+  await expect(page.locator('.stack-sync-state')).toContainText(/pending|offline/i);
   await expect(second).toContainText('Overall position 1');
   await expect(second).toBeFocused();
 
@@ -79,7 +79,9 @@ test('replays an offline reorder and exposes an actionable conflict without losi
   await page.getByRole('button', { name: 'Personal Stack' }).click();
   await expect(stackRow(page, 'Offline second')).toContainText('Overall position 1');
   await context.setOffline(false);
-  await expect(page.getByRole('status')).toContainText(/synced|applied/i, { timeout: 15_000 });
+  await expect(page.locator('.stack-sync-state')).toContainText(/synced|applied/i, {
+    timeout: 15_000,
+  });
 
   const conflict = page.getByRole('alert').filter({ hasText: /stack.*conflict/i });
   if (await conflict.isVisible()) {
@@ -106,7 +108,7 @@ test('supports keyboard and touch reordering with announced positions at every v
   if (['iphone', 'ipad'].includes(testInfo.project.name)) await moveUp.tap();
   else await moveUp.press('Enter');
   await expect(second).toContainText('Overall position 1');
-  await expect(page.getByRole('status')).toContainText(/position|pending|applied|synced/i);
+  await expect(page.locator('.stack-sync-state')).toContainText(/position|pending|applied|synced/i);
 
   const box = await moveUp.boundingBox();
   expect(box?.height).toBeGreaterThanOrEqual(44);
@@ -115,4 +117,19 @@ test('supports keyboard and touch reordering with announced positions at every v
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
+
+  if ((page.viewportSize()?.width ?? 1000) <= 480) {
+    const moveDown = second.getByRole('button', { name: 'Move down' });
+    const moveTo = second.getByRole('button', { name: 'Move to position' });
+    const [upBox, downBox, toBox, controlsBox] = await Promise.all([
+      moveUp.boundingBox(),
+      moveDown.boundingBox(),
+      moveTo.boundingBox(),
+      second.locator('.stack-move-controls').boundingBox(),
+    ]);
+    expect(upBox?.width).toBeCloseTo(downBox?.width ?? 0, 0);
+    expect((downBox?.x ?? 0) - ((upBox?.x ?? 0) + (upBox?.width ?? 0))).toBeGreaterThan(0);
+    expect(toBox?.y).toBeGreaterThan((upBox?.y ?? 0) + (upBox?.height ?? 0));
+    expect(toBox?.width).toBeCloseTo(controlsBox?.width ?? 0, 0);
+  }
 });

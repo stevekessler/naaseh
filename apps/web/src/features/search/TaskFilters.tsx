@@ -1,14 +1,24 @@
-import { urgencyLabels, urgencyValues, type Urgency } from '@naaseh/domain';
+import type { CategoryRecord, Project } from '@naaseh/domain';
 import type { Filters } from '../../search/task-search.js';
+import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
+import { CategoryPicker } from '../../components/CategoryPicker.js';
+import { PriorityFilter } from '../../components/PriorityFilter.js';
+import { ProjectPicker } from '../projects/ProjectPicker.js';
 
 export function TaskFilters({
   value,
   change,
   resultCount,
+  categories = [],
+  projects = [],
+  assignees = [],
 }: {
   value: Filters;
   change: (next: Filters) => void;
   resultCount?: number;
+  categories?: readonly CategoryRecord[];
+  projects?: readonly Project[];
+  assignees?: readonly AssigneeOption[];
 }) {
   const selectedUrgencies = value.urgencies ?? [];
   const active = [
@@ -22,56 +32,19 @@ export function TaskFilters({
   return (
     <fieldset className="filter-fields">
       <legend>Filters</legend>
-      <fieldset aria-label="Urgency levels" className="urgency-filter-group">
-        <legend>Urgency</legend>
-        {urgencyValues.map((urgency) => (
-          <label key={urgency}>
-            <input
-              type="checkbox"
-              value={urgency}
-              checked={selectedUrgencies.includes(urgency)}
-              onChange={(event) => {
-                const selected = event.currentTarget.checked
-                  ? [...selectedUrgencies, urgency]
-                  : selectedUrgencies.filter((item) => item !== urgency);
-                change({
-                  ...value,
-                  urgencies: urgencyValues.filter((item) => selected.includes(item)),
-                });
-              }}
-            />
-            <span>{urgencyLabels[urgency]}</span>
-          </label>
-        ))}
-        {selectedUrgencies.length ? (
-          <>
-            <p>
-              {selectedUrgencies.length} urgency level{selectedUrgencies.length === 1 ? '' : 's'}{' '}
-              selected:{' '}
-              {selectedUrgencies.map((urgency: Urgency) => urgencyLabels[urgency]).join(', ')}
-            </p>
-            <button
-              type="button"
-              className="quiet"
-              aria-label="Clear urgency filters"
-              onClick={() => change({ ...value, urgencies: [] })}
-            >
-              Clear urgency filters
-            </button>
-          </>
-        ) : null}
-        {selectedUrgencies.length > 0 && resultCount === 0 ? (
-          <p role="status">No work matches the selected urgency levels.</p>
-        ) : null}
-      </fieldset>
-      <label>
-        <span>Project</span>
-        <input
-          value={value.projectId ?? ''}
-          placeholder="Project ID or unassigned"
-          onChange={(event) => change({ ...value, projectId: event.target.value })}
-        />
-      </label>
+      <PriorityFilter
+        value={selectedUrgencies}
+        change={(urgencies) => change({ ...value, urgencies })}
+        {...(resultCount === undefined ? {} : { resultCount })}
+      />
+      <ProjectPicker
+        categories={categories}
+        projects={projects}
+        value={value.projectId ?? ''}
+        categoryId={value.categoryId}
+        allLabel="All projects"
+        onChange={(projectId) => change({ ...value, projectId })}
+      />
       <label>
         <span>Scope</span>
         <select
@@ -116,16 +89,31 @@ export function TaskFilters({
       </label>
       <label>
         <span>Assignee</span>
-        <input
+        <AssigneePicker
+          assignees={assignees}
           value={value.assigneeId}
-          onChange={(event) => change({ ...value, assigneeId: event.target.value })}
+          allLabel="All assignees"
+          onChange={(assigneeId) => change({ ...value, assigneeId })}
         />
       </label>
       <label>
         <span>Category</span>
-        <input
+        <CategoryPicker
+          categories={categories}
           value={value.categoryId}
-          onChange={(event) => change({ ...value, categoryId: event.target.value })}
+          allLabel="All categories"
+          onChange={(categoryId) =>
+            change({
+              ...value,
+              categoryId,
+              projectId:
+                value.projectId &&
+                projects.find((project) => project.id === value.projectId)?.categoryId !==
+                  categoryId
+                  ? ''
+                  : (value.projectId ?? ''),
+            })
+          }
         />
       </label>
       <div className="filter-chips" role="group" aria-label="Active filters">

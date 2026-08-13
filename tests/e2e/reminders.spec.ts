@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test.use({ serviceWorkers: 'block' });
 
-test('shows overdue fallback offline and explains unavailable push configuration', async ({
+test('shows overdue fallback offline and hides unavailable push configuration', async ({
   page,
   context,
 }) => {
@@ -16,8 +16,5 @@ test('shows overdue fallback offline and explains unavailable push configuration
   await form.getByRole('button', { name: 'Add task' }).click();
   await context.setOffline(true);
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Enable reminders' }).click();
-  await expect(
-    page.getByText('Push reminders are not configured for this deployment.'),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enable reminders' })).toHaveCount(0);
 });

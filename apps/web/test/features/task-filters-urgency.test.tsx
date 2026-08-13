@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { filtersFromSearch } from '../../src/features/search/search-state.js';
 import { TaskFilters } from '../../src/features/search/TaskFilters.js';
 import type { Filters } from '../../src/search/task-search.js';
+import { PriorityFilter } from '../../src/components/PriorityFilter.js';
 
 type UrgencyFilters = Filters & { urgencies: Urgency[] };
 type UrgencyTaskFiltersProps = {
@@ -69,7 +70,10 @@ describe('TaskFilters urgency controls', () => {
       from: '2026-08-01',
       projectId: 'project-a',
     };
-    const tree = TaskFilters({ value: selected, change }) as ReactNode;
+    const tree = PriorityFilter({
+      value: selected.urgencies,
+      change: (urgencies) => change({ ...selected, urgencies }),
+    }) as ReactNode;
     const clear = findElement(
       tree,
       (type, props) => type === 'button' && props['aria-label'] === 'Clear urgency filters',

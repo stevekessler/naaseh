@@ -1,10 +1,13 @@
 import { type FormEvent } from 'react';
+import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
 export function CategoryForm({
   save,
   initial,
+  assignees = [],
 }: {
   save: (value: { name: string; color: string; defaultAssigneeId?: string }) => void;
   initial?: { name: string; color: string; defaultAssigneeId?: string | undefined };
+  assignees?: readonly AssigneeOption[];
 }) {
   return (
     <form
@@ -29,7 +32,11 @@ export function CategoryForm({
       </label>
       <label>
         Default assignee
-        <input name="assignee" defaultValue={initial?.defaultAssigneeId} />
+        <AssigneePicker
+          name="assignee"
+          assignees={assignees}
+          {...(initial?.defaultAssigneeId ? { defaultValue: initial.defaultAssigneeId } : {})}
+        />
       </label>
       <button>Save category</button>
     </form>
