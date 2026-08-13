@@ -39,10 +39,10 @@ describe('durable local outbox rules', () => {
     ).toEqual({ depth: 3, oldestAgeSeconds: 120 });
     expect(buildBacklogSnapshot(0, undefined)).toBeUndefined();
   });
-  it('bootstraps only an empty task snapshot with an advanced cursor and no pending work', () => {
-    expect(shouldBootstrapTaskSnapshot(0, 0, { public: 2 })).toBe(true);
-    expect(shouldBootstrapTaskSnapshot(1, 0, { public: 2 })).toBe(false);
-    expect(shouldBootstrapTaskSnapshot(0, 1, { public: 2 })).toBe(false);
-    expect(shouldBootstrapTaskSnapshot(0, 0, {})).toBe(false);
+  it('bootstraps an uninitialized empty task snapshot exactly once', () => {
+    expect(shouldBootstrapTaskSnapshot(0, 0, false)).toBe(true);
+    expect(shouldBootstrapTaskSnapshot(1, 0, false)).toBe(false);
+    expect(shouldBootstrapTaskSnapshot(0, 1, false)).toBe(false);
+    expect(shouldBootstrapTaskSnapshot(0, 0, true)).toBe(false);
   });
 });
