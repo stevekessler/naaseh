@@ -131,10 +131,11 @@ export function TaskForm({
           />
         </label>
         <label>
-          Assignee
+          Task assignee
           <AssigneePicker
             assignees={assignees}
             value={assigneeId}
+            ariaLabel="Assignee"
             onChange={(nextAssigneeId) => {
               setAssigneeId(nextAssigneeId);
               setAssigneeTouched(true);

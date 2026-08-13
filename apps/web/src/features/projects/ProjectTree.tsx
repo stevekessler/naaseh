@@ -62,7 +62,7 @@ export function ProjectTree({
       <header className="welcome">
         <div>
           <p className="eyebrow">Workload as of {new Date(tree.asOf).toLocaleString()}</p>
-          <h1 id="projects-heading">Projects</h1>
+          <h1 id="projects-heading">Categories and Projects</h1>
         </div>
       </header>
       {changeUrgencies ? (
@@ -73,7 +73,7 @@ export function ProjectTree({
           <li key={category.id}>
             <details open>
               <summary>
-                <strong>{category.name}</strong>{' '}
+                <strong>Category: {category.name}</strong>{' '}
                 <span className="count-badge">{count.taskCount} to-dos</span>{' '}
                 <span className="count-badge">{count.listCount} lists</span>
               </summary>
@@ -85,7 +85,7 @@ export function ProjectTree({
                 {projects.map(({ project, count: projectCount }) => (
                   <li key={project.id}>
                     <a href={`/tasks?projectId=${encodeURIComponent(project.id)}`}>
-                      {project.name}
+                      Project: {project.name}
                     </a>{' '}
                     <span className="count-badge">{projectCount.taskCount} to-dos</span>{' '}
                     <span className="count-badge">{projectCount.listCount} lists</span>{' '}
@@ -99,12 +99,13 @@ export function ProjectTree({
                     />
                   </li>
                 ))}
+                {!projects.length ? <li>No projects in this category.</li> : null}
               </ul>
             </details>
           </li>
         ))}
         <li>
-          <a href="/tasks?projectId=unassigned">Unassigned</a>{' '}
+          <a href="/tasks?projectId=unassigned">Unassigned to a project</a>{' '}
           <span className="count-badge">{tree.unassigned.taskCount} to-dos</span>{' '}
           <span className="count-badge">{tree.unassigned.listCount} lists</span>
           <UrgencyBreakdown

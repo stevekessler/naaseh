@@ -88,11 +88,12 @@ export function TaskFilters({
         />
       </label>
       <label>
-        <span>Assignee</span>
+        <span>Filter by assignee</span>
         <AssigneePicker
           assignees={assignees}
           value={value.assigneeId}
           allLabel="All assignees"
+          ariaLabel="Assignee"
           onChange={(assigneeId) => change({ ...value, assigneeId })}
         />
       </label>

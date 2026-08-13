@@ -407,6 +407,7 @@ export function App() {
   const [syncError, setSyncError] = useState<string>();
   const [applyUpdate, setApplyUpdate] = useState<(() => void) | undefined>();
   const syncing = useRef(false);
+  const syncRetryTimer = useRef<number | undefined>(undefined);
   const visible = useMemo(() => filterTasks(tasks, filters), [tasks, filters]);
   useEffect(() => {
     if (section !== 'dashboard' || !session) return;
@@ -555,11 +556,20 @@ export function App() {
     history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
   }, [filters]);
   const synchronize = useCallback(async () => {
-    if (!session || !navigator.onLine || syncing.current) return;
+    if (!session || !navigator.onLine || document.visibilityState === 'hidden' || syncing.current)
+      return;
+    if (syncRetryTimer.current !== undefined) {
+      window.clearTimeout(syncRetryTimer.current);
+      syncRetryTimer.current = undefined;
+    }
     syncing.current = true;
     try {
       await drainSequentially(session.csrfToken, (delay) => {
-        window.setTimeout(() => void synchronize(), delay);
+        if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
+        syncRetryTimer.current = window.setTimeout(() => {
+          syncRetryTimer.current = undefined;
+          void synchronize();
+        }, delay);
       });
       setSyncError(undefined);
     } catch (error) {
@@ -598,6 +608,16 @@ export function App() {
     window.addEventListener('online', online);
     return () => window.removeEventListener('online', online);
   }, [synchronize, section]);
+  useEffect(() => {
+    const visible = () => {
+      if (document.visibilityState === 'visible') void synchronize();
+    };
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      document.removeEventListener('visibilitychange', visible);
+      if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
+    };
+  }, [synchronize]);
 
   useEffect(() => {
     const syncRoute = () => {

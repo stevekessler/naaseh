@@ -7,6 +7,7 @@ import {
 } from '../../src/db/outbox.js';
 import { supportedLocalSchema } from '../../src/db/sync-cursor.js';
 import { assertStorageCapacity } from '../../src/db/storage-health.js';
+import { shouldBootstrapTaskSnapshot } from '../../src/sync/sync-engine.js';
 describe('durable local outbox rules', () => {
   it('keeps each entity sequential while allowing independent entity queues', () => {
     const grouped = groupSequentialMutations([
@@ -37,5 +38,11 @@ describe('durable local outbox rules', () => {
       buildBacklogSnapshot(3, '2026-07-23T11:58:00.000Z', Date.parse('2026-07-23T12:00:00.000Z')),
     ).toEqual({ depth: 3, oldestAgeSeconds: 120 });
     expect(buildBacklogSnapshot(0, undefined)).toBeUndefined();
+  });
+  it('bootstraps only an empty task snapshot with an advanced cursor and no pending work', () => {
+    expect(shouldBootstrapTaskSnapshot(0, 0, { public: 2 })).toBe(true);
+    expect(shouldBootstrapTaskSnapshot(1, 0, { public: 2 })).toBe(false);
+    expect(shouldBootstrapTaskSnapshot(0, 1, { public: 2 })).toBe(false);
+    expect(shouldBootstrapTaskSnapshot(0, 0, {})).toBe(false);
   });
 });

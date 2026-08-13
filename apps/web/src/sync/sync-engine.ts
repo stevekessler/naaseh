@@ -107,6 +107,42 @@ export function classifyMutationResults(results: MutationResult[]) {
 }
 export const syncHttpError = (operation: string, status: number) =>
   new Error(`${operation} failed (${status}); pending changes remain safely stored.`);
+
+export function shouldBootstrapTaskSnapshot(
+  taskCount: number,
+  pendingCount: number,
+  cursor: VectorCursor,
+) {
+  return (
+    taskCount === 0 &&
+    pendingCount === 0 &&
+    Object.values(cursor).some((sequence) => Number.isSafeInteger(sequence) && sequence > 0)
+  );
+}
+
+async function recoverMissingTaskSnapshot(): Promise<void> {
+  const [taskCount, pendingCount, cursor] = await Promise.all([
+    db.secureTasks.count(),
+    db.outbox.count(),
+    readCursor(),
+  ]);
+  if (!shouldBootstrapTaskSnapshot(taskCount, pendingCount, cursor)) return;
+
+  const response = await fetch('/api/v1/sync/bootstrap', {
+    credentials: 'include',
+  });
+  if (!response.ok) throw syncHttpError('Synchronization bootstrap', response.status);
+  const body = (await response.json()) as { tasks?: unknown[] };
+  const records = await Promise.all(
+    (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
+  );
+  await db.transaction('rw', db.secureTasks, db.outbox, async () => {
+    // A task created while bootstrap was in flight wins. Never replace or
+    // discard a local snapshot or pending mutation during recovery.
+    if ((await db.secureTasks.count()) || (await db.outbox.count())) return;
+    if (records.length) await db.secureTasks.bulkPut(records);
+  });
+}
 async function pushMutation(
   csrfToken: string,
   mutation: Awaited<ReturnType<typeof decryptMutation>>,
@@ -378,10 +414,18 @@ export async function pullChanges(): Promise<void> {
   if (records.length || tombstones.length || !enhanced.length)
     await commitPull(records, tombstones, [], cursor);
 }
-export async function syncNow(csrfToken: string) {
+async function performSync(csrfToken: string) {
+  await recoverMissingTaskSnapshot();
   await drainOutbox(csrfToken);
   await pullChanges();
   await refreshGoogleSyncCache(csrfToken).catch(() => undefined);
+}
+
+export async function syncNow(csrfToken: string) {
+  if (!navigator.locks) return performSync(csrfToken);
+  await navigator.locks.request('naaseh-sync', { ifAvailable: true }, async (lock) => {
+    if (lock) await performSync(csrfToken);
+  });
 }
 export async function drainSequentially(
   csrfToken: string,
