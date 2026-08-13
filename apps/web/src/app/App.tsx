@@ -20,7 +20,7 @@ import { filtersFromSearch, safeSearchState } from '../features/search/search-st
 import { TaskSearchBar } from '../features/search/TaskSearchBar.js';
 import { TaskFilters } from '../features/search/TaskFilters.js';
 import { UpdatePrompt } from './UpdatePrompt.js';
-import { safeToActivateUpdate } from './service-worker-update.js';
+import { safeToActivateUpdate, subscribeToServiceWorkerUpdate } from './service-worker-update.js';
 import { ViewSwitcher } from '../features/tasks/ViewSwitcher.js';
 import { loadView, saveView } from '../db/preferences-repository.js';
 import { listLocalGroups } from '../db/group-repository.js';
@@ -611,12 +611,17 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const accept = (apply: () => void) => setApplyUpdate(() => apply);
     const ready = (event: Event) => {
-      const detail = (event as CustomEvent<{ apply: () => void }>).detail;
-      if (detail?.apply) setApplyUpdate(() => detail.apply);
+      const detail = (event as CustomEvent<{ apply?: () => void }>).detail;
+      if (detail?.apply) accept(detail.apply);
     };
+    const unsubscribe = subscribeToServiceWorkerUpdate(accept);
     window.addEventListener('naaseh:update-ready', ready);
-    return () => window.removeEventListener('naaseh:update-ready', ready);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('naaseh:update-ready', ready);
+    };
   }, []);
 
   if (!session)
