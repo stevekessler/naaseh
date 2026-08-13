@@ -20,6 +20,7 @@ export function AssigneePicker({
   value,
   defaultValue,
   allLabel,
+  ariaLabel,
   onChange,
 }: {
   assignees: readonly AssigneeOption[];
@@ -27,6 +28,7 @@ export function AssigneePicker({
   value?: string;
   defaultValue?: string;
   allLabel?: string;
+  ariaLabel?: string;
   onChange?: (value: string) => void;
 }) {
   const options = visibleAssignees(assignees);
@@ -36,6 +38,7 @@ export function AssigneePicker({
   return (
     <select
       name={name}
+      {...(ariaLabel ? { 'aria-label': ariaLabel } : {})}
       {...(value === undefined ? { defaultValue: selected } : { value: selected })}
       {...(onChange ? { onChange: (event) => onChange(event.target.value) } : {})}
     >
