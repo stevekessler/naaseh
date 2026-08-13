@@ -27,10 +27,37 @@ EXPECTED_SECRETS = {
     "PRODUCTION_SMOKE_PASSWORD",
 }
 HEALTHY_STACK_STATUSES = {"CREATE_COMPLETE", "UPDATE_COMPLETE"}
+PROJECT_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
+SAVE_LOCATION_ENV_VAR = "NAASEH_VALIDATION_SAVE_LOCATION"
 
 
 class ValidationError(RuntimeError):
     pass
+
+
+def env_value(name: str, env_path: Path = PROJECT_ENV_PATH) -> str | None:
+    """Read one setting from the process environment or the project's .env file."""
+    if name in os.environ:
+        return os.environ[name] or None
+
+    try:
+        lines = env_path.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return None
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line.removeprefix("export ").lstrip()
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == name:
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+            return value or None
+    return None
 
 
 class Reporter:
@@ -46,7 +73,7 @@ class Reporter:
     def _resolve_log_path(value: str | None) -> Path | None:
         if not value:
             return None
-        expanded = Path(value).expanduser()
+        expanded = Path(os.path.expandvars(value)).expanduser()
         if expanded.is_dir() or value.endswith(("/", os.sep)):
             stamp = dt.datetime.now().astimezone().strftime("%Y%m%d-%H%M%S")
             return expanded / f"naaseh-production-validation-{stamp}.log"
@@ -536,13 +563,22 @@ class ProductionValidator:
         return f"{count} metric series found"
 
 
-def parse_args(argv: list[str] | None = None, *, default_phase: str = "post") -> argparse.Namespace:
+def parse_args(
+    argv: list[str] | None = None,
+    *,
+    default_phase: str = "post",
+    env_path: Path = PROJECT_ENV_PATH,
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run read-only validation of the Naaseh production deployment."
     )
     parser.add_argument(
         "--save-location",
-        help="Log file path, or an existing/trailing-slash directory for a timestamped log.",
+        default=env_value(SAVE_LOCATION_ENV_VAR, env_path),
+        help=(
+            "Log file path, or an existing/trailing-slash directory for a timestamped log. "
+            f"Defaults to {SAVE_LOCATION_ENV_VAR} from the environment or project .env file."
+        ),
     )
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument("--verbose", action="store_true", help="Show command-level details.")

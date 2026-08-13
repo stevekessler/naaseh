@@ -68,6 +68,17 @@ and Web Push metric presence. It does not change the deployment or send a notifi
 
 ## Save a log
 
+To save validation logs by default, create a project-root `.env` file and set:
+
+```dotenv
+NAASEH_VALIDATION_SAVE_LOCATION="$HOME/Desktop/naaseh-validation-logs/"
+```
+
+Both validation scripts use this default. A command-line `--save-location` takes precedence, and
+an explicitly exported `NAASEH_VALIDATION_SAVE_LOCATION` takes precedence over `.env`. Relative
+paths are resolved from the directory where the script is run. The repository ignores `.env`, so
+your local path will not be committed.
+
 Pass an exact log filename:
 
 ```console

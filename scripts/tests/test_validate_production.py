@@ -44,6 +44,15 @@ class ReporterTests(unittest.TestCase):
                 reporter.close()
             self.assertIn("diagnostic", log_path.read_text(encoding="utf-8"))
 
+    def test_save_location_expands_environment_variables(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.dict("os.environ", {"VALIDATION_LOG_ROOT": directory}):
+                reporter = Reporter(False, "$VALIDATION_LOG_ROOT/logs/")
+            try:
+                self.assertEqual(reporter.log_path.parent, Path(directory) / "logs")
+            finally:
+                reporter.close()
+
 
 class CommandRunnerTests(unittest.TestCase):
     def test_sensitive_command_and_error_are_redacted(self):
@@ -75,6 +84,41 @@ class ArgumentTests(unittest.TestCase):
     def test_verbose_and_no_verbose_are_mutually_exclusive(self):
         with self.assertRaises(SystemExit):
             parse_args(["--verbose", "--no-verbose"])
+
+    def test_save_location_defaults_to_project_env_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_path = Path(directory) / ".env"
+            env_path.write_text(
+                'NAASEH_VALIDATION_SAVE_LOCATION="~/validation logs/"\n',
+                encoding="utf-8",
+            )
+            with patch.dict("os.environ", {}, clear=True):
+                args = parse_args([], env_path=env_path)
+        self.assertEqual(args.save_location, "~/validation logs/")
+
+    def test_process_environment_overrides_env_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_path = Path(directory) / ".env"
+            env_path.write_text(
+                "NAASEH_VALIDATION_SAVE_LOCATION=from-file/\n",
+                encoding="utf-8",
+            )
+            with patch.dict(
+                "os.environ",
+                {"NAASEH_VALIDATION_SAVE_LOCATION": "from-process/"},
+                clear=True,
+            ):
+                args = parse_args([], env_path=env_path)
+        self.assertEqual(args.save_location, "from-process/")
+
+    def test_command_line_save_location_overrides_environment_default(self):
+        with patch.dict(
+            "os.environ",
+            {"NAASEH_VALIDATION_SAVE_LOCATION": "from-process/"},
+            clear=True,
+        ):
+            args = parse_args(["--save-location", "from-command-line/"])
+        self.assertEqual(args.save_location, "from-command-line/")
 
 
 class PhaseTests(unittest.TestCase):
