@@ -11,6 +11,17 @@ import { ProjectPicker } from '../projects/ProjectPicker.js';
 import { UrgencyField } from '../../components/UrgencyField.js';
 import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
 import { CategoryPicker } from '../../components/CategoryPicker.js';
+
+export function categoryDefaultAssignee(
+  categoryId: string,
+  categories: readonly CategoryRecord[],
+  creatorId?: string,
+) {
+  return (
+    categories.find((category) => category.id === categoryId)?.defaultAssigneeId ?? creatorId ?? ''
+  );
+}
+
 export function TaskForm({
   save,
   task,
@@ -37,6 +48,13 @@ export function TaskForm({
     '';
   const [categoryId, setCategoryId] = useState(initialCategoryId);
   const [projectId, setProjectId] = useState(task?.projectId ?? '');
+  const initialCategory = categories.find((category) => category.id === initialCategoryId);
+  const [assigneeId, setAssigneeId] = useState(
+    task
+      ? (task.assigneeId ?? '')
+      : (initialCategory?.defaultAssigneeId ?? defaultAssigneeId ?? ''),
+  );
+  const [assigneeTouched, setAssigneeTouched] = useState(false);
   const openParentTasks = parentTasks
     .filter(
       (candidate) =>
@@ -55,9 +73,6 @@ export function TaskForm({
     const submittedProjectId = value('projectId');
     const submittedCategoryId =
       projects.find((item) => item.id === submittedProjectId)?.categoryId || value('categoryId');
-    const category = categories.find((item) => item.id === submittedCategoryId);
-    const assigneeId =
-      value('assigneeId') || category?.defaultAssigneeId || (!task ? defaultAssigneeId : undefined);
     await save({
       label: value('label'),
       memo: value('memo'),
@@ -68,7 +83,7 @@ export function TaskForm({
             dueTimeZone: value('dueTimeZone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
           }
         : {}),
-      ...(assigneeId ? { assigneeId } : {}),
+      assigneeId: assigneeId || undefined,
       ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
       ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
       ...(value('groupId') ? { groupId: value('groupId') } : {}),
@@ -81,6 +96,8 @@ export function TaskForm({
       setUrgency(defaultUrgency);
       setCategoryId('');
       setProjectId('');
+      setAssigneeId(defaultAssigneeId ?? '');
+      setAssigneeTouched(false);
     }
   }
   return (
@@ -117,9 +134,11 @@ export function TaskForm({
           Assignee
           <AssigneePicker
             assignees={assignees}
-            {...(task?.assigneeId || (!task && defaultAssigneeId)
-              ? { defaultValue: task?.assigneeId ?? defaultAssigneeId }
-              : {})}
+            value={assigneeId}
+            onChange={(nextAssigneeId) => {
+              setAssigneeId(nextAssigneeId);
+              setAssigneeTouched(true);
+            }}
           />
         </label>
         <label>
@@ -129,6 +148,10 @@ export function TaskForm({
             value={categoryId}
             onChange={(nextCategoryId) => {
               setCategoryId(nextCategoryId);
+              if (!task && !assigneeTouched)
+                setAssigneeId(
+                  categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
+                );
               if (
                 projectId &&
                 projects.find((project) => project.id === projectId)?.categoryId !== nextCategoryId
@@ -147,7 +170,13 @@ export function TaskForm({
             const nextCategoryId = projects.find(
               (project) => project.id === nextProjectId,
             )?.categoryId;
-            if (nextCategoryId) setCategoryId(nextCategoryId);
+            if (nextCategoryId) {
+              setCategoryId(nextCategoryId);
+              if (!task && !assigneeTouched)
+                setAssigneeId(
+                  categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
+                );
+            }
           }}
         />
         <label>

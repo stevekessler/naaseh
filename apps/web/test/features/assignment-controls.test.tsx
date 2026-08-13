@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { createTask } from '@naaseh/domain';
 import { AssigneePicker } from '../../src/components/AssigneePicker.js';
-import { TaskForm } from '../../src/features/tasks/TaskForm.js';
+import { categoryDefaultAssignee, TaskForm } from '../../src/features/tasks/TaskForm.js';
 import { TaskFilters } from '../../src/features/search/TaskFilters.js';
 import { PersonalStackPage } from '../../src/features/stacks/PersonalStackPage.js';
 
@@ -103,6 +103,27 @@ describe('shared assignment controls', () => {
     expect(html).not.toContain('Completed parent');
     expect(html).toContain('>Link<');
     expect(html).not.toContain('HTTPS link');
+  });
+
+  it('prefers a category default over the creator without changing an existing task', () => {
+    const categorized = { ...category, defaultAssigneeId: 'user-category' };
+    expect(categoryDefaultAssignee(category.id, [categorized], 'user-steve')).toBe('user-category');
+
+    const existing = createTask(
+      { label: 'Unassigned task', categoryId: category.id },
+      'user-steve',
+      new Date('2026-08-10T00:00:00.000Z'),
+    );
+    const html = renderToStaticMarkup(
+      <TaskForm
+        save={vi.fn()}
+        task={existing}
+        categories={[categorized]}
+        assignees={assignees}
+        defaultAssigneeId="user-steve"
+      />,
+    );
+    expect(html).toContain('<option value="" selected="">Unassigned</option>');
   });
 
   it('offers task creation on Personal Stack with the same dropdowns', () => {

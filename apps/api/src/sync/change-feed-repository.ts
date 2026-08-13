@@ -25,6 +25,18 @@ export interface PersonalStackFeedChange {
 
 export type SyncFeedChange = SyncChange | PersonalStackFeedChange;
 
+const lastChangeKey = `CHANGE#${'9'.repeat(20)}`;
+
+export function changeFeedKeyRange(after: number) {
+  if (!Number.isSafeInteger(after) || after < 0)
+    throw new Error('Synchronization cursor must be a non-negative safe integer.');
+  if (!Number.isSafeInteger(after + 1)) throw new Error('Synchronization cursor is exhausted.');
+  return {
+    first: `CHANGE#${String(after + 1).padStart(20, '0')}`,
+    last: lastChangeKey,
+  };
+}
+
 const rankFields = new Set([
   'rank',
   'overallRank',
@@ -49,6 +61,10 @@ export function deserializeAudienceFeedItems(
   const changes: SyncFeedChange[] = [];
   for (const item of items) {
     const data = item.data as Record<string, unknown> | undefined;
+    // Feed partitions also contain metadata such as the COUNTER item. Queries
+    // should exclude it, but ignoring metadata here keeps legacy/bad queries
+    // from turning a synchronization pull into an internal server error.
+    if (!data) continue;
     if (data?.entityType !== 'personalStackOperation') {
       changes.push(data as unknown as SyncChange);
       continue;
@@ -140,13 +156,15 @@ export async function pullAudience(
   after: number,
   limit = 200,
 ): Promise<SyncFeedChange[]> {
+  const range = changeFeedKeyRange(after);
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: tableName,
-      KeyConditionExpression: 'PK = :pk AND SK > :after',
+      KeyConditionExpression: 'PK = :pk AND SK BETWEEN :first AND :last',
       ExpressionAttributeValues: {
         ':pk': `FEED#${audience}`,
-        ':after': `CHANGE#${String(after).padStart(20, '0')}`,
+        ':first': range.first,
+        ':last': range.last,
       },
       Limit: limit,
     }),

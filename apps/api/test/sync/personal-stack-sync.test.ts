@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { pushRequestSchema } from '@naaseh/contracts';
 import { createPersonalStackService } from '../../src/ranking/stack-service.js';
 import {
@@ -7,9 +7,12 @@ import {
 } from '../../src/sync/sync-service.js';
 import {
   assertFeedChangePrivacy,
+  changeFeedKeyRange,
   deserializeAudienceFeedItems,
+  pullAudience,
   type PersonalStackFeedChange,
 } from '../../src/sync/change-feed-repository.js';
+import { dynamodb } from '../../src/shared/dynamodb.js';
 
 const mutationId = '01K00000000000000000000001';
 const operationId = '01K00000000000000000000002';
@@ -154,6 +157,27 @@ describe('contract-v4 personal stack synchronization', () => {
     ]);
     expect(deserializeAudienceFeedItems('PUBLIC', stored)).toEqual([]);
     expect(deserializeAudienceFeedItems('GROUP#group-a', stored)).toEqual([]);
+  });
+
+  it('queries only change records after the cursor and ignores feed metadata', async () => {
+    expect(changeFeedKeyRange(7)).toEqual({
+      first: 'CHANGE#00000000000000000008',
+      last: 'CHANGE#99999999999999999999',
+    });
+    expect(deserializeAudienceFeedItems('PUBLIC', [{ SK: 'COUNTER' }])).toEqual([]);
+    expect(() => changeFeedKeyRange(-1)).toThrow(/cursor/iu);
+
+    const send = vi.spyOn(dynamodb, 'send').mockResolvedValueOnce({ Items: [{ SK: 'COUNTER' }] });
+    await expect(pullAudience('PUBLIC', 7)).resolves.toEqual([]);
+    expect(send.mock.calls[0]?.[0].input).toMatchObject({
+      KeyConditionExpression: 'PK = :pk AND SK BETWEEN :first AND :last',
+      ExpressionAttributeValues: {
+        ':pk': 'FEED#PUBLIC',
+        ':first': 'CHANGE#00000000000000000008',
+        ':last': 'CHANGE#99999999999999999999',
+      },
+    });
+    send.mockRestore();
   });
 
   it('rejects rank fields in owner stack feed payloads and shared work changes', () => {
