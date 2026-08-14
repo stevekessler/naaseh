@@ -580,6 +580,10 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
+    if (session) void synchronize();
+  }, [session, synchronize]);
+
+  useEffect(() => {
     const announce = () => {
       const current = navigator.onLine;
       document.documentElement.dataset.online = String(current);

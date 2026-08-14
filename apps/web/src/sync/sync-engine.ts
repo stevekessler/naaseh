@@ -111,37 +111,34 @@ export const syncHttpError = (operation: string, status: number) =>
 export function shouldBootstrapTaskSnapshot(
   taskCount: number,
   pendingCount: number,
-  cursor: VectorCursor,
+  bootstrapComplete: boolean,
 ) {
-  return (
-    taskCount === 0 &&
-    pendingCount === 0 &&
-    Object.values(cursor).some((sequence) => Number.isSafeInteger(sequence) && sequence > 0)
-  );
+  return taskCount === 0 && pendingCount === 0 && !bootstrapComplete;
 }
 
 async function recoverMissingTaskSnapshot(): Promise<void> {
-  const [taskCount, pendingCount, cursor] = await Promise.all([
+  const [taskCount, pendingCount, bootstrapState] = await Promise.all([
     db.secureTasks.count(),
     db.outbox.count(),
-    readCursor(),
+    db.settings.get('task-snapshot-bootstrapped'),
   ]);
-  if (!shouldBootstrapTaskSnapshot(taskCount, pendingCount, cursor)) return;
-
-  const response = await fetch('/api/v1/sync/bootstrap', {
-    credentials: 'include',
-  });
-  if (!response.ok) throw syncHttpError('Synchronization bootstrap', response.status);
-  const body = (await response.json()) as { tasks?: unknown[] };
-  const records = await Promise.all(
-    (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
-  );
-  await db.transaction('rw', db.secureTasks, db.outbox, async () => {
-    // A task created while bootstrap was in flight wins. Never replace or
-    // discard a local snapshot or pending mutation during recovery.
-    if ((await db.secureTasks.count()) || (await db.outbox.count())) return;
-    if (records.length) await db.secureTasks.bulkPut(records);
-  });
+  if (shouldBootstrapTaskSnapshot(taskCount, pendingCount, bootstrapState?.value === 'true')) {
+    const response = await fetch('/api/v1/sync/bootstrap', {
+      credentials: 'include',
+    });
+    if (!response.ok) throw syncHttpError('Synchronization bootstrap', response.status);
+    const body = (await response.json()) as { tasks?: unknown[] };
+    const records = await Promise.all(
+      (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
+    );
+    await db.transaction('rw', db.secureTasks, db.outbox, db.settings, async () => {
+      // A task created while bootstrap was in flight wins. Never replace or
+      // discard a local snapshot or pending mutation during recovery.
+      if ((await db.secureTasks.count()) || (await db.outbox.count())) return;
+      if (records.length) await db.secureTasks.bulkPut(records);
+      await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+    });
+  }
 }
 async function pushMutation(
   csrfToken: string,
