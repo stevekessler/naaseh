@@ -6,6 +6,7 @@ import {
   QueryCommand,
   ScanCommand,
   TransactWriteCommand,
+  type ScanCommandInput,
   type TransactWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import type { EntityRevision, StableMutationResult, Task, TaskRevision } from '@naaseh/domain';
@@ -47,6 +48,22 @@ export async function listPublicTasks(): Promise<Task[]> {
   );
   return (result.Items ?? []).map((item) => item.data as Task);
 }
+export function legacyOwnerTaskScanInput(
+  ownerId: string,
+  startKey?: Record<string, unknown>,
+): ScanCommandInput {
+  return {
+    TableName: table,
+    FilterExpression: 'begins_with(PK, :task) AND SK=:current AND #data.#ownerId=:owner',
+    ExpressionAttributeNames: { '#data': 'data', '#ownerId': 'ownerId' },
+    ExpressionAttributeValues: {
+      ':task': 'TASK#',
+      ':current': 'CURRENT',
+      ':owner': ownerId,
+    },
+    ...(startKey ? { ExclusiveStartKey: startKey } : {}),
+  };
+}
 export async function listOwnerTasks(ownerId: string): Promise<Task[]> {
   const result = await document.send(
     new QueryCommand({
@@ -62,15 +79,7 @@ export async function listOwnerTasks(ownerId: string): Promise<Task[]> {
   // Compatibility scan keeps pre-index records eligible until normal writes backfill GSI2.
   let startKey: Record<string, unknown> | undefined;
   do {
-    const legacy = await document.send(
-      new ScanCommand({
-        TableName: table,
-        FilterExpression: 'SK=:current AND #data.#ownerId=:owner',
-        ExpressionAttributeNames: { '#data': 'data', '#ownerId': 'ownerId' },
-        ExpressionAttributeValues: { ':current': 'CURRENT', ':owner': ownerId },
-        ...(startKey ? { ExclusiveStartKey: startKey } : {}),
-      }),
-    );
+    const legacy = await document.send(new ScanCommand(legacyOwnerTaskScanInput(ownerId, startKey)));
     for (const item of legacy.Items ?? []) {
       const task = item.data as Task;
       tasks.set(task.id, task);
