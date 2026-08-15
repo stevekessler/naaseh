@@ -14,6 +14,23 @@ export const keys = {
   provisionRequest: (token: string) => ({ PK: `PROVISION#${token}`, SK: 'RESULT' }),
   session: (hash: string) => ({ PK: `SESSION#${hash}`, SK: 'SESSION' }),
   task: (id: string) => ({ PK: `TASK#${id}`, SK: 'CURRENT' }),
+  taskTimer: (ownerId: string) => ({ PK: `USER#${ownerId}`, SK: 'TIMER#CURRENT' }),
+  taskTimerRevision: (ownerId: string, version: number, runId: string) => ({
+    PK: `USER#${ownerId}`,
+    SK: `TIMER#REV#${String(version).padStart(12, '0')}#${runId}`,
+  }),
+  taskTimerReceipt: (ownerId: string, mutationId: string) => ({
+    PK: `USER#${ownerId}`,
+    SK: `TIMER#RECEIPT#${mutationId}`,
+  }),
+  taskTimerOwnerFeedCounter: (ownerId: string) => ({
+    PK: `FEED#OWNER#${ownerId}`,
+    SK: 'COUNTER',
+  }),
+  taskTimerOwnerFeedEntry: (ownerId: string, sequence: number) => ({
+    PK: `FEED#OWNER#${ownerId}`,
+    SK: `CHANGE#${String(sequence).padStart(20, '0')}`,
+  }),
   revision: (taskId: string, version: number, id: string) => ({
     PK: `TASK#${taskId}`,
     SK: `REV#${String(version).padStart(12, '0')}#${id}`,
@@ -148,6 +165,12 @@ export const keys = {
     PK: `MIGRATION#${name}`,
     SK: `CHECKPOINT#${id}`,
   }),
+  tfaFactor: (userId: string) => ({ PK: `USER#${userId}`, SK: 'TFA#FACTOR' }),
+  loginTransaction: (tokenDigest: string) => ({
+    PK: `LOGIN#${tokenDigest}`,
+    SK: 'CHALLENGE',
+  }),
+  adminTfaRecoveryAudit: (id: string) => ({ PK: 'AUDIT#ADMIN_TFA_RECOVERY', SK: id }),
   jobCheckpoint: (jobType: 'COPY' | 'EXPORT', id: string, checkpoint: string) => ({
     PK: `${jobType}JOB#${id}`,
     SK: `CHECKPOINT#${checkpoint}`,

@@ -15,5 +15,5 @@ test('navigation and primary controls meet touch targets and expose non-color st
   await setOffline(page);
   const create = page.getByRole('button', { name: 'Create group' });
   await expect(create).toBeDisabled();
-  await expect(create).toHaveCSS('text-decoration-line', 'line-through');
+  await expect(create).toHaveCSS('text-decoration-line', 'none');
 });

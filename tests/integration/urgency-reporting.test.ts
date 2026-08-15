@@ -13,7 +13,7 @@ vi.mock('../../apps/api/src/lifecycle/archive-repository.js', () => ({
   queryArchivedWork: vi.fn(async () => archive),
 }));
 
-type UrgencyLevel = 'extra_low' | 'low' | 'medium' | 'high' | 'critical';
+type UrgencyLevel = 'low' | 'medium' | 'high' | 'critical';
 
 const completion = (overrides: Record<string, unknown> = {}) =>
   ({
@@ -29,7 +29,7 @@ const completion = (overrides: Record<string, unknown> = {}) =>
 
 describe('urgency reporting semantics', () => {
   it('uses immutable completion-time urgency after the current work urgency changes', () => {
-    const currentTask = { urgency: 'extra_low' };
+    const currentTask = { urgency: 'low' };
     const report = calculateCompletionReport([completion()], {
       userId: 'owner',
       timeZone: 'UTC',
@@ -40,9 +40,8 @@ describe('urgency reporting semantics', () => {
       urgencyBreakdown: Record<UrgencyLevel, number>;
     };
 
-    expect(currentTask.urgency).toBe('extra_low');
+    expect(currentTask.urgency).toBe('low');
     expect(report.urgencyBreakdown).toEqual({
-      extra_low: 0,
       low: 0,
       medium: 0,
       high: 0,
@@ -72,7 +71,6 @@ describe('urgency reporting semantics', () => {
     ).toBe('critical');
     expect(report.total).toBe(0);
     expect(report.urgencyBreakdown).toEqual({
-      extra_low: 0,
       low: 0,
       medium: 0,
       high: 0,
@@ -96,7 +94,7 @@ describe('urgency reporting semantics', () => {
         { urgency: 'critical', lifecycle: 'active' },
         { urgency: 'high', lifecycle: 'archived' },
       ]),
-    ).toEqual({ extra_low: 0, low: 1, medium: 0, high: 0, critical: 1 });
+    ).toEqual({ low: 1, medium: 0, high: 0, critical: 1 });
   });
 
   it('filters archive rows by their current urgency after post-completion edits', async () => {
@@ -116,7 +114,7 @@ describe('urgency reporting semantics', () => {
       version: 2,
     } as const;
     archive.tasks = [
-      { ...base, urgency: 'extra_low' },
+      { ...base, urgency: 'low' },
       { ...base, id: '01J00000000000000000000112', urgency: 'critical' },
     ] as Task[];
     const { listAuthorizedArchive } = await import(

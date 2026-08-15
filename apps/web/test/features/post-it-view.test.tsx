@@ -41,6 +41,19 @@ describe('post-it task view', () => {
     expect(html).toContain('aria-pressed="true"');
   });
 
+  it('offers the shared task editor from a post-it when editing is enabled', () => {
+    const task = createTask({ label: 'Editable note' }, 'steve');
+    const html = renderToStaticMarkup(
+      <PostItBoard
+        tasks={[task]}
+        onToggle={async () => undefined}
+        onUpdate={async () => undefined}
+      />,
+    );
+    expect(html).toContain(`id="task-edit-trigger-postit-${task.id}"`);
+    expect(html).toContain('Edit Editable note');
+  });
+
   it('keeps completed styling offline and defines reduced-motion and sound feedback', () => {
     const css = readFileSync(new URL('../../src/styles/app.css', import.meta.url), 'utf8');
     const feedback = readFileSync(

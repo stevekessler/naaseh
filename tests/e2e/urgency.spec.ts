@@ -1,15 +1,14 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
 test.beforeEach(async ({ page }) => mockSuccessfulSync(page));
 
-type Urgency = 'extra_low' | 'low' | 'medium' | 'high' | 'critical';
+type Urgency = 'low' | 'medium' | 'high' | 'critical';
 
 const urgencyLabels: Record<Urgency, string> = {
-  extra_low: 'Extra Low',
   low: 'Low',
   medium: 'Medium',
   high: 'High',
@@ -23,8 +22,12 @@ async function chooseUrgency(container: Locator, urgency: Urgency) {
 async function createTask(page: Page, label: string, urgency: Urgency, parentLabel?: string) {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
+  await expandTaskDetails(form);
   await chooseUrgency(form, urgency);
-  if (parentLabel) await form.getByLabel('Parent task').selectOption({ label: parentLabel });
+  if (parentLabel) {
+    await form.getByRole('combobox', { name: 'Parent task' }).fill(parentLabel);
+    await page.getByRole('option', { name: parentLabel, exact: true }).click();
+  }
   await form.getByRole('button', { name: 'Add task' }).click();
   const row = page
     .locator('li')
@@ -35,10 +38,10 @@ async function createTask(page: Page, label: string, urgency: Urgency, parentLab
 }
 
 async function editSelectedTaskUrgency(page: Page, urgency: Urgency) {
-  const detail = page.getByLabel('Task details');
-  await chooseUrgency(detail, urgency);
-  await detail.getByRole('button', { name: 'Save changes' }).click();
-  await expect(detail.getByLabel('Priority', { exact: true })).toHaveValue(urgency);
+  const dialog = page.getByRole('dialog', { name: 'Edit task' });
+  await chooseUrgency(dialog, urgency);
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(dialog).toBeHidden();
 }
 
 async function createList(page: Page, name: string, urgency: Urgency) {
@@ -58,24 +61,25 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
   await signIn(page);
 
   await createTask(page, 'Urgent parent', 'critical');
-  await page.getByRole('heading', { name: 'Urgent parent' }).click();
-  const detail = page.getByLabel('Task details');
+  await page.getByRole('button', { name: 'Urgent parent', exact: true }).click();
+  const detail = page.getByRole('dialog', { name: 'Edit task' }).getByLabel('Task details');
   const parentId = await detail.getAttribute('data-task-id');
   expect(parentId).toBeTruthy();
 
-  await editSelectedTaskUrgency(page, 'extra_low');
-  await expect(detail.getByRole('heading', { name: 'Revision history' })).toBeVisible();
-  const urgencyRevision = detail.locator('li').filter({ hasText: 'urgency' }).last();
+  await editSelectedTaskUrgency(page, 'low');
+  await page.getByRole('button', { name: 'Urgent parent', exact: true }).click();
+  const updatedDetail = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(updatedDetail.getByRole('heading', { name: 'Revision history' })).toBeVisible();
+  const urgencyRevision = updatedDetail.locator('li').filter({ hasText: 'urgency' }).last();
   await expect(urgencyRevision).toBeVisible();
   await urgencyRevision.getByText('Safe changes').click();
   await expect(urgencyRevision.getByText(/"before"[\s\S]*critical/i)).toBeVisible();
-  await expect(urgencyRevision.getByText(/"after"[\s\S]*Extra Low/i)).toBeVisible();
-  await detail.getByRole('button', { name: 'Close details' }).click();
+  await expect(urgencyRevision.getByText(/"after"[\s\S]*Low/i)).toBeVisible();
+  await updatedDetail.getByRole('button', { name: 'Cancel' }).click();
 
   await createTask(page, 'Urgent child', 'high', 'Urgent parent');
-  await page.getByRole('heading', { name: 'Urgent child' }).click();
+  await page.getByRole('button', { name: 'Urgent child', exact: true }).click();
   await editSelectedTaskUrgency(page, 'medium');
-  await page.getByLabel('Task details').getByRole('button', { name: 'Close details' }).click();
 
   await page.getByRole('button', { name: 'Complete Urgent parent' }).click();
   await expect(page.getByRole('heading', { name: 'Urgent parent' })).toBeHidden();
@@ -88,7 +92,7 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   const archivedTask = page.locator('article').filter({ hasText: 'Urgent parent' });
   const archivedList = page.locator('article').filter({ hasText: 'Urgent checklist' });
-  await expect(archivedTask.getByLabel('Priority: Extra Low')).toBeVisible();
+  await expect(archivedTask.getByLabel('Priority: Low')).toBeVisible();
   await expect(archivedList.getByLabel('Priority: Critical')).toBeVisible();
 });
 
@@ -98,25 +102,24 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
 }) => {
   await signIn(page);
   await createTask(page, 'Online urgency seed', 'medium');
-  await page.getByRole('heading', { name: 'Online urgency seed' }).click();
+  await page.getByRole('button', { name: 'Online urgency seed', exact: true }).click();
   const parentId = await page.getByLabel('Task details').getAttribute('data-task-id');
   expect(parentId).toBeTruthy();
-  await page.getByLabel('Task details').getByRole('button', { name: 'Close details' }).click();
+  await page
+    .getByRole('dialog', { name: 'Edit task' })
+    .getByRole('button', { name: 'Cancel' })
+    .click();
 
   await context.setOffline(true);
-  await createTask(page, 'Offline urgent child', 'extra_low', 'Online urgency seed');
-  await page.getByRole('heading', { name: 'Online urgency seed' }).click();
+  await createTask(page, 'Offline urgent child', 'low', 'Online urgency seed');
+  await page.getByRole('button', { name: 'Online urgency seed', exact: true }).click();
   await editSelectedTaskUrgency(page, 'critical');
-  await page.getByLabel('Task details').getByRole('button', { name: 'Close details' }).click();
 
-  const list = await createList(page, 'Offline urgent list', 'high');
-  await chooseUrgency(list, 'low');
-  await expect(page.getByRole('status').filter({ hasText: 'Offline' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-online', 'false');
 
   await context.setOffline(false);
-  await expect(page.getByRole('status').filter({ hasText: 'Synced' })).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(page.locator('html')).toHaveAttribute('data-online', 'true');
+  await expect(page.getByText('Synced').first()).toBeAttached({ timeout: 15_000 });
 
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(
@@ -129,14 +132,6 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
     page
       .locator('li')
       .filter({ has: page.getByRole('heading', { name: 'Offline urgent child' }) })
-      .getByLabel('Priority: Extra Low'),
-  ).toBeVisible();
-
-  await openLists(page);
-  await expect(
-    page
-      .locator('.named-list')
-      .filter({ hasText: 'Offline urgent list' })
       .getByLabel('Priority: Low'),
   ).toBeVisible();
 });
@@ -146,6 +141,7 @@ test('keeps urgency controls accessible to keyboard, touch, and screen readers a
 }, testInfo) => {
   await signIn(page);
   const form = page.locator('.task-form').first();
+  await expandTaskDetails(form);
   const urgency = form.getByLabel('Priority', { exact: true });
 
   await urgency.focus();

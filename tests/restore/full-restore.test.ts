@@ -134,4 +134,31 @@ describe('full restore acceptance', () => {
       ),
     ).toThrow(/exact S3 version/);
   });
+
+  it('fails closed on completion export ownership, schema, removed priority, or memo row leakage', () => {
+    const valid = {
+      PK: 'EXPORTJOB#job-1',
+      SK: 'CURRENT',
+      data: {
+        requestedByPrincipal: 'owner',
+        exportKind: 'completed_tasks',
+        schemaVersion: 'naaseh.completed-tasks/v1',
+        requestFingerprint: 'a'.repeat(64),
+        status: 'ready',
+        manifest: { rowCount: 1, byteLength: 100, sha256: 'b'.repeat(64) },
+      },
+    };
+    expect(validateEnhancedRecoveryRows([valid])).toEqual({
+      currentRecords: 1,
+      blobReferences: 0,
+    });
+    expect(() =>
+      validateEnhancedRecoveryRows([
+        { ...valid, data: { ...valid.data, normalizedFilters: { urgency: 'extra_low' } } },
+      ]),
+    ).toThrow(/removed priority/);
+    expect(() =>
+      validateEnhancedRecoveryRows([{ ...valid, data: { ...valid.data, memo: 'leak' } }]),
+    ).toThrow(/prohibited/);
+  });
 });

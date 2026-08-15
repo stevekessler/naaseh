@@ -8,12 +8,11 @@ export const urgencyStackRankingContractVersionSchema = z.literal(
 export const urgencyStackRankingOpenApiPath =
   'specs/005-urgency-stack-ranking/contracts/urgency-stack-ranking.openapi.yaml' as const;
 
-export const urgencySchema = z.enum(['extra_low', 'low', 'medium', 'high', 'critical']);
+export const urgencySchema = z.enum(['low', 'medium', 'high', 'critical']);
 export const urgencyValues = urgencySchema.options;
 
 export const urgencyCountsSchema = z
   .object({
-    extra_low: z.number().int().nonnegative(),
     low: z.number().int().nonnegative(),
     medium: z.number().int().nonnegative(),
     high: z.number().int().nonnegative(),
@@ -27,7 +26,7 @@ const contentTypeSchema = z.enum(['all', 'todos', 'lists']);
 
 export const urgencyQuerySchema = z
   .string()
-  .regex(/^(extra_low|low|medium|high|critical)(,(extra_low|low|medium|high|critical))*$/)
+  .regex(/^(low|medium|high|critical)(,(low|medium|high|critical))*$/)
   .superRefine((value, context) => {
     const values = value.split(',');
     if (new Set(values).size !== values.length)
@@ -38,6 +37,7 @@ const reportingFilterShape = {
   from: dateSchema.optional(),
   to: dateSchema.optional(),
   timeZone: z.string().min(1).default('UTC'),
+  browserTimeZone: z.string().min(1).max(128).optional(),
   weekStartsOn: z.coerce.number().int().min(0).max(6).default(1),
   assignment: z.enum(['all', 'unassigned', 'category', 'project']).default('all'),
   userId: z.string().min(1).optional(),
@@ -128,7 +128,7 @@ export const filterBasisSchema = z
     urgencies: z
       .array(urgencySchema)
       .min(1)
-      .max(5)
+      .max(4)
       .refine((items) => new Set(items).size === items.length, {
         message: 'Urgencies must be unique.',
       })

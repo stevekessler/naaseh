@@ -17,12 +17,12 @@ describe('urgency work integration', () => {
   it('defaults new Tasks, subtasks, and Lists to Medium and persists explicit values', () => {
     const parent = createTask({ label: 'Parent', urgency: 'critical' }, 'owner', now);
     const subtask = createTask({ label: 'Child', parentId: parent.id }, 'owner', now);
-    const list = createList({ name: 'Errands', urgency: 'extra_low' }, 'owner', now);
+    const list = createList({ name: 'Errands', urgency: 'low' }, 'owner', now);
     const defaultList = createList({ name: 'Default' }, 'owner', now);
 
     expect(parent.urgency).toBe('critical');
     expect(subtask.urgency).toBe('medium');
-    expect(list.urgency).toBe('extra_low');
+    expect(list.urgency).toBe('low');
     expect(defaultList.urgency).toBe('medium');
   });
 

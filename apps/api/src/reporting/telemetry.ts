@@ -91,5 +91,33 @@ export function recordReconciliation(input: Parameters<typeof reconciliationTele
     metric('ProjectionReconciliationFailures', 1);
   return detail;
 }
+
+export function recordCompletionExport(input: {
+  phase: 'request' | 'snapshot' | 'transform' | 'verify' | 'download';
+  outcome: 'success' | 'failure';
+  scope: 'self' | 'all_users';
+  durationMs?: number;
+  rowCount?: number;
+}) {
+  log('reporting.completion_export', {
+    operation: 'completion_export',
+    phase: input.phase,
+    outcome: input.outcome,
+    scope: input.scope,
+    ...(input.durationMs === undefined
+      ? {}
+      : { latencyBucket: bucket(input.durationMs, [250, 1_000, 5_000, 30_000, 300_000]) }),
+    ...(input.rowCount === undefined
+      ? {}
+      : { rowCountBucket: bucket(input.rowCount, [0, 10, 100, 1_000, 10_000, 50_000]) }),
+  });
+  metric('CompletionExports', 1);
+  if (input.durationMs !== undefined)
+    metric('CompletionExportDuration', Math.max(0, input.durationMs), 'Milliseconds');
+  if (input.rowCount !== undefined) metric('CompletionExportRows', Math.max(0, input.rowCount));
+  if (input.outcome === 'failure') metric('CompletionExportFailures', 1);
+  if (input.phase === 'verify' && input.outcome === 'failure')
+    metric('CompletionExportIntegrityFailures', 1);
+}
 import { log, metric } from '@naaseh/observability';
 import { stackAffectedCountBucket } from '../ranking/telemetry.js';

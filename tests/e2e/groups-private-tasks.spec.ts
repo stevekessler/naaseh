@@ -69,10 +69,12 @@ test.describe('mocked group API', () => {
     await page.getByRole('button', { name: 'Join' }).click();
     await page.getByLabel('Group PIN').fill('111111');
     await page.getByRole('button', { name: 'Join group' }).click();
-    await expect(page.getByRole('alert')).toHaveText('Unable to update group.');
+    await expect(page.getByText('Unable to update group.', { exact: true })).toBeVisible();
     await page.getByLabel('Group PIN').fill('123456');
     await page.getByRole('button', { name: 'Join group' }).click();
-    await expect(page.getByRole('alert')).toHaveText('Too many attempts. Try again later.');
+    await expect(
+      page.getByText('Too many attempts. Try again later.', { exact: true }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();
 
     await page.getByRole('button', { name: 'Create group' }).click();
@@ -84,7 +86,7 @@ test.describe('mocked group API', () => {
     await expect(page.getByText('Active owner')).toBeVisible();
 
     await context.setOffline(true);
-    await page.getByRole('button', { name: 'Tasks' }).click();
+    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
     await page.getByRole('button', { name: 'Groups' }).click();
     await expect(page.getByText(/Offline: showing saved group status/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
@@ -102,15 +104,18 @@ test('preserves an owner private-task transition while offline and after reload'
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Owner offline private task');
   await form.getByRole('button', { name: 'Add task' }).click();
-  await page.getByRole('heading', { name: 'Owner offline private task' }).click();
-  const detail = page.getByLabel('Task details');
+  await page.getByRole('button', { name: 'Owner offline private task', exact: true }).click();
+  const detail = page.getByRole('dialog', { name: 'Edit task' });
   await context.setOffline(true);
   await detail.getByLabel('Private task').check();
   await detail.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByTitle('Private')).toBeVisible();
   if (testInfo.project.name === 'chromium') {
     await page.reload();
-    await expect(page.getByLabel('Task details').getByLabel('Private task')).toBeChecked();
+    await page.getByRole('button', { name: 'Owner offline private task', exact: true }).click();
+    await expect(
+      page.getByRole('dialog', { name: 'Edit task' }).getByLabel('Private task'),
+    ).toBeChecked();
   }
   await context.setOffline(false);
 });

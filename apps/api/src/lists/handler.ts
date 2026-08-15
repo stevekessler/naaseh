@@ -28,6 +28,7 @@ import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { recordListAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
 import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
+import { assertAuthorizedGroupSelection } from '../groups/group-selection-authorization.js';
 const actorFor = (event: any) => ({
   id: event.requestContext.authorizer?.lambda?.userId as string,
   role: (event.requestContext.authorizer?.lambda?.role ?? 'user') as 'admin' | 'user',
@@ -87,6 +88,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       return problem(409, 'conflict', 'The resource changed on another device.', correlationId);
     if (method === 'PATCH' && !itemId) {
       const parsed = listPatchSchema.parse(JSON.parse(event.body ?? '{}'));
+      assertAuthorizedGroupSelection(parsed.groupId ?? undefined, actor.groupIds);
       const assignment =
         parsed.projectId !== undefined
           ? await resolveProjectAssignment(parsed.projectId)

@@ -22,6 +22,8 @@ export const handler: APIGatewayRequestSimpleAuthorizerHandlerV2 = async (event)
     return { isAuthorized: false };
   const user = await userById(record.userId);
   if (!user?.active || user.sessionEpoch !== record.sessionEpoch) return { isAuthorized: false };
+  if (user.tfaStatus === 'recovery_required') return { isAuthorized: false };
+  if (user.role === 'admin' && user.tfaStatus !== 'enabled') return { isAuthorized: false };
   if (new Date(record.idleExpiresAt).getTime() - now.getTime() < 15 * 60_000) {
     const refreshed = new Date(
       Math.min(now.getTime() + 30 * 60_000, new Date(record.absoluteExpiresAt).getTime()),

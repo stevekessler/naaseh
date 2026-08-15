@@ -5,8 +5,33 @@ const allowedTypes = new Set([
   'text/plain',
   'text/csv',
 ]);
+const mediaTypeByExtension = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.txt', 'text/plain'],
+  ['.csv', 'text/csv'],
+]);
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export const MAX_ATTACHMENTS_PER_PARENT = 10;
+export function canonicalAttachmentMediaType(filename: string, mediaType: string) {
+  const normalized = mediaType.trim().toLowerCase();
+  if (allowedTypes.has(normalized)) return normalized;
+  // iOS Files and other OS document providers sometimes expose downloaded files
+  // with a generic MIME type even though the selected filename has a supported
+  // extension. The bytes remain untrusted and still go through malware scanning.
+  if (!normalized || normalized === 'application/octet-stream') {
+    const lowerFilename = filename.toLowerCase();
+    for (const [extension, inferred] of mediaTypeByExtension) {
+      if (lowerFilename.endsWith(extension)) return inferred;
+    }
+  }
+  throw Object.assign(new Error('This file type is not supported.'), {
+    statusCode: 400,
+    code: 'invalid_attachment',
+  });
+}
 export function sanitizeFilename(value: string) {
   const safeCharacters = [...value.normalize('NFKC')]
     .map((character) => {
@@ -24,14 +49,20 @@ export function validateFilePolicy(input: {
   sizeBytes: number;
   existingCount?: number;
 }) {
-  if (!allowedTypes.has(input.mediaType)) throw new Error('This file type is not supported.');
+  const mediaType = canonicalAttachmentMediaType(input.filename, input.mediaType);
   if (
     !Number.isInteger(input.sizeBytes) ||
     input.sizeBytes < 1 ||
     input.sizeBytes > MAX_ATTACHMENT_BYTES
   )
-    throw new Error('File must be between 1 byte and 25 MiB.');
+    throw Object.assign(new Error('File must be between 1 byte and 25 MiB.'), {
+      statusCode: 400,
+      code: 'invalid_attachment',
+    });
   if ((input.existingCount ?? 0) >= MAX_ATTACHMENTS_PER_PARENT)
-    throw new Error('This item already has the maximum number of attachments.');
-  return { ...input, filename: sanitizeFilename(input.filename) };
+    throw Object.assign(new Error('This item already has the maximum number of attachments.'), {
+      statusCode: 400,
+      code: 'invalid_attachment',
+    });
+  return { ...input, filename: sanitizeFilename(input.filename), mediaType };
 }

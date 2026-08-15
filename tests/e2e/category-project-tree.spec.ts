@@ -35,10 +35,12 @@ test('administrator manages a two-level tree with parent-scoped Project names of
   await expect(organization.locator('.organization-tree')).toBeVisible();
 });
 
-test('work forms expose one grouped Project-or-Unassigned assignment', async ({ page }) => {
+test('work forms expose explicit Category and Project assignments', async ({ page }) => {
   await signIn(page);
   const form = page.locator('.task-form').first();
   await expect(form.getByLabel('Project')).toHaveValue('');
-  await expect(form.getByRole('option', { name: 'Unassigned' })).toBeAttached();
-  await expect(form.getByLabel('Category')).toHaveCount(0);
+  await expect(
+    form.getByLabel('Project').getByRole('option', { name: 'Unassigned' }),
+  ).toBeAttached();
+  await expect(form.getByLabel('Category')).toHaveValue('');
 });

@@ -11,6 +11,8 @@ export interface EncryptedTaskRecord {
   ownerId: string;
   status: Task['status'];
   dueAt?: string;
+  dueKind?: Task['dueKind'];
+  dueDate?: string;
   assigneeId?: string;
   categoryId?: string;
   projectId?: string;
@@ -86,6 +88,8 @@ class NaasehDatabase extends Dexie {
   secureStackOperationChunks!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureStackSnapshots!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureStackConflicts!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureTaskTimers!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureTimerCheckpoints!: EntityTable<EncryptedEntityRecord, 'id'>;
   constructor() {
     super('naaseh');
     this.version(1).stores({
@@ -247,6 +251,38 @@ class NaasehDatabase extends Dexie {
       secureStackOperationChunks: 'id,ownerId,scopeKey,operationId,chunkIndex,updatedAt',
       secureStackSnapshots: 'id,ownerId,scopeKey,generation,chunkIndex,updatedAt',
       secureStackConflicts: 'id,ownerId,scopeKey,operationId,updatedAt',
+    });
+    this.version(11).stores({
+      tasks: 'id,ownerId,status,dueAt,assigneeId,categoryId,parentId,visibility,updatedAt',
+      secureTasks:
+        'id,ownerId,status,lifecycle,completionState,urgency,dueAt,dueTimeZone,assigneeId,categoryId,projectId,groupId,parentId,visibility,updatedAt',
+      revisions: 'id,taskId,changedAt',
+      outbox: 'id,entityId,entityType,createdAt,attempts',
+      settings: 'key',
+      cryptoKeys: 'id',
+      secureCategories: 'id,lifecycle,updatedAt',
+      secureProjects: 'id,categoryId,lifecycle,updatedAt',
+      secureCompletionEvents:
+        'id,taskId,completedBy,occurredAt,projectId,categoryId,urgencyAtCompletion,reversedAt,updatedAt',
+      secureDeletionJobs: 'id,taskId,updatedAt',
+      secureRevisions: 'id,taskId,mutationId,updatedAt',
+      secureReminders: 'id,taskId,updatedAt',
+      secureConflicts: 'id,updatedAt',
+      secureGroups: 'id,updatedAt',
+      secureLists: 'id,projectId,lifecycle,urgency,updatedAt',
+      secureListItems: 'id,taskId,updatedAt',
+      secureDirectoryItems: 'id,updatedAt',
+      secureAttachments: 'id,taskId,updatedAt',
+      secureJobs: 'id,updatedAt',
+      secureGoogleSync: 'id,updatedAt',
+      secureStackScopes: 'id,ownerId,scopeType,scopeId,updatedAt',
+      secureStackMemberships: 'id,ownerId,scopeKey,workType,workId,membershipEpoch,updatedAt',
+      secureStackOperations: 'id,ownerId,scopeKey,stackVersion,mutationId,updatedAt',
+      secureStackOperationChunks: 'id,ownerId,scopeKey,operationId,chunkIndex,updatedAt',
+      secureStackSnapshots: 'id,ownerId,scopeKey,generation,chunkIndex,updatedAt',
+      secureStackConflicts: 'id,ownerId,scopeKey,operationId,updatedAt',
+      secureTaskTimers: 'id,ownerId,taskId,updatedAt',
+      secureTimerCheckpoints: 'id,ownerId,taskId,updatedAt',
     });
   }
 }

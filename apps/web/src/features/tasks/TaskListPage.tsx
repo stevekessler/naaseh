@@ -1,11 +1,11 @@
 import type { CategoryRecord, Project, Task, TaskRevision } from '@naaseh/domain';
 import { TaskList } from './TaskList.js';
-import { TaskForm } from './TaskForm.js';
 import { TaskActions } from './TaskActions.js';
 import { SubtaskTree } from './SubtaskTree.js';
 import { RevisionLog } from './RevisionLog.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
+import { TaskEditDialog } from './TaskEditDialog.js';
 export function TaskListPage({
   tasks,
   loading = false,
@@ -21,7 +21,7 @@ export function TaskListPage({
   projects = [],
   assignees = [],
   parentTasks = tasks,
-  defaultAssigneeId,
+  currentUserId,
 }: {
   tasks: Task[];
   loading?: boolean;
@@ -38,6 +38,7 @@ export function TaskListPage({
   assignees?: AssigneeOption[];
   parentTasks?: Task[];
   defaultAssigneeId?: string;
+  currentUserId?: string;
 }) {
   if (loading) return <p role="status">Loading tasks…</p>;
   if (error)
@@ -49,38 +50,47 @@ export function TaskListPage({
     );
   return (
     <>
-      <TaskList tasks={tasks} onToggle={onToggle} onSelect={onSelect} />
+      <TaskList
+        tasks={tasks}
+        onToggle={onToggle}
+        onSelect={onSelect}
+        {...(currentUserId ? { currentUserId } : {})}
+      />
       {selected && (
-        <aside className="task-detail" aria-label="Task details" data-task-id={selected.id}>
-          <button className="quiet" onClick={onClose}>
-            Close details
-          </button>
-          <h2>{selected.label}</h2>
-          <TaskActions
-            task={selected}
-            csrfToken={csrfToken}
-            update={(patch) => void onUpdate(selected, patch)}
-          />
-          <TaskForm
+        <>
+          <TaskEditDialog
             task={selected}
             categories={categories}
             projects={projects}
             assignees={assignees}
             parentTasks={parentTasks}
-            {...(defaultAssigneeId ? { defaultAssigneeId } : {})}
-            submitLabel="Save changes"
-            save={(patch) => onUpdate(selected, patch as Partial<Task>)}
+            save={(patch) => onUpdate(selected, patch)}
+            close={onClose}
+            secondaryContent={
+              <section
+                className="task-detail-actions"
+                aria-label="Task details"
+                data-task-id={selected.id}
+              >
+                <TaskActions
+                  task={selected}
+                  csrfToken={csrfToken}
+                  {...(currentUserId ? { currentUserId } : {})}
+                  update={(patch) => void onUpdate(selected, patch)}
+                />
+                <h3>Subtasks</h3>
+                <SubtaskTree parentId={selected.id} tasks={tasks} edit={onSelect} />
+                <h3>Revision history</h3>
+                <RevisionLog revisions={revisions} />
+                <AttachmentPanelForParent
+                  parentType="task"
+                  parentId={selected.id}
+                  csrfToken={csrfToken}
+                />
+              </section>
+            }
           />
-          <h3>Subtasks</h3>
-          <SubtaskTree parentId={selected.id} tasks={tasks} />
-          <h3>Revision history</h3>
-          <RevisionLog revisions={revisions} />
-          <AttachmentPanelForParent
-            parentType="task"
-            parentId={selected.id}
-            csrfToken={csrfToken}
-          />
-        </aside>
+        </>
       )}
     </>
   );

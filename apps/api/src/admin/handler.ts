@@ -11,6 +11,12 @@ import { putRecord } from '../shared/store.js';
 import { createLogger } from '@naaseh/observability';
 
 const statusSchema = z.object({ active: z.boolean() }).strict();
+const pageSchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(100).default(100),
+    cursor: z.string().min(1).max(1000).optional(),
+  })
+  .strict();
 const uploadSchema = z
   .object({
     userId: z.string().min(1).max(200),
@@ -34,13 +40,22 @@ async function handle(event: APIGatewayProxyEventV2) {
   try {
     requireAdminMutation(auth ?? {});
   } catch {
+    logger.metric('AdminAuthorizationDenials', 1);
     return problem(403, 'forbidden', 'Administrator access required.', correlationId);
   }
   if (!auth?.userId)
     return problem(403, 'forbidden', 'Administrator access required.', correlationId);
   const method = event.requestContext.http.method;
-  if (method === 'GET' && event.rawPath.endsWith('/admin/users'))
-    return json(200, { items: await userAdminService.listUsers() });
+  if (method === 'GET' && event.rawPath.endsWith('/admin/users')) {
+    const query = pageSchema.parse(event.queryStringParameters ?? {});
+    return json(
+      200,
+      await userAdminService.pageUsers({
+        limit: query.limit,
+        ...(query.cursor ? { cursor: query.cursor } : {}),
+      }),
+    );
+  }
 
   requireMutationSecurity(
     event.headers.origin,
@@ -82,6 +97,7 @@ async function handle(event: APIGatewayProxyEventV2) {
       auth.userId,
       event.pathParameters.userId,
       body.active,
+      event.headers['if-match'] ? Number(event.headers['if-match']) : undefined,
     );
     await putRecord(
       {

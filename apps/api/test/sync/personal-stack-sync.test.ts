@@ -121,7 +121,7 @@ describe('contract-v4 personal stack synchronization', () => {
       },
       listEligibleWork: async () => [
         { ...first, urgency: 'critical' },
-        { ...second, urgency: 'extra_low' },
+        { ...second, urgency: 'low' },
       ],
     });
     const input = {

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expandTaskDetails } from './enhanced-helpers.js';
 
 async function signInAndAddTask(page: Page) {
   await page.goto('/');
@@ -7,7 +8,8 @@ async function signInAndAddTask(page: Page) {
   await page.getByRole('button', { name: 'Sign in' }).click();
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Cedar post-it');
-  await form.getByLabel('Memo').fill('Responsive note content');
+  await expandTaskDetails(form);
+  await form.getByRole('textbox', { name: 'Memo', exact: true }).fill('Responsive note content');
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible();
 }
@@ -46,6 +48,7 @@ test('uses a non-motion completion treatment when reduced motion is requested', 
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await signInAndAddTask(page);
+  await page.evaluate(() => window.scrollTo(0, 0));
   await page.getByRole('button', { name: 'Post-its' }).click();
   const note = page.locator('.postit', { hasText: 'Cedar post-it' });
   await note.getByRole('button', { name: 'Complete Cedar post-it' }).click();

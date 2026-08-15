@@ -89,6 +89,13 @@ export function classifyError(error: unknown): SafeApiError {
     return new SafeApiError(400, 'invalid_request', 'The request is invalid.', 'validation');
 
   const candidate = (error && typeof error === 'object' ? error : {}) as ErrorLike;
+  if (candidate.statusCode === 400 && candidate.code === 'invalid_attachment')
+    return new SafeApiError(
+      400,
+      'invalid_attachment',
+      error instanceof Error ? error.message : 'The attachment is not accepted.',
+      'validation',
+    );
   if (
     (candidate.status === 400 || candidate.status === 409 || candidate.status === 410) &&
     (candidate.code === 'invalid_cursor' ||
@@ -105,6 +112,8 @@ export function classifyError(error: unknown): SafeApiError {
     return new SafeApiError(401, 'unauthorized', 'Authentication required.', 'authorization');
   if (candidate.statusCode === 403)
     return new SafeApiError(403, 'forbidden', 'Request rejected.', 'authorization');
+  if (candidate.statusCode === 404)
+    return new SafeApiError(404, 'not_found', 'Resource not found.', 'not_found');
   if (
     candidate.name === 'ConditionalCheckFailedException' ||
     candidate.name === 'TransactionCanceledException'

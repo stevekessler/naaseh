@@ -24,7 +24,7 @@ describe('Task and List urgency contract', () => {
     });
   });
 
-  it.each(['extra_low', 'low', 'medium', 'high', 'critical'] as const)(
+  it.each(['low', 'medium', 'high', 'critical'] as const)(
     'accepts %s on Task and List create and patch',
     (urgency) => {
       expect
@@ -46,7 +46,7 @@ describe('Task and List urgency contract', () => {
   );
 
   it('rejects unknown and non-categorical urgency values', () => {
-    for (const urgency of ['urgent', 'extra-low', 1, null]) {
+    for (const urgency of ['urgent', 'extra_low', 1, null]) {
       expect(contracts.taskCreateSchema.safeParse({ label: 'Invalid', urgency }).success).toBe(
         false,
       );

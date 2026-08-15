@@ -10,7 +10,18 @@ test('persists archive/report state across an offline restart and keeps deletion
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Complete Offline integrated' }).click();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
-  await page.evaluate(() => location.reload());
+  // The app shell is served by the network in this dev-server matrix. Briefly reconnect for
+  // navigation and lazy-route loading, then verify persisted state after returning offline.
+  await context.setOffline(false);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await expect(page.getByLabel('1 completed to-dos')).toBeVisible();
+  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible();
+  await context.setOffline(true);
   await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
   await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();

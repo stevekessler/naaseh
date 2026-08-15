@@ -121,6 +121,7 @@ export class NaasehStack extends Stack {
       webPushSecret,
       googleOAuthSecret,
       alerts: criticalAlerts,
+      adminTfaRecoveryOperatorArn: props.breakGlassRoleArn,
     });
     attachSameOriginApi(distribution, httpApi, responseHeadersPolicy);
     createOperationalVisibility(
@@ -189,6 +190,12 @@ export class NaasehStack extends Stack {
     });
     new CfnOutput(this, 'ProvisionUserOperatorPolicyArn', {
       value: functions.provisionUserOperatorPolicy.managedPolicyArn,
+    });
+    new CfnOutput(this, 'AdminTfaRecoveryFunctionName', {
+      value: functions.recoverAdminTfa.functionName,
+    });
+    new CfnOutput(this, 'AdminTfaRecoveryOperatorPolicyArn', {
+      value: functions.tfaRecoveryOperatorPolicy.managedPolicyArn,
     });
     new CfnOutput(this, 'ExportTodosFunctionName', {
       value: functions.exportCoordinator.functionName,

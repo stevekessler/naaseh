@@ -11,7 +11,7 @@ export function CopyListAction({
 }) {
   const [state, setState] = useState<'idle' | 'copying' | 'failed' | 'ready'>('idle');
   return (
-    <div>
+    <div className="copy-list-action">
       <button
         disabled={state === 'copying'}
         onClick={() => {

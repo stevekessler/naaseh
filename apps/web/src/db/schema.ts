@@ -1,4 +1,4 @@
-export const currentSchemaVersion = 10;
+export const currentSchemaVersion = 11;
 
 const storeIntroductions = [
   {
@@ -27,6 +27,7 @@ const storeIntroductions = [
       'secureStackConflicts',
     ],
   },
+  { version: 11, stores: ['secureTaskTimers', 'secureTimerCheckpoints'] },
 ] as const;
 
 export const enhancedEncryptedStores = storeIntroductions.flatMap(({ stores }) => stores);
@@ -71,4 +72,41 @@ export async function runMigrations(migrations: Migration[], from: number): Prom
     version = migration.version;
   }
   return version;
+}
+
+export interface SchemaMigrationCheckpoint {
+  version: number;
+  completedStepIds: string[];
+}
+
+export interface ResumableSchemaMigrationStep {
+  id: string;
+  from: number;
+  to: number;
+  run: () => Promise<void>;
+}
+
+export async function runResumableSchemaMigrations(options: {
+  checkpoint: SchemaMigrationCheckpoint;
+  steps: ResumableSchemaMigrationStep[];
+  saveCheckpoint: (checkpoint: SchemaMigrationCheckpoint) => Promise<void>;
+  validateBeforeMigration?: () => void | Promise<void>;
+}) {
+  await options.validateBeforeMigration?.();
+  const completed = new Set(options.checkpoint.completedStepIds);
+  let version = options.checkpoint.version;
+  for (const step of options.steps) {
+    if (completed.has(step.id)) continue;
+    if (step.from !== version)
+      throw new Error(
+        `Schema migration ${step.id} expected version ${step.from}, received ${version}`,
+      );
+    if (step.to < step.from || step.to > currentSchemaVersion)
+      throw new Error(`Schema migration ${step.id} has an invalid target version`);
+    await step.run();
+    completed.add(step.id);
+    version = step.to;
+    await options.saveCheckpoint({ version, completedStepIds: [...completed] });
+  }
+  return { version, completedStepIds: [...completed] } satisfies SchemaMigrationCheckpoint;
 }

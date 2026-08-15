@@ -10,7 +10,7 @@ const openapi = readFileSync(
 const asOf = '2026-08-05T12:00:00.000Z';
 const eventId = '01K00000000000000000000050';
 const taskId = '01K00000000000000000000030';
-const urgencyCounts = { extra_low: 0, low: 1, medium: 0, high: 0, critical: 0 };
+const urgencyCounts = { low: 1, medium: 0, high: 0, critical: 0 };
 
 function operation(path: string, nextPath: string) {
   const start = openapi.indexOf(`  ${path}:`);
@@ -20,6 +20,29 @@ function operation(path: string, nextPath: string) {
 }
 
 describe('completion report contract', () => {
+  it('validates snapshot completion-export scope, browser zone, and owner-safe job status', () => {
+    const request = contracts.completionExportRequestSchema.parse({
+      filters: { period: 'day', weekStartsOn: 0, urgencies: ['high'] },
+      browserTimeZone: 'America/Denver',
+      asOf,
+      idempotencyKey: 'stable-idempotency-key-0001',
+      scope: 'self',
+    });
+    expect(request.browserTimeZone).toBe('America/Denver');
+    expect(request.adminConfirmed).toBe(false);
+    expect(
+      contracts.completionExportJobResponseSchema.parse({
+        id: 'job',
+        status: 'completed',
+        schemaVersion: 'naaseh.completed-tasks/v1',
+        asOf,
+        rowCount: 1,
+        checksum: 'a'.repeat(64),
+        downloadAvailable: true,
+        downloadUrl: 'https://download.example.test/result',
+      }),
+    ).toMatchObject({ status: 'completed', rowCount: 1 });
+  });
   it('returns bounded zero-filled personal buckets and historical filters', () => {
     const report = calculateCompletionReport([], {
       userId: 'owner',
@@ -48,7 +71,7 @@ describe('completion report contract', () => {
         userId: 'owner',
         categoryId: 'category-a',
         projectId: 'project-a',
-        urgencies: 'extra_low,critical',
+        urgencies: 'low,critical',
         from: '2026-08-01',
         to: '2026-08-31',
         timeZone: 'America/Denver',
@@ -60,7 +83,7 @@ describe('completion report contract', () => {
       userId: 'owner',
       categoryId: 'category-a',
       projectId: 'project-a',
-      urgencies: 'extra_low,critical',
+      urgencies: 'low,critical',
       from: '2026-08-01',
       to: '2026-08-31',
       timeZone: 'America/Denver',
@@ -76,7 +99,7 @@ describe('completion report contract', () => {
         assignment: 'project',
         userId: 'owner',
         projectId: 'project-a',
-        urgencies: 'extra_low,critical',
+        urgencies: 'low,critical',
         cursor: 'opaque-continuation',
         limit: '50',
       }),
@@ -85,7 +108,7 @@ describe('completion report contract', () => {
       assignment: 'project',
       userId: 'owner',
       projectId: 'project-a',
-      urgencies: 'extra_low,critical',
+      urgencies: 'low,critical',
       cursor: 'opaque-continuation',
       limit: 50,
     });

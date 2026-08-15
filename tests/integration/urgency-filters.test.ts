@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-type Urgency = 'extra_low' | 'low' | 'medium' | 'high' | 'critical';
+type Urgency = 'low' | 'medium' | 'high' | 'critical';
 type Candidate = {
   id: string;
   urgency: Urgency;
@@ -80,7 +80,7 @@ const baseContext = (overrides: Partial<ReadContext> = {}): ReadContext => ({
   endpoint: 'overall_stack',
   scope: 'overall',
   orderBy: 'overallRank',
-  filters: { urgencies: ['extra_low', 'critical'], lifecycle: 'active', contentType: 'all' },
+  filters: { urgencies: ['low', 'critical'], lifecycle: 'active', contentType: 'all' },
   sourceEpochs: { owner: 3 },
   stackVersion: 11,
   snapshotGeneration: 2,
@@ -91,7 +91,7 @@ const baseContext = (overrides: Partial<ReadContext> = {}): ReadContext => ({
 
 const candidate = (index: number, overrides: Partial<Candidate> = {}): Candidate => ({
   id: `work-${String(index).padStart(5, '0')}`,
-  urgency: index % 2 ? 'critical' : 'extra_low',
+  urgency: index % 2 ? 'critical' : 'low',
   canonicalPosition: index,
   sourcePage: Math.floor(index / 125),
   audience: 'OWNER#user-a',
@@ -133,11 +133,11 @@ describe('bounded server-side urgency filtering', () => {
     const candidates = [
       candidate(1, { urgency: 'critical' }),
       candidate(2, { urgency: 'low' }),
-      candidate(3, { urgency: 'extra_low', assigneeId: 'other' }),
-      candidate(4, { urgency: 'extra_low' }),
+      candidate(3, { urgency: 'low', assigneeId: 'other' }),
+      candidate(4, { urgency: 'low' }),
     ];
     const filters = {
-      urgencies: ['extra_low', 'critical'] as Urgency[],
+      urgencies: ['low', 'critical'] as Urgency[],
       from: '2026-08-01',
       to: '2026-08-31',
       assigneeId: 'user-a',
@@ -155,7 +155,7 @@ describe('bounded server-side urgency filtering', () => {
         candidates,
         limit: 2,
       });
-      expect(page.items.map((item) => item.id)).toEqual(['work-00001', 'work-00004']);
+      expect(page.items.map((item) => item.id)).toEqual(['work-00001', 'work-00002']);
     }
   });
 
@@ -202,7 +202,7 @@ describe('bounded server-side urgency filtering', () => {
     const candidates = [
       candidate(1, { audience: 'PUBLIC', lifecycle: 'archived', urgency: 'critical' }),
       candidate(1, { audience: 'GROUP#one', lifecycle: 'archived', urgency: 'critical' }),
-      candidate(2, { audience: 'OWNER#user-a', lifecycle: 'archived', urgency: 'extra_low' }),
+      candidate(2, { audience: 'OWNER#user-a', lifecycle: 'archived', urgency: 'low' }),
       candidate(3, { audience: 'GROUP#one', lifecycle: 'archived', authorized: false }),
       candidate(4, { audience: 'GROUP#revoked', lifecycle: 'archived' }),
     ];
@@ -213,7 +213,7 @@ describe('bounded server-side urgency filtering', () => {
           endpoint,
           scope: endpoint === 'archive' ? 'archive' : 'project:project-a',
           orderBy: 'source',
-          filters: { urgencies: ['extra_low', 'critical'], lifecycle: 'archived' },
+          filters: { urgencies: ['low', 'critical'], lifecycle: 'archived' },
           sourceEpochs: { owner: 3, public: 8, 'group:one': 5 },
           stackVersion: undefined,
           snapshotGeneration: undefined,

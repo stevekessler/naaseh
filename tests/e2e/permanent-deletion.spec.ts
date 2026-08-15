@@ -63,9 +63,9 @@ test('warns, cancels, confirms, reports progress, and purges only after success'
   );
   await signIn(page);
   await addTask(page, 'Delete journey');
-  await page.getByRole('heading', { name: 'Delete journey' }).click();
+  await page.getByRole('button', { name: 'Delete journey', exact: true }).click();
   await page.getByRole('button', { name: 'Delete permanently' }).click();
-  const dialog = page.getByRole('dialog');
+  const dialog = page.getByRole('dialog', { name: /Permanently delete/ });
   await expect(dialog).toContainText('cannot be undone');
   await expect(dialog).toContainText('3 dependent records');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
@@ -81,7 +81,7 @@ test('warns, cancels, confirms, reports progress, and purges only after success'
 test('does not offer a false offline delete', async ({ page, context }) => {
   await signIn(page);
   await addTask(page, 'Offline delete');
-  await page.getByRole('heading', { name: 'Offline delete' }).click();
+  await page.getByRole('button', { name: 'Offline delete', exact: true }).click();
   await context.setOffline(true);
   await expect(page.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
 });

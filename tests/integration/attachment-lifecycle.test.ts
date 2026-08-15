@@ -40,6 +40,22 @@ describe('attachment lifecycle integration', () => {
       }).filename,
     ).not.toContain('/');
   });
+  it('canonicalizes generic document-provider types for supported filenames', () => {
+    expect(
+      validateFilePolicy({
+        filename: 'Amazon order.PDF',
+        mediaType: 'application/octet-stream',
+        sizeBytes: base.sizeBytes,
+      }).mediaType,
+    ).toBe('application/pdf');
+    expect(() =>
+      validateFilePolicy({
+        filename: 'unknown.bin',
+        mediaType: 'application/octet-stream',
+        sizeBytes: base.sizeBytes,
+      }),
+    ).toThrow('not supported');
+  });
   it('is fail-closed across scan ordering and permits idempotent terminal observation', () => {
     const scanning = transitionAttachment(base, 'scanning');
     const clean = transitionAttachment(scanning, 'available');

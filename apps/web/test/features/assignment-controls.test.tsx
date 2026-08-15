@@ -1,8 +1,16 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { createTask } from '@naaseh/domain';
-import { AssigneePicker } from '../../src/components/AssigneePicker.js';
-import { categoryDefaultAssignee, TaskForm } from '../../src/features/tasks/TaskForm.js';
+import {
+  AssigneePicker,
+  canonicalAssigneeId,
+  mergeAssigneeOptions,
+} from '../../src/components/AssigneePicker.js';
+import {
+  categoryDefaultAssignee,
+  eligibleParentTasks,
+  TaskForm,
+} from '../../src/features/tasks/TaskForm.js';
 import { TaskFilters } from '../../src/features/search/TaskFilters.js';
 import { PersonalStackPage } from '../../src/features/stacks/PersonalStackPage.js';
 
@@ -48,6 +56,26 @@ describe('shared assignment controls', () => {
     expect(html).toContain('<select');
     expect(html).toContain('Steve (@steve)');
     expect(html).not.toContain('naaseh-smoke');
+  });
+
+  it('merges legacy assignee IDs with the canonical username identity', () => {
+    const canonical = {
+      id: 'user-steve',
+      displayName: 'Steve Kessler',
+      username: 'steve',
+    };
+    const options = mergeAssigneeOptions(
+      [{ id: 'Steve', displayName: 'Steve' }, canonical],
+      ['Steve', '@steve'],
+    );
+    const html = renderToStaticMarkup(<AssigneePicker assignees={options} defaultValue="Steve" />);
+
+    expect(options).toEqual([canonical]);
+    expect(canonicalAssigneeId(options, 'Steve')).toBe('user-steve');
+    expect(html).toContain(
+      '<option value="user-steve" selected="">Steve Kessler (@steve)</option>',
+    );
+    expect(html).not.toContain('<option value="Steve">Steve</option>');
   });
 
   it('uses Category, Project, and Assignee dropdowns in task creation and filters', () => {
@@ -99,10 +127,12 @@ describe('shared assignment controls', () => {
 
     expect(html).toContain('<option value="user-steve" selected="">Steve (@steve)</option>');
     expect(html).toContain('name="parentId"');
-    expect(html).toContain('Open parent');
-    expect(html).not.toContain('Completed parent');
+    expect(eligibleParentTasks(undefined, [openParent, completedParent])).toEqual([openParent]);
     expect(html).toContain('>Link<');
     expect(html).not.toContain('HTTPS link');
+    expect(html).toContain('<details class="task-form-details">');
+    expect(html.indexOf('>Task label<')).toBeLessThan(html.indexOf('>Task details<'));
+    expect(html.indexOf('>Memo<')).toBeLessThan(html.indexOf('>Link<'));
   });
 
   it('prefers a category default over the creator without changing an existing task', () => {
@@ -124,6 +154,7 @@ describe('shared assignment controls', () => {
       />,
     );
     expect(html).toContain('<option value="" selected="">Unassigned</option>');
+    expect(html).toContain('<details class="task-form-details" open="">');
   });
 
   it('offers task creation on Personal Stack with the same dropdowns', () => {

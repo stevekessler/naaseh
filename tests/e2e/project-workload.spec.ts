@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, signIn } from './enhanced-helpers.js';
 
 test('shows exact Category/Project/Unassigned counts and date state online and offline', async ({
   page,
@@ -17,9 +17,10 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await projectForm.getByLabel('End date').fill('2020-01-01');
   await projectForm.getByRole('button', { name: 'Create Project' }).click();
 
-  await page.getByRole('button', { name: 'Tasks' }).click();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   const taskForm = page.locator('.task-form').first();
   await taskForm.getByLabel('Task label').fill('Assigned work');
+  await expandTaskDetails(taskForm);
   await taskForm.getByLabel('Project').selectOption({ label: 'API' });
   await taskForm.getByRole('button', { name: 'Add task' }).click();
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
@@ -28,8 +29,8 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await listForm.getByLabel('Project').selectOption({ label: 'API' });
   await listForm.getByRole('button', { name: 'Create list' }).click();
 
-  await context.setOffline(true);
   await page.getByRole('button', { name: 'Projects' }).click();
+  await context.setOffline(true);
   const tree = page.locator('.project-workload-tree');
   const category = tree.locator('li').filter({ hasText: 'PAAO' }).first();
   await expect(category).toContainText('1 to-dos');
@@ -37,6 +38,6 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   const project = tree.locator('li').filter({ hasText: 'API' }).first();
   await expect(project).toContainText('overdue');
   await expect(project).toContainText('2 remaining');
-  await expect(tree.getByText('Unassigned', { exact: true })).toBeVisible();
+  await expect(tree.getByText('Unassigned to a project', { exact: true })).toBeVisible();
   await context.setOffline(false);
 });

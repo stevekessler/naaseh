@@ -71,7 +71,7 @@ beforeEach(() => {
 describe('encrypted local list repository', () => {
   it('commits encrypted entity and durable outbox records together across a restart read', async () => {
     const list = await saveNewList('Groceries', 'owner');
-    await addLocalListItem(list.id, 'Milk', 'owner');
+    await addLocalListItem(list.id, { name: 'Milk', amountMinor: null }, 'owner');
     expect(await listLocalLists()).toEqual([list]);
     expect((await listLocalListItems(list.id))[0]).toMatchObject({
       directorySnapshot: { name: 'Milk' },

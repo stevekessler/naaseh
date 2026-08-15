@@ -1,0 +1,117 @@
+export const COMPLETED_TASK_CSV_V1_HEADERS = [
+  'schema_version',
+  'export_as_of',
+  'record_kind',
+  'task_id',
+  'parent_task_id',
+  'root_task_id',
+  'label',
+  'link',
+  'memo_text',
+  'memo_document_json',
+  'memo_protected',
+  'created_at',
+  'updated_at',
+  'due_kind',
+  'due_date',
+  'due_at',
+  'due_time_precision',
+  'completed_at',
+  'completion_event_id',
+  'completed_by_user_id',
+  'completion_reversed_at',
+  'archived_at',
+  'archive_reason',
+  'status',
+  'lifecycle',
+  'completion_state',
+  'priority',
+  'owner_user_id',
+  'assignee_user_id',
+  'category_id',
+  'category_label',
+  'project_id',
+  'project_label',
+  'group_id',
+  'group_label',
+  'visibility',
+  'shared_with_json',
+  'lock_state',
+  'locked_by_user_id',
+  'recurrence_json',
+  'reminders_json',
+  'list_id',
+  'list_item_id',
+  'list_amount_minor',
+  'post_it_color',
+  'post_it_effective_color',
+  'google_task_id',
+  'google_task_list_id',
+  'google_sync_state',
+  'google_last_synced_at',
+  'attachments_json',
+  'task_version',
+  'completion_version',
+  'sync_state',
+  'viewer_overall_rank',
+  'viewer_project_rank',
+] as const;
+
+export const adversarialMemoPasteFixtures = [
+  {
+    name: 'script and event handlers',
+    html: '<p onclick="alert(1)"><strong>Safe</strong><script>alert(2)</script> text</p>',
+    expectedText: 'Safe text',
+  },
+  {
+    name: 'unsupported link image and nested list',
+    html: '<ul><li><a href="javascript:alert(1)">Item</a><ol><li>Nested</li></ol></li></ul><img src=x>',
+    expectedText: 'Item\nNested',
+  },
+  {
+    name: 'supported marks and unicode',
+    html: '<p><b>Bold</b> <i>Italic</i> <s>Strike</s> שלום, مرحبا 👩🏽‍💻</p>',
+    expectedText: 'Bold Italic Strike שלום, مرحبا 👩🏽‍💻',
+  },
+] as const;
+
+export type CompletedTaskCsvFixture = Record<
+  (typeof COMPLETED_TASK_CSV_V1_HEADERS)[number],
+  string
+>;
+
+export function buildCompletedTaskCsvFixture(
+  overrides: Partial<CompletedTaskCsvFixture> = {},
+): CompletedTaskCsvFixture {
+  const row = Object.fromEntries(
+    COMPLETED_TASK_CSV_V1_HEADERS.map((header) => [header, '']),
+  ) as CompletedTaskCsvFixture;
+  return Object.assign(row, {
+    schema_version: 'naaseh.completed-tasks/v1',
+    export_as_of: '2026-08-14T18:00:00.000Z',
+    record_kind: 'task',
+    task_id: 'fixture-task-1',
+    root_task_id: 'fixture-task-1',
+    label: 'Comma, quote " and\nnewline שלום',
+    link: '=HYPERLINK("https://example.invalid")',
+    memo_text: '\t+SUM(1,1)\nSafe memo',
+    memo_document_json:
+      '{"blocks":[{"runs":[{"bold":true,"text":"Safe memo"}],"type":"paragraph"}],"version":1}',
+    memo_protected: 'false',
+    created_at: '2026-08-01T12:00:00.000Z',
+    updated_at: '2026-08-14T17:00:00.000Z',
+    completed_at: '2026-08-14T17:30:00.000Z',
+    completion_event_id: 'completion-1',
+    completion_state: 'completed',
+    priority: 'medium',
+    owner_user_id: 'fixture-user-without-tfa',
+    visibility: 'private',
+    post_it_effective_color: 'yellow',
+    attachments_json:
+      '[{"id":"attachment-1","name":"report, final.pdf","size":1234,"state":"available"}]',
+    task_version: '3',
+    completion_version: '1',
+    sync_state: 'synced',
+    ...overrides,
+  });
+}

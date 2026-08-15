@@ -11,8 +11,8 @@ describe('urgency controls', () => {
 
     expect(html).toContain('<select');
     expect(html).toContain('aria-label="Urgency"');
-    expect(html).toContain('value="extra_low"');
-    expect(html).toContain('>Extra Low<');
+    expect(html).toContain('value="low"');
+    expect(html).toContain('>Low<');
     expect(html).toContain('>Low<');
     expect(html).toContain('>Medium<');
     expect(html).toContain('>High<');

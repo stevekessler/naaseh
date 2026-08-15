@@ -1,4 +1,9 @@
 import { expect, test } from '@playwright/test';
+import {
+  expectContained,
+  expectMinimumTarget,
+  expectNoIntersection,
+} from './responsive-assertions.js';
 
 test('@enhanced-lists creates, completes, and retains a lightweight list item offline', async ({
   page,
@@ -14,7 +19,29 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
   await page.getByLabel('Add an item').fill('Milk');
   await page.getByRole('button', { name: 'Add item' }).click();
-  await page.getByRole('button', { name: 'Complete Milk' }).click();
+  const item = page.locator('.list-item').filter({ hasText: 'Milk' });
+  const complete = item.getByRole('button', { name: 'Complete Milk' });
+  await expectMinimumTarget(complete);
+  await expect
+    .poll(() => complete.evaluate((element) => getComputedStyle(element, '::before').width))
+    .toBe('24px');
+  await expectNoIntersection(
+    item.locator('.list-item-summary'),
+    item.locator('.list-item-actions'),
+  );
+
+  await item.getByRole('button', { name: 'Edit', exact: true }).click();
+  const editor = item.locator('.list-item-editor');
+  await expect(editor).toBeVisible();
+  await expectContained(editor.getByLabel('Item name'), editor);
+  await expectContained(editor.getByLabel('Amount'), editor);
+  await expectNoIntersection(editor.getByLabel('Item name'), editor.locator('.value-editor'));
+  await expectNoIntersection(
+    editor.locator('.value-editor'),
+    editor.getByRole('button', { name: 'Save item' }),
+  );
+
+  await complete.click();
   await expect(page.getByText('Milk completed.')).toBeAttached();
   await context.setOffline(true);
   await expect(page.getByText('Milk', { exact: true })).toBeVisible();

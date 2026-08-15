@@ -1,4 +1,5 @@
 import type { List } from '@naaseh/domain';
+import { ReferenceCombobox } from '../../components/ReferenceCombobox.js';
 export function ListVisibilityControl({
   list,
   groups = [],
@@ -18,21 +19,16 @@ export function ListVisibilityControl({
       >
         {list.locked ? '🔒 Locked' : '🔓 Unlocked'}
       </button>
-      <label>
-        Group
-        <select
-          disabled={list.locked}
-          value={list.groupId ?? ''}
-          onChange={(event) => change({ groupId: event.target.value || undefined })}
-        >
-          <option value="">Everyone</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {list.locked ? null : (
+        <ReferenceCombobox
+          label="Group"
+          name="listGroup"
+          {...(list.groupId ? { value: list.groupId } : {})}
+          options={groups.map((group) => ({ id: group.id, label: group.name }))}
+          onChange={(groupId) => change({ groupId: groupId || undefined })}
+          clearLabel="Everyone"
+        />
+      )}
       <p>
         {list.locked
           ? 'Only you can see this list.'

@@ -1,4 +1,6 @@
 export * from './task.js';
+export * from './memo-document.js';
+export * from './due-date.js';
 export * from './revision.js';
 export * from './identity.js';
 export * from './sync.js';
@@ -27,3 +29,5 @@ export * from './crypto/hidden-memo-package.js';
 export * from './google-sync.js';
 export * from './urgency.js';
 export * from './personal-stack.js';
+export * from './feature-version.js';
+export * from './task-timer.js';

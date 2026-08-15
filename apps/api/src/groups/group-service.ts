@@ -9,6 +9,7 @@ import {
   updateMembership,
 } from './group-repository.js';
 import { notifyStackAuthorizationChange } from '../ranking/stack-membership-lifecycle.js';
+export { assertAuthorizedGroupSelection } from './group-selection-authorization.js';
 
 export type GroupPolicyFailure =
   | 'group_inactive'

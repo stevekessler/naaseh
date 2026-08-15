@@ -21,10 +21,24 @@ const directoryFeed = async (value: import('@naaseh/domain').GlobalDirectoryItem
     changedAt: value.updatedAt,
   }),
 ];
+
+export function hasAuthorizedDirectorySession(
+  actor: unknown,
+): actor is { userId: string; csrfToken?: string; sessionEpoch: number } {
+  if (!actor || typeof actor !== 'object') return false;
+  const candidate = actor as { userId?: unknown; sessionEpoch?: unknown };
+  return (
+    typeof candidate.userId === 'string' &&
+    candidate.userId.length > 0 &&
+    Number.isSafeInteger(candidate.sessionEpoch) &&
+    Number(candidate.sessionEpoch) >= 0
+  );
+}
+
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const actor = (event.requestContext as any).authorizer?.lambda;
   const correlationId = event.requestContext.requestId;
-  if (!actor?.userId)
+  if (!hasAuthorizedDirectorySession(actor))
     return problem(401, 'unauthorized', 'Authentication required.', correlationId);
   try {
     const id = event.pathParameters?.directoryItemId,

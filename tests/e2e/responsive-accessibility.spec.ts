@@ -9,12 +9,13 @@ test('representative responsive pages have no serious or critical axe findings',
   for (const pageName of [
     'Tasks',
     'Personal Stack',
+    'Profile',
     'Completed Tasks',
     'Lists',
+    'Global Items',
     'Groups',
     'Archive',
     'Projects',
-    'Google',
     'Admin',
   ]) {
     await page.getByRole('button', { name: pageName, exact: true }).click();

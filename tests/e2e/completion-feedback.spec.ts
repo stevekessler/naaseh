@@ -18,7 +18,9 @@ test('@enhanced-lists pointer and keyboard completion survives blocked audio wit
   const list = await createListWithItem(page, 'Done today', 'Pointer item');
   await list.getByRole('button', { name: 'Complete Pointer item' }).click();
   await expect(list.getByText('Pointer item completed.')).toBeAttached();
+  await page.getByRole('button', { name: 'Profile' }).click();
   await page.getByLabel('Completion sounds').uncheck();
+  await page.getByRole('button', { name: 'Lists' }).click();
   await list.getByRole('button', { name: 'Reopen Pointer item' }).click();
   await expect(list.getByText('Pointer item reopened.')).toBeAttached();
 });

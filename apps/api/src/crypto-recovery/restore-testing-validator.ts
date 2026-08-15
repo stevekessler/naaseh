@@ -8,6 +8,8 @@ import {
   DynamoDBClient,
   ScanCommand,
   QueryCommand,
+  UpdateItemCommand,
+  DeleteItemCommand,
   type AttributeValue,
   type ScanCommandOutput,
 } from '@aws-sdk/client-dynamodb';
@@ -32,6 +34,7 @@ import { MAX_RTO_SECONDS } from './restore-validator.js';
 import { validateEnhancedRecoveryRows } from './backup-manifest.js';
 import { assertDeletionLedgerApplied } from './deletion-ledger-validator.js';
 import { validatePersonalStackRestore } from './personal-stack-restore-validator.js';
+import { validateTaskTimerRestore } from './task-timer-restore-validator.js';
 
 const restoreEventSchema = z
   .object({
@@ -54,6 +57,7 @@ const workflowEventSchema = z
     action: z.enum([
       'ValidateRestoreJob',
       'ValidateRestoredResource',
+      'RecoverAuthentication',
       'RecordEvidence',
       'RecordFailure',
     ]),
@@ -142,7 +146,12 @@ const defaultDependencies = (): RestoreTestingDependencies => ({
  * access to that resource and reports a content-free validation result back to AWS Backup.
  */
 export async function runRestoreTestingAction(
-  action: 'ValidateRestoreJob' | 'ValidateRestoredResource' | 'RecordEvidence' | 'RecordFailure',
+  action:
+    | 'ValidateRestoreJob'
+    | 'ValidateRestoredResource'
+    | 'RecoverAuthentication'
+    | 'RecordEvidence'
+    | 'RecordFailure',
   input: Record<string, unknown>,
   dependencies: RestoreTestingDependencies,
 ) {
@@ -166,6 +175,8 @@ export async function runRestoreTestingAction(
     const probe = await probeRestoredResource(evidence, dependencies);
     return { ...evidence, probe };
   }
+  if (action === 'RecoverAuthentication')
+    return recoverRestoredAuthentication(evidence, dependencies);
 
   if (!input.resourceValidation)
     throw new Error('Restored resource validation evidence is missing.');
@@ -177,6 +188,89 @@ export async function runRestoreTestingAction(
     }),
   );
   return { restoreJobId: evidence.restoreJobId, status: 'SUCCESSFUL' as const };
+}
+
+async function recoverRestoredAuthentication(
+  evidence: z.infer<typeof restoreEvidenceSchema>,
+  dependencies: RestoreTestingDependencies,
+) {
+  if (evidence.resourceType !== 'DynamoDB')
+    return { usersUpdated: 0, administratorsRecoveryRequired: 0, loginTransactionsInvalidated: 0 };
+  const restoredTable = resourceName(evidence.createdResourceArn, 'table');
+  const items = await readDynamoItems(restoredTable, dependencies.dynamodb);
+  const users = items.flatMap((item) => {
+    if (item.SK !== 'PROFILE' || typeof item.PK !== 'string' || !item.PK.startsWith('USER#'))
+      return [];
+    const data = item.data as { id?: unknown; role?: unknown; sessionEpoch?: unknown } | undefined;
+    return typeof data?.id === 'string' &&
+      (data.role === 'admin' || data.role === 'user') &&
+      Number.isInteger(data.sessionEpoch)
+      ? [{ id: data.id, role: data.role, sessionEpoch: Number(data.sessionEpoch) }]
+      : [];
+  });
+  const now = new Date().toISOString();
+  let administratorsRecoveryRequired = 0;
+  for (const user of users) {
+    await dependencies.dynamodb.send(
+      new UpdateItemCommand({
+        TableName: restoredTable,
+        Key: { PK: { S: `USER#${user.id}` }, SK: { S: 'PROFILE' } },
+        UpdateExpression:
+          'SET #data.sessionEpoch=:epoch, #data.securityUpdatedAt=:now' +
+          (user.role === 'admin' ? ', #data.tfaStatus=:recovery' : ''),
+        ExpressionAttributeNames: { '#data': 'data' },
+        ExpressionAttributeValues: {
+          ':epoch': { N: String(user.sessionEpoch + 1) },
+          ':now': { S: now },
+          ...(user.role === 'admin' ? { ':recovery': { S: 'recovery_required' } } : {}),
+        },
+      }),
+    );
+    if (user.role === 'admin') {
+      administratorsRecoveryRequired += 1;
+      await dependencies.dynamodb.send(
+        new UpdateItemCommand({
+          TableName: restoredTable,
+          Key: { PK: { S: `USER#${user.id}` }, SK: { S: 'TFA#FACTOR' } },
+          UpdateExpression: 'SET #data.#status=:recovery, #data.updatedAt=:now',
+          ConditionExpression: 'attribute_exists(PK)',
+          ExpressionAttributeNames: { '#data': 'data', '#status': 'status' },
+          ExpressionAttributeValues: {
+            ':recovery': { S: 'recovery_required' },
+            ':now': { S: now },
+          },
+        }),
+      );
+    }
+  }
+  const loginTransactions = items.filter(
+    (item): item is RestoredItem & { PK: string; SK: string } =>
+      typeof item.PK === 'string' && item.PK.startsWith('LOGIN#') && item.SK === 'CHALLENGE',
+  );
+  for (const transaction of loginTransactions)
+    await dependencies.dynamodb.send(
+      new DeleteItemCommand({
+        TableName: restoredTable,
+        Key: { PK: { S: transaction.PK }, SK: { S: transaction.SK } },
+      }),
+    );
+  const verified = await readDynamoItems(restoredTable, dependencies.dynamodb);
+  if (verified.some((item) => typeof item.PK === 'string' && item.PK.startsWith('LOGIN#')))
+    throw new Error('Restored login transactions were not fully invalidated.');
+  for (const user of users) {
+    const row = verified.find((item) => item.PK === `USER#${user.id}` && item.SK === 'PROFILE');
+    const data = row?.data as { sessionEpoch?: unknown; tfaStatus?: unknown } | undefined;
+    if (
+      data?.sessionEpoch !== user.sessionEpoch + 1 ||
+      (user.role === 'admin' && data.tfaStatus !== 'recovery_required')
+    )
+      throw new Error('Restored authentication recovery validation failed.');
+  }
+  return {
+    usersUpdated: users.length,
+    administratorsRecoveryRequired,
+    loginTransactionsInvalidated: loginTransactions.length,
+  };
 }
 
 export async function handler(event: unknown) {
@@ -342,8 +436,9 @@ export function validateUrgencyRestore(items: RestoredItem[]) {
   for (const item of items) {
     if (typeof item.PK !== 'string' || !item.PK.startsWith('WORKLOAD#')) continue;
     if (typeof item.SK !== 'string' || !item.SK.startsWith('COUNT#')) continue;
-    const match =
-      /^(COUNT#.+#(?:task|list))(?:#URGENCY#(extra_low|low|medium|high|critical))?$/u.exec(item.SK);
+    const match = /^(COUNT#.+#(?:task|list))(?:#URGENCY#(low|medium|high|critical))?$/u.exec(
+      item.SK,
+    );
     if (!match || !Number.isInteger(item.count) || Number(item.count) < 0)
       throw new Error('Restored workload urgency counter is invalid.');
     const key = `${item.PK}|${match[1]}`;
@@ -397,6 +492,7 @@ async function readDynamoItems(tableName: string, client: CommandClient) {
     const page = (await client.send(
       new ScanCommand({
         TableName: tableName,
+        ConsistentRead: true,
         ProjectionExpression: 'PK, SK, #data, #count',
         ExpressionAttributeNames: { '#data': 'data', '#count': 'count' },
         ExclusiveStartKey: exclusiveStartKey,
@@ -449,6 +545,13 @@ export async function validateRestoredInventory(
     )
     .map((item) => ({ PK: item.PK, SK: item.SK, data: item.data }));
   const personalStackIntegrity = validatePersonalStackRestore(personalStackRows);
+  const taskTimerIntegrity = validateTaskTimerRestore(
+    items.flatMap((item) =>
+      typeof item.PK === 'string' && typeof item.SK === 'string'
+        ? [{ PK: item.PK, SK: item.SK, data: item.data }]
+        : [],
+    ),
+  );
   const urgencyIntegrity = validateUrgencyRestore(items);
   const discrepancies = Object.entries(manifest.entityCounts)
     .filter(([name, expected]) => (actualCounts[normalizeEntityName(name)] ?? 0) !== expected)
@@ -504,6 +607,7 @@ export async function validateRestoredInventory(
       ),
     },
     urgencyIntegrity,
+    taskTimerIntegrity,
   };
 }
 

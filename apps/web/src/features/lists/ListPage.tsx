@@ -1,14 +1,7 @@
-import { useState } from 'react';
-import {
-  effectiveDirectoryFields,
-  type GlobalDirectoryItem,
-  type List,
-  type ListItem,
-} from '@naaseh/domain';
+import { effectiveDirectoryFields, type List, type ListItem } from '@naaseh/domain';
 import { ListIndexPage } from './ListIndexPage.js';
 import { ListForm } from './ListForm.js';
-import { ListItems } from './ListItems.js';
-import { GlobalDirectory } from './GlobalDirectory.js';
+import { ListItemCreateForm, ListItems, type NewListItem } from './ListItems.js';
 import { ListTotal } from './ListTotal.js';
 import { ListVisibilityControl } from './ListVisibilityControl.js';
 import { CopyListAction } from './CopyListAction.js';
@@ -24,8 +17,6 @@ export function ListPage({
   addItem,
   toggle,
   remove,
-  actorId,
-  addDirectoryItem,
   csrfToken,
   changeList,
   groups,
@@ -46,11 +37,9 @@ export function ListPage({
     projectId?: string,
     urgency?: import('@naaseh/domain').Urgency,
   ) => Promise<void>;
-  addItem: (listId: string, name: string) => Promise<void>;
+  addItem: (listId: string, input: NewListItem) => Promise<void>;
   toggle: (item: ListItem) => void;
   remove: (item: ListItem) => void;
-  actorId: string;
-  addDirectoryItem: (listId: string, item: GlobalDirectoryItem) => Promise<void>;
   csrfToken: string;
   changeList: (list: List, patch: Partial<List>) => Promise<void>;
   groups: { id: string; name: string }[];
@@ -64,7 +53,6 @@ export function ListPage({
   categories: import('@naaseh/domain').CategoryRecord[];
   projects: import('@naaseh/domain').Project[];
 }) {
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const directory = useLiveQuery(() => listLocalDirectoryItems(), []) ?? [];
   return (
     <section>
@@ -76,7 +64,6 @@ export function ListPage({
       </header>
       <ListForm save={createList} categories={categories} projects={projects} />
       <ListIndexPage lists={lists} {...(selectedId ? { selectedId } : {})} open={openList} />
-      <GlobalDirectory actorId={actorId} lists={lists} addToList={addDirectoryItem} />
       {lists.length === 0 ? (
         <p>No lists yet. Create one above.</p>
       ) : (
@@ -85,64 +72,51 @@ export function ListPage({
           .map((list) => (
             <article className="named-list" key={list.id}>
               <h2>{list.name}</h2>
-              <UrgencyBadge urgency={list.urgency} />
-              <UrgencyField
-                value={list.urgency}
-                label="Priority"
-                onChange={(urgency) => void changeList(list, { urgency })}
-              />
-              <button
-                type="button"
-                className="quiet"
-                onClick={() => {
-                  const name = prompt('List name', list.name)?.trim();
-                  if (name && name !== list.name) void changeList(list, { name });
-                }}
-              >
-                Rename list
-              </button>
-              <PermanentDeleteDialog
-                target={{ resourceType: 'list', resourceId: list.id, version: list.version }}
-                label={list.name}
-                csrfToken={csrfToken}
-                disabled={list.lifecycle === 'deleting'}
-              />
+              <div className="list-settings">
+                <UrgencyBadge urgency={list.urgency} />
+                <UrgencyField
+                  value={list.urgency}
+                  label="Priority"
+                  onChange={(urgency) => void changeList(list, { urgency })}
+                />
+              </div>
               <ListVisibilityControl
                 list={list}
                 groups={groups}
                 change={(patch) => void changeList(list, patch)}
               />
-              <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
-              <button
-                type="button"
-                onClick={() =>
-                  void changeList(list, {
-                    status: 'archived',
-                    lifecycle: 'archived',
-                    archiveReason: 'finished',
-                  })
-                }
-              >
-                Finish and archive list
-              </button>
-              <form
-                className="list-add"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  const name = drafts[list.id]?.trim();
-                  if (name)
-                    void addItem(list.id, name).then(() => setDrafts({ ...drafts, [list.id]: '' }));
-                }}
-              >
-                <label>
-                  Add an item
-                  <input
-                    value={drafts[list.id] ?? ''}
-                    onChange={(event) => setDrafts({ ...drafts, [list.id]: event.target.value })}
-                  />
-                </label>
-                <button>Add item</button>
-              </form>
+              <div className="list-actions" aria-label="List actions">
+                <button
+                  type="button"
+                  className="quiet"
+                  onClick={() => {
+                    const name = prompt('List name', list.name)?.trim();
+                    if (name && name !== list.name) void changeList(list, { name });
+                  }}
+                >
+                  Rename list
+                </button>
+                <PermanentDeleteDialog
+                  target={{ resourceType: 'list', resourceId: list.id, version: list.version }}
+                  label={list.name}
+                  csrfToken={csrfToken}
+                  disabled={list.lifecycle === 'deleting'}
+                />
+                <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
+                <button
+                  type="button"
+                  onClick={() =>
+                    void changeList(list, {
+                      status: 'archived',
+                      lifecycle: 'archived',
+                      archiveReason: 'finished',
+                    })
+                  }
+                >
+                  Finish and archive list
+                </button>
+              </div>
+              <ListItemCreateForm add={(input) => addItem(list.id, input)} />
               <ListItems
                 items={items.get(list.id) ?? []}
                 toggle={toggle}

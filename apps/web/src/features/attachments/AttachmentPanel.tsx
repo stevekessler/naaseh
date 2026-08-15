@@ -65,6 +65,7 @@ export function AttachmentPanel({
           accept="application/pdf,image/jpeg,image/png,text/plain,text/csv"
           disabled={!online || active.length >= 10}
           onChange={(event) => {
+            const input = event.currentTarget;
             const file = event.target.files?.[0];
             if (!file) return;
             setError(undefined);
@@ -74,7 +75,12 @@ export function AttachmentPanel({
               .catch((reason) =>
                 setError(reason instanceof Error ? reason.message : 'Upload failed.'),
               )
-              .finally(() => setProgress(undefined));
+              .finally(() => {
+                setProgress(undefined);
+                // Selecting the same file again must trigger another change event
+                // after either a successful upload or a recoverable failure.
+                input.value = '';
+              });
           }}
         />
       </label>

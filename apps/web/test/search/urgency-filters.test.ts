@@ -31,11 +31,11 @@ describe('urgency filtering', () => {
 
   it('matches any selected urgency without re-sorting the personal input order', () => {
     const critical = task('Critical third', 'critical');
-    const extraLow = task('Extra Low first', 'extra_low');
+    const lowPriority = task('Low first', 'low');
     const high = task('High second', 'high');
 
     expect(
-      filterTasks([critical, extraLow, high], filters({ urgencies: ['high', 'critical'] })),
+      filterTasks([critical, lowPriority, high], filters({ urgencies: ['high', 'critical'] })),
     ).toEqual([critical, high]);
   });
 

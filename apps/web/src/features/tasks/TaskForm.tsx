@@ -1,16 +1,33 @@
-import { type FormEvent, useState } from 'react';
+import { lazy, Suspense, type CSSProperties, type FormEvent, useState } from 'react';
 import {
   defaultUrgency,
+  instantToLocalDue,
+  localDueToInstant,
+  memoDocumentText,
+  plainMemoDocument,
   type CategoryRecord,
+  type MemoDocument,
   type Project,
+  type PostItColor,
   type Task,
   type TaskInput,
   type Urgency,
 } from '@naaseh/domain';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
 import { UrgencyField } from '../../components/UrgencyField.js';
-import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
+import {
+  AssigneePicker,
+  canonicalAssigneeId,
+  type AssigneeOption,
+} from '../../components/AssigneePicker.js';
 import { CategoryPicker } from '../../components/CategoryPicker.js';
+import { ReferenceCombobox } from '../../components/ReferenceCombobox.js';
+import { timeOptionsForTask } from './due-value.js';
+import { postItPalette } from '../../styles/category-color.js';
+
+const MemoEditor = lazy(() =>
+  import('../memos/MemoEditor.js').then(({ MemoEditor }) => ({ default: MemoEditor })),
+);
 
 export function categoryDefaultAssignee(
   categoryId: string,
@@ -22,6 +39,35 @@ export function categoryDefaultAssignee(
   );
 }
 
+export function eligibleParentTasks(task: Task | undefined, parentTasks: readonly Task[]) {
+  const descendantIds = new Set<string>();
+  if (task) {
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const candidate of parentTasks)
+        if (
+          candidate.parentId &&
+          (candidate.parentId === task.id || descendantIds.has(candidate.parentId)) &&
+          !descendantIds.has(candidate.id)
+        ) {
+          descendantIds.add(candidate.id);
+          changed = true;
+        }
+    }
+  }
+  return parentTasks
+    .filter(
+      (candidate) =>
+        candidate.id !== task?.id &&
+        !descendantIds.has(candidate.id) &&
+        candidate.status === 'open' &&
+        (candidate.lifecycle ?? 'active') === 'active' &&
+        candidate.completionState !== 'completed',
+    )
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
 export function TaskForm({
   save,
   task,
@@ -29,6 +75,8 @@ export function TaskForm({
   projects = [],
   assignees = [],
   parentTasks = [],
+  groupOptions = [],
+  offline = false,
   defaultAssigneeId,
   submitLabel = task ? 'Save changes' : 'Add task',
 }: {
@@ -38,6 +86,8 @@ export function TaskForm({
   projects?: readonly Project[];
   assignees?: readonly AssigneeOption[];
   parentTasks?: readonly Task[];
+  groupOptions?: readonly { id: string; label: string; context?: string }[];
+  offline?: boolean;
   defaultAssigneeId?: string;
   submitLabel?: string;
 }) {
@@ -55,41 +105,44 @@ export function TaskForm({
       : (initialCategory?.defaultAssigneeId ?? defaultAssigneeId ?? ''),
   );
   const [assigneeTouched, setAssigneeTouched] = useState(false);
-  const openParentTasks = parentTasks
-    .filter(
-      (candidate) =>
-        candidate.id !== task?.id &&
-        candidate.status === 'open' &&
-        (candidate.lifecycle ?? 'active') === 'active' &&
-        candidate.completionState !== 'completed',
-    )
-    .sort((left, right) => left.label.localeCompare(right.label));
+  const [memoDocument, setMemoDocument] = useState<MemoDocument>(
+    task?.memoDocument ?? plainMemoDocument(task?.memo ?? ''),
+  );
+  const initialTimed = task?.dueAt ? instantToLocalDue(task.dueAt) : undefined;
+  const [dueKind, setDueKind] = useState<'none' | 'date' | 'timed'>(
+    task?.dueKind ?? (task?.dueDate ? 'date' : task?.dueAt ? 'timed' : 'none'),
+  );
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? initialTimed?.localDate ?? '');
+  const [dueTime, setDueTime] = useState(initialTimed?.localTime ?? '10:00');
+  const [parentId, setParentId] = useState(task?.parentId ?? '');
+  const [groupId, setGroupId] = useState(task?.groupId ?? '');
+  const [postItColor, setPostItColor] = useState<PostItColor | ''>(task?.postItColor ?? '');
+  const openParentTasks = eligibleParentTasks(task, parentTasks);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
-    const due = value('dueAt');
     const submittedProjectId = value('projectId');
     const submittedCategoryId =
       projects.find((item) => item.id === submittedProjectId)?.categoryId || value('categoryId');
     await save({
       label: value('label'),
-      memo: value('memo'),
+      memo: memoDocumentText(memoDocument),
+      memoDocument,
       link: value('link'),
-      ...(due
-        ? {
-            dueAt: new Date(due).toISOString(),
-            dueTimeZone: value('dueTimeZone') || Intl.DateTimeFormat().resolvedOptions().timeZone,
-          }
+      ...(dueKind === 'date' && dueDate ? { dueKind, dueDate } : {}),
+      ...(dueKind === 'timed' && dueDate && dueTime
+        ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
         : {}),
-      assigneeId: assigneeId || undefined,
+      assigneeId: canonicalAssigneeId(assignees, assigneeId) || undefined,
       ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
       ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
-      ...(value('groupId') ? { groupId: value('groupId') } : {}),
-      ...(value('parentId') ? { parentId: value('parentId') } : {}),
+      ...(groupId ? { groupId } : {}),
+      ...(parentId ? { parentId } : {}),
       visibility: data.get('private') ? 'private' : 'public',
       urgency,
+      ...(postItColor ? { postItColor } : {}),
     });
     if (!task) {
       form.reset();
@@ -98,6 +151,14 @@ export function TaskForm({
       setProjectId('');
       setAssigneeId(defaultAssigneeId ?? '');
       setAssigneeTouched(false);
+      setMemoDocument(plainMemoDocument(''));
+      setDueKind('none');
+      setDueDate('');
+      setDueTime('10:00');
+      setParentId('');
+      setGroupId('');
+      setPostItColor('');
+      form.querySelector<HTMLDetailsElement>('.task-form-details')?.removeAttribute('open');
     }
   }
   return (
@@ -106,100 +167,174 @@ export function TaskForm({
         Task label
         <input name="label" required maxLength={300} defaultValue={task?.label} />
       </label>
-      <label>
-        Link
-        <input name="link" type="url" pattern="https://.*" defaultValue={task?.link} />
-      </label>
-      <label>
-        Memo
-        <textarea name="memo" maxLength={20000} defaultValue={task?.memo} />
-      </label>
-      <div className="form-grid">
+      <details className="task-form-details" {...(task ? { open: true } : {})}>
+        <summary>Task details</summary>
+        <label>Memo</label>
+        {typeof document === 'undefined' ? (
+          <div className="memo-editor" aria-label="Memo">
+            {memoDocumentText(memoDocument)}
+          </div>
+        ) : (
+          <Suspense fallback={<p role="status">Loading memo editor…</p>}>
+            <MemoEditor value={memoDocument} onChange={setMemoDocument} />
+          </Suspense>
+        )}
         <label>
-          Priority
-          <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
+          Link
+          <input name="link" type="url" pattern="https://.*" defaultValue={task?.link} />
         </label>
-        <label>
-          Due date and time
-          <input name="dueAt" type="datetime-local" defaultValue={task?.dueAt?.slice(0, 16)} />
-        </label>
-        <label>
-          Time zone
-          <input
-            name="dueTimeZone"
-            defaultValue={task?.dueTimeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone}
-          />
-        </label>
-        <label>
-          Task assignee
-          <AssigneePicker
-            assignees={assignees}
-            value={assigneeId}
-            ariaLabel="Assignee"
-            onChange={(nextAssigneeId) => {
-              setAssigneeId(nextAssigneeId);
-              setAssigneeTouched(true);
-            }}
-          />
-        </label>
-        <label>
-          Category
-          <CategoryPicker
+        <div className="form-grid">
+          <label>
+            Priority
+            <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
+          </label>
+          <label>
+            Due
+            <select
+              value={dueKind}
+              onChange={(event) => setDueKind(event.target.value as typeof dueKind)}
+            >
+              <option value="none">No due date</option>
+              <option value="date">Date only</option>
+              <option value="timed">Date and time</option>
+            </select>
+          </label>
+          {dueKind !== 'none' && (
+            <label>
+              Due date
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                required
+              />
+            </label>
+          )}
+          {dueKind === 'timed' && (
+            <label>
+              Due time
+              <select value={dueTime} onChange={(event) => setDueTime(event.target.value)}>
+                {timeOptionsForTask(task?.dueAt).map((time) => (
+                  <option key={time} value={time}>
+                    {time}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label>
+            Task assignee
+            <AssigneePicker
+              assignees={assignees}
+              value={assigneeId}
+              ariaLabel="Assignee"
+              onChange={(nextAssigneeId) => {
+                setAssigneeId(nextAssigneeId);
+                setAssigneeTouched(true);
+              }}
+            />
+          </label>
+          <label>
+            Category
+            <CategoryPicker
+              categories={categories}
+              value={categoryId}
+              onChange={(nextCategoryId) => {
+                setCategoryId(nextCategoryId);
+                if (!task && !assigneeTouched)
+                  setAssigneeId(
+                    categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
+                  );
+                if (
+                  projectId &&
+                  projects.find((project) => project.id === projectId)?.categoryId !==
+                    nextCategoryId
+                )
+                  setProjectId('');
+              }}
+            />
+          </label>
+          <ProjectPicker
             categories={categories}
-            value={categoryId}
-            onChange={(nextCategoryId) => {
-              setCategoryId(nextCategoryId);
-              if (!task && !assigneeTouched)
-                setAssigneeId(
-                  categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
-                );
-              if (
-                projectId &&
-                projects.find((project) => project.id === projectId)?.categoryId !== nextCategoryId
-              )
-                setProjectId('');
+            projects={projects}
+            categoryId={categoryId}
+            value={projectId}
+            onChange={(nextProjectId) => {
+              setProjectId(nextProjectId);
+              const nextCategoryId = projects.find(
+                (project) => project.id === nextProjectId,
+              )?.categoryId;
+              if (nextCategoryId) {
+                setCategoryId(nextCategoryId);
+                if (!task && !assigneeTouched)
+                  setAssigneeId(
+                    categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
+                  );
+              }
             }}
           />
+          <ReferenceCombobox
+            label="Group"
+            name="group"
+            options={groupOptions}
+            value={groupId}
+            onChange={setGroupId}
+            offline={offline}
+            clearLabel="No group"
+          />
+          <ReferenceCombobox
+            label="Parent task"
+            name="parent"
+            options={openParentTasks.map((candidate) => ({
+              id: candidate.id,
+              label: candidate.label,
+              ...(candidate.projectId
+                ? { context: `Project ${candidate.projectId.slice(-6)}` }
+                : candidate.categoryId
+                  ? { context: `Category ${candidate.categoryId}` }
+                  : {}),
+            }))}
+            value={parentId}
+            onChange={setParentId}
+            offline={offline}
+            clearLabel="No parent task"
+          />
+        </div>
+        <label className="checkbox">
+          <input name="private" type="checkbox" defaultChecked={task?.visibility === 'private'} />{' '}
+          Private task
         </label>
-        <ProjectPicker
-          categories={categories}
-          projects={projects}
-          categoryId={categoryId}
-          value={projectId}
-          onChange={(nextProjectId) => {
-            setProjectId(nextProjectId);
-            const nextCategoryId = projects.find(
-              (project) => project.id === nextProjectId,
-            )?.categoryId;
-            if (nextCategoryId) {
-              setCategoryId(nextCategoryId);
-              if (!task && !assigneeTouched)
-                setAssigneeId(
-                  categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
-                );
-            }
-          }}
-        />
-        <label>
-          Group
-          <input name="groupId" defaultValue={task?.groupId} />
-        </label>
-        <label>
-          Parent task
-          <select name="parentId" defaultValue={task?.parentId ?? ''}>
-            <option value="">No parent task</option>
-            {openParentTasks.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                {candidate.label}
-              </option>
+        {task && (
+          <fieldset className="post-it-color-picker">
+            <legend>Post-it color</legend>
+            <label>
+              <input
+                type="radio"
+                name="postItColor"
+                checked={!postItColor}
+                onChange={() => setPostItColor('')}
+              />
+              Use category color
+            </label>
+            {(Object.keys(postItPalette) as PostItColor[]).map((color) => (
+              <label
+                key={color}
+                style={{ '--swatch-color': postItPalette[color].background } as CSSProperties}
+              >
+                <input
+                  type="radio"
+                  name="postItColor"
+                  value={color}
+                  checked={postItColor === color}
+                  onChange={() => setPostItColor(color)}
+                />
+                <span className="post-it-color-swatch" aria-hidden="true" />
+                {color[0]!.toUpperCase() + color.slice(1)}
+              </label>
             ))}
-          </select>
-        </label>
-      </div>
-      <label className="checkbox">
-        <input name="private" type="checkbox" defaultChecked={task?.visibility === 'private'} />{' '}
-        Private task
-      </label>
+          </fieldset>
+        )}
+      </details>
       <button>{submitLabel}</button>
     </form>
   );

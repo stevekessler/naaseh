@@ -4,6 +4,10 @@ import {
   resolveLocalStackConflict,
   type LocalStackConflict,
 } from '../db/personal-stack-repository.js';
+export {
+  listLocalTaskTimerConflicts as listTaskTimerConflicts,
+  resolveLocalTaskTimerConflict as resolveTaskTimerConflict,
+} from '../db/task-timer-repository.js';
 export type Resolution = 'keep-local' | 'keep-remote';
 export const resolveConflict = (conflict: SyncConflict, resolution: Resolution): Task =>
   resolution === 'keep-local'

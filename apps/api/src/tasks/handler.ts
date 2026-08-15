@@ -19,10 +19,12 @@ import { canReadTaskAs } from '@naaseh/domain';
 import { errorResponse, json, problem, SafeApiError } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
 import { sanitizeTaskPatch } from './task-service.js';
+import { assertNoCycle } from './task-policy.js';
 import { syncTaskReminder } from '../notifications/web-push.js';
 import { recordTaskAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
 import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
+import { assertAuthorizedGroupSelection } from '../groups/group-selection-authorization.js';
 
 async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const correlationId = event.requestContext.requestId || randomUUID();
@@ -94,6 +96,10 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         actorId,
       });
     }
+    assertAuthorizedGroupSelection(
+      input.groupId,
+      context.authorizer?.lambda?.groupIds?.split(',').filter(Boolean) ?? [],
+    );
     const task = createTask(input, actorId);
     const mutationId = event.headers['x-client-mutation-id'] ?? createUlid();
     const saved = await saveTaskMutation(
@@ -153,6 +159,26 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         : event.rawPath.endsWith('/lock')
           ? { visibility: body.locked ? 'private' : 'public' }
           : sanitizeTaskPatch(body);
+      assertAuthorizedGroupSelection(
+        normalized.groupId,
+        context.authorizer?.lambda?.groupIds?.split(',').filter(Boolean) ?? [],
+      );
+      if (normalized.parentId) {
+        const candidates = [...(await listPublicTasks()), ...(await listOwnerTasks(actorId))];
+        const parent = candidates.find((candidate) => candidate.id === normalized.parentId);
+        if (
+          !parent ||
+          !canRead(parent) ||
+          parent.status !== 'open' ||
+          (parent.lifecycle ?? 'active') !== 'active'
+        )
+          throw new Error('Parent task is unavailable.');
+        assertNoCycle(
+          taskId,
+          normalized.parentId,
+          new Map(candidates.map((item) => [item.id, item])),
+        );
+      }
     } catch (error) {
       return errorResponse(
         error instanceof SyntaxError

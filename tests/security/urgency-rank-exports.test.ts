@@ -21,9 +21,9 @@ const work = (patch: Partial<Task>): Task =>
 
 describe('urgency and viewer-rank export boundary', () => {
   it('exports categorical urgency and only the requesting viewer rank overlay', () => {
-    expect(CSV_HEADERS).toContain('urgency');
-    expect(CSV_HEADERS).toContain('overallRank');
-    expect(CSV_HEADERS).toContain('projectRank');
+    expect(CSV_HEADERS).toContain('priority');
+    expect(CSV_HEADERS).toContain('viewer_overall_rank');
+    expect(CSV_HEADERS).toContain('viewer_project_rank');
 
     const csv = transformTodosToCsv(
       [work({})],
@@ -36,7 +36,9 @@ describe('urgency and viewer-rank export boundary', () => {
       ]),
     );
     expect(csv).toContain('critical');
-    expect(csv).toMatch(/,5,1,/);
+    const row = csv.trimEnd().split('\r\n')[1]!.split(',');
+    expect(row[CSV_HEADERS.indexOf('viewer_overall_rank')]).toBe('5');
+    expect(row[CSV_HEADERS.indexOf('viewer_project_rank')]).toBe('1');
     expect(csv).not.toContain('requesting-viewer');
     expect(csv).not.toContain('other-user');
   });
@@ -46,7 +48,7 @@ describe('urgency and viewer-rank export boundary', () => {
       id: '01J00000000000000000000002',
       status: 'archived',
       lifecycle: 'archived',
-      urgency: 'extra_low',
+      urgency: 'low',
     });
     const csv = transformTodosToCsv(
       [archived],
@@ -54,9 +56,9 @@ describe('urgency and viewer-rank export boundary', () => {
       new Map([[archived.id, { overallRank: 9, projectRank: 2 }]]),
     );
     const row = csv.trimEnd().split('\r\n')[1]!.split(',');
-    expect(row[CSV_HEADERS.indexOf('urgency')]).toBe('extra_low');
-    expect(row[CSV_HEADERS.indexOf('overallRank')]).toBe('');
-    expect(row[CSV_HEADERS.indexOf('projectRank')]).toBe('');
+    expect(row[CSV_HEADERS.indexOf('priority')]).toBe('low');
+    expect(row[CSV_HEADERS.indexOf('viewer_overall_rank')]).toBe('');
+    expect(row[CSV_HEADERS.indexOf('viewer_project_rank')]).toBe('');
   });
 
   it('never adds rows outside the already-authorized input collection', () => {

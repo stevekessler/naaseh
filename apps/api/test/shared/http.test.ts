@@ -15,6 +15,13 @@ describe('safe API error classification', () => {
       false,
     ],
     [
+      Object.assign(new Error('missing'), { statusCode: 404 }),
+      404,
+      'not_found',
+      'not_found',
+      false,
+    ],
+    [
       Object.assign(new Error('secret'), { name: 'TransactionCanceledException' }),
       409,
       'conflict',

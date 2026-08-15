@@ -30,7 +30,7 @@ test('an administrator responsively lists, disables, and reactivates users witho
       body: JSON.stringify({ user: users[0], csrfToken: 'test-csrf' }),
     }),
   );
-  await page.route('**/api/v1/admin/users', async (route) => {
+  await page.route('**/api/v1/admin/users*', async (route) => {
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON() as {
         username: string;
@@ -90,11 +90,11 @@ test('an administrator responsively lists, disables, and reactivates users witho
   await page.getByLabel('Password').fill('correct horse battery staple');
   await page.getByLabel('PIN').fill('246810');
   await page.getByRole('button', { name: 'Add user' }).click();
-  await expect(page.getByText('@new-admin')).toBeVisible();
+  await expect(page.getByRole('cell', { name: '@new-admin' })).toBeVisible();
   await page.getByRole('button', { name: 'Disable Alex' }).click();
-  await expect(page.getByText('User · Disabled')).toBeVisible();
+  await expect(page.getByRole('row', { name: /Alex.*Disabled/ })).toBeVisible();
   await page.getByRole('button', { name: 'Reactivate Alex' }).click();
-  await expect(page.getByText('User · Active')).toBeVisible();
+  await expect(page.getByRole('row', { name: /Alex.*Active/ })).toBeVisible();
 });
 
 test('a regular user has no administration surface and cannot see another user private data', async ({

@@ -110,7 +110,7 @@ describe('personal stack HTTP and sync contract', () => {
           movedWork: reference(workId),
           destinationIndex: 1,
           affectedWork: [reference(workId), reference(secondWorkId), reference(thirdWorkId)],
-          filterBasis: { urgencies: ['extra_low', 'critical'], projectId },
+          filterBasis: { urgencies: ['low', 'critical'], projectId },
         },
       }).move.kind,
     ).toBe('filtered_permutation');

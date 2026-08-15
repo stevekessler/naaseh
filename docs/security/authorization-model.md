@@ -29,6 +29,14 @@ add and list allowlisted user profiles, disable/reactivate accounts, and create,
 archive categories. All authenticated users may read categories so task forms remain usable.
 User/category mutations require a live admin session, same-origin and CSRF checks, and immutable
 content-free audit events. Self-disablement and removal of the last active administrator fail.
+The `/admin` presentation route is also role-gated for clarity, but every administrator endpoint
+independently enforces the role. User-list pages are capped at 100 stable username/ID rows and expose
+only safe TFA state and bounded active group IDs; credentials and recovery material never appear.
+
+Personal reminders, sounds, Google setup, password reset, and TFA controls live under `/profile` and
+remain available to ordinary users. A submitted Task or List group ID must be one of the actor's
+active authorized memberships; the API rejects stale, revoked, or arbitrary IDs even if a client is
+modified to bypass the combobox.
 
 Administrators may read all task, list, list-item, directory, and attachment metadata, including
 locked and group-restricted content. These privileged reads are audited. Administrator access is

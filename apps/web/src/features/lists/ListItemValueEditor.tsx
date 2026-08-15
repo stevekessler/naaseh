@@ -27,7 +27,7 @@ export function ListItemValueEditor({
           onChange={(event) => setText(event.target.value)}
         />
       </label>
-      <label>
+      <label className="value-editor-credit">
         <input
           type="checkbox"
           checked={positive}

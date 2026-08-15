@@ -34,9 +34,8 @@ import type { AdminUser } from '../features/admin/UsersAdminPage.js';
 import {
   changeAdminUserStatus,
   createAdminUser,
-  listAdminUsers,
+  listAdminUsersPage,
 } from '../features/admin/admin-client.js';
-import { ReminderSettings } from '../features/reminders/ReminderSettings.js';
 import {
   addLocalListItem,
   editLocalListItem,
@@ -50,7 +49,6 @@ import {
   updateLocalListItem,
 } from '../db/list-repository.js';
 import { listLocalDirectoryItems, saveDirectoryItem } from '../db/directory-repository.js';
-import { CompletionSoundSetting } from '../features/tasks/CompletionSoundSetting.js';
 import { SearchResults } from '../features/search/SearchResults.js';
 import { navigate, parseAppRoute } from './router.js';
 import { listLocalArchive } from '../db/archive-repository.js';
@@ -67,7 +65,8 @@ import {
 } from '../db/category-repository.js';
 import { useWorkloadTree } from '../features/projects/useWorkloadTree.js';
 import { listLocalCompletionEvents } from '../db/completion-event-repository.js';
-import { purgePrivateStackStateForSession } from '../sync/privacy-purge.js';
+import { purgeAllAuthorizedData, purgePrivateStackStateForSession } from '../sync/privacy-purge.js';
+import { revalidateProtectedSession, validateBrowserSession } from '../features/auth/session.js';
 import {
   initializeLocalStack,
   latestAppliedStackOperationAt,
@@ -87,7 +86,7 @@ import {
 import type { StackDisplayItem } from '../features/stacks/StackRow.js';
 import type { CompletionFilterValue } from '../features/reports/CompletionFilters.js';
 import {
-  downloadCompletionCsv,
+  runCompletionExport,
   fetchCompletionReport,
   readCompletionReportCache,
   saveCompletionReportCache,
@@ -98,7 +97,7 @@ import type {
   CompletionDetailRow,
   CompletionReportState,
 } from '../features/reports/CompletionDashboard.js';
-import type { AssigneeOption } from '../components/AssigneePicker.js';
+import { mergeAssigneeOptions, type AssigneeOption } from '../components/AssigneePicker.js';
 
 const ArchivePage = lazy(() =>
   import('../features/archive/ArchivePage.js').then(({ ArchivePage }) => ({
@@ -115,20 +114,25 @@ const CompletionDashboard = lazy(() =>
     default: CompletionDashboard,
   })),
 );
-const GoogleSyncPage = lazy(() =>
-  import('../features/google-sync/GoogleSyncPage.js').then(({ GoogleSyncPage }) => ({
-    default: GoogleSyncPage,
-  })),
-);
 const GroupPage = lazy(() =>
   import('../features/groups/GroupPage.js').then(({ GroupPage }) => ({ default: GroupPage })),
 );
 const ListPage = lazy(() =>
   import('../features/lists/ListPage.js').then(({ ListPage }) => ({ default: ListPage })),
 );
+const GlobalDirectoryPage = lazy(() =>
+  import('../features/lists/GlobalDirectoryPage.js').then(({ GlobalDirectoryPage }) => ({
+    default: GlobalDirectoryPage,
+  })),
+);
 const PersonalStackPage = lazy(() =>
   import('../features/stacks/PersonalStackPage.js').then(({ PersonalStackPage }) => ({
     default: PersonalStackPage,
+  })),
+);
+const ProfilePage = lazy(() =>
+  import('../features/profile/ProfilePage.js').then(({ ProfilePage }) => ({
+    default: ProfilePage,
   })),
 );
 const ProjectTree = lazy(() =>
@@ -180,17 +184,23 @@ export function App() {
   });
   const [view, setView] = useState<'list' | 'postit'>('list');
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
+  const headerExpandTimer = useRef<number | undefined>(undefined);
   const [online, setOnline] = useState(() => navigator.onLine);
+  const [sessionValidation, setSessionValidation] = useState<'valid' | 'locked' | 'retry'>(() =>
+    sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid',
+  );
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
     | 'lists'
+    | 'directory'
     | 'groups'
     | 'archive'
     | 'projects'
     | 'dashboard'
     | 'stack'
     | 'google'
+    | 'profile'
     | 'admin'
   >(initialRoute.section);
   const [stackScope, setStackScope] = useState<LocalStackScope>({ scopeType: 'overall' });
@@ -216,6 +226,7 @@ export function App() {
     initialRoute.section === 'lists' ? initialRoute.listId : undefined,
   );
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminUsersCursor, setAdminUsersCursor] = useState<string>();
   const [filters, setFilters] = useState<Filters>(() => filtersFromSearch(location.search));
   const [selectedId, setSelectedId] = useState<string | undefined>(
     () => location.pathname.match(/^\/tasks\/([^/]+)$/)?.[1],
@@ -251,29 +262,23 @@ export function App() {
       [selectedId],
     ) ?? [];
   const assignees = useMemo<AssigneeOption[]>(() => {
-    const known = new Map<string, AssigneeOption>();
-    for (const user of adminUsers) {
-      if (!user.active || user.username.replace(/^@/, '').toLocaleLowerCase() === 'naaseh-smoke')
-        continue;
-      known.set(user.id, {
+    const known = adminUsers
+      .filter((user) => user.active)
+      .map((user) => ({
         id: user.id,
         displayName: user.displayName,
         username: user.username.replace(/^@/, ''),
+      }));
+    if (session)
+      known.push({
+        id: session.userId,
+        displayName: session.displayName,
+        username: '',
       });
-    }
-    if (session && !known.has(session.userId))
-      known.set(session.userId, { id: session.userId, displayName: session.displayName });
-    for (const id of [
+    return mergeAssigneeOptions(known, [
       ...tasks.map((task) => task.assigneeId),
       ...categories.map((category) => category.defaultAssigneeId),
-    ]) {
-      if (!id || known.has(id) || id.replace(/^@/, '').toLocaleLowerCase() === 'naaseh-smoke')
-        continue;
-      known.set(id, { id, displayName: id });
-    }
-    return [...known.values()].sort((left, right) =>
-      left.displayName.localeCompare(right.displayName),
-    );
+    ]);
   }, [adminUsers, session, tasks, categories]);
   const pending = useLiveQuery(() => db.outbox.count(), []) ?? 0;
   const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
@@ -526,10 +531,28 @@ export function App() {
     const mobile = window.matchMedia('(max-width: 900px)');
     const updateHeader = () => {
       if (!mobile.matches) {
+        if (headerExpandTimer.current !== undefined) window.clearTimeout(headerExpandTimer.current);
+        headerExpandTimer.current = undefined;
         setHeaderCollapsed(false);
         return;
       }
-      setHeaderCollapsed((collapsed) => (collapsed ? window.scrollY > 16 : window.scrollY > 96));
+      setHeaderCollapsed((collapsed) => {
+        if (!collapsed) return window.scrollY > 96;
+        if (window.scrollY > 16) {
+          if (headerExpandTimer.current !== undefined)
+            window.clearTimeout(headerExpandTimer.current);
+          headerExpandTimer.current = undefined;
+          return true;
+        }
+        // Keep the compact header stable while programmatic focus/click scrolling settles.
+        // Expanding immediately changes page geometry and can move the intended control away.
+        if (headerExpandTimer.current === undefined)
+          headerExpandTimer.current = window.setTimeout(() => {
+            headerExpandTimer.current = undefined;
+            if (window.scrollY <= 16) setHeaderCollapsed(false);
+          }, 1_000);
+        return true;
+      });
     };
     updateHeader();
     window.addEventListener('scroll', updateHeader, { passive: true });
@@ -537,6 +560,7 @@ export function App() {
     return () => {
       window.removeEventListener('scroll', updateHeader);
       mobile.removeEventListener('change', updateHeader);
+      if (headerExpandTimer.current !== undefined) window.clearTimeout(headerExpandTimer.current);
     };
   }, []);
   useEffect(() => {
@@ -546,9 +570,12 @@ export function App() {
       );
   }, [section, session]);
   useEffect(() => {
-    if (session?.role === 'admin')
-      void listAdminUsers(session.csrfToken)
-        .then(setAdminUsers)
+    if (section === 'admin' && session?.role === 'admin')
+      void listAdminUsersPage(session.csrfToken)
+        .then((page) => {
+          setAdminUsers(page.items);
+          setAdminUsersCursor(page.nextCursor);
+        })
         .catch(() => setSyncError('Administrative users could not be loaded.'));
   }, [section, session]);
   useEffect(() => {
@@ -583,6 +610,27 @@ export function App() {
     if (session) void synchronize();
   }, [session, synchronize]);
 
+  const revalidateSession = useCallback(async () => {
+    if (!session) return;
+    if (session.userId === 'local-steve') {
+      setSessionValidation('valid');
+      return;
+    }
+    const result = await revalidateProtectedSession({
+      lock: () => setSessionValidation('locked'),
+      validate: validateBrowserSession,
+      purge: purgeAllAuthorizedData,
+      unlock: () => setSessionValidation('valid'),
+    });
+    if (result.status === 'revoked') setSession(null);
+    else if (result.status === 'offline_locked' || result.status === 'purge_failed')
+      setSessionValidation('retry');
+  }, [session]);
+
+  useEffect(() => {
+    if (session && sessionValidation !== 'valid') void revalidateSession();
+  }, [session, sessionValidation, revalidateSession]);
+
   useEffect(() => {
     const announce = () => {
       const current = navigator.onLine;
@@ -606,12 +654,13 @@ export function App() {
     // navigator.onLine settles. Defer one turn so the guard sees the new state.
     const online = () =>
       window.setTimeout(() => {
+        void revalidateSession();
         void synchronize();
         if (section === 'dashboard') setCompletionReportAttempt((value) => value + 1);
       }, 0);
     window.addEventListener('online', online);
     return () => window.removeEventListener('online', online);
-  }, [synchronize, section]);
+  }, [synchronize, revalidateSession, section]);
   useEffect(() => {
     const visible = () => {
       if (document.visibilityState === 'visible') void synchronize();
@@ -654,8 +703,28 @@ export function App() {
         onAuthenticated={(next) => {
           sessionStorage.setItem('naaseh-session-view', JSON.stringify(next));
           setSession(next);
+          setSessionValidation('valid');
         }}
       />
+    );
+
+  if (sessionValidation !== 'valid')
+    return (
+      <main className="login-page">
+        <section className="login-card" aria-live="polite">
+          <h1>Securing your local data</h1>
+          <p>
+            {sessionValidation === 'locked'
+              ? 'Validating your session before unlocking cached tasks…'
+              : 'Your session could not be validated or cleared. Cached tasks remain locked.'}
+          </p>
+          {sessionValidation === 'retry' && (
+            <button type="button" onClick={() => void revalidateSession()}>
+              Retry validation
+            </button>
+          )}
+        </section>
+      </main>
     );
 
   async function addTask(input: import('@naaseh/domain').TaskInput) {
@@ -711,10 +780,10 @@ export function App() {
             </button>
             <button
               className="quiet"
-              aria-current={section === 'google' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'google' })}
+              aria-current={section === 'profile' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'profile' })}
             >
-              Google
+              Profile
             </button>
             <button
               className="quiet"
@@ -746,6 +815,13 @@ export function App() {
             </button>
             <button
               className="quiet"
+              aria-current={section === 'directory' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'directory' })}
+            >
+              Global Items
+            </button>
+            <button
+              className="quiet"
               aria-current={section === 'groups' ? 'page' : undefined}
               onClick={() => navigate({ section: 'groups' })}
             >
@@ -761,8 +837,6 @@ export function App() {
               </button>
             )}
           </nav>
-          <ReminderSettings csrfToken={session.csrfToken} />
-          <CompletionSoundSetting />
           <button
             className="quiet"
             onClick={() => {
@@ -787,6 +861,9 @@ export function App() {
             parentTasks={tasks}
             defaultAssigneeId={session.userId}
             createTask={addTask}
+            updateTask={async (task, patch) => {
+              await updateTask(task, patch, session.userId);
+            }}
             items={
               remoteStackItems ??
               rankedStackItems.map(({ work, rank }) => ({
@@ -899,46 +976,73 @@ export function App() {
                 await resolveLocalStackConflict(conflict.id, 'discard');
             }}
           />
-        ) : section === 'google' ? (
-          <GoogleSyncPage csrfToken={session.csrfToken} />
+        ) : section === 'profile' ? (
+          <ProfilePage csrfToken={session.csrfToken} role={session.role} />
         ) : section === 'admin' ? (
-          <>
-            <UsersAdminPage
-              users={adminUsers}
-              currentUserId={session.userId}
-              online={online}
-              create={async (input) => {
-                const created = await createAdminUser(input, session.csrfToken);
-                setAdminUsers((users) => [
-                  ...users.filter((user) => user.id !== created.id),
-                  created,
-                ]);
-              }}
-              toggle={async (userId, active) => {
-                const updated = await changeAdminUserStatus(userId, active, session.csrfToken);
-                setAdminUsers((users) =>
-                  users.map((user) => (user.id === userId ? updated : user)),
-                );
-              }}
-            />
-            <CategoriesAdminPage
-              categories={categories}
-              projects={projects}
-              assignees={assignees}
-              createCategory={(value) => void saveNewLocalCategory(value)}
-              updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
-              createProject={(value) => void saveNewLocalProject(value)}
-              updateProject={(project, patch) => void updateLocalProject(project, patch)}
-              actorId={session.userId}
-              csrfToken={session.csrfToken}
-              changeCategoryLifecycle={(category, action, actorId) =>
-                void changeLocalCategoryLifecycle(category, action, actorId)
-              }
-              changeProjectLifecycle={(project, action, actorId) =>
-                void changeLocalProjectLifecycle(project, action, actorId)
-              }
-            />
-          </>
+          session.role !== 'admin' ? (
+            <section role="alert" className="panel">
+              <h1>Administrator access required</h1>
+              <p>Your account cannot open system administration.</p>
+            </section>
+          ) : (
+            <>
+              <UsersAdminPage
+                users={adminUsers}
+                currentUserId={session.userId}
+                online={online}
+                {...(adminUsersCursor
+                  ? {
+                      nextCursor: adminUsersCursor,
+                      loadMore: async () => {
+                        const page = await listAdminUsersPage(session.csrfToken, adminUsersCursor);
+                        setAdminUsers((users) => [
+                          ...users,
+                          ...page.items.filter(
+                            (item) => !users.some((user) => user.id === item.id),
+                          ),
+                        ]);
+                        setAdminUsersCursor(page.nextCursor);
+                      },
+                    }
+                  : {})}
+                create={async (input) => {
+                  const created = await createAdminUser(input, session.csrfToken);
+                  setAdminUsers((users) => [
+                    ...users.filter((user) => user.id !== created.id),
+                    created,
+                  ]);
+                }}
+                toggle={async (userId, active, version) => {
+                  const updated = await changeAdminUserStatus(
+                    userId,
+                    active,
+                    session.csrfToken,
+                    version,
+                  );
+                  setAdminUsers((users) =>
+                    users.map((user) => (user.id === userId ? updated : user)),
+                  );
+                }}
+              />
+              <CategoriesAdminPage
+                categories={categories}
+                projects={projects}
+                assignees={assignees}
+                createCategory={(value) => void saveNewLocalCategory(value)}
+                updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
+                createProject={(value) => void saveNewLocalProject(value)}
+                updateProject={(project, patch) => void updateLocalProject(project, patch)}
+                actorId={session.userId}
+                csrfToken={session.csrfToken}
+                changeCategoryLifecycle={(category, action, actorId) =>
+                  void changeLocalCategoryLifecycle(category, action, actorId)
+                }
+                changeProjectLifecycle={(project, action, actorId) =>
+                  void changeLocalProjectLifecycle(project, action, actorId)
+                }
+              />
+            </>
+          )
         ) : section === 'groups' ? (
           <GroupPage
             groups={groups}
@@ -984,7 +1088,9 @@ export function App() {
             retry={() => setCompletionReportAttempt((value) => value + 1)}
             restart={() => setCompletionReportAttempt((value) => value + 1)}
             refreshAfterReconnect={() => setCompletionReportAttempt((value) => value + 1)}
-            exportCsv={() => downloadCompletionCsv(completionDetailRows)}
+            exportCsv={async (filters) => {
+              await runCompletionExport(filters, session.csrfToken);
+            }}
           />
         ) : section === 'archive' ? (
           <ArchivePage
@@ -1001,9 +1107,21 @@ export function App() {
                 await updateLocalList(entry.list, { status: 'active', lifecycle: 'active' });
             }}
           />
+        ) : section === 'directory' ? (
+          <GlobalDirectoryPage
+            actorId={session.userId}
+            lists={lists.filter((list) => list.lifecycle !== 'archived')}
+            addToList={async (listId, item) => {
+              await addLocalListItem(
+                listId,
+                { name: item.name, amountMinor: item.amountMinor },
+                session.userId,
+                item,
+              );
+            }}
+          />
         ) : section === 'lists' ? (
           <ListPage
-            actorId={session.userId}
             csrfToken={session.csrfToken}
             lists={lists.filter((list) => list.lifecycle !== 'archived')}
             items={listItems}
@@ -1015,11 +1133,8 @@ export function App() {
             createList={async (name, projectId, urgency) => {
               await saveNewList(name, session.userId, projectId, urgency);
             }}
-            addItem={async (listId, name) => {
-              await addLocalListItem(listId, name, session.userId);
-            }}
-            addDirectoryItem={async (listId, item) => {
-              await addLocalListItem(listId, item.name, session.userId, item);
+            addItem={async (listId, input) => {
+              await addLocalListItem(listId, input, session.userId);
             }}
             changeList={async (list, patch) => {
               await updateLocalList(list, patch);
@@ -1113,6 +1228,7 @@ export function App() {
                 assignees={assignees}
                 parentTasks={tasks}
                 defaultAssigneeId={session.userId}
+                currentUserId={session.userId}
                 tasks={visible}
                 loading={taskResult === undefined}
                 selected={tasks.find((item) => item.id === selectedId)}
@@ -1135,7 +1251,16 @@ export function App() {
                 }}
               />
             ) : (
-              <PostItBoard tasks={visible} categories={categories} onToggle={toggle} />
+              <PostItBoard
+                tasks={visible}
+                categories={categories}
+                projects={projects}
+                assignees={assignees}
+                onToggle={toggle}
+                onUpdate={async (task, patch) => {
+                  await updateTask(task, patch, session.userId);
+                }}
+              />
             )}
           </>
         )}

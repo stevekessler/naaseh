@@ -7,14 +7,21 @@ test('minimal responsive sign-in and offline task journey', async ({ page, conte
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByLabel('Task label').fill('Review the plan');
   await page.getByRole('button', { name: 'Add task' }).click();
-  await expect(page.getByRole('heading', { name: 'Review the plan' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review the plan', exact: true })).toHaveCount(1);
   await page.evaluate(() => navigator.serviceWorker.ready);
   await context.setOffline(true);
   await expect
     .poll(() => page.evaluate(() => document.documentElement.dataset.online))
     .toBe('false');
-  // Playwright WebKit cannot reliably reload while network emulation is offline. Chromium
-  // covers the shell reload; WebKit profiles still cover offline data access in the live tab.
-  if (testInfo.project.name === 'chromium') await page.reload();
-  await expect(page.getByRole('heading', { name: 'Review the plan' })).toBeVisible();
+  if (testInfo.project.name === 'chromium') {
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Review the plan', exact: true })).toHaveCount(
+      1,
+    );
+  } else {
+    await expect(page.getByRole('heading', { name: 'Review the plan', exact: true })).toHaveCount(
+      1,
+    );
+  }
+  await context.setOffline(false);
 });

@@ -7,6 +7,9 @@ export interface AdminUser {
   role: 'admin' | 'user';
   active: boolean;
   sessionEpoch: number;
+  version?: number;
+  tfaStatus?: 'disabled' | 'required' | 'enabled' | 'recovery_required';
+  groupSummary?: readonly string[];
 }
 
 export function UsersAdminPage({
@@ -15,10 +18,12 @@ export function UsersAdminPage({
   toggle,
   create,
   online,
+  nextCursor,
+  loadMore,
 }: {
   users: AdminUser[];
   currentUserId: string;
-  toggle: (id: string, active: boolean) => Promise<void>;
+  toggle: (id: string, active: boolean, version?: number) => Promise<void>;
   create: (input: {
     username: string;
     displayName: string;
@@ -27,6 +32,8 @@ export function UsersAdminPage({
     role: 'user' | 'admin';
   }) => Promise<void>;
   online: boolean;
+  nextCursor?: string;
+  loadMore?: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState('');
@@ -96,37 +103,67 @@ export function UsersAdminPage({
         </button>
         {!online && <p role="status">Connect to the internet to administer users.</p>}
       </form>
-      <div className="admin-grid">
-        {users.map((user) => {
-          const self = user.id === currentUserId;
-          return (
-            <article key={user.id}>
-              <h2>{user.displayName}</h2>
-              <p>@{user.username}</p>
-              <p>
-                {user.role === 'admin' ? 'Administrator' : 'User'} ·{' '}
-                {user.active ? 'Active' : 'Disabled'}
-              </p>
-              <button
-                disabled={busy === user.id || (self && user.active)}
-                aria-label={`${user.active ? 'Disable' : 'Reactivate'} ${user.displayName}`}
-                onClick={() => {
-                  setBusy(user.id);
-                  setError('');
-                  void toggle(user.id, !user.active)
-                    .catch(() => setError('The user status could not be changed.'))
-                    .finally(() => setBusy(undefined));
-                }}
-              >
-                {busy === user.id ? 'Saving…' : user.active ? 'Disable' : 'Reactivate'}
-              </button>
-              {self && user.active && (
-                <small>Your active administrator account cannot disable itself.</small>
-              )}
-            </article>
-          );
-        })}
+      <div className="admin-user-table-scroll" tabIndex={0}>
+        <table className="admin-user-table">
+          <caption>System user accounts</caption>
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Username</th>
+              <th scope="col">Role</th>
+              <th scope="col">Status</th>
+              <th scope="col">TFA</th>
+              <th scope="col">Groups</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((user) => {
+              const self = user.id === currentUserId;
+              return (
+                <tr key={user.id}>
+                  <th scope="row">{user.displayName}</th>
+                  <td>@{user.username}</td>
+                  <td>{user.role === 'admin' ? 'Administrator' : 'User'}</td>
+                  <td>{user.active ? 'Active' : 'Disabled'}</td>
+                  <td>{user.tfaStatus?.replaceAll('_', ' ') ?? 'Not reported'}</td>
+                  <td>{user.groupSummary?.join(', ') || 'None'}</td>
+                  <td>
+                    <button
+                      disabled={busy === user.id || (self && user.active)}
+                      aria-label={`${user.active ? 'Disable' : 'Reactivate'} ${user.displayName}`}
+                      onClick={() => {
+                        setBusy(user.id);
+                        setError('');
+                        void toggle(user.id, !user.active, user.version)
+                          .catch(() => setError('The user status could not be changed.'))
+                          .finally(() => setBusy(undefined));
+                      }}
+                    >
+                      {busy === user.id ? 'Saving…' : user.active ? 'Disable' : 'Reactivate'}
+                    </button>
+                    {self && user.active && (
+                      <small>Your active administrator account cannot disable itself.</small>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+      {nextCursor && loadMore ? (
+        <button
+          type="button"
+          disabled={!online || busy === 'page'}
+          onClick={() => {
+            setBusy('page');
+            void loadMore().finally(() => setBusy(undefined));
+          }}
+        >
+          {busy === 'page' ? 'Loading users…' : 'Load more users'}
+        </button>
+      ) : null}
     </section>
   );
 }

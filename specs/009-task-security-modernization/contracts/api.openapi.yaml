@@ -1,0 +1,337 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Task Security and Modernization API Delta
+  version: 1.0.0
+  description: >-
+    Feature 009 additions and changed request surfaces. Existing endpoints and shared
+    problem/session schemas remain governed by packages/contracts.
+servers:
+  - url: /api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Verify primary credentials and either establish a session or begin TFA
+      responses:
+        '200':
+          description: Existing opaque application session established
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionView'
+        '202':
+          description: A factor challenge or administrator enrollment is required
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TfaNextStep'
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+        '429': { $ref: '#/components/responses/GenericAuthFailure' }
+  /auth/tfa/enrollment/start:
+    post:
+      summary: Start TOTP enrollment in the current pre-auth or stepped-up context
+      responses:
+        '200':
+          description: Transient authenticator bootstrap material
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [otpauthUri, manualEntryKey, expiresAt]
+                properties:
+                  otpauthUri: { type: string, pattern: '^otpauth://totp/' }
+                  manualEntryKey: { type: string, minLength: 32 }
+                  expiresAt: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+  /auth/tfa/enrollment/confirm:
+    post:
+      summary: Verify enrollment and return recovery codes exactly once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [code]
+              properties:
+                code: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: Factor enabled; ordinary application session may be established
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recoveryCodes, session]
+                properties:
+                  recoveryCodes:
+                    type: array
+                    minItems: 10
+                    maxItems: 10
+                    items: { type: string }
+                  session: { $ref: '#/components/schemas/SessionView' }
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+        '409': { $ref: '#/components/responses/GenericAuthFailure' }
+        '429': { $ref: '#/components/responses/GenericAuthFailure' }
+  /auth/tfa/challenge:
+    post:
+      summary: Complete a login factor transaction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [method, code]
+              properties:
+                method: { type: string, enum: [totp, recovery_code] }
+                code: { type: string, minLength: 6, maxLength: 64 }
+      responses:
+        '200':
+          description: Existing opaque application session established
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SessionView' }
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+        '429': { $ref: '#/components/responses/GenericAuthFailure' }
+  /auth/password-reset:
+    post:
+      summary: Reset password using the account PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [username, pin, newPassword, confirmPassword]
+              properties:
+                username: { type: string, minLength: 1, maxLength: 128 }
+                pin: { type: string, pattern: '^[0-9]{6,12}$' }
+                newPassword: { type: string, minLength: 12, maxLength: 256 }
+                confirmPassword: { type: string, minLength: 12, maxLength: 256 }
+      responses:
+        '200':
+          description: Generic result regardless of account existence or verifier outcome
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/GenericAuthFailure' }
+        '429': { $ref: '#/components/responses/GenericAuthFailure' }
+  /profile/security:
+    get:
+      summary: Read safe current-user security state
+      responses:
+        '200':
+          description: Safe factor summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileSecurity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /profile/tfa/recovery-codes/rotate:
+    post:
+      summary: Rotate recovery codes after recent password and factor verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FactorChangeProof' }
+      responses:
+        '200':
+          description: New codes returned once
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recoveryCodes]
+                properties:
+                  recoveryCodes:
+                    type: array
+                    minItems: 10
+                    maxItems: 10
+                    items: { type: string }
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+        '409': { $ref: '#/components/responses/GenericAuthFailure' }
+  /profile/tfa:
+    delete:
+      summary: Disable ordinary-user TFA after step-up; administrators are rejected
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FactorChangeProof' }
+      responses:
+        '204': { description: Disabled and other sessions revoked }
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+        '403': { description: Administrators cannot disable TFA }
+  /profile/password:
+    post:
+      summary: Change the authenticated user's password after re-verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [currentPassword, newPassword, confirmPassword]
+              properties:
+                currentPassword: { type: string, maxLength: 256 }
+                newPassword: { type: string, minLength: 12, maxLength: 256 }
+                confirmPassword: { type: string, minLength: 12, maxLength: 256 }
+      responses:
+        '204': { description: Password changed and all sessions revoked }
+        '401': { $ref: '#/components/responses/GenericAuthFailure' }
+  /reporting/completion-export:
+    post:
+      summary: Start a snapshot-consistent completed-task CSV export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [filters, browserTimeZone, asOf, idempotencyKey, scope]
+              properties:
+                filters: { type: object, description: Existing normalized completion filters }
+                browserTimeZone: { type: string, minLength: 1, maxLength: 128 }
+                asOf: { type: string, format: date-time }
+                idempotencyKey: { type: string, minLength: 16, maxLength: 128 }
+                scope: { type: string, enum: [self, all_users] }
+                adminConfirmed: { type: boolean, default: false }
+      responses:
+        '202':
+          description: Export accepted or stable idempotent job returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompletionExportJob' }
+        '403': { description: Scope or record authorization denied }
+        '409': { description: Idempotency payload mismatch }
+  /reporting/completion-export/{jobId}:
+    get:
+      summary: Read an owner-authorized export job/result status
+      parameters:
+        - in: path
+          name: jobId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Job state; download action appears only after integrity validation
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CompletionExportJob' }
+        '404': { description: Not found or not authorized }
+  /admin/users:
+    get:
+      summary: Return a bounded page for the responsive user table
+      parameters:
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        '200':
+          description: Stable username/id ordered page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminUserRow' }
+                  nextCursor: { type: [string, 'null'] }
+        '403': { description: Administrator privilege required }
+components:
+  responses:
+    GenericAuthFailure:
+      description: Generic authentication or throttling result without account/factor disclosure
+      headers:
+        Cache-Control:
+          schema: { type: string, const: no-store }
+    Unauthorized:
+      description: Existing generic unauthenticated response
+  schemas:
+    SessionView:
+      type: object
+      description: Existing safe session response; no credential material
+    TfaNextStep:
+      type: object
+      additionalProperties: false
+      required: [next, expiresAt]
+      properties:
+        next: { type: string, enum: [tfa_challenge, tfa_enrollment] }
+        expiresAt: { type: string, format: date-time }
+    ProfileSecurity:
+      type: object
+      additionalProperties: false
+      required: [tfaStatus, recoveryCodesRemaining]
+      properties:
+        tfaStatus: { type: string, enum: [disabled, enrollment_required, enabled, recovery_required] }
+        enrolledAt: { type: [string, 'null'], format: date-time }
+        recoveryCodesRemaining: { type: integer, minimum: 0, maximum: 10 }
+    FactorChangeProof:
+      type: object
+      additionalProperties: false
+      required: [password, method, code]
+      properties:
+        password: { type: string, maxLength: 256 }
+        method: { type: string, enum: [totp, recovery_code] }
+        code: { type: string, minLength: 6, maxLength: 64 }
+    CompletionExportJob:
+      type: object
+      required: [id, status, schemaVersion, asOf]
+      properties:
+        id: { type: string }
+        status: { type: string, enum: [pending, running, validating, completed, failed] }
+        schemaVersion: { type: string, const: naaseh.completed-tasks/v1 }
+        asOf: { type: string, format: date-time }
+        rowCount: { type: integer, minimum: 0 }
+        checksum: { type: string }
+        downloadAvailable: { type: boolean }
+        errorClass: { type: string }
+    AdminUserRow:
+      type: object
+      additionalProperties: false
+      required: [id, username, displayName, role, active, tfaStatus, version]
+      properties:
+        id: { type: string }
+        username: { type: string }
+        displayName: { type: string }
+        role: { type: string, enum: [user, admin] }
+        active: { type: boolean }
+        groupSummary:
+          type: array
+          items:
+            type: object
+            required: [id, label]
+            properties:
+              id: { type: string }
+              label: { type: string }
+        tfaStatus: { type: string, enum: [disabled, enrollment_required, enabled, recovery_required] }
+        version: { type: integer, minimum: 1 }

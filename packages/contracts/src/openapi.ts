@@ -11,6 +11,8 @@ import {
   urgencySchema,
   taskInputSchema,
   taskSchema,
+  memoDocumentSchema,
+  postItColorSchema,
   listItemSchema,
   listSchema,
   ulidSchema,
@@ -22,8 +24,93 @@ import {
 export const enhancedListContractVersion = 2 as const;
 export const enhancedListContractVersionSchema = z.literal(enhancedListContractVersion);
 export const archiveProjectContractVersionSchema = z.literal(3);
+export const featureMigrationStatusSchema = z
+  .object({
+    version: z.number().int().positive(),
+    status: z.enum(['pending', 'running', 'ready', 'failed']),
+  })
+  .strict();
+export const syncVersionNegotiationRequestSchema = z
+  .object({ contractVersion: z.number().int().positive() })
+  .strict();
+export const syncVersionNegotiationResultSchema = z
+  .object({
+    accepted: z.boolean(),
+    requestedVersion: z.number().int().positive(),
+    minimumSupportedVersion: z.number().int().positive(),
+    currentVersion: z.number().int().positive(),
+    migration: featureMigrationStatusSchema,
+  })
+  .strict();
+export const syncCompatibilityProblemSchema = z
+  .object({
+    type: z.literal('https://naaseh.example/problems/sync-version'),
+    reason: z.enum(['client_version_unsupported', 'client_version_newer']),
+    requestedVersion: z.number().int(),
+    minimumSupportedVersion: z.number().int().positive(),
+    currentVersion: z.number().int().positive(),
+    retryable: z.boolean(),
+  })
+  .strict();
 export const loginRequestSchema = z
   .object({ username: z.string().trim().min(1).max(100), password: z.string().min(1).max(1024) })
+  .strict();
+export const tfaNextStepSchema = z
+  .object({
+    next: z.enum(['tfa_challenge', 'tfa_enrollment']),
+    expiresAt: z.string().datetime(),
+  })
+  .strict();
+export const tfaChallengeRequestSchema = z
+  .object({
+    method: z.enum(['totp', 'recovery_code']),
+    code: z.string().min(6).max(64),
+  })
+  .strict();
+export const tfaEnrollmentResponseSchema = z
+  .object({
+    secret: z.string().min(16).max(128),
+    otpauthUri: z.string().startsWith('otpauth://totp/'),
+  })
+  .strict();
+export const tfaEnrollmentConfirmRequestSchema = z
+  .object({ code: z.string().regex(/^[0-9]{6}$/) })
+  .strict();
+export const factorChangeProofSchema = z
+  .object({
+    password: z.string().max(256),
+    method: z.enum(['totp', 'recovery_code']),
+    code: z.string().min(6).max(64),
+  })
+  .strict();
+export const passwordProofSchema = z.object({ password: z.string().max(256) }).strict();
+export const passwordChangeRequestSchema = factorChangeProofSchema
+  .extend({
+    newPassword: z.string().min(12).max(256),
+    confirmPassword: z.string().min(12).max(256),
+  })
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    message: 'New passwords must match',
+    path: ['confirmPassword'],
+  });
+export const passwordResetRequestSchema = z
+  .object({
+    username: z.string().trim().min(1).max(128),
+    pin: z.string().regex(/^[0-9]{6,12}$/),
+    newPassword: z.string().min(12).max(256),
+    confirmPassword: z.string().min(12).max(256),
+  })
+  .strict()
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    message: 'New passwords must match',
+    path: ['confirmPassword'],
+  });
+export const profileSecurityResponseSchema = z
+  .object({
+    tfaStatus: z.enum(['disabled', 'enrollment_required', 'enabled', 'recovery_required']),
+    enrolledAt: z.string().datetime().nullable().optional(),
+    recoveryCodesRemaining: z.number().int().min(0).max(10),
+  })
   .strict();
 export const taskCreateSchema = taskInputSchema;
 const taskHttpsUrlSchema = z
@@ -35,18 +122,26 @@ export const taskPatchSchema = z
     label: z.string().trim().min(1).max(300).optional(),
     link: taskHttpsUrlSchema.or(z.literal('')).optional(),
     memo: z.string().max(20_000).optional(),
+    memoDocument: memoDocumentSchema.optional(),
     memoHidden: z.boolean().optional(),
     encryptedMemo: z.string().optional(),
-    dueAt: z.string().datetime().optional(),
-    dueTimeZone: z.string().min(1).optional(),
+    dueAt: z.string().datetime().nullable().optional(),
+    dueKind: z.enum(['date', 'timed']).nullable().optional(),
+    dueDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .nullable()
+      .optional(),
+    dueTimeZone: z.string().min(1).nullable().optional(),
     assigneeId: z.string().min(1).optional(),
     categoryId: z.string().min(1).optional(),
     projectId: ulidSchema.nullable().optional(),
-    groupId: z.string().min(1).optional(),
-    parentId: z.string().min(1).optional(),
+    groupId: z.string().min(1).nullable().optional(),
+    parentId: z.string().min(1).nullable().optional(),
     visibility: z.enum(['public', 'private']).optional(),
     status: z.enum(['open', 'completed', 'archived']).optional(),
     urgency: urgencySchema.optional(),
+    postItColor: postItColorSchema.nullable().optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, 'Patch cannot be empty.');
@@ -180,6 +275,7 @@ export const pushRequestSchema = z
         enhancedListContractVersionSchema,
         archiveProjectContractVersionSchema,
         urgencyStackRankingContractVersionSchema,
+        z.literal(5),
       ])
       .default(1),
     mutations: z
@@ -196,6 +292,16 @@ export const pushRequestSchema = z
   })
   .strict()
   .superRefine((request, context) => {
+    if (request.contractVersion !== 5) {
+      request.mutations.forEach((mutation, index) => {
+        if (mutation.entityType === 'taskTimer')
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Task timer commands require contract version 5',
+            path: ['mutations', index],
+          });
+      });
+    }
     if (request.contractVersion !== 4) {
       request.mutations.forEach((mutation, index) => {
         if (stackSyncMutationSchema.safeParse(mutation).success)

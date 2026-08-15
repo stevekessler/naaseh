@@ -48,7 +48,7 @@ test('shows responsive Google settings, preview, date disclosure, status, and co
   );
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
-  await page.getByRole('button', { name: 'Google', exact: true }).click();
+  await page.getByRole('button', { name: 'Profile' }).click();
   await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();
   await expect(page.locator('.google-sync-page [role="status"]')).toContainText('preview');
   await page.getByRole('button', { name: 'Preview Naaseh' }).click();
@@ -81,11 +81,15 @@ test('keeps Google settings readable offline and disables a new connection', asy
     }),
   );
   await signIn(page);
-  await page.getByRole('button', { name: 'Google', exact: true }).click();
+  await page.getByRole('button', { name: 'Profile' }).click();
   await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
-  await expect(page.getByText(/Offline/)).toBeVisible();
+  await expect(
+    page.getByText(
+      'Offline. Last-known Google status remains available; synchronization will wait.',
+    ),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect Google' })).toBeDisabled();
 });
 
@@ -145,7 +149,7 @@ test('keeps encrypted conflict choices available offline and resolves an edited 
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"resolved":true}' }),
   );
   await signIn(page);
-  await page.getByRole('button', { name: 'Google', exact: true }).click();
+  await page.getByRole('button', { name: 'Profile' }).click();
   await expect(page.getByText('Naaseh title')).toBeVisible();
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));

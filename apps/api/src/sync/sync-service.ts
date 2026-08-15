@@ -18,11 +18,35 @@ import {
 } from '@naaseh/domain';
 import { stackSyncMutationSchema } from '@naaseh/contracts';
 import type { PersonalStackService } from '../ranking/stack-service.js';
+import type { TaskTimerService } from '../timers/task-timer-service.js';
 
 export type MutationDispatcher = (mutation: Mutation) => Promise<StableMutationResult>;
 export type MutationDispatchers = Partial<Record<EntityType, MutationDispatcher>>;
 
 export type PersonalStackSyncMutation = ReturnType<typeof stackSyncMutationSchema.parse>;
+
+export async function dispatchTaskTimerSyncMutation(input: {
+  actorId: string;
+  sourceClientId: string;
+  mutation: Mutation;
+  service: TaskTimerService;
+}): Promise<ContractV4MutationResult> {
+  if (input.mutation.entityType !== 'taskTimer' || input.mutation.operation !== 'timerCommand')
+    throw new Error('Invalid task timer sync mutation.');
+  const result = await input.service.execute({
+    actorId: input.actorId,
+    ownerId: input.mutation.entityId,
+    mutationId: input.mutation.id,
+    sourceClientId: input.sourceClientId,
+    baseVersion: input.mutation.baseVersion,
+    command: input.mutation.payload,
+  });
+  return contractV4MutationResultSchema.parse({
+    mutationId: input.mutation.id,
+    status: result.status === 'duplicate' ? 'duplicate' : result.status,
+    version: result.version,
+  });
+}
 
 export async function dispatchPersonalStackSyncMutation(input: {
   actorId: string;

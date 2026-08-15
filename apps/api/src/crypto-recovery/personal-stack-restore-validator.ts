@@ -174,6 +174,8 @@ function validateScope(rows: Row[]) {
 }
 
 export function validatePersonalStackRestore(rows: Row[]) {
+  if (JSON.stringify(rows).toLocaleLowerCase().includes('extra_low'))
+    throw new Error('Personal stack restore contains an unsupported Extra Low value.');
   const grouped = new Map<string, Row[]>();
   for (const row of rows) grouped.set(row.PK, [...(grouped.get(row.PK) ?? []), row]);
   return {

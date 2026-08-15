@@ -6,6 +6,8 @@ import {
   validatePicture,
   validatePictureSignature,
 } from '../../apps/api/src/admin/profile-picture.js';
+import { requireAdminMutation } from '../../apps/api/src/admin/admin-authorization.js';
+import { assertAuthorizedGroupSelection } from '../../apps/api/src/groups/group-selection-authorization.js';
 
 describe('admin and profile-media security', () => {
   it('rejects executable, oversized, empty, and MIME-spoofed pictures', () => {
@@ -38,5 +40,11 @@ describe('admin and profile-media security', () => {
     expect(output).not.toContain('secret');
     expect(output).not.toContain('123456');
     expect(output).not.toContain('signed-secret-url');
+  });
+
+  it('denies ordinary users and rejects arbitrary or revoked group identifiers', () => {
+    expect(() => requireAdminMutation({ userId: 'user', role: 'user' })).toThrow(/Administrator/);
+    expect(() => assertAuthorizedGroupSelection('joined', ['joined'])).not.toThrow();
+    expect(() => assertAuthorizedGroupSelection('revoked', ['joined'])).toThrow();
   });
 });

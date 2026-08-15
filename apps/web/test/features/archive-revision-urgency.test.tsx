@@ -96,7 +96,7 @@ describe('archived and revised urgency display', () => {
     );
     expect(html).toContain('August release');
     expect(html).not.toContain('Urgency: Critical');
-    expect(html.match(/type="checkbox"/g) ?? []).toHaveLength(5);
+    expect(html.match(/type="checkbox"/g) ?? []).toHaveLength(4);
   });
 
   it('renders urgency revision values as full labels instead of wire values alone', () => {
@@ -108,15 +108,15 @@ describe('archived and revised urgency display', () => {
       changedAt: now.toISOString(),
       operation: 'update',
       changedFields: ['urgency'],
-      before: { urgency: 'extra_low' },
+      before: { urgency: 'low' },
       after: { urgency: 'critical' },
       syncOutcome: 'applied',
     };
     const html = renderToStaticMarkup(<RevisionLog revisions={[revision]} />);
 
     expect(html).toContain('Priority changed from');
-    expect(html).toContain('<strong>Extra Low</strong>');
+    expect(html).toContain('<strong>Low</strong>');
     expect(html).toContain('<strong>Critical</strong>');
-    expect(html).not.toContain('extra_low');
+    expect(html).not.toContain('low');
   });
 });

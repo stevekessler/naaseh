@@ -24,9 +24,12 @@ const mutableTaskFields = new Set<keyof Task>([
   'label',
   'link',
   'memo',
+  'memoDocument',
   'memoHidden',
   'encryptedMemo',
   'dueAt',
+  'dueKind',
+  'dueDate',
   'dueTimeZone',
   'assigneeId',
   'categoryId',
@@ -35,6 +38,7 @@ const mutableTaskFields = new Set<keyof Task>([
   'parentId',
   'visibility',
   'urgency',
+  'postItColor',
   'status',
 ]);
 
@@ -46,7 +50,21 @@ export function sanitizeTaskPatch(value: unknown): Partial<Task> {
   if (!entries.length) throw new Error('Task patch cannot be empty.');
   if (entries.some(([field]) => !mutableTaskFields.has(field as keyof Task)))
     throw new Error('Task patch contains a protected field.');
-  return Object.fromEntries(entries) as Partial<Task>;
+  const clearable = new Set([
+    'dueKind',
+    'dueDate',
+    'dueAt',
+    'dueTimeZone',
+    'parentId',
+    'groupId',
+    'projectId',
+    'postItColor',
+  ]);
+  if (entries.some(([field, fieldValue]) => fieldValue === null && !clearable.has(field)))
+    throw new Error('Task patch contains an invalid null field.');
+  return Object.fromEntries(
+    entries.map(([field, fieldValue]) => [field, fieldValue === null ? undefined : fieldValue]),
+  ) as Partial<Task>;
 }
 
 export function prepareTaskUpdate(

@@ -1,5 +1,13 @@
 # Isolated restore test report
 
+## Feature 009 local recovery drill — 2026-08-14
+
+The local recovery suites exercise the full-restore validator and workflow scaffolding plus feature-specific invariants for authentication factors, timer current/revision/receipt/feed state, task memo/date/color records, Extra Low removal guard, personal ranks, completion exports, archive/reporting, attachments, permanent-deletion ledgers, signed manifests, and recovery-key selection. Malformed ownership, duplicate current timer aggregates, revision versions beyond current, missing receipts, nonzero `extra_low`, invalid factor state, bad manifest signatures, wrong Region/resource identity, and incomplete export results fail closed.
+
+The recovery workflow infrastructure retains isolated names, read-only validation, bounded four-hour RTO enforcement, safe failure reporting, and deletion of temporary restored resources. Administrator factors restored from backup are normalized to `recovery_required`; the workflow does not reopen administrator access with a restored seed. No production data or credentials were used.
+
+Local drill result: **PASS** — 14 files and 55 tests passed in 10.19 seconds using the focused restore, crypto-recovery, migration-registry, recovery-stack, and restore-workflow command. This validates code and synthesized workflow behavior only.
+
 No production or sandbox restore has been executed yet. T172 remains open until this report is
 completed from an actual AWS Backup Restore Testing run.
 

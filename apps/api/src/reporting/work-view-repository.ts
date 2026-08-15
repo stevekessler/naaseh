@@ -29,7 +29,7 @@ import { authorizeList } from '../lists/list-authorization.js';
 
 export { PaginationCursorError } from '../shared/pagination-cursor.js';
 
-export type WorkViewUrgency = 'extra_low' | 'low' | 'medium' | 'high' | 'critical';
+export type WorkViewUrgency = 'low' | 'medium' | 'high' | 'critical';
 
 export interface WorkViewCandidate {
   id: string;

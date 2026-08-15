@@ -19,9 +19,24 @@ export async function listAdminUsers(csrfToken: string) {
   return (await adminRequest<{ items: AdminUser[] }>('/admin/users', csrfToken)).items;
 }
 
-export function changeAdminUserStatus(userId: string, active: boolean, csrfToken: string) {
+export async function listAdminUsersPage(csrfToken: string, cursor?: string, limit = 100) {
+  const query = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, limit))) });
+  if (cursor) query.set('cursor', cursor);
+  return adminRequest<{ items: AdminUser[]; nextCursor?: string }>(
+    `/admin/users?${query.toString()}`,
+    csrfToken,
+  );
+}
+
+export function changeAdminUserStatus(
+  userId: string,
+  active: boolean,
+  csrfToken: string,
+  version?: number,
+) {
   return adminRequest<AdminUser>(`/admin/users/${encodeURIComponent(userId)}`, csrfToken, {
     method: 'PATCH',
+    ...(version ? { headers: { 'if-match': String(version) } } : {}),
     body: JSON.stringify({ active }),
   });
 }

@@ -1,4 +1,11 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
+
+export async function expandTaskDetails(form: Locator) {
+  const details = form.locator('.task-form-details');
+  if ((await details.getAttribute('open')) === null)
+    await details.getByText('Task details', { exact: true }).click();
+  await expect(details).toHaveAttribute('open', '');
+}
 
 export async function signIn(page: Page) {
   await page.goto('/');
@@ -44,7 +51,7 @@ export async function openLists(page: Page) {
 export async function createListWithItem(page: Page, listName: string, itemName: string) {
   await openLists(page);
   await page.getByLabel('List name').fill(listName);
-  await page.getByRole('button', { name: 'Create list' }).click();
+  await page.getByLabel('List name').press('Enter');
   const list = page.locator('.named-list').filter({ hasText: listName });
   await list.getByLabel('Add an item').fill(itemName);
   await list.getByRole('button', { name: 'Add item' }).click();
