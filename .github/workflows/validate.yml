@@ -22,5 +22,5 @@ jobs:
       - name: Audit deployed runtime dependencies
         run: npm audit --omit=dev --audit-level=high --workspace @naaseh/api --workspace @naaseh/web
       - run: npm run validate
-      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:quick
