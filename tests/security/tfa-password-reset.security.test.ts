@@ -1,21 +1,57 @@
-import { readFileSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { createTfaService, requiredTfaNextStep } from '../../apps/api/src/auth/tfa-service.js';
+import { recordAuthSecurityEvent } from '../../apps/api/src/auth/telemetry.js';
+import type { StoredUser } from '../../apps/api/src/auth/user-repository.js';
 
 describe('TFA and password reset security boundaries', () => {
-  it('uses KMS encryption context and never grants administrator password/PIN bypass', () => {
-    const cryptoSource = readFileSync('apps/api/src/auth/tfa-crypto.ts', 'utf8');
-    const serviceSource = readFileSync('apps/api/src/auth/tfa-service.ts', 'utf8');
-    expect(cryptoSource).toContain('naaseh-totp');
-    expect(cryptoSource).toContain('EncryptionContext');
-    expect(serviceSource).toContain('enrollment_required');
-    expect(serviceSource).not.toMatch(/admin.*(?:pin|password).*bypass/i);
+  const admin: StoredUser = {
+    id: 'admin-1',
+    username: 'admin',
+    displayName: 'Administrator',
+    role: 'admin',
+    active: true,
+    sessionEpoch: 4,
+    credentialVersion: 2,
+    tfaStatus: 'enrollment_required',
+    passwordHash: 'password-digest',
+    pinHash: 'pin-digest',
+    pepperVersion: '1',
+    securityUpdatedAt: '2026-08-18T00:00:00.000Z',
+    version: 3,
+  };
+
+  it('requires administrator enrollment and stores only encrypted/digested factor material', async () => {
+    expect(requiredTfaNextStep(admin)).toBe('tfa_enrollment');
+    const saveFactor = vi.fn(async () => undefined);
+    const changeUserSecurity = vi.fn(async () => undefined);
+    const service = createTfaService({
+      getFactor: vi.fn(async () => undefined),
+      saveFactor,
+      decryptSecret: vi.fn(async () => 'unused'),
+      encryptSecret: vi.fn(async () => 'kms-ciphertext'),
+      advanceCounter: vi.fn(async () => undefined),
+      changeUserSecurity,
+    });
+
+    const recoveryCodes = await service.enableFactor(admin, 'plaintext-bootstrap-secret');
+
+    expect(recoveryCodes).toHaveLength(10);
+    const stored = saveFactor.mock.calls[0]?.[0];
+    expect(stored?.secretCiphertext).toBe('kms-ciphertext');
+    expect(JSON.stringify(stored)).not.toContain('plaintext-bootstrap-secret');
+    for (const code of recoveryCodes) expect(JSON.stringify(stored)).not.toContain(code);
+    expect(changeUserSecurity).toHaveBeenCalledWith(
+      admin.id,
+      expect.objectContaining({ tfaStatus: 'enabled', nextSessionEpoch: 5 }),
+    );
   });
 
-  it('marks every factor/reset response no-store and excludes protected values from logs', () => {
-    const handlerSource = readFileSync('apps/api/src/auth/handler.ts', 'utf8');
-    const telemetrySource = readFileSync('apps/api/src/auth/telemetry.ts', 'utf8');
-    expect(handlerSource).toContain('no-store');
-    for (const protectedName of ['password', 'pin', 'code', 'secretCiphertext'])
-      expect(telemetrySource).not.toContain(`fields.${protectedName}`);
+  it('records password reset requests as accepted without logging submitted secrets', () => {
+    const sink = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    recordAuthSecurityEvent('password_reset_request', 'accepted', 'correlation-1');
+    const output = sink.mock.calls.flat().join('\n');
+    expect(output).toContain('password_reset_request');
+    expect(output).toContain('accepted');
+    expect(output).not.toMatch(/password-digest|pin-digest|plaintext-bootstrap-secret/);
   });
 });

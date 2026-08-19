@@ -19,10 +19,16 @@ import {
   authenticateSession,
   issueSession,
   revokeSession,
+  rotateSession,
   sessionTokenHash,
 } from './session-service.js';
 import { findSession } from './session-repository.js';
-import { commitPasswordReset, userById, userByUsername } from './user-repository.js';
+import {
+  changeUserSecurity,
+  commitPasswordReset,
+  userById,
+  userByUsername,
+} from './user-repository.js';
 import { errorResponse, json, problem } from '../shared/http.js';
 import { requireMutationSecurity, validOrigin } from '../shared/security.js';
 import {
@@ -45,7 +51,6 @@ import {
   getTfaFactor,
   putTfaFactor,
 } from './tfa-repository.js';
-import { changeUserSecurity } from './user-repository.js';
 import { decryptTfaSecret, encryptTfaSecret, generateTfaSecret, verifyTotp } from './tfa-crypto.js';
 import { createPasswordResetService } from './password-reset-service.js';
 import { recordAuthSecurityEvent } from './telemetry.js';
@@ -101,7 +106,9 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   const correlationId = event.requestContext.requestId || randomUUID();
   const path = event.rawPath;
   const token = sessionToken(event.headers.cookie);
-  if (path.endsWith('/tfa/enrollment') && event.requestContext.http.method === 'GET') {
+  if (path.endsWith('/tfa/enrollment') && event.requestContext.http.method === 'POST') {
+    if (!validOrigin(event.headers.origin))
+      return problem(403, 'forbidden', 'Request rejected.', correlationId);
     const challengeToken = preAuthToken(event.headers.cookie);
     if (!challengeToken)
       return problem(401, 'authentication_failed', 'Unable to start enrollment.', correlationId);
@@ -236,7 +243,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       newPassword: body.newPassword,
       sourceKey,
     });
-    recordAuthSecurityEvent('password_reset', 'success', correlationId);
+    recordAuthSecurityEvent('password_reset_request', 'accepted', correlationId);
     return json(
       200,
       { message: 'If the account information was valid, the password has been reset.' },
@@ -295,7 +302,11 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       body.method,
       body.code,
     );
-    const session = await issueSession(authenticated.user.id, authenticated.user.sessionEpoch + 1);
+    const session = await rotateSession(
+      authenticated.token,
+      authenticated.user.id,
+      authenticated.user.sessionEpoch + 1,
+    );
     return json(
       200,
       { recoveryCodes, csrfToken: session.record.csrfToken },
@@ -344,7 +355,11 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     if (!(await verifyOrDummy(authenticated.user.passwordHash, body.password, pepper.value)))
       return problem(401, 'authentication_failed', 'Unable to verify credentials.', correlationId);
     await tfaService.disableFactor(authenticated.user, body.method, body.code);
-    const session = await issueSession(authenticated.user.id, authenticated.user.sessionEpoch + 1);
+    const session = await rotateSession(
+      authenticated.token,
+      authenticated.user.id,
+      authenticated.user.sessionEpoch + 1,
+    );
     return json(
       200,
       { csrfToken: session.record.csrfToken },
@@ -379,7 +394,11 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       nextSessionEpoch: authenticated.user.sessionEpoch + 1,
       retainedTfaStatus: authenticated.user.tfaStatus,
     });
-    const session = await issueSession(authenticated.user.id, authenticated.user.sessionEpoch + 1);
+    const session = await rotateSession(
+      authenticated.token,
+      authenticated.user.id,
+      authenticated.user.sessionEpoch + 1,
+    );
     return json(
       200,
       { csrfToken: session.record.csrfToken },

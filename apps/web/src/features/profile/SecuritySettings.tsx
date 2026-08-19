@@ -133,6 +133,9 @@ export function SecuritySettings({
                   </li>
                 ))}
               </ol>
+              <button type="button" onClick={() => setRecoveryCodes(undefined)}>
+                I saved these codes; clear them from the screen
+              </button>
             </section>
           )}
           {role !== 'admin' && (

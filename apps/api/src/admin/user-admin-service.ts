@@ -9,7 +9,7 @@ export type AdminUserView = Pick<
   'id' | 'username' | 'displayName' | 'pictureKey' | 'role' | 'active' | 'sessionEpoch'
 > & {
   version: number;
-  tfaStatus: 'disabled' | 'required' | 'enabled' | 'recovery_required';
+  tfaStatus: 'disabled' | 'enrollment_required' | 'enabled' | 'recovery_required';
   groupSummary: string[];
 };
 
@@ -44,14 +44,15 @@ function view(user: UserRecord, groupSummary: string[] = []): AdminUserView {
     active: user.active,
     sessionEpoch: user.sessionEpoch,
     version: user.version ?? 1,
-    tfaStatus:
-      user.tfaStatus === 'enrollment_required' ? 'required' : (user.tfaStatus ?? 'disabled'),
+    tfaStatus: user.tfaStatus ?? 'disabled',
     groupSummary: groupSummary.slice(0, 5),
   };
 }
 
 const encodeCursor = (sortKey: string) =>
   Buffer.from(JSON.stringify({ version: 1, sortKey }), 'utf8').toString('base64url');
+// This unsigned cursor is intentionally untrusted input. It is only a validated
+// DynamoDB position hint; it never grants access or changes the query partition.
 const decodeCursor = (cursor: string) => {
   try {
     const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {

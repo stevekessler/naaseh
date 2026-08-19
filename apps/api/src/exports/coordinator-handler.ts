@@ -12,6 +12,8 @@ import { log, metric } from '@naaseh/observability';
 import { errorResponse, json, problem } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
 import { recordCompletionExport } from '../reporting/telemetry.js';
+import { sessionAuthorizerContext } from '../shared/authorizer-context.js';
+import { completionExportReadAccess } from './completion-export-service.js';
 const sfn = new SFNClient({});
 type Request = {
   version: 'naaseh.export-todos/v1';
@@ -40,15 +42,7 @@ async function beginExecution(job: { id: string; snapshotTime: string }) {
 
 async function httpHandler(event: APIGatewayProxyEventV2) {
   const correlationId = event.requestContext.requestId;
-  const actor = (event.requestContext as any).authorizer?.lambda as
-    | {
-        userId?: string;
-        role?: 'admin' | 'user';
-        csrfToken?: string;
-        sessionEpoch?: number;
-        groupIds?: string;
-      }
-    | undefined;
+  const actor = sessionAuthorizerContext(event);
   if (!actor?.userId || !Number.isSafeInteger(actor.sessionEpoch))
     return problem(401, 'unauthorized', 'Authentication required.', correlationId);
   try {
@@ -79,19 +73,21 @@ async function httpHandler(event: APIGatewayProxyEventV2) {
     }
     if (method === 'GET' && jobId) {
       const job = await findExportJob(jobId);
-      if (!job || job.requestedByPrincipal !== actor.userId || job.exportKind !== 'completed_tasks')
+      const access = completionExportReadAccess(
+        job,
+        actor.userId,
+        actor.groupIds?.split(',').filter(Boolean) ?? [],
+      );
+      if (access === 'not_found')
         return problem(404, 'not_found', 'Export not found.', correlationId);
-      const currentGroups = (actor.groupIds?.split(',').filter(Boolean) ?? []).sort();
-      if (
-        job.scope === 'self' &&
-        JSON.stringify(currentGroups) !== JSON.stringify(job.authorizedGroupIds ?? [])
-      )
+      if (access === 'authorization_changed')
         return problem(
           409,
           'authorization_changed',
           'Export authorization changed.',
           correlationId,
         );
+      if (!job) return problem(404, 'not_found', 'Export not found.', correlationId);
       const result = job.status === 'ready' ? await readyExportResult(job) : undefined;
       return json(200, publicCompletionExportJob(job, result?.downloadUrl));
     }

@@ -79,7 +79,10 @@ export class NaasehStack extends Stack {
       primaryKey: dataKey,
       allowedOrigin: `https://${props.domainName}`,
     });
-    const exportResources = createExportResources(this, { table });
+    const exportResources = createExportResources(this, {
+      table,
+      allowedOrigin: `https://${props.domainName}`,
+    });
     const commonEnvironment = {
       NODE_ENV: 'production',
       NAASEH_TABLE: table.tableName,

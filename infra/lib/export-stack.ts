@@ -10,7 +10,10 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import type { Construct } from 'constructs';
 import { fileURLToPath } from 'node:url';
-export function createExportResources(scope: Construct, options: { table: dynamodb.ITable }) {
+export function createExportResources(
+  scope: Construct,
+  options: { table: dynamodb.ITable; allowedOrigin: string },
+) {
   const key = new kms.Key(scope, 'ExportKey', {
     enableKeyRotation: true,
     removalPolicy: RemovalPolicy.RETAIN,
@@ -23,6 +26,15 @@ export function createExportResources(scope: Construct, options: { table: dynamo
     bucketKeyEnabled: true,
     versioned: true,
     removalPolicy: RemovalPolicy.RETAIN,
+    cors: [
+      {
+        allowedOrigins: [options.allowedOrigin],
+        allowedMethods: [s3.HttpMethods.GET],
+        allowedHeaders: ['*'],
+        exposedHeaders: ['content-length', 'content-type', 'etag'],
+        maxAge: 300,
+      },
+    ],
     lifecycleRules: [
       {
         id: 'ExpireExportData',

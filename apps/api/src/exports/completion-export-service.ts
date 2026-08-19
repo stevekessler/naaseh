@@ -2,6 +2,22 @@ import type { CompletionEvent, ExportJob, Task } from '@naaseh/domain';
 import { completionLocalDate } from '../reporting/completion-report-service.js';
 import type { CompletionExportMetadata } from './csv-transformer.js';
 
+export function completionExportReadAccess(
+  job: ExportJob | undefined,
+  actorId: string,
+  currentGroupIds: readonly string[],
+): 'allowed' | 'not_found' | 'authorization_changed' {
+  if (!job || job.requestedByPrincipal !== actorId || job.exportKind !== 'completed_tasks')
+    return 'not_found';
+  if (
+    job.scope === 'self' &&
+    JSON.stringify([...currentGroupIds].sort()) !==
+      JSON.stringify([...(job.authorizedGroupIds ?? [])].sort())
+  )
+    return 'authorization_changed';
+  return 'allowed';
+}
+
 export function authorizeCompletionExportTask(
   task: Task,
   event: CompletionEvent | undefined,

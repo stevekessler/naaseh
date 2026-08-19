@@ -8,7 +8,7 @@ export interface AdminUser {
   active: boolean;
   sessionEpoch: number;
   version?: number;
-  tfaStatus?: 'disabled' | 'required' | 'enabled' | 'recovery_required';
+  tfaStatus?: 'disabled' | 'enrollment_required' | 'enabled' | 'recovery_required';
   groupSummary?: readonly string[];
 }
 

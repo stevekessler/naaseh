@@ -37,7 +37,12 @@ describe('modern task memo and due values', () => {
   });
 
   it('rejects nonexistent DST wall times and never rounds an off-grid value', () => {
-    expect(() => localDueToInstant('2026-03-08', '02:30')).toThrow(/does not exist/i);
+    expect(() => localDueToInstant('2026-03-08', '02:30', 'America/Denver')).toThrow(
+      /does not exist/i,
+    );
+    expect(localDueToInstant('2026-08-15', '10:07', 'America/Denver').dueAt).toBe(
+      '2026-08-15T16:07:00.000Z',
+    );
     expect(localDueToInstant('2026-08-15', '10:07').localTime).toBe('10:07');
   });
 });

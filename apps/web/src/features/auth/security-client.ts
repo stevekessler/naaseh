@@ -24,7 +24,7 @@ export const submitTfaChallenge = (method: 'totp' | 'recovery_code', code: strin
 
 export const startTfaEnrollment = () =>
   noStoreRequest<{ secret: string; otpauthUri: string }>('/api/v1/auth/tfa/enrollment', {
-    method: 'GET',
+    method: 'POST',
   });
 
 export const confirmTfaEnrollment = (code: string) =>

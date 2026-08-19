@@ -419,7 +419,7 @@ export function createApplicationApi(
   route(
     'TfaEnrollmentIntegration',
     '/api/v1/auth/tfa/enrollment',
-    [apigwv2.HttpMethod.GET],
+    [apigwv2.HttpMethod.POST],
     auth,
     false,
   );

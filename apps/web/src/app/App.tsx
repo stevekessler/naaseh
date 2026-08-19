@@ -570,14 +570,25 @@ export function App() {
       );
   }, [section, session]);
   useEffect(() => {
-    if (section === 'admin' && session?.role === 'admin')
-      void listAdminUsersPage(session.csrfToken)
-        .then((page) => {
-          setAdminUsers(page.items);
-          setAdminUsersCursor(page.nextCursor);
-        })
-        .catch(() => setSyncError('Administrative users could not be loaded.'));
-  }, [section, session]);
+    if (session?.role !== 'admin') {
+      setAdminUsers([]);
+      setAdminUsersCursor(undefined);
+      return;
+    }
+    let active = true;
+    void listAdminUsersPage(session.csrfToken)
+      .then((page) => {
+        if (!active) return;
+        setAdminUsers(page.items);
+        setAdminUsersCursor(page.nextCursor);
+      })
+      .catch(() => {
+        if (active) setSyncError('Administrative users could not be loaded.');
+      });
+    return () => {
+      active = false;
+    };
+  }, [session]);
   useEffect(() => {
     const query = safeSearchState(filters.query, filters);
     history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);

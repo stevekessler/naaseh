@@ -29,7 +29,7 @@ paths:
                 $ref: '#/components/schemas/TfaNextStep'
         '401': { $ref: '#/components/responses/GenericAuthFailure' }
         '429': { $ref: '#/components/responses/GenericAuthFailure' }
-  /auth/tfa/enrollment/start:
+  /auth/tfa/enrollment:
     post:
       summary: Start TOTP enrollment in the current pre-auth or stepped-up context
       responses:

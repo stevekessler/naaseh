@@ -1,6 +1,6 @@
 import { log, metric } from '@naaseh/observability';
 
-type AuthSecurityOutcome = 'success' | 'denied' | 'rate_limited' | 'failed';
+type AuthSecurityOutcome = 'accepted' | 'success' | 'denied' | 'rate_limited' | 'failed';
 
 export function recordAuthSecurityEvent(
   operation: string,

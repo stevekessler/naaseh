@@ -166,17 +166,24 @@ async function sha256Hex(bytes: ArrayBuffer) {
     .join('');
 }
 
+export async function validateCompletionExport(
+  bytes: ArrayBuffer,
+  expected: { checksum: string; rowCount: number },
+) {
+  if ((await sha256Hex(bytes)) !== expected.checksum) throw new Error('Export checksum mismatch.');
+  const text = new TextDecoder().decode(bytes);
+  if (text.split('\r\n', 1)[0] !== COMPLETED_TASK_CSV_HEADERS.join(','))
+    throw new Error('Export header mismatch.');
+  if (csvRecordCount(text) !== expected.rowCount + 1) throw new Error('Export row count mismatch.');
+}
+
 export async function downloadVerifiedCompletionExport(job: CompletionExportJob) {
   if (!job.downloadAvailable || !job.downloadUrl || !job.checksum || job.rowCount === undefined)
     throw new Error('Completion export is not ready.');
   const response = await fetch(job.downloadUrl);
   if (!response.ok) throw new Error('Completion export download failed.');
   const bytes = await response.arrayBuffer();
-  if ((await sha256Hex(bytes)) !== job.checksum) throw new Error('Export checksum mismatch.');
-  const text = new TextDecoder().decode(bytes);
-  if (text.split('\r\n', 1)[0] !== COMPLETED_TASK_CSV_HEADERS.join(','))
-    throw new Error('Export header mismatch.');
-  if (csvRecordCount(text) !== job.rowCount + 1) throw new Error('Export row count mismatch.');
+  await validateCompletionExport(bytes, { checksum: job.checksum, rowCount: job.rowCount });
   const url = URL.createObjectURL(new Blob([bytes], { type: 'text/csv;charset=utf-8' }));
   const link = document.createElement('a');
   link.href = url;
@@ -215,7 +222,7 @@ export async function runCompletionExport(
     attempt < 240 && !['completed', 'failed'].includes(job.status);
     attempt += 1
   ) {
-    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    await new Promise((resolve) => window.setTimeout(resolve, 2_000));
     job = await completionExportRequest(`/api/v1/reporting/completion-export/${job.id}`);
   }
   if (job.status !== 'completed') throw new Error('Completion export did not complete.');

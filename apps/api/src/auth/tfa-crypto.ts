@@ -7,6 +7,14 @@ const algorithm = 'SHA1';
 const digits = 6;
 const period = 30;
 
+type TfaKmsResult = {
+  CiphertextBlob?: Uint8Array | undefined;
+  Plaintext?: Uint8Array | undefined;
+};
+type TfaKmsSend = (command: EncryptCommand | DecryptCommand) => Promise<TfaKmsResult>;
+const sendKms: TfaKmsSend = async (command) =>
+  command instanceof EncryptCommand ? kms.send(command) : kms.send(command);
+
 const normalizeRecoveryCode = (value: string) =>
   value.normalize('NFKC').replaceAll('-', '').trim().toLocaleUpperCase('en-US');
 
@@ -50,25 +58,32 @@ export function verifyTotp(options: {
   return { counter };
 }
 
-export async function encryptTfaSecret(userId: string, secretBase32: string) {
-  const result = await kms.send(
-    new EncryptCommand({
-      KeyId: process.env.NAASEH_KMS_KEY_ARN,
-      Plaintext: Buffer.from(secretBase32, 'utf8'),
-      EncryptionContext: { purpose: 'naaseh-totp', userId },
-    }),
-  );
-  if (!result.CiphertextBlob) throw new Error('Unable to protect TFA secret');
-  return Buffer.from(result.CiphertextBlob).toString('base64');
+export function createTfaSecretCrypto(send: TfaKmsSend = sendKms) {
+  return {
+    async encrypt(userId: string, secretBase32: string) {
+      const result = await send(
+        new EncryptCommand({
+          KeyId: process.env.NAASEH_KMS_KEY_ARN,
+          Plaintext: Buffer.from(secretBase32, 'utf8'),
+          EncryptionContext: { purpose: 'naaseh-totp', userId },
+        }),
+      );
+      if (!result.CiphertextBlob) throw new Error('Unable to protect TFA secret');
+      return Buffer.from(result.CiphertextBlob).toString('base64');
+    },
+    async decrypt(userId: string, ciphertext: string) {
+      const result = await send(
+        new DecryptCommand({
+          CiphertextBlob: Buffer.from(ciphertext, 'base64'),
+          EncryptionContext: { purpose: 'naaseh-totp', userId },
+        }),
+      );
+      if (!result.Plaintext) throw new Error('Unable to read TFA secret');
+      return Buffer.from(result.Plaintext).toString('utf8');
+    },
+  };
 }
 
-export async function decryptTfaSecret(userId: string, ciphertext: string) {
-  const result = await kms.send(
-    new DecryptCommand({
-      CiphertextBlob: Buffer.from(ciphertext, 'base64'),
-      EncryptionContext: { purpose: 'naaseh-totp', userId },
-    }),
-  );
-  if (!result.Plaintext) throw new Error('Unable to read TFA secret');
-  return Buffer.from(result.Plaintext).toString('utf8');
-}
+const tfaSecretCrypto = createTfaSecretCrypto();
+export const encryptTfaSecret = tfaSecretCrypto.encrypt;
+export const decryptTfaSecret = tfaSecretCrypto.decrypt;

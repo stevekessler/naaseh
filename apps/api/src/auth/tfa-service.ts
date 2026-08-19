@@ -7,6 +7,7 @@ import {
   verifyRecoveryCode,
   verifyTotp,
 } from './tfa-crypto.js';
+import { SafeApiError } from '../shared/http.js';
 
 export interface TfaServiceDependencies {
   getFactor: (userId: string) => Promise<TfaFactorRecord | undefined>;
@@ -96,9 +97,21 @@ export function createTfaService(dependencies: TfaServiceDependencies) {
     method: 'totp' | 'recovery_code',
     code: string,
   ) {
-    if (!(await verifyFactor(user, method, code))) throw new Error('Factor verification failed');
+    if (!(await verifyFactor(user, method, code)))
+      throw new SafeApiError(
+        401,
+        'authentication_failed',
+        'Unable to verify credentials.',
+        'authorization',
+      );
     const factor = await dependencies.getFactor(user.id);
-    if (!factor || factor.status !== 'enabled') throw new Error('Factor verification failed');
+    if (!factor || factor.status !== 'enabled')
+      throw new SafeApiError(
+        401,
+        'authentication_failed',
+        'Unable to verify credentials.',
+        'authorization',
+      );
     const recoveryCodes = generateRecoveryCodes();
     const now = new Date().toISOString();
     await dependencies.saveFactor({
@@ -119,8 +132,20 @@ export function createTfaService(dependencies: TfaServiceDependencies) {
   }
 
   async function disableFactor(user: StoredUser, method: 'totp' | 'recovery_code', code: string) {
-    if (user.role === 'admin') throw new Error('Administrators cannot disable TFA');
-    if (!(await verifyFactor(user, method, code))) throw new Error('Factor verification failed');
+    if (user.role === 'admin')
+      throw new SafeApiError(
+        403,
+        'forbidden',
+        'Administrators cannot disable two-factor authentication.',
+        'authorization',
+      );
+    if (!(await verifyFactor(user, method, code)))
+      throw new SafeApiError(
+        401,
+        'authentication_failed',
+        'Unable to verify credentials.',
+        'authorization',
+      );
     await dependencies.deleteFactor?.(user.id);
     await dependencies.changeUserSecurity(user.id, {
       tfaStatus: 'disabled',
