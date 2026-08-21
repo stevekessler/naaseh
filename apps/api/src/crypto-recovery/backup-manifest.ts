@@ -64,8 +64,24 @@ export function validateEnhancedRecoveryRows(rows: readonly EnhancedRecoveryRow[
       if (typeof data?.objectVersionId !== 'string' || !data.objectVersionId)
         throw new Error('Restored attachment blob is missing its exact S3 version.');
     }
-    if (pk.startsWith('EXPORTJOB#') && data?.status === 'ready' && !data.manifest)
-      throw new Error('Restored ready export is missing its verified manifest.');
+    if (pk.startsWith('EXPORTJOB#')) {
+      if (typeof data?.requestedByPrincipal !== 'string' || !data.requestedByPrincipal)
+        throw new Error('Restored export is missing its owner.');
+      if (data.status === 'ready' && !data.manifest)
+        throw new Error('Restored ready export is missing its verified manifest.');
+      if (
+        data.exportKind === 'completed_tasks' &&
+        (data.schemaVersion !== 'naaseh.completed-tasks/v1' ||
+          typeof data.requestFingerprint !== 'string' ||
+          !/^[a-f0-9]{64}$/iu.test(data.requestFingerprint))
+      )
+        throw new Error('Restored completion export has invalid schema integrity metadata.');
+      const serialized = JSON.stringify(data);
+      if (/extra_low/iu.test(serialized))
+        throw new Error('Restored completion export contains removed priority data.');
+      if (['memo', 'memoDocument', 'encryptedMemo', 'rows'].some((field) => field in (data ?? {})))
+        throw new Error('Restored export job contains prohibited row or memo data.');
+    }
   }
   return { currentRecords: current.size, blobReferences: references.size };
 }

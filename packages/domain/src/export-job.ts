@@ -11,6 +11,17 @@ export const exportJobSchema = z
   .object({
     id: ulidSchema,
     requestedByPrincipal: z.string().min(1),
+    exportKind: z.enum(['all_tasks', 'completed_tasks']).default('all_tasks'),
+    schemaVersion: z.string().optional(),
+    scope: z.enum(['self', 'all_users']).optional(),
+    normalizedFilters: z.record(z.string(), z.unknown()).optional(),
+    browserTimeZone: z.string().min(1).max(128).optional(),
+    requestFingerprint: z
+      .string()
+      .regex(/^[a-f0-9]{64}$/i)
+      .optional(),
+    adminConfirmed: z.boolean().optional(),
+    authorizedGroupIds: z.array(z.string().min(1)).max(500).optional(),
     status: z.enum([
       'pending',
       'exporting',

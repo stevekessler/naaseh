@@ -14,9 +14,9 @@ test('completed work moves to the archive and can be restored after an offline r
   await context.setOffline(true);
   await page.evaluate(() => location.reload());
   await expect(page.getByRole('heading', { name: 'Archive journey' })).toBeVisible();
+  await context.setOffline(false);
   await page.getByRole('button', { name: 'Restore' }).click();
   await expect(page.getByRole('heading', { name: 'Archive journey' })).toBeHidden();
-  await context.setOffline(false);
 });
 
 test('finishing a list archives the parent and retains nested items', async ({ page }) => {

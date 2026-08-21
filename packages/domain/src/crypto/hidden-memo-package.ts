@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { memoDocumentSchema } from '../memo-document.js';
 
 const pinWrapSchema = z
   .object({
@@ -20,7 +21,7 @@ const recoveryWrapSchema = z
 
 export const hiddenMemoPackageSchema = z
   .object({
-    version: z.literal(1),
+    version: z.union([z.literal(1), z.literal(2)]),
     taskId: z.string().min(1),
     memoId: z.string().min(1),
     ciphertext: z.string().min(1),
@@ -55,6 +56,10 @@ export const hiddenMemoPackageSchema = z
   });
 
 export type HiddenMemoPackage = z.infer<typeof hiddenMemoPackageSchema>;
+
+export const hiddenMemoPayloadV2Schema = z
+  .object({ version: z.literal(2), text: z.string().max(20_000), document: memoDocumentSchema })
+  .strict();
 
 export const hiddenMemoAad = (taskId: string, memoId: string, version = 1) =>
   `naaseh:hidden-memo:${version}:${taskId}:${memoId}`;

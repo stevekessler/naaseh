@@ -84,7 +84,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         return problem(400, 'invalid_urgency', 'Urgency filter is invalid.', correlationId);
       const report = await getCompletionReport({
         userId: targetUserId,
-        timeZone: query.timeZone ?? 'UTC',
+        timeZone: query.browserTimeZone ?? query.timeZone ?? 'UTC',
         period,
         from: query.from ?? defaultFrom(),
         to: query.to ?? todayUtc(),

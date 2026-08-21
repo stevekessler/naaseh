@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expandTaskDetails } from './enhanced-helpers.js';
 
 async function signIn(page: Page) {
   await page.goto('/');
@@ -14,24 +15,29 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await signIn(page);
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Call the contractor');
+  await expect(form.locator('.task-form-details')).not.toHaveAttribute('open', '');
+  await expandTaskDetails(form);
   await form.getByLabel('Link', { exact: true }).fill('https://example.com/project');
-  await form.getByLabel('Memo').fill('Ask for an updated estimate');
-  await form.getByLabel('Due date and time').fill('2020-01-01T09:00');
+  await form
+    .getByRole('textbox', { name: 'Memo', exact: true })
+    .fill('Ask for an updated estimate');
+  await form.getByLabel('Due').selectOption('timed');
+  await form.locator('input[type="date"]').fill('2020-01-01');
+  await form.getByLabel('Due time').selectOption('09:00');
   await expect(form.getByLabel('Assignee')).toHaveValue('local-steve');
-  await form.getByLabel('Group').fill('family');
   await form.getByLabel('Private task').check();
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
-  await page.getByRole('heading', { name: 'Call the contractor' }).click();
+  await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();
   await expect(page).toHaveURL(/\/tasks\//);
   const detail = page.getByLabel('Task details');
+  const dialog = page.getByRole('dialog', { name: 'Edit task' });
   await expect(detail.getByRole('heading', { name: 'Revision history' })).toBeVisible();
   await expect(detail.getByText(/create by local-steve/)).toBeVisible();
-  await detail.getByLabel('Task label').fill('Call the contractor today');
-  await detail.getByRole('button', { name: 'Save changes' }).click();
-  await expect(detail.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
-  await detail.getByRole('button', { name: 'Close details' }).click();
+  await dialog.getByLabel('Task label').fill('Call the contractor today');
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
   await page.getByRole('button', { name: 'Complete Call the contractor today' }).click();
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeHidden();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
@@ -43,13 +49,17 @@ test('shows nested subtasks in task details', async ({ page }) => {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Parent task');
   await form.getByRole('button', { name: 'Add task' }).click();
-  await page.getByRole('heading', { name: 'Parent task' }).click();
-  const detail = page.getByLabel('Task details');
-  await detail.getByRole('button', { name: 'Close details' }).click();
+  await page.getByRole('button', { name: 'Parent task', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Edit task' })
+    .getByRole('button', { name: 'Cancel' })
+    .click();
   await form.getByLabel('Task label').fill('Child task');
-  await form.getByLabel('Parent task').selectOption({ label: 'Parent task' });
+  await expandTaskDetails(form);
+  await form.getByRole('combobox', { name: 'Parent task' }).fill('Parent task');
+  await page.getByRole('option', { name: 'Parent task', exact: true }).click();
   await form.getByRole('button', { name: 'Add task' }).click();
-  await page.getByRole('heading', { name: 'Parent task' }).click();
+  await page.getByRole('button', { name: 'Parent task', exact: true }).click();
   await expect(
     page.getByLabel('Task details').getByRole('listitem').filter({ hasText: 'Child task' }),
   ).toBeVisible();

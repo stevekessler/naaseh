@@ -11,6 +11,23 @@ function base64(bytes: ArrayBuffer) {
 export async function checksumFile(file: File) {
   return base64(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()));
 }
+const mediaTypeByExtension = new Map([
+  ['.pdf', 'application/pdf'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.txt', 'text/plain'],
+  ['.csv', 'text/csv'],
+]);
+export function attachmentMediaType(file: Pick<File, 'name' | 'type'>) {
+  const reported = file.type.trim().toLowerCase();
+  if (reported && reported !== 'application/octet-stream') return reported;
+  const lowerFilename = file.name.toLowerCase();
+  for (const [extension, mediaType] of mediaTypeByExtension) {
+    if (lowerFilename.endsWith(extension)) return mediaType;
+  }
+  return reported;
+}
 export const uploadProgressPercent = (loaded: number, total: number) =>
   total > 0 ? Math.min(100, Math.max(0, Math.round((loaded / total) * 100))) : 0;
 function putWithProgress(
@@ -50,6 +67,7 @@ export async function uploadAttachment(
 ) {
   if (!navigator.onLine) throw new Error('Connect to the internet to upload this file.');
   const checksumSha256 = await checksumFile(file);
+  const mediaType = attachmentMediaType(file);
   const initiate = await fetch('/api/v1/attachments/uploads', {
     method: 'POST',
     credentials: 'include',
@@ -62,7 +80,7 @@ export async function uploadAttachment(
       parentType,
       parentId,
       originalFilename: file.name,
-      mediaType: file.type,
+      mediaType,
       sizeBytes: file.size,
       checksumSha256,
     }),

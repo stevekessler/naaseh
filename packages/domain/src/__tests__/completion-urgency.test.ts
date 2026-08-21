@@ -43,10 +43,10 @@ describe('completion urgency history', () => {
       {},
       new Date('2026-08-05T12:00:00.000Z'),
     );
-    const laterTask = { ...completed.task, urgency: 'extra_low' as const };
+    const laterTask = { ...completed.task, urgency: 'low' as const };
 
     expect(completed.completionEvent).toMatchObject({ urgencyAtCompletion: 'critical' });
-    expect(laterTask.urgency).toBe('extra_low');
+    expect(laterTask.urgency).toBe('low');
     expect(
       (completed.completionEvent as CompletionEvent & { urgencyAtCompletion: string })
         .urgencyAtCompletion,
@@ -69,9 +69,8 @@ describe('completion urgency history', () => {
     });
   });
 
-  it('zero-fills all five urgency levels instead of omitting empty buckets', () => {
+  it('zero-fills all four urgency levels instead of omitting empty buckets', () => {
     expect(zeroUrgencyCounts()).toEqual({
-      extra_low: 0,
       low: 0,
       medium: 0,
       high: 0,
@@ -81,7 +80,6 @@ describe('completion urgency history', () => {
       tasks: 0,
       lists: 0,
       urgencyCounts: {
-        extra_low: 0,
         low: 0,
         medium: 0,
         high: 0,

@@ -79,7 +79,9 @@ export async function listOwnerTasks(ownerId: string): Promise<Task[]> {
   // Compatibility scan keeps pre-index records eligible until normal writes backfill GSI2.
   let startKey: Record<string, unknown> | undefined;
   do {
-    const legacy = await document.send(new ScanCommand(legacyOwnerTaskScanInput(ownerId, startKey)));
+    const legacy = await document.send(
+      new ScanCommand(legacyOwnerTaskScanInput(ownerId, startKey)),
+    );
     for (const item of legacy.Items ?? []) {
       const task = item.data as Task;
       tasks.set(task.id, task);

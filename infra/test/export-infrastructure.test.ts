@@ -12,7 +12,7 @@ const table = new dynamodb.Table(stack, 'Table', {
   sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
   pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
 });
-createExportResources(stack, { table });
+createExportResources(stack, { table, allowedOrigin: 'https://tasks.example.com' });
 const template = Template.fromStack(stack);
 
 describe('export infrastructure', () => {
@@ -26,6 +26,14 @@ describe('export infrastructure', () => {
       },
       BucketEncryption: Match.anyValue(),
       LifecycleConfiguration: Match.anyValue(),
+      CorsConfiguration: {
+        CorsRules: [
+          Match.objectLike({
+            AllowedMethods: ['GET'],
+            AllowedOrigins: ['https://tasks.example.com'],
+          }),
+        ],
+      },
     });
     template.resourceCountIs('AWS::KMS::Key', 1);
     template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);

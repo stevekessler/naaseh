@@ -14,6 +14,10 @@ Na'aseh is a responsive, offline-capable task manager for Steve and collaborator
 
 Run `npm run validate` for type checking, linting, unit tests, and builds, and `npm run test:python` for the operator-command tests. Pull requests use the focused `npm run test:e2e:quick` browser gate; run `npm run test:e2e` for the complete four-profile browser suite. Before AWS work, use `npm run validate:pre-aws`; add the complete browser suite with `npm run validate:pre-aws:browsers`. On a Mac with Safari Technology Preview installed, run `npm run test:safari-preview` for the independent native-WebDriver smoke check. `VERBOSE_LOGGING` is enabled only by the literal value `true`; it defaults off. Logs must never include passwords, PINs, cookies, tokens, cryptographic material, or protected task content.
 
+Account-specific reminders, completion sound, Google Tasks setup, password changes, and two-factor authentication now live under **Profile**. System-wide user, category, and project controls remain under **Admin**; reusable global list items have their own **Global Items** page. Administrators must enroll in and pass TOTP before protected access. Password reset requires the account PIN, and lost administrator factors use the separate recovery-operator workflow documented in [admin TFA recovery](docs/operations/admin-tfa-recovery.md).
+
+Tasks support modal editing, a constrained rich-text memo, browser-local due times, optional date-only due dates, per-task post-it colors, a synchronized private timer, and drag-enhanced personal ranking with keyboard controls. Completed-task CSV files are generated as verified asynchronous exports. See the [task security modernization architecture](docs/architecture/task-security-modernization.md), [timer runbook](docs/operations/task-timer.md), and [completion export runbook](docs/operations/completion-export.md).
+
 See `specs/001-naaseh-v1-baseline/` for requirements and architecture. Before the first cloud deployment, follow the [first AWS deployment runbook](docs/operations/first-aws-deployment.md); see `docs/operations/recovery.md` for recovery controls.
 
 ## Lists and completion feedback
@@ -25,7 +29,7 @@ each linked item may override its name or amount and reset to the latest global 
 global, limited to a group, locked to their owner, or copied with clean attachment references.
 
 Tasks and list items share the same completion animation and optional scrunch sound. The sound is
-on by default and can be disabled from the header; reduced-motion users receive the completed state
+on by default and can be disabled from Profile; reduced-motion users receive the completed state
 without animation. Search defaults to all content and can be narrowed to Lists or To-do Lists.
 
 PDF, JPEG, PNG, text, and CSV files up to 25 MiB can be attached to tasks and list items while

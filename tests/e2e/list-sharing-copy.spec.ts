@@ -16,7 +16,7 @@ test('@enhanced-lists lock precedence, deep links, copy readiness, and responsiv
   const list = await createListWithItem(page, 'Shared packing', 'Passports');
   await list.getByLabel('Lock list').click();
   await expect(list.getByText('Only you can see this list.')).toBeVisible();
-  await expect(list.getByLabel('Group')).toBeDisabled();
+  await expect(list.getByLabel('Group')).toHaveCount(0);
   await list.getByRole('button', { name: 'Copy list' }).click();
   await expect(list.getByText('The copied list is ready.')).toBeVisible();
   await page

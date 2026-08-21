@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -9,6 +9,7 @@ async function createTask(page: Page, label: string, urgency: string) {
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
+  await expandTaskDetails(form);
   await form.getByLabel('Priority', { exact: true }).selectOption(urgency);
   await form.getByRole('button', { name: 'Add task' }).click();
 }
@@ -34,21 +35,21 @@ test('keeps urgency-independent overall and Project orders private and durable',
 }) => {
   await signIn(page);
   await createTask(page, 'Critical task', 'critical');
-  await createTask(page, 'Extra low task', 'extra_low');
+  await createTask(page, 'Low priority task', 'low');
   await createList(page, 'Medium list', 'medium');
   await openPersonalStack(page);
 
   await expect(page.getByLabel('Stack scope')).toHaveValue('overall');
-  const extraLow = stackRow(page, 'Extra low task');
-  await extraLow.getByRole('button', { name: 'Move to position' }).click();
-  await extraLow.getByLabel('Position').fill('1');
-  await extraLow.getByRole('button', { name: 'Apply position' }).click();
-  await expect(extraLow).toContainText('Overall position 1');
-  await expect(extraLow).toContainText('Extra Low');
+  const lowPriority = stackRow(page, 'Low priority task');
+  await lowPriority.getByRole('button', { name: 'Move to position' }).click();
+  await lowPriority.getByLabel('Position').fill('1');
+  await lowPriority.getByRole('button', { name: 'Apply position' }).click();
+  await expect(lowPriority).toContainText('Overall position 1');
+  await expect(lowPriority).toContainText('Low');
   await expect(stackRow(page, 'Critical task')).toContainText('Overall position 2');
 
   await page.reload();
-  await expect(stackRow(page, 'Extra low task')).toContainText('Overall position 1');
+  await expect(stackRow(page, 'Low priority task')).toContainText('Overall position 1');
   await expect(stackRow(page, 'Medium list')).toBeVisible();
 
   const projectOption = page.getByLabel('Stack scope').locator('option[value^="project:"]').first();
@@ -98,7 +99,7 @@ test('supports keyboard and touch reordering with announced positions at every v
 }, testInfo) => {
   await signIn(page);
   await createTask(page, 'Accessible first', 'critical');
-  await createTask(page, 'Accessible second', 'extra_low');
+  await createTask(page, 'Accessible second', 'low');
   await openPersonalStack(page);
 
   const second = stackRow(page, 'Accessible second');

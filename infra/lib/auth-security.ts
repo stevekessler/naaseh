@@ -26,8 +26,58 @@ export const authSecurityRules: wafv2.CfnWebACL.RuleProperty[] = [
     },
   },
   {
-    name: 'GroupJoinRateLimit',
+    name: 'SensitiveAuthRateLimit',
     priority: 1,
+    action: { block: {} },
+    statement: {
+      rateBasedStatement: {
+        aggregateKeyType: 'IP',
+        limit: 30,
+        evaluationWindowSec: 60,
+        scopeDownStatement: {
+          byteMatchStatement: {
+            fieldToMatch: { uriPath: {} },
+            positionalConstraint: 'STARTS_WITH',
+            searchString: '/api/v1/auth/tfa',
+            textTransformations: [{ priority: 0, type: 'NONE' }],
+          },
+        },
+      },
+    },
+    visibilityConfig: {
+      cloudWatchMetricsEnabled: true,
+      metricName: 'SensitiveAuthRateLimit',
+      sampledRequestsEnabled: true,
+    },
+  },
+  {
+    name: 'PasswordResetRateLimit',
+    priority: 2,
+    action: { block: {} },
+    statement: {
+      rateBasedStatement: {
+        aggregateKeyType: 'IP',
+        limit: 20,
+        evaluationWindowSec: 60,
+        scopeDownStatement: {
+          byteMatchStatement: {
+            fieldToMatch: { uriPath: {} },
+            positionalConstraint: 'EXACTLY',
+            searchString: '/api/v1/auth/password-reset',
+            textTransformations: [{ priority: 0, type: 'NONE' }],
+          },
+        },
+      },
+    },
+    visibilityConfig: {
+      cloudWatchMetricsEnabled: true,
+      metricName: 'PasswordResetRateLimit',
+      sampledRequestsEnabled: true,
+    },
+  },
+  {
+    name: 'GroupJoinRateLimit',
+    priority: 3,
     action: { block: {} },
     statement: {
       rateBasedStatement: {
@@ -52,7 +102,7 @@ export const authSecurityRules: wafv2.CfnWebACL.RuleProperty[] = [
   },
   {
     name: 'GlobalRateLimit',
-    priority: 2,
+    priority: 4,
     action: { block: {} },
     statement: { rateBasedStatement: { aggregateKeyType: 'IP', limit: 500 } },
     visibilityConfig: {

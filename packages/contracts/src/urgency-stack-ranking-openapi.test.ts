@@ -31,10 +31,22 @@ const stackMutation = {
 
 describe('urgency and personal stack contracts', () => {
   it('requires a zero-fillable count for every categorical urgency', () => {
-    expect(
-      urgencyCountsSchema.parse({ extra_low: 0, low: 1, medium: 2, high: 3, critical: 4 }),
-    ).toEqual({ extra_low: 0, low: 1, medium: 2, high: 3, critical: 4 });
+    expect(urgencyCountsSchema.parse({ low: 1, medium: 2, high: 3, critical: 4 })).toEqual({
+      low: 1,
+      medium: 2,
+      high: 3,
+      critical: 4,
+    });
     expect(urgencyCountsSchema.safeParse({ low: 1 }).success).toBe(false);
+    expect(
+      urgencyCountsSchema.safeParse({
+        extra_low: 0,
+        low: 1,
+        medium: 2,
+        high: 3,
+        critical: 4,
+      }).success,
+    ).toBe(false);
   });
 
   it('validates discriminated reorder moves and Project page identity', () => {

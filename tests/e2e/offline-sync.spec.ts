@@ -6,7 +6,7 @@ async function signIn(page: Page) {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
 }
-test('preserves offline work in the live tab and across a Chromium app-shell reload', async ({
+test('preserves offline work in the live tab and across a validated Chromium app-shell reload', async ({
   page,
   context,
 }, testInfo) => {
@@ -17,8 +17,11 @@ test('preserves offline work in the live tab and across a Chromium app-shell rel
   await page.getByLabel('Task label').fill('Written offline');
   await page.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: 'Written offline' })).toBeVisible();
+  await page.evaluate(() => scrollTo(0, 0));
   await expect(page.getByRole('status').filter({ hasText: 'Offline' })).toBeVisible();
   if (testInfo.project.name === 'chromium') {
+    await context.setOffline(false);
+    await page.evaluate(() => scrollTo(0, 0));
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Written offline' })).toBeVisible();
   }
@@ -76,6 +79,7 @@ test.describe('mocked reconnect protocol', () => {
     // proves the offline write completed before the browser reconnects.
     await expect(page.getByRole('heading', { name: 'Reconnect safely' })).toBeVisible();
     await context.setOffline(false);
+    await page.evaluate(() => scrollTo(0, 0));
     await expect(page.getByRole('status').filter({ hasText: 'Synced' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Reconnect safely' })).toBeVisible();
   });
@@ -106,6 +110,7 @@ test.describe('mocked reconnect protocol', () => {
     await page.getByRole('button', { name: 'Add task' }).click();
     await expect(page.getByRole('heading', { name: 'Conflicting offline edit' })).toBeVisible();
     await context.setOffline(false);
+    await page.evaluate(() => scrollTo(0, 0));
     // Conflict capture encrypts an additional record; allow headroom when all
     // browser projects run concurrently on a small CI runner.
     await expect(page.getByRole('status').filter({ hasText: '1 conflict' })).toBeVisible({

@@ -13,7 +13,7 @@ const reference = (index: number, workType: 'task' | 'list' = 'task') => ({
 const item = {
   reference: reference(1),
   label: 'Call the dentist',
-  urgency: 'extra_low' as const,
+  urgency: 'low' as const,
   overallPosition: 5,
   projectPosition: 1,
 };
@@ -42,7 +42,7 @@ describe('personal stack component primitives', () => {
       />,
     );
     expect(stackRowFocusId(item.reference)).toContain('personal-stack-row-task-');
-    expect(html).toContain('Extra Low');
+    expect(html).toContain('Low');
     expect(html).toContain('Project position 1 of 2');
     expect(html).toContain('Overall position 5');
     expect(html).toContain('aria-posinset="1"');
@@ -113,6 +113,22 @@ describe('personal stack component primitives', () => {
     expect(html).toContain('class="stack-position-editor"');
     expect(html.indexOf('Move up')).toBeLessThan(html.indexOf('Move down'));
     expect(html.indexOf('Move down')).toBeLessThan(html.indexOf('Move to position'));
+  });
+
+  it('offers task editing without adding an edit action to list rows', () => {
+    const task = renderToStaticMarkup(
+      <StackRow item={item} scope={{ scopeType: 'overall' }} move={vi.fn()} editTask={vi.fn()} />,
+    );
+    const list = renderToStaticMarkup(
+      <StackRow
+        item={{ ...item, reference: reference(2, 'list') }}
+        scope={{ scopeType: 'overall' }}
+        move={vi.fn()}
+        editTask={vi.fn()}
+      />,
+    );
+    expect(task).toContain('Edit Call the dentist');
+    expect(list).not.toContain('Edit Call the dentist');
   });
 
   it.each([

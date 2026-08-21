@@ -16,6 +16,7 @@ import {
 import { bucketCompletionEvents } from './completion-bucketing.js';
 import { projectCompletionChart } from './completion-presentation.js';
 import { CompletionFilters, type CompletionFilterValue } from './CompletionFilters.js';
+import { useBrowserTimeZone } from '../tasks/due-value.js';
 
 const dateOffset = (days: number) => {
   const date = new Date();
@@ -69,7 +70,7 @@ export interface CompletionDashboardProps {
     buckets: Array<{ key: string; count: number }>;
   };
   changeFilters?: (value: CompletionFilterValue) => void;
-  exportCsv?: () => void;
+  exportCsv?: (filters: CompletionFilterValue) => Promise<void> | void;
 }
 
 const cursorErrorCopy: Partial<Record<CompletionReportError, string>> = {
@@ -100,11 +101,13 @@ export function CompletionDashboard({
   exportCsv,
 }: CompletionDashboardProps) {
   const initialUrgencies = normalizeUrgencySet(selectedUrgencies as Urgency[]);
+  const browserTimeZone = useBrowserTimeZone();
+  const [exportState, setExportState] = useState<'idle' | 'running' | 'failed'>('idle');
   const [filters, setFilters] = useState<CompletionFilterValue>({
     period: 'day',
     categoryId: '',
     projectId: '',
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    timeZone: browserTimeZone,
     weekStartsOn: 0,
     urgencies: initialUrgencies,
   });
@@ -113,6 +116,14 @@ export function CompletionDashboard({
       setFilters((current) => ({ ...current, ...preferences })),
     );
   }, []);
+  useEffect(() => {
+    setFilters((current) => {
+      if (current.timeZone === browserTimeZone) return current;
+      const next = { ...current, timeZone: browserTimeZone };
+      changeFilters?.(next);
+      return next;
+    });
+  }, [browserTimeZone, changeFilters]);
   const report = useMemo(
     () =>
       bucketCompletionEvents(events, {
@@ -161,7 +172,6 @@ export function CompletionDashboard({
           changeUrgencies?.(next.urgencies);
           changeFilters?.(next);
           void saveReportingPreferences({
-            timeZone: next.timeZone,
             weekStartsOn: next.weekStartsOn,
           });
         }}
@@ -172,9 +182,21 @@ export function CompletionDashboard({
         label="Priority at completion"
       />
       {exportCsv ? (
-        <button type="button" onClick={exportCsv}>
-          Export CSV
+        <button
+          type="button"
+          disabled={exportState === 'running'}
+          onClick={() => {
+            setExportState('running');
+            void Promise.resolve(exportCsv(filters))
+              .then(() => setExportState('idle'))
+              .catch(() => setExportState('failed'));
+          }}
+        >
+          {exportState === 'running' ? 'Preparing export…' : 'Export CSV'}
         </button>
+      ) : null}
+      {exportState === 'failed' ? (
+        <p role="alert">The export could not be verified. Try again; no partial file was saved.</p>
       ) : null}
       {reportState?.offline && reportState.source === 'cache' ? (
         <p role="status">Offline · showing previously synchronized report</p>

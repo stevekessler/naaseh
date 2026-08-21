@@ -27,7 +27,7 @@ const list = {
     membershipEpoch: 'epoch-list',
   },
   label: 'Camping supplies',
-  urgency: 'extra_low' as const,
+  urgency: 'low' as const,
   overallPosition: 1,
   projectPosition: 2,
 };
@@ -74,7 +74,7 @@ describe('personal stack accessibility contract', () => {
     expect(html).toContain('Moved Call the dentist to position 1 of 2 in Home Project stack.');
     expect(html).toContain('Project position 1 of 2');
     expect(html).toContain('Overall position 2');
-    expect(html).toContain('Extra Low');
+    expect(html).toContain('Low');
   });
 
   it('provides native keyboard Move up/down/to-position controls and touch alternatives', () => {

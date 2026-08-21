@@ -15,6 +15,7 @@ import {
 import { db } from './database.js';
 import { createDeviceKey, decryptText, encryptText } from '../crypto/vault.js';
 import { getClientId } from './client-id.js';
+import { assertNoExtraLowActiveValues } from './extra-low-removal.js';
 
 let deviceKeyPromise: Promise<CryptoKey> | undefined;
 
@@ -58,6 +59,8 @@ export async function taskToEncryptedRecord(task: Task) {
     urgency: task.urgency,
     ...(task.dueAt ? { dueAt: task.dueAt } : {}),
     ...(task.dueTimeZone ? { dueTimeZone: task.dueTimeZone } : {}),
+    ...(task.dueKind ? { dueKind: task.dueKind } : {}),
+    ...(task.dueDate ? { dueDate: task.dueDate } : {}),
     ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
     ...(task.categoryId ? { categoryId: task.categoryId } : {}),
     ...(task.projectId ? { projectId: task.projectId } : {}),
@@ -74,9 +77,14 @@ async function encryptMutationPayload(mutationId: string, payload: unknown) {
   return encryptText(JSON.stringify(payload), await deviceKey(), `mutation:${mutationId}`);
 }
 const safeRevisionFields = new Set<keyof Task>([
+  'memo',
+  'memoDocument',
   'urgency',
+  'postItColor',
   'link',
   'dueAt',
+  'dueKind',
+  'dueDate',
   'dueTimeZone',
   'assigneeId',
   'categoryId',
@@ -99,7 +107,18 @@ function localRevisionValues(task: Task, fields: string[]) {
   return Object.fromEntries(
     fields
       .filter((field) => safeRevisionFields.has(field as keyof Task))
-      .map((field) => [field, task[field as keyof Task] ?? null]),
+      .map((field) => {
+        const value = task[field as keyof Task];
+        const revisionValue: string | number | boolean | null =
+          field === 'memoDocument'
+            ? value
+              ? JSON.stringify(value)
+              : null
+            : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+              ? value
+              : null;
+        return [field, revisionValue];
+      }),
   );
 }
 async function encryptRevision(revision: TaskRevision) {
@@ -139,13 +158,17 @@ export async function listLocalTasksByUrgency(urgencies: readonly Task['urgency'
 }
 export async function decryptMutation(record: import('./database.js').StoredMutation) {
   const payload = record.payload as unknown;
-  if (payload && typeof payload === 'object' && 'ciphertext' in payload && 'iv' in payload)
-    return {
+  if (payload && typeof payload === 'object' && 'ciphertext' in payload && 'iv' in payload) {
+    const decrypted = {
       ...record,
       payload: JSON.parse(
         await decryptText(record.payload, await deviceKey(), `mutation:${record.id}`),
       ),
     };
+    assertNoExtraLowActiveValues([decrypted.payload]);
+    return decrypted;
+  }
+  assertNoExtraLowActiveValues([payload]);
   return { ...record, payload };
 }
 
@@ -190,6 +213,10 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
 }
 
 export async function updateTask(task: Task, patch: Partial<Task>, actorId: string): Promise<Task> {
+  const wirePatch = patch as Partial<Task> & Record<string, unknown>;
+  patch = Object.fromEntries(
+    Object.entries(wirePatch).map(([field, value]) => [field, value === null ? undefined : value]),
+  ) as Partial<Task>;
   const id = createUlid();
   let completionEvent: CompletionEvent | undefined;
   let operation: TaskRevision['operation'] = 'update';
@@ -292,7 +319,10 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
   };
   const [storedTask, payload, storedRevision, storedEvent] = await Promise.all([
     taskToEncryptedRecord(next),
-    encryptMutationPayload(id, { patch, ...(completionEvent ? { completionEvent } : {}) }),
+    encryptMutationPayload(id, {
+      patch: wirePatch,
+      ...(completionEvent ? { completionEvent } : {}),
+    }),
     encryptRevision(revision),
     completionEvent
       ? Promise.resolve({

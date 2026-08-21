@@ -28,6 +28,43 @@ export function createArchiveProjectMigration(
     bundling: { minify: true, sourceMap: true },
   });
   options.table.grantReadWriteData(fn);
+  const featureMigrationGate = new nodejs.NodejsFunction(
+    scope,
+    'TaskSecurityFeatureMigrationGateFunction',
+    {
+      runtime: lambda.Runtime.NODEJS_24_X,
+      entry: fileURLToPath(
+        new URL('../../apps/api/src/migrations/feature-migration-registry.ts', import.meta.url),
+      ),
+      handler: 'handler',
+      timeout: Duration.seconds(30),
+      memorySize: 256,
+      reservedConcurrentExecutions: 1,
+      environment: options.environment,
+      logGroup: options.logGroup,
+      bundling: { minify: true, sourceMap: true },
+    },
+  );
+  const extraLowInventory = new nodejs.NodejsFunction(scope, 'ExtraLowInventoryFunction', {
+    runtime: lambda.Runtime.NODEJS_24_X,
+    entry: fileURLToPath(
+      new URL('../../apps/api/src/projects/extra-low-inventory-handler.ts', import.meta.url),
+    ),
+    handler: 'handler',
+    timeout: Duration.minutes(15),
+    memorySize: 512,
+    reservedConcurrentExecutions: 1,
+    environment: options.environment,
+    logGroup: options.logGroup,
+    bundling: { minify: true, sourceMap: true },
+  });
+  options.table.grantReadData(extraLowInventory);
   new CfnOutput(scope, 'ArchiveProjectMigrationFunctionName', { value: fn.functionName });
-  return { fn };
+  new CfnOutput(scope, 'TaskSecurityFeatureMigrationGateFunctionName', {
+    value: featureMigrationGate.functionName,
+  });
+  new CfnOutput(scope, 'ExtraLowInventoryFunctionName', {
+    value: extraLowInventory.functionName,
+  });
+  return { fn, featureMigrationGate, extraLowInventory };
 }

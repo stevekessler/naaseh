@@ -33,6 +33,14 @@ export async function expectNoIntersection(first: Locator, second: Locator) {
   expect(width > 0 && height > 0).toBe(false);
 }
 
+export async function expectVerticalGap(above: Locator, below: Locator, minimum = 8) {
+  const [aboveBox, belowBox] = await Promise.all([above.boundingBox(), below.boundingBox()]);
+  expect(aboveBox).not.toBeNull();
+  expect(belowBox).not.toBeNull();
+  if (!aboveBox || !belowBox) return;
+  expect(belowBox.y - (aboveBox.y + aboveBox.height)).toBeGreaterThanOrEqual(minimum);
+}
+
 export async function expectMinimumTarget(target: Locator, minimum = 44) {
   const box = await target.boundingBox();
   expect(box).not.toBeNull();

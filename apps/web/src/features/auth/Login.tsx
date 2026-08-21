@@ -1,4 +1,6 @@
 import { useState, type FormEvent } from 'react';
+import { TfaChallenge } from './TfaChallenge.js';
+import { resetPassword } from './security-client.js';
 
 export function Login({
   onAuthenticated,
@@ -12,6 +14,8 @@ export function Login({
 }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [next, setNext] = useState<'tfa_challenge' | 'tfa_enrollment'>();
+  const [resetMode, setResetMode] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -38,6 +42,10 @@ export function Login({
         return;
       }
       const result = await response.json();
+      if (response.status === 202) {
+        setNext(result.next);
+        return;
+      }
       onAuthenticated({
         userId: result.user.id,
         displayName: result.user.displayName,
@@ -57,6 +65,75 @@ export function Login({
       setBusy(false);
     }
   }
+  async function submitReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    const data = new FormData(event.currentTarget);
+    try {
+      const result = await resetPassword({
+        username: String(data.get('username') ?? ''),
+        pin: String(data.get('pin') ?? ''),
+        newPassword: String(data.get('newPassword') ?? ''),
+        confirmPassword: String(data.get('confirmPassword') ?? ''),
+      });
+      setError(result.message);
+    } catch {
+      setError('Unable to reset the password. Check the entries and try again later.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (next)
+    return (
+      <TfaChallenge
+        enrollmentRequired={next === 'tfa_enrollment'}
+        onAuthenticated={onAuthenticated}
+      />
+    );
+  if (resetMode)
+    return (
+      <main className="login-page">
+        <form className="login-card" onSubmit={submitReset}>
+          <h1>Reset password</h1>
+          <label>
+            <span>Username</span>
+            <input name="username" autoComplete="username" required />
+          </label>
+          <label>
+            <span>Account PIN</span>
+            <input name="pin" type="password" inputMode="numeric" required />
+          </label>
+          <label>
+            <span>New password</span>
+            <input
+              name="newPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              required
+            />
+          </label>
+          <label>
+            <span>Confirm new password</span>
+            <input
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              required
+            />
+          </label>
+          {error && <p role="status">{error}</p>}
+          <button type="submit" disabled={busy}>
+            {busy ? 'Resetting…' : 'Reset password'}
+          </button>
+          <button type="button" onClick={() => setResetMode(false)}>
+            Back to sign in
+          </button>
+        </form>
+      </main>
+    );
   return (
     <main className="login-page">
       <form className="login-card" onSubmit={submit}>
@@ -76,6 +153,9 @@ export function Login({
         )}
         <button type="submit" disabled={busy}>
           {busy ? 'Signing in…' : 'Sign in'}
+        </button>
+        <button type="button" onClick={() => setResetMode(true)}>
+          Forgot password?
         </button>
       </form>
     </main>

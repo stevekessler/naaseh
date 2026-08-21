@@ -62,6 +62,13 @@ export function createOperationalVisibility(
     ['ProjectionReconciliationAlarm', 'ProjectionReconciliationFailures'],
     ['FilteredReadFailureAlarm', 'FilteredReadFailures'],
     ['ReportExportFailureAlarm', 'UrgencyReportExportFailures'],
+    ['CompletionExportFailureAlarm', 'CompletionExportFailures'],
+    ['CompletionExportIntegrityAlarm', 'CompletionExportIntegrityFailures'],
+    ['AuthSecurityFailureAlarm', 'AuthSecurityFailures'],
+    ['AdminTfaRecoveryFailureAlarm', 'AdminTfaRecoveryFailures'],
+    ['TaskTimerFailureAlarm', 'TaskTimerFailures'],
+    ['TaskTimerInvariantAlarm', 'TaskTimerInvariantFailures'],
+    ['ExtraLowInventoryBlockedAlarm', 'ExtraLowInventoryBlocked'],
   ] as const) {
     const alarm = new cloudwatch.Alarm(scope, id, {
       metric: applicationMetric(metricName),
@@ -76,6 +83,7 @@ export function createOperationalVisibility(
     ['StackOperationLatencyAlarm', 'StackOperationLatency', 1_000],
     ['CursorContextRestartAlarm', 'PaginationContextRestarts', 10],
     ['CursorExpiryAlarm', 'PaginationCursorExpiries', 10],
+    ['TaskTimerConflictAlarm', 'TaskTimerConflicts', 10],
   ] as const) {
     const alarm = new cloudwatch.Alarm(scope, id, {
       metric: applicationMetric(metricName, metricName.endsWith('Latency') ? 'p95' : 'Sum'),
@@ -134,6 +142,40 @@ export function createOperationalVisibility(
       ],
     }),
     new cloudwatch.GraphWidget({
+      title: 'Completed-task exports',
+      left: [
+        applicationMetric('CompletionExports'),
+        applicationMetric('CompletionExportRows'),
+        applicationMetric('CompletionExportDuration', 'p95'),
+      ],
+      right: [
+        applicationMetric('CompletionExportFailures'),
+        applicationMetric('CompletionExportIntegrityFailures'),
+      ],
+    }),
+    new cloudwatch.GraphWidget({
+      title: 'Authentication and recovery security',
+      left: [applicationMetric('AuthSecurityEvents'), applicationMetric('AuthSecurityDenials')],
+      right: [
+        applicationMetric('AuthSecurityFailures'),
+        applicationMetric('AdminTfaRecoveries'),
+        applicationMetric('AdminTfaRecoveryFailures'),
+        applicationMetric('AdminAuthorizationDenials'),
+      ],
+    }),
+    new cloudwatch.GraphWidget({
+      title: 'Task timer synchronization',
+      left: [
+        applicationMetric('TaskTimerCommands'),
+        applicationMetric('TaskTimerCommandLatency', 'p95'),
+      ],
+      right: [
+        applicationMetric('TaskTimerConflicts'),
+        applicationMetric('TaskTimerFailures'),
+        applicationMetric('TaskTimerInvariantFailures'),
+      ],
+    }),
+    new cloudwatch.GraphWidget({
       title: 'DynamoDB throttles',
       left: [
         table.metricThrottledRequestsForOperations({
@@ -165,6 +207,7 @@ export function createOperationalVisibility(
         applicationMetric('StackReorderFailures'),
         applicationMetric('StackCompactions'),
         applicationMetric('StackCompactionFailures'),
+        applicationMetric('ExtraLowInventoryBlocked'),
       ],
     }),
     new cloudwatch.GraphWidget({

@@ -153,7 +153,7 @@ export async function updateLocalList(current: List, patch: Partial<List>): Prom
 }
 export async function addLocalListItem(
   listId: string,
-  name: string,
+  input: { name: string; amountMinor: number | null },
   actorId: string,
   directory?: { id: string; amountMinor: number | null; version: number },
 ): Promise<ListItem> {
@@ -161,7 +161,8 @@ export async function addLocalListItem(
   const value = createListItem(
     listId,
     {
-      name,
+      name: input.name,
+      amountMinor: input.amountMinor,
       ...(directory
         ? {
             directoryItemId: directory.id,

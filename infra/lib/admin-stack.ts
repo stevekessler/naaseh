@@ -1,5 +1,6 @@
 import { Duration, Stack } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
+import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -32,6 +33,7 @@ export function createAdminFunctions(
     passwordPepperKey: kms.IKey;
     deletionConfirmationSecret: secretsmanager.ISecret;
     logGroup: logs.ILogGroup;
+    tfaRecoveryOperatorArn: string;
   },
 ) {
   const common = {
@@ -63,6 +65,21 @@ export function createAdminFunctions(
     logGroup: options.logGroup,
     bundling: withArgon2Bundling({ minify: true, sourceMap: true }),
   });
+  const recoverAdminTfa = new nodejs.NodejsFunction(scope, 'AdminTfaRecoveryFunction', {
+    ...common,
+    entry: fileURLToPath(
+      new URL('../../apps/api/src/admin/admin-tfa-recovery-handler.ts', import.meta.url),
+    ),
+    handler: 'handler',
+    memorySize: 256,
+    reservedConcurrentExecutions: 1,
+    logGroup: options.logGroup,
+    environment: {
+      ...common.environment,
+      ADMIN_TFA_RECOVERY_OPERATOR_ARN: options.tfaRecoveryOperatorArn,
+    },
+    bundling: { minify: true, sourceMap: true },
+  });
   const processor = new nodejs.NodejsFunction(scope, 'ProfilePictureProcessor', {
     ...common,
     entry: fileURLToPath(
@@ -93,6 +110,7 @@ export function createAdminFunctions(
     bundling: { minify: true, sourceMap: true },
   });
   options.table.grantReadWriteData(admin);
+  options.table.grantReadWriteData(recoverAdminTfa);
   provisionUser.addToRolePolicy(
     new iam.PolicyStatement({
       effect: iam.Effect.ALLOW,
@@ -168,12 +186,42 @@ export function createAdminFunctions(
       }),
     ],
   });
+  const tfaRecoveryOperatorPolicy = new iam.ManagedPolicy(scope, 'AdminTfaRecoveryOperatorPolicy', {
+    description: 'Allows the designated recovery operator to invoke only admin TFA recovery.',
+    roles: [
+      iam.Role.fromRoleArn(scope, 'AdminTfaRecoveryOperatorRole', options.tfaRecoveryOperatorArn),
+    ],
+    statements: [
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['lambda:InvokeFunction'],
+        resources: [recoverAdminTfa.functionArn],
+      }),
+    ],
+  });
+  const tfaRecoveryAuditTrail = new cloudtrail.Trail(scope, 'AdminTfaRecoveryAuditTrail', {
+    sendToCloudWatchLogs: true,
+    cloudWatchLogsRetention: logs.RetentionDays.THREE_MONTHS,
+  });
+  tfaRecoveryAuditTrail.addLambdaEventSelector([recoverAdminTfa], {
+    readWriteType: cloudtrail.ReadWriteType.WRITE_ONLY,
+  });
   options.media.addEventNotification(
     s3.EventType.OBJECT_CREATED,
     new notifications.LambdaDestination(processor),
     { prefix: 'profiles/', suffix: '' },
   );
-  return { admin, provisionUser, operatorPolicy, processor, categories, projects };
+  return {
+    admin,
+    provisionUser,
+    operatorPolicy,
+    recoverAdminTfa,
+    tfaRecoveryOperatorPolicy,
+    tfaRecoveryAuditTrail,
+    processor,
+    categories,
+    projects,
+  };
 }
 
 export function attachAdminRoutes(

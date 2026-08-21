@@ -1,12 +1,11 @@
 import { z } from 'zod';
 
-export const urgencyValues = ['extra_low', 'low', 'medium', 'high', 'critical'] as const;
+export const urgencyValues = ['low', 'medium', 'high', 'critical'] as const;
 
 export const urgencySchema = z.enum(urgencyValues);
 export type Urgency = z.infer<typeof urgencySchema>;
 
 export const urgencyLabels = {
-  extra_low: 'Extra Low',
   low: 'Low',
   medium: 'Medium',
   high: 'High',
@@ -40,7 +39,6 @@ export type UrgencyCounts = Record<Urgency, number>;
 
 export const urgencyCountsSchema = z
   .object({
-    extra_low: z.number().int().nonnegative(),
     low: z.number().int().nonnegative(),
     medium: z.number().int().nonnegative(),
     high: z.number().int().nonnegative(),
@@ -50,7 +48,6 @@ export const urgencyCountsSchema = z
 
 export const zeroUrgencyCounts = (): UrgencyCounts =>
   urgencyCountsSchema.parse({
-    extra_low: 0,
     low: 0,
     medium: 0,
     high: 0,

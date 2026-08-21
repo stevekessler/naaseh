@@ -7,7 +7,7 @@ import type {
   UserRecord,
 } from '@naaseh/domain';
 
-export const urgencyFixtureValues = ['extra_low', 'low', 'medium', 'high', 'critical'] as const;
+export const urgencyFixtureValues = ['low', 'medium', 'high', 'critical'] as const;
 
 export type UrgencyFixtureValue = (typeof urgencyFixtureValues)[number];
 
@@ -21,7 +21,7 @@ export const urgencyStackRankingIds = {
   categoryWork: '01K00000000000000000000001',
   projectDelivery: '01K00000000000000000000010',
   projectOperations: '01K00000000000000000000011',
-  taskExtraLow: '01K00000000000000000000100',
+  taskLow: '01K00000000000000000000100',
   taskMedium: '01K00000000000000000000101',
   subtaskHigh: '01K00000000000000000000102',
   taskCompletedCritical: '01K00000000000000000000103',
@@ -116,9 +116,9 @@ const activeTaskDefaults = {
 export const urgencyStackRankingTasks = [
   {
     ...activeTaskDefaults,
-    id: urgencyStackRankingIds.taskExtraLow,
+    id: urgencyStackRankingIds.taskLow,
     label: 'Document optional cleanup ideas',
-    urgency: 'extra_low',
+    urgency: 'low',
     projectId: urgencyStackRankingIds.projectDelivery,
     groupId: 'urgency-team',
     createdAt: '2026-08-01T13:00:00.000Z',
@@ -169,7 +169,7 @@ export const urgencyStackRankingTasks = [
   {
     id: urgencyStackRankingIds.subtaskCompletedLow,
     ownerId: urgencyStackRankingUsers.owner.id,
-    parentId: urgencyStackRankingIds.taskExtraLow,
+    parentId: urgencyStackRankingIds.taskLow,
     label: 'File the follow-up notes',
     memo: '',
     memoHidden: false,

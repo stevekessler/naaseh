@@ -3,6 +3,7 @@ import {
   purgeLocalPersonalStack,
   removeLocalStackMembership,
 } from '../db/personal-stack-repository.js';
+import { purgeLocalTaskTimer } from '../db/task-timer-repository.js';
 
 export const purgePrivateStackStateForSession = purgeLocalPersonalStack;
 
@@ -13,6 +14,7 @@ export async function purgeRevokedOrDeletedStackWork(
 ) {
   if (entityType === 'listItem') return;
   await removeLocalStackMembership(ownerId, entityType, entityId);
+  if (entityType === 'task') await purgeLocalTaskTimer(ownerId, entityId);
 }
 export async function purgeRevokedGroup(groupId: string, entityIds: string[]) {
   await db.transaction(
@@ -63,5 +65,24 @@ export async function purgeEntityBeforeCursor(
   await db.transaction('rw', store, db.settings, async () => {
     await store.delete(entityId);
     await db.settings.delete(`search-document:${entityType}:${entityId}`);
+  });
+}
+
+export async function purgeRevokedSessionData(options: {
+  transaction: (work: () => Promise<void>) => Promise<unknown>;
+  clearProtectedStores: () => Promise<void>;
+  clearDependentOutbox: () => Promise<void>;
+}) {
+  await options.transaction(async () => {
+    await options.clearProtectedStores();
+    await options.clearDependentOutbox();
+  });
+}
+
+/** Removes all account-derived browser data in one Dexie transaction after revocation. */
+export async function purgeAllAuthorizedData() {
+  const protectedTables = db.tables;
+  await db.transaction('rw', protectedTables, async () => {
+    for (const table of protectedTables) await table.clear();
   });
 }

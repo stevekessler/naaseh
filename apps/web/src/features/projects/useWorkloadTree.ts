@@ -30,7 +30,6 @@ export function useWorkloadTree(
           taskCount: 0,
           listCount: 0,
           urgencyCounts: {
-            extra_low: 0,
             low: 0,
             medium: 0,
             high: 0,
@@ -45,7 +44,6 @@ export function useWorkloadTree(
               taskCount: 0,
               listCount: 0,
               urgencyCounts: {
-                extra_low: 0,
                 low: 0,
                 medium: 0,
                 high: 0,

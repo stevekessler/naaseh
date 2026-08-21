@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Row = Record<string, any>;
-type Urgency = 'extra_low' | 'low' | 'medium' | 'high' | 'critical';
+type Urgency = 'low' | 'medium' | 'high' | 'critical';
 
 const state = vi.hoisted(() => ({
   tasks: new Map<string, Row>(),
@@ -200,13 +200,13 @@ describe('offline Task/List urgency persistence', () => {
     const task = await saveNewTask({ label: 'Reconnect task' }, 'owner');
     const list = await saveNewList('Reconnect list', 'owner');
     await updateTask(task, { urgency: 'low' } as Partial<typeof task>, 'owner');
-    await updateLocalList(list, { urgency: 'extra_low' } as Partial<typeof list>);
+    await updateLocalList(list, { urgency: 'low' } as Partial<typeof list>);
 
     await drainOutbox('csrf');
 
     expect(state.outbox.size).toBe(0);
     expect((await listLocalTasks()).map(urgencyOf)).toEqual(['low']);
-    expect((await listLocalLists()).map(urgencyOf)).toEqual(['extra_low']);
+    expect((await listLocalLists()).map(urgencyOf)).toEqual(['low']);
     expect(fetch).toHaveBeenCalledTimes(4);
   });
 

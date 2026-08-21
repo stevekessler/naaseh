@@ -1,5 +1,13 @@
 # Observability review
 
+## Feature 009 local validation — 2026-08-14
+
+`npm run test:observability` passes 25 tests across four files in 10.30 seconds. The synthesized foundation now contains 19 API integrations, 25 Lambda permissions, and 26 critical CloudWatch alarms while remaining below the 400-resource stack budget. The additional feature alarms cover task-security migration/inventory integrity and related failure paths; all alarms retain SNS actions.
+
+The feature review includes safe TFA/reset/recovery outcomes, timer actions/conflicts/latency/clock anomalies, Extra Low inventory guard, administration denials, completion-export lifecycle/integrity failures, and existing sync/outbox metrics. Dimensions remain bounded action/outcome/reason/version/count classes. Credentials, codes, factor material/state details, cookies/tokens, labels/memos, task/user identifiers where unnecessary, timer anchors/payloads, combobox queries, CSV rows, object paths, and signed URLs remain excluded by logger redaction and security tests.
+
+This is local synthesis and redaction evidence. Deployed log delivery, retention, alarm state/transitions, dashboard links, CloudTrail attribution, cardinality, and actual ingestion cost remain production release checks.
+
 ## Local validation — 2026-07-23
 
 Application logs are structured JSON and recursively redact passwords, PINs, authorization

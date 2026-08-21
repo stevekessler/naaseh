@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expandTaskDetails } from './enhanced-helpers.js';
 
 async function signIn(page: Page) {
   await page.goto('/');
@@ -14,9 +15,12 @@ async function addTask(
 ) {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(task.label);
-  await form.getByLabel('Memo').fill(task.memo);
-  await form.getByLabel('Due date and time').fill(task.dueAt);
-  await form.getByLabel('Assignee').fill(task.assignee);
+  await expandTaskDetails(form);
+  await form.getByRole('textbox', { name: 'Memo', exact: true }).fill(task.memo);
+  await form.getByLabel('Due').selectOption('timed');
+  await form.locator('input[type="date"]').fill(task.dueAt.slice(0, 10));
+  await form.getByLabel('Due time').selectOption(task.dueAt.slice(11));
+  await form.getByLabel('Assignee').selectOption('local-steve');
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: task.label })).toBeVisible();
 }
@@ -49,12 +53,12 @@ test('searches and combines filters without putting memo queries in navigation s
   await filters.getByRole('button', { name: 'Clear filters' }).click();
   await filters.getByRole('textbox', { name: 'From' }).fill('2030-01-01');
   await filters.getByRole('textbox', { name: 'To', exact: true }).fill('2030-01-31');
-  await filters.getByLabel('Assignee').fill('steve');
+  await filters.getByLabel('Assignee').selectOption('local-steve');
   await expect(filters.getByRole('status')).toHaveText('1 result');
   await expect(page.getByRole('heading', { name: 'Project Cedar' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
   await expect(page).toHaveURL(/from=2030-01-01/);
-  await expect(page).toHaveURL(/assigneeId=steve/);
+  await expect(page).toHaveURL(/assigneeId=local-steve/);
 
   await context.setOffline(true);
   await filters.getByLabel('Search').fill('ced');

@@ -1,17 +1,35 @@
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectVersionsCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { ExportJob } from '@naaseh/domain';
 import { updateExport } from './export-service.js';
+import { recordCompletionExport } from '../reporting/telemetry.js';
 const s3 = new S3Client({});
 const bucket = process.env.NAASEH_EXPORT_BUCKET ?? '';
 export async function readyExportResult(job: ExportJob) {
   if (job.status !== 'ready' || !job.resultKey || !job.manifest)
     throw new Error('Export result is not ready.');
+  const head = await s3.send(
+    new HeadObjectCommand({ Bucket: bucket, Key: job.resultKey, ChecksumMode: 'ENABLED' }),
+  );
+  if (
+    head.ContentLength !== job.manifest.byteLength ||
+    head.Metadata?.sha256 !== job.manifest.sha256 ||
+    Number(head.Metadata?.rowcount) !== job.manifest.rowCount
+  ) {
+    if (job.exportKind === 'completed_tasks')
+      recordCompletionExport({
+        phase: 'verify',
+        outcome: 'failure',
+        scope: job.scope ?? 'self',
+      });
+    throw new Error('Export integrity verification failed.');
+  }
   return {
     downloadUrl: await getSignedUrl(
       s3,

@@ -8,9 +8,13 @@ import {
 } from './completion-event.js';
 import { authorizeContent } from './authorization.js';
 import { defaultUrgency, urgencySchema } from './urgency.js';
+import { dueCalendarDateSchema } from './due-date.js';
+import { memoDocumentSchema, memoDocumentText } from './memo-document.js';
 
 export const visibilitySchema = z.enum(['public', 'private']);
 export const taskStatusSchema = z.enum(['open', 'completed', 'archived']);
+export const postItColorSchema = z.enum(['yellow', 'pink', 'blue', 'green', 'purple', 'orange']);
+export type PostItColor = z.infer<typeof postItColorSchema>;
 const httpsUrlSchema = z
   .string()
   .url()
@@ -29,11 +33,14 @@ const taskObjectSchema = z
     label: z.string().trim().min(1).max(300),
     link: httpsUrlSchema.optional().or(z.literal('')),
     memo: z.string().max(20_000).default(''),
+    memoDocument: memoDocumentSchema.optional(),
     memoHidden: z.boolean().default(false),
     encryptedMemo: z.string().optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
     dueAt: z.string().datetime().optional(),
+    dueKind: z.enum(['date', 'timed']).optional(),
+    dueDate: dueCalendarDateSchema.optional(),
     dueTimeZone: z.string().min(1).optional(),
     assigneeId: z.string().optional(),
     categoryId: z.string().optional(),
@@ -42,6 +49,7 @@ const taskObjectSchema = z
     parentId: z.string().optional(),
     visibility: visibilitySchema.default('public'),
     urgency: urgencySchema.default(defaultUrgency),
+    postItColor: postItColorSchema.optional(),
     status: taskStatusSchema.default('open'),
     lifecycle: z.enum(['active', 'archived', 'deleting']).optional(),
     completionState: z.enum(['open', 'completed']).optional(),
@@ -58,9 +66,12 @@ const taskObjectSchema = z
 function validateTaskInvariants(
   task: {
     dueAt?: string | undefined;
+    dueKind?: 'date' | 'timed' | undefined;
+    dueDate?: string | undefined;
     dueTimeZone?: string | undefined;
     memoHidden?: boolean | undefined;
     memo?: string | undefined;
+    memoDocument?: z.input<typeof memoDocumentSchema> | undefined;
     encryptedMemo?: string | undefined;
     status?: string | undefined;
     completionState?: string | undefined;
@@ -69,11 +80,21 @@ function validateTaskInvariants(
   },
   context: z.RefinementCtx,
 ) {
-  if (Boolean(task.dueAt) !== Boolean(task.dueTimeZone))
+  if (!task.dueKind && Boolean(task.dueAt) !== Boolean(task.dueTimeZone))
     context.addIssue({
       code: 'custom',
       path: ['dueTimeZone'],
       message: 'dueAt and dueTimeZone must be provided together.',
+    });
+  if (
+    (task.dueKind === 'date' && (!task.dueDate || task.dueAt || task.dueTimeZone)) ||
+    (task.dueKind === 'timed' && (!task.dueAt || task.dueDate)) ||
+    (!task.dueKind && task.dueDate)
+  )
+    context.addIssue({
+      code: 'custom',
+      path: ['dueKind'],
+      message: 'Date-only and timed due values must use their matching fields.',
     });
   if (task.memoHidden && task.memo)
     context.addIssue({
@@ -86,6 +107,18 @@ function validateTaskInvariants(
       code: 'custom',
       path: ['encryptedMemo'],
       message: 'Encrypted memo data requires memoHidden.',
+    });
+  if (task.memoHidden && task.memoDocument)
+    context.addIssue({
+      code: 'custom',
+      path: ['memoDocument'],
+      message: 'Hidden memo documents cannot be stored as plaintext.',
+    });
+  if (task.memoDocument && memoDocumentText(task.memoDocument) !== task.memo)
+    context.addIssue({
+      code: 'custom',
+      path: ['memo'],
+      message: 'Memo text must match the document projection.',
     });
   const completionState =
     task.completionState ?? (task.status === 'completed' ? 'completed' : 'open');

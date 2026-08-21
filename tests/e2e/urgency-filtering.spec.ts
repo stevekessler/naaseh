@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -14,7 +14,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 const filtersFor = (page: Page) => page.getByRole('region', { name: 'Search and filters' });
-const urgencyFiltersFor = (page: Page) => filtersFor(page).getByRole('group', { name: 'Urgency' });
+const urgencyFiltersFor = (page: Page) =>
+  filtersFor(page).getByRole('group', { name: 'Urgency levels' });
 
 async function createOrganization(page: Page) {
   await page.getByRole('button', { name: 'Admin' }).click();
@@ -48,16 +49,20 @@ async function createFilteredTask(
 ) {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(input.label);
-  await form.getByLabel('Memo').fill(`searchable ${input.label}`);
-  await form.getByLabel('Urgency', { exact: true }).selectOption(input.urgency);
+  await expandTaskDetails(form);
+  await form.getByRole('textbox', { name: 'Memo', exact: true }).fill(`searchable ${input.label}`);
+  await form.getByLabel('Priority', { exact: true }).selectOption(input.urgency);
   await form.getByLabel('Project').selectOption(input.projectId);
-  await form.getByLabel('Assignee').fill(input.assignee);
-  await form.getByLabel('Due date and time').fill(input.dueAt);
+  await form.getByLabel('Assignee').selectOption('local-steve');
+  await form.getByLabel('Due').selectOption('timed');
+  await form.locator('input[type="date"]').fill(input.dueAt.slice(0, 10));
+  await form.getByLabel('Due time').selectOption(input.dueAt.slice(11));
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: input.label })).toBeVisible();
 }
 
 async function selectUrgencies(page: Page, labels: string[]) {
+  await page.evaluate(() => window.scrollTo(0, 0));
   const group = urgencyFiltersFor(page);
   for (const label of labels) {
     const checkbox = group.getByRole('checkbox', { name: label, exact: true });
@@ -79,8 +84,8 @@ test('filters by one or many urgency levels with every existing filter online', 
     dueAt: '2030-01-15T09:00',
   });
   await createFilteredTask(page, {
-    label: 'Urgency filter extra-low target',
-    urgency: 'extra_low',
+    label: 'Urgency filter low target',
+    urgency: 'low',
     projectId: organization.projectId,
     assignee: 'steve',
     dueAt: '2030-01-16T09:00',
@@ -95,16 +100,16 @@ test('filters by one or many urgency levels with every existing filter online', 
 
   await selectUrgencies(page, ['Critical']);
   await expect(page.getByRole('heading', { name: 'Urgency filter critical target' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Urgency filter extra-low target' })).toBeHidden();
-  await selectUrgencies(page, ['Extra Low']);
+  await expect(page.getByRole('heading', { name: 'Urgency filter low target' })).toBeHidden();
+  await selectUrgencies(page, ['Low']);
 
   const filters = filtersFor(page);
   await filters.getByLabel('Search').fill('searchable urgency filter');
   await filters.getByRole('textbox', { name: 'From' }).fill('2030-01-01');
   await filters.getByRole('textbox', { name: 'To', exact: true }).fill('2030-01-31');
-  await filters.getByLabel('Assignee').fill('steve');
-  await filters.getByLabel('Category').fill(organization.categoryId);
-  await filters.getByLabel('Project').fill(organization.projectId);
+  await filters.getByLabel('Assignee').selectOption('local-steve');
+  await filters.getByLabel('Category').selectOption(organization.categoryId);
+  await filters.getByLabel('Project').selectOption(organization.projectId);
   await filters.getByLabel('Scope').selectOption('active');
   await filters.getByLabel('Content').selectOption('todos');
   await expect(filters.getByRole('status').first()).toHaveText('2 results');
@@ -275,9 +280,13 @@ for (const failure of readFailures) {
     );
     await page.getByRole('button', { name: 'Personal Stack' }).click();
     await selectUrgencies(page, ['High']);
-    const alert = page.getByRole('alert');
+    const actionName =
+      failure.action.source === 'retry' ? 'Retry filtered read' : 'Restart filtered read';
+    const alert = page
+      .getByRole('alert')
+      .filter({ has: page.getByRole('button', { name: actionName, exact: true }) });
     await expect(alert).toContainText(failure.message);
-    await expect(alert.getByRole('button', { name: failure.action })).toBeVisible();
+    await expect(alert.getByRole('button', { name: actionName, exact: true })).toBeVisible();
   });
 }
 
@@ -290,7 +299,7 @@ test('offers a retry when a filtered read times out', async ({ page }) => {
   );
   await page.getByRole('button', { name: 'Personal Stack' }).click();
   await selectUrgencies(page, ['Medium']);
-  const alert = page.getByRole('alert');
+  const alert = page.getByRole('alert').filter({ hasText: /timed out|timeout/i });
   await expect(alert).toContainText(/timed out|timeout/i);
   await expect(alert.getByRole('button', { name: /retry/i })).toBeVisible();
 });

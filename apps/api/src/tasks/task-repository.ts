@@ -83,8 +83,12 @@ export const findTask = (id: string) =>
   getRecord<{ data: Task }>(`TASK#${id}`, 'CURRENT').then((item) => item?.data);
 
 const revisionFieldAllowlist = new Set<keyof Task>([
+  'memo',
+  'memoDocument',
   'link',
   'dueAt',
+  'dueKind',
+  'dueDate',
   'dueTimeZone',
   'assigneeId',
   'categoryId',
@@ -92,6 +96,7 @@ const revisionFieldAllowlist = new Set<keyof Task>([
   'parentId',
   'visibility',
   'urgency',
+  'postItColor',
   'status',
   'completedAt',
   'completedBy',
@@ -103,7 +108,18 @@ function safeRevisionValues(task: Task | undefined, changedFields: string[]) {
   return Object.fromEntries(
     changedFields
       .filter((field) => revisionFieldAllowlist.has(field as keyof Task))
-      .map((field) => [field, task[field as keyof Task] ?? null]),
+      .map((field) => {
+        const value = task[field as keyof Task];
+        const revisionValue: string | number | boolean | null =
+          field === 'memoDocument'
+            ? value
+              ? JSON.stringify(value)
+              : null
+            : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+              ? value
+              : null;
+        return [field, revisionValue];
+      }),
   ) as TaskRevision['after'];
 }
 export async function saveTaskMutation(

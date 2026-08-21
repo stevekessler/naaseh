@@ -1,10 +1,12 @@
 import type { VectorCursor } from '@naaseh/domain';
 import type { StoredMutation, EncryptedTaskRecord, EncryptedEntityRecord } from './database.js';
 import { db } from './database.js';
+import { assertNoExtraLowActiveValues } from './extra-low-removal.js';
 export async function atomicEntityAndMutation(
   entity: EncryptedTaskRecord,
   mutation: StoredMutation,
 ) {
+  assertNoExtraLowActiveValues([entity]);
   await db.transaction('rw', db.secureTasks, db.outbox, async () => {
     await db.secureTasks.put(entity);
     await db.outbox.add(mutation);
@@ -32,6 +34,8 @@ const encryptedStoreFor = (entityType: StoredMutation['entityType']) => {
       return db.secureDeletionJobs;
     case 'accessControl':
       return db.secureGroups;
+    case 'taskTimer':
+      return db.secureTaskTimers;
     default:
       throw new Error(`Entity type ${entityType} does not use the generic encrypted store`);
   }
@@ -41,6 +45,7 @@ export async function atomicEncryptedEntityAndMutation(
   entity: EncryptedEntityRecord,
   mutation: StoredMutation,
 ) {
+  assertNoExtraLowActiveValues([entity]);
   const store = encryptedStoreFor(mutation.entityType);
   await db.transaction('rw', store, db.outbox, async () => {
     await store.put(entity);
@@ -99,7 +104,8 @@ export interface EncryptedPullChange {
     | 'accessControl'
     | 'project'
     | 'completionEvent'
-    | 'deletionJob';
+    | 'deletionJob'
+    | 'taskTimer';
   record?: EncryptedEntityRecord;
   entityId: string;
   operation: 'upsert' | 'tombstone';
@@ -127,6 +133,7 @@ export async function commitEnhancedPull(
       db.secureCompletionEvents,
       db.secureDeletionJobs,
       db.secureGroups,
+      db.secureTaskTimers,
       db.secureConflicts,
       db.outbox,
       db.settings,

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CategoryRecord, Project, Task, TaskInput, WorkReference } from '@naaseh/domain';
 import type { LocalStackScope } from '../../db/personal-stack-repository.js';
 import { StackList } from './StackList.js';
@@ -7,6 +8,7 @@ import { TaskFilters } from '../search/TaskFilters.js';
 import type { Filters } from '../../search/task-search.js';
 import { TaskForm } from '../tasks/TaskForm.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
+import { TaskEditDialog } from '../tasks/TaskEditDialog.js';
 
 export interface PersonalStackPageProps {
   scope: LocalStackScope;
@@ -28,6 +30,7 @@ export interface PersonalStackPageProps {
   filters?: Filters;
   changeFilters?: (filters: Filters) => void;
   createTask?: (task: TaskInput) => Promise<void>;
+  updateTask?: (task: Task, patch: Partial<Task>) => Promise<void>;
   readError?: 'invalid_cursor' | 'expired_cursor' | 'context_changed' | 'failed' | 'timeout';
   retryRead?: () => void;
   restartRead?: () => void;
@@ -77,11 +80,14 @@ export function PersonalStackPage({
   filters,
   changeFilters,
   createTask,
+  updateTask,
   readError,
   retryRead,
   restartRead,
 }: PersonalStackPageProps) {
   const pendingCount = pendingOperationIds.length;
+  const [editingId, setEditingId] = useState<string>();
+  const editing = parentTasks.find((task) => task.id === editingId);
   return (
     <section className="personal-stack-page">
       <header className="personal-stack-header">
@@ -166,7 +172,23 @@ export function PersonalStackPage({
         </div>
       ) : null}
 
-      <StackList items={items} scope={scope} move={move} />
+      <StackList
+        items={items}
+        scope={scope}
+        move={move}
+        {...(updateTask ? { editTask: setEditingId } : {})}
+      />
+      {editing && updateTask ? (
+        <TaskEditDialog
+          task={editing}
+          categories={categories}
+          projects={projectRecords}
+          assignees={assignees}
+          parentTasks={parentTasks}
+          save={(patch) => updateTask(editing, patch)}
+          close={() => setEditingId(undefined)}
+        />
+      ) : null}
     </section>
   );
 }

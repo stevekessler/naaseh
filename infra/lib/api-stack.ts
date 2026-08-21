@@ -78,6 +78,7 @@ export function createApplicationApi(
     webPushSecret: secretsmanager.ISecret;
     googleOAuthSecret: secretsmanager.ISecret;
     alerts: sns.ITopic;
+    adminTfaRecoveryOperatorArn: string;
   },
 ) {
   const defaults = sharedLambdaDefaults(options.environment);
@@ -242,19 +243,28 @@ export function createApplicationApi(
     pepper: options.pepper,
     recoveryKeyArn: options.recoveryKeyArn,
   }).fn;
-  const { admin, provisionUser, operatorPolicy, processor, categories, projects } =
-    createAdminFunctions(scope, {
-      environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
-      table: options.table,
-      dataKey: options.dataKey,
-      media: options.media,
-      passwordPepper: options.pepper,
-      passwordPepperKey: options.pepperKey,
-      deletionConfirmationSecret: deletion.secret,
-      logGroup: options.logGroups.auth,
-    });
+  const {
+    admin,
+    provisionUser,
+    operatorPolicy,
+    recoverAdminTfa,
+    tfaRecoveryOperatorPolicy,
+    processor,
+    categories,
+    projects,
+  } = createAdminFunctions(scope, {
+    environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
+    table: options.table,
+    dataKey: options.dataKey,
+    media: options.media,
+    passwordPepper: options.pepper,
+    passwordPepperKey: options.pepperKey,
+    deletionConfirmationSecret: deletion.secret,
+    logGroup: options.logGroups.auth,
+    tfaRecoveryOperatorArn: options.adminTfaRecoveryOperatorArn,
+  });
   const notification = createNotificationResources(scope, {
-    environment: options.environment,
+    environment: { ...options.environment, ALLOWED_ORIGINS: options.allowedOrigin },
     table: options.table,
     webPushSecret: options.webPushSecret,
     taskFunction: task,
@@ -322,6 +332,16 @@ export function createApplicationApi(
   // Only the login handler needs the password pepper. Collaboration, recovery,
   // and provisioning receive their grants in their isolated stacks.
   options.pepper.grantRead(auth);
+  auth.addEnvironment('NAASEH_KMS_KEY_ARN', options.dataKey.keyArn);
+  auth.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['kms:Encrypt', 'kms:Decrypt'],
+      resources: [options.dataKey.keyArn],
+      conditions: {
+        StringEquals: { 'kms:EncryptionContext:purpose': 'naaseh-totp' },
+      },
+    }),
+  );
   options.dataKey.grantEncryptDecrypt(task);
   options.dataKey.grantEncryptDecrypt(ranking);
   options.dataKey.grantEncryptDecrypt(stackCompactor);
@@ -383,6 +403,59 @@ export function createApplicationApi(
   route('SessionIntegration', '/api/v1/auth/session', [apigwv2.HttpMethod.GET], auth, false);
   route('LogoutIntegration', '/api/v1/auth/logout', [apigwv2.HttpMethod.POST], auth, false);
   route(
+    'PasswordResetIntegration',
+    '/api/v1/auth/password-reset',
+    [apigwv2.HttpMethod.POST],
+    auth,
+    false,
+  );
+  route(
+    'TfaChallengeIntegration',
+    '/api/v1/auth/tfa/challenge',
+    [apigwv2.HttpMethod.POST],
+    auth,
+    false,
+  );
+  route(
+    'TfaEnrollmentIntegration',
+    '/api/v1/auth/tfa/enrollment',
+    [apigwv2.HttpMethod.POST],
+    auth,
+    false,
+  );
+  route(
+    'TfaEnrollmentConfirmIntegration',
+    '/api/v1/auth/tfa/enrollment/confirm',
+    [apigwv2.HttpMethod.POST],
+    auth,
+    false,
+  );
+  route('ProfileSecurityIntegration', '/api/v1/profile/security', [apigwv2.HttpMethod.GET], auth);
+  route(
+    'ProfileSecurityTfaIntegration',
+    '/api/v1/profile/security/tfa',
+    [apigwv2.HttpMethod.DELETE],
+    auth,
+  );
+  route(
+    'ProfileSecurityEnrollmentIntegration',
+    '/api/v1/profile/security/tfa/enrollment',
+    [apigwv2.HttpMethod.POST],
+    auth,
+  );
+  route(
+    'ProfileRecoveryCodesIntegration',
+    '/api/v1/profile/security/recovery-codes',
+    [apigwv2.HttpMethod.POST],
+    auth,
+  );
+  route(
+    'ProfilePasswordIntegration',
+    '/api/v1/profile/security/password',
+    [apigwv2.HttpMethod.POST],
+    auth,
+  );
+  route(
     'TaskIntegration',
     '/api/v1/tasks',
     [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
@@ -442,6 +515,18 @@ export function createApplicationApi(
     '/api/v1/reporting/completion-report/drilldown',
     [apigwv2.HttpMethod.GET],
     reporting,
+  );
+  route(
+    'CompletionExportIntegration',
+    '/api/v1/reporting/completion-export',
+    [apigwv2.HttpMethod.POST],
+    exportCoordinator,
+  );
+  route(
+    'CompletionExportStatusIntegration',
+    '/api/v1/reporting/completion-export/{jobId}',
+    [apigwv2.HttpMethod.GET],
+    exportCoordinator,
   );
   route(
     'TaskArchiveIntegration',
@@ -736,6 +821,8 @@ export function createApplicationApi(
       admin,
       provisionUser,
       provisionUserOperatorPolicy: operatorPolicy,
+      recoverAdminTfa,
+      tfaRecoveryOperatorPolicy,
       categories,
       projects,
       processor,

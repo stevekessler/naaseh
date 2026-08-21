@@ -1,15 +1,18 @@
 import type { Task } from '@naaseh/domain';
 import { PrivacyControl } from './PrivacyControl.js';
 import { PermanentDeleteDialog } from '../archive/PermanentDeleteDialog.js';
+import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 
 export function TaskActions({
   task,
   update,
   csrfToken,
+  currentUserId,
 }: {
   task: Task;
   update: (patch: Partial<Task>) => void;
   csrfToken: string;
+  currentUserId?: string;
 }) {
   return (
     <div>
@@ -27,6 +30,7 @@ export function TaskActions({
         taskId={task.id}
         csrfToken={csrfToken}
       />
+      {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} /> : null}
       <PermanentDeleteDialog
         target={{ resourceType: 'task', resourceId: task.id, version: task.version }}
         label={task.label}

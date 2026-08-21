@@ -57,6 +57,11 @@ const safeUser = (user: StoredUser): UserRecord => ({
   role: user.role,
   active: user.active,
   sessionEpoch: user.sessionEpoch,
+  credentialVersion: user.credentialVersion,
+  tfaStatus: user.tfaStatus,
+  ...(user.tfaEnrolledAt ? { tfaEnrolledAt: user.tfaEnrolledAt } : {}),
+  ...(user.securityUpdatedAt ? { securityUpdatedAt: user.securityUpdatedAt } : {}),
+  version: user.version,
 });
 
 export function createProvisionUserService(dependencies: ProvisionUserDependencies) {
@@ -89,6 +94,10 @@ export function createProvisionUserService(dependencies: ProvisionUserDependenci
       role: input.role,
       active: true,
       sessionEpoch: 0,
+      credentialVersion: 0,
+      tfaStatus: input.role === 'admin' ? 'enrollment_required' : 'disabled',
+      securityUpdatedAt: new Date().toISOString(),
+      version: 1,
       passwordHash,
       pinHash,
       pepperVersion,

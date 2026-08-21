@@ -294,6 +294,33 @@ describe('personal-stack restore validation', () => {
     );
     expect(() => validateUrgencyRestore(missingSnapshot)).toThrow(/completion|urgency/iu);
 
+    const removedCurrentValue = rows.map((row) =>
+      row.SK === 'CURRENT' && row.PK.startsWith('TASK#')
+        ? { ...row, data: { ...(row.data as Record<string, unknown>), urgency: 'extra_low' } }
+        : row,
+    );
+    expect(() => validateUrgencyRestore(removedCurrentValue)).toThrow(/urgency/iu);
+
+    const removedImmutableValue = rows.map((row) =>
+      row.SK === 'EVENT'
+        ? {
+            ...row,
+            data: {
+              ...(row.data as Record<string, unknown>),
+              urgencyAtCompletion: 'extra_low',
+            },
+          }
+        : row,
+    );
+    expect(() => validateUrgencyRestore(removedImmutableValue)).toThrow(/completion|urgency/iu);
+
+    const removedCounter = rows.map((row) =>
+      row.SK === 'COUNT#overall#overall#task#URGENCY#low'
+        ? { ...row, SK: 'COUNT#overall#overall#task#URGENCY#extra_low' }
+        : row,
+    );
+    expect(() => validateUrgencyRestore(removedCounter)).toThrow(/counter/iu);
+
     const inconsistentTotals = rows.map((row) =>
       row.SK === 'COUNT#overall#overall#task' ? { ...row, count: 2 } : row,
     );

@@ -243,10 +243,10 @@ describe('urgency stack ranking target-scale fixture', () => {
       list: 2_000,
     });
     expect(countBy(fixture.overallWork, ({ urgency }) => urgency)).toEqual(
-      Object.fromEntries(urgencyValues.map((urgency) => [urgency, 10_000])),
+      Object.fromEntries(urgencyValues.map((urgency) => [urgency, 12_500])),
     );
     expect(countBy(fixture.projectWork, ({ urgency }) => urgency)).toEqual(
-      Object.fromEntries(urgencyValues.map((urgency) => [urgency, 2_000])),
+      Object.fromEntries(urgencyValues.map((urgency) => [urgency, 2_500])),
     );
     expect(countBy(fixture.overallWork, ({ audienceKind }) => audienceKind)).toEqual({
       owner: 30_000,
@@ -255,7 +255,7 @@ describe('urgency stack ranking target-scale fixture', () => {
     });
     expect(
       countBy(fixture.completionEvents, ({ urgencyAtCompletion }) => urgencyAtCompletion),
-    ).toEqual(Object.fromEntries(urgencyValues.map((urgency) => [urgency, 8_000])));
+    ).toEqual(Object.fromEntries(urgencyValues.map((urgency) => [urgency, 10_000])));
     expect(fixture.overallWork.filter(({ sparseSelector }) => sparseSelector)).toHaveLength(500);
     expect(
       new Set(fixture.completionEvents.map(({ occurredAt }) => occurredAt.slice(0, 10))),
@@ -289,7 +289,9 @@ describe('urgency stack ranking performance and boundedness', () => {
       scopeType: 'project',
       scopeId: PERFORMANCE_PROJECT_ID,
     };
-    const extraLow = fixture.overallWork.filter(({ urgency }) => urgency === 'extra_low');
+    const lowPriority = fixture.overallWork
+      .filter(({ urgency }) => urgency === 'low')
+      .slice(0, 10_000);
     const workloadWork = fixture.overallWork.map((work) => ({
       kind: work.kind === 'list' ? ('list' as const) : ('task' as const),
       lifecycle: work.lifecycle,
@@ -297,10 +299,8 @@ describe('urgency stack ranking performance and boundedness', () => {
       urgency: work.urgency,
     }));
 
-    await measureJourney('20-percent-local-urgency-filter', () => () => {
-      expect(fixture.overallWork.filter(({ urgency }) => urgency === 'extra_low')).toHaveLength(
-        10_000,
-      );
+    await measureJourney('25-percent-local-urgency-filter', () => () => {
+      expect(fixture.overallWork.filter(({ urgency }) => urgency === 'low')).toHaveLength(12_500);
     });
     await measureJourney('1-percent-local-sparse-filter', () => () => {
       expect(fixture.overallWork.filter(({ sparseSelector }) => sparseSelector)).toHaveLength(500);
@@ -344,15 +344,15 @@ describe('urgency stack ranking performance and boundedness', () => {
     await measureJourney('10k-filtered-permutation', () => () => {
       const result = applyFilteredPermutation(fixture.overallStack, {
         kind: 'filtered_permutation',
-        movedWork: extraLow.at(-1)!.reference,
+        movedWork: lowPriority.at(-1)!.reference,
         destinationIndex: 0,
-        affectedWork: refs(extraLow),
+        affectedWork: refs(lowPriority),
       });
-      expect(result[extraLow[0]!.overallPosition - 1]).toEqual(extraLow.at(-1)!.reference);
+      expect(result[lowPriority[0]!.overallPosition - 1]).toEqual(lowPriority.at(-1)!.reference);
     });
     await measureJourney('100-row-stack-refresh', () => async () => {
       const page = await readFilteredStackPage({
-        context: filteredContext({ urgencies: ['extra_low'] }),
+        context: filteredContext({ urgencies: ['low'] }),
         candidates: fixture.overallWork,
         limit: 100,
       });
@@ -374,14 +374,16 @@ describe('urgency stack ranking performance and boundedness', () => {
           (sum, count) => sum + count.taskCount + count.listCount,
           0,
         ),
-      ).toBe(10_000);
-      expect(completion.total).toBe(8_000);
+      ).toBe(12_500);
+      expect(completion.total).toBe(10_000);
     });
   }, 180_000);
 
   it('keeps a 10k filtered operation and 50k snapshot within chunk and transaction limits', () => {
     const scope: PersonalStackScope = { userId: PERFORMANCE_OWNER_ID, scopeType: 'overall' };
-    const affectedWork = refs(fixture.overallWork.filter(({ urgency }) => urgency === 'extra_low'));
+    const affectedWork = refs(
+      fixture.overallWork.filter(({ urgency }) => urgency === 'low').slice(0, 10_000),
+    );
     const prepared = prepareStackOperationRecords({
       scope,
       operation: {

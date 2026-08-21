@@ -1,13 +1,29 @@
-import MiniSearch from 'minisearch';
+import { memoDocumentText, type MemoDocument } from '@naaseh/domain';
+
+/**
+ * Session-memory-only search for memos the user has explicitly unlocked.
+ * Call `lock` on inactivity, sign-out, session revocation, or visibility loss.
+ * No value held here is written to IndexedDB, the outbox, logs, or exports.
+ */
 export class HiddenMemoIndex {
-  private index = new MiniSearch<{ id: string; memo: string }>({ fields: ['memo'], idField: 'id' });
-  unlock(id: string, memo: string) {
-    this.index.add({ id, memo });
+  readonly #plain = new Map<string, string>();
+
+  unlock(taskId: string, document: MemoDocument | string) {
+    this.#plain.set(taskId, typeof document === 'string' ? document : memoDocumentText(document));
   }
-  lock() {
-    this.index.removeAll();
+
+  lock(taskId?: string) {
+    if (taskId) this.#plain.delete(taskId);
+    else this.#plain.clear();
   }
+
   search(query: string) {
-    return this.index.search(query, { prefix: true }).map((hit) => String(hit.id));
+    const normalized = query.trim().toLocaleLowerCase();
+    if (!normalized) return [];
+    return [...this.#plain]
+      .filter(([, text]) => text.toLocaleLowerCase().includes(normalized))
+      .map(([taskId]) => taskId);
   }
 }
+
+export { HiddenMemoIndex as UnlockedHiddenMemoIndex };

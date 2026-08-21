@@ -1,4 +1,4 @@
-import { DeleteCommand, GetCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 
 const failures = new Map<string, { count: number; nextAt: number }>();
@@ -43,3 +43,55 @@ export async function registerDurableFailure(key: string, now = Date.now()) {
 }
 export const clearDurableFailures = (key: string) =>
   dynamodb.send(new DeleteCommand({ TableName: tableName, Key: durableKey(key) }));
+
+const resetWindowKey = (key: string) => ({ PK: `AUTHRESET#${key}`, SK: 'WINDOW' });
+
+export async function consumeDurableWindowAttempt(
+  key: string,
+  limit: number,
+  windowSeconds = 15 * 60,
+  now = Date.now(),
+) {
+  const item = (
+    await dynamodb.send(
+      new GetCommand({ TableName: tableName, Key: resetWindowKey(key), ConsistentRead: true }),
+    )
+  ).Item;
+  const active = Number(item?.windowEndsAt ?? 0) > now;
+  const priorCount = active ? Number(item?.count ?? 0) : 0;
+  if (priorCount >= limit) return false;
+  const windowEndsAt = active ? Number(item?.windowEndsAt) : now + windowSeconds * 1_000;
+  try {
+    await dynamodb.send(
+      new PutCommand({
+        TableName: tableName,
+        Item: {
+          ...resetWindowKey(key),
+          count: priorCount + 1,
+          windowEndsAt,
+          expiresAt: Math.ceil(windowEndsAt / 1_000),
+        },
+        ConditionExpression: item
+          ? '#count=:priorCount AND windowEndsAt=:priorWindowEndsAt'
+          : 'attribute_not_exists(PK)',
+        ...(item
+          ? {
+              ExpressionAttributeNames: { '#count': 'count' },
+              ExpressionAttributeValues: {
+                ':priorCount': Number(item.count ?? 0),
+                ':priorWindowEndsAt': Number(item.windowEndsAt ?? 0),
+              },
+            }
+          : {}),
+      }),
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function consumePasswordResetAttempt(accountKey: string, sourceKey: string) {
+  if (!(await consumeDurableWindowAttempt(`account:${accountKey}`, 5))) return false;
+  return consumeDurableWindowAttempt(`source:${sourceKey}`, 20);
+}

@@ -12,6 +12,7 @@ import {
   categorySchema,
   nextRetryDelay,
   personalStackOperationSchema,
+  taskTimerSchema,
   taskSchema,
 } from '@naaseh/domain';
 import { db } from '../db/database.js';
@@ -43,6 +44,7 @@ import {
   type LocalStackMove,
   type LocalStackScope,
 } from '../db/personal-stack-repository.js';
+import { conflictLocalTaskTimer, purgeLocalTaskTimer } from '../db/task-timer-repository.js';
 export type SyncState = 'offline' | 'idle' | 'syncing' | 'error';
 type MutationResult = {
   mutationId: string;
@@ -127,17 +129,35 @@ async function recoverMissingTaskSnapshot(): Promise<void> {
       credentials: 'include',
     });
     if (!response.ok) throw syncHttpError('Synchronization bootstrap', response.status);
-    const body = (await response.json()) as { tasks?: unknown[] };
+    const body = (await response.json()) as { tasks?: unknown[]; taskTimer?: unknown };
     const records = await Promise.all(
       (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
     );
-    await db.transaction('rw', db.secureTasks, db.outbox, db.settings, async () => {
-      // A task created while bootstrap was in flight wins. Never replace or
-      // discard a local snapshot or pending mutation during recovery.
-      if ((await db.secureTasks.count()) || (await db.outbox.count())) return;
-      if (records.length) await db.secureTasks.bulkPut(records);
-      await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
-    });
+    const timer = body.taskTimer ? taskTimerSchema.parse(body.taskTimer) : undefined;
+    const timerRecord = timer
+      ? {
+          id: timer.ownerId,
+          ownerId: timer.ownerId,
+          taskId: timer.taskId,
+          updatedAt: timer.updatedAt,
+          value: await encryptLocalValue('taskTimer', timer.ownerId, timer),
+        }
+      : undefined;
+    await db.transaction(
+      'rw',
+      db.secureTasks,
+      db.secureTaskTimers,
+      db.outbox,
+      db.settings,
+      async () => {
+        // A task created while bootstrap was in flight wins. Never replace or
+        // discard a local snapshot or pending mutation during recovery.
+        if ((await db.secureTasks.count()) || (await db.outbox.count())) return;
+        if (records.length) await db.secureTasks.bulkPut(records);
+        if (timerRecord) await db.secureTaskTimers.put(timerRecord);
+        await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+      },
+    );
   }
 }
 async function pushMutation(
@@ -147,6 +167,7 @@ async function pushMutation(
 ) {
   const clientId = await getClientId();
   const isStackMutation = mutation.entityType === ('personalStackOperation' as string);
+  const isTimerMutation = mutation.entityType === 'taskTimer';
   const wireMutation = {
     id: mutation.id,
     entityId: mutation.entityId,
@@ -166,13 +187,15 @@ async function pushMutation(
       'x-client-id': clientId,
     },
     body: JSON.stringify({
-      contractVersion: ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
-        ? 3
-        : isStackMutation
-          ? 4
-          : ['task', 'category', 'group'].includes(mutation.entityType)
-            ? 1
-            : 2,
+      contractVersion: isTimerMutation
+        ? 5
+        : ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
+          ? 3
+          : isStackMutation
+            ? 4
+            : ['task', 'category', 'group'].includes(mutation.entityType)
+              ? 1
+              : 2,
       mutations: [wireMutation],
       ...(isStackMutation ? {} : { backlog }),
     }),
@@ -215,6 +238,16 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
               result.version ??
               item.baseVersion,
           });
+        } else if (item.entityType === 'taskTimer') {
+          await conflictLocalTaskTimer({
+            ownerId: item.entityId,
+            mutationId: item.id,
+            reason:
+              result.reason === 'authorization_changed'
+                ? 'authorization_changed'
+                : 'version_mismatch',
+            command: mutation.payload as import('@naaseh/domain').TaskTimerCommand,
+          });
         } else {
           const value = await encryptLocalValue('conflict', item.id, { mutation, result });
           await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
@@ -241,7 +274,7 @@ export async function pullChanges(): Promise<void> {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ contractVersion: 4, cursor: current }),
+    body: JSON.stringify({ contractVersion: 5, cursor: current }),
   });
   if (!response.ok) throw syncHttpError('Synchronization pull', response.status);
   const body = (await response.json()) as {
@@ -268,6 +301,7 @@ export async function pullChanges(): Promise<void> {
     category: categorySchema,
     completionEvent: completionEventSchema,
     deletionJob: deletionJobSchema,
+    taskTimer: taskTimerSchema,
   };
   for (const change of body.changes) {
     const entityType = change.entityType ?? 'task';
@@ -337,7 +371,8 @@ export async function pullChanges(): Promise<void> {
             | 'accessControl'
             | 'project'
             | 'completionEvent'
-            | 'deletionJob',
+            | 'deletionJob'
+            | 'taskTimer',
           entityId: change.entityId,
           operation: 'tombstone' as const,
         });
@@ -356,6 +391,8 @@ export async function pullChanges(): Promise<void> {
         completedBy?: string;
         occurredAt?: string;
         reversedAt?: string;
+        ownerId?: string;
+        taskId?: string;
       };
       enhanced.push({
         entityType: entityType as
@@ -368,11 +405,14 @@ export async function pullChanges(): Promise<void> {
           | 'accessControl'
           | 'project'
           | 'completionEvent'
-          | 'deletionJob',
+          | 'deletionJob'
+          | 'taskTimer',
         entityId: change.entityId,
         operation: 'upsert' as const,
         record: {
           id: parsed.id,
+          ...(parsed.ownerId ? { ownerId: parsed.ownerId } : {}),
+          ...(parsed.taskId ? { taskId: parsed.taskId } : {}),
           ...((parsed.listId ?? parsed.parentId)
             ? { taskId: parsed.listId ?? parsed.parentId }
             : {}),
@@ -401,6 +441,11 @@ export async function pullChanges(): Promise<void> {
       continue;
     }
     if (change.operation === 'tombstone') {
+      const localTimer = await db.secureTaskTimers.toArray();
+      for (const timer of localTimer) {
+        if (timer.taskId === change.entityId && timer.ownerId)
+          await purgeLocalTaskTimer(timer.ownerId, change.entityId);
+      }
       tombstones.push(change.entityId);
       continue;
     }

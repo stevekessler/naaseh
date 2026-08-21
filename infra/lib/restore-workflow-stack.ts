@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 export const restoreStates = [
   'ValidateRestoreJob',
   'ValidateRestoredResource',
+  'RecoverAuthentication',
   'RecordEvidence',
 ] as const;
 
@@ -108,7 +109,12 @@ export function createRestoreWorkflow(
   );
   validator.addToRolePolicy(
     new iam.PolicyStatement({
-      actions: ['dynamodb:DescribeTable', 'dynamodb:Scan'],
+      actions: [
+        'dynamodb:DescribeTable',
+        'dynamodb:Scan',
+        'dynamodb:UpdateItem',
+        'dynamodb:DeleteItem',
+      ],
       resources: [
         Arn.format(
           {
@@ -143,6 +149,11 @@ export function createRestoreWorkflow(
     'ValidateRestoredResource',
     '$.resourceValidation',
   );
+  const recoverAuthentication = invoke(
+    'RecoverAuthentication',
+    'RecoverAuthentication',
+    '$.authenticationRecovery',
+  );
   const recordEvidence = invoke('RecordEvidence', 'RecordEvidence', '$.validationResult');
   const recordFailure = new tasks.LambdaInvoke(scope, 'RecordFailure', {
     lambdaFunction: validator,
@@ -156,11 +167,12 @@ export function createRestoreWorkflow(
     error: 'NaasehRestoreValidationFailed',
   });
   recordFailure.next(notifyFailure);
-  for (const task of [validateJob, validateResource, recordEvidence])
+  for (const task of [validateJob, validateResource, recoverAuthentication, recordEvidence])
     task.addCatch(recordFailure, { resultPath: '$.failure' });
 
   const definition = sfn.Chain.start(validateJob)
     .next(validateResource)
+    .next(recoverAuthentication)
     .next(recordEvidence)
     .next(new sfn.Succeed(scope, 'RestoreValidationSucceeded'));
   const stateMachine = new sfn.StateMachine(scope, 'IsolatedRestoreStateMachine', {

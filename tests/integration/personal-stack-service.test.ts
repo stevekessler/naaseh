@@ -6,7 +6,7 @@ type Scope =
   | { userId: string; scopeType: 'project'; scopeId: string };
 type WorkReference = { workType: 'task' | 'list'; workId: string; membershipEpoch: string };
 type EligibleWork = WorkReference & {
-  urgency: 'extra_low' | 'low' | 'medium' | 'high' | 'critical';
+  urgency: 'low' | 'medium' | 'high' | 'critical';
   projectId?: string;
 };
 type Move =
@@ -88,7 +88,7 @@ const work = (
 ): EligibleWork => ({ workType, workId, membershipEpoch, urgency, projectId: project });
 const a = work(ids.a, '0001', 'critical');
 const b = work(ids.b, '0002', 'medium', projectId, 'list');
-const c = work(ids.c, '0003', 'extra_low');
+const c = work(ids.c, '0003', 'low');
 const d = work(ids.d, '0004', 'high');
 const ref = ({ workType, workId, membershipEpoch }: EligibleWork): WorkReference => ({
   workType,
@@ -259,7 +259,7 @@ describe('personal stack service', () => {
       movedWork: ref(movedWork),
       destinationIndex,
       affectedWork: [a, b, c, d].map(ref),
-      filterBasis: { urgencies: ['critical', 'medium', 'extra_low', 'high'] },
+      filterBasis: { urgencies: ['critical', 'medium', 'low', 'high'] },
     });
 
     expect(

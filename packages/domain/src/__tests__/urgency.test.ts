@@ -9,23 +9,21 @@ import {
 } from '../urgency.js';
 
 describe('urgency', () => {
-  it('defines exactly five stable categorical wire values in display order', () => {
-    expect(urgencyValues).toEqual(['extra_low', 'low', 'medium', 'high', 'critical']);
-    expect(new Set(urgencyValues).size).toBe(5);
+  it('defines exactly four stable categorical wire values in display order', () => {
+    expect(urgencyValues).toEqual(['low', 'medium', 'high', 'critical']);
+    expect(new Set(urgencyValues).size).toBe(4);
 
     for (const value of urgencyValues) expect(urgencySchema.parse(value)).toBe(value);
   });
 
   it('provides one stable human-readable label for every wire value', () => {
     expect(urgencyLabels).toEqual({
-      extra_low: 'Extra Low',
       low: 'Low',
       medium: 'Medium',
       high: 'High',
       critical: 'Critical',
     });
     expect(urgencyValues.map((value) => urgencyLabels[value])).toEqual([
-      'Extra Low',
       'Low',
       'Medium',
       'High',
@@ -43,7 +41,6 @@ describe('urgency', () => {
     const second = zeroUrgencyCounts();
 
     expect(first).toEqual({
-      extra_low: 0,
       low: 0,
       medium: 0,
       high: 0,
@@ -68,6 +65,7 @@ describe('urgency', () => {
     '1',
     '5',
     'Extra Low',
+    'extra_low',
     'Medium',
     'CRITICAL',
     '',

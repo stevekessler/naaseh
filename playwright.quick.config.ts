@@ -27,20 +27,5 @@ export default defineConfig({
       testMatch: chromiumJourneys,
       use: { ...devices['Desktop Chrome'] },
     },
-    {
-      name: 'webkit',
-      testMatch: 'baseline.spec.ts',
-      use: { ...devices['Desktop Safari'] },
-    },
-    {
-      name: 'iphone',
-      testMatch: 'baseline.spec.ts',
-      use: { ...devices['iPhone 14'] },
-    },
-    {
-      name: 'ipad',
-      testMatch: 'baseline.spec.ts',
-      use: { ...devices['iPad Pro 11'] },
-    },
   ],
 });

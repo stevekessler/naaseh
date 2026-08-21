@@ -4,10 +4,12 @@ export function TaskList({
   tasks,
   onToggle,
   onSelect = () => {},
+  currentUserId,
 }: {
   tasks: Task[];
   onToggle: (task: Task) => void;
   onSelect?: (task: Task) => void;
+  currentUserId?: string;
 }) {
   if (!tasks.length)
     return (
@@ -19,7 +21,13 @@ export function TaskList({
   return (
     <ul className="task-list">
       {tasks.map((task) => (
-        <TaskRow key={task.id} task={task} onToggle={onToggle} onSelect={onSelect} />
+        <TaskRow
+          key={task.id}
+          task={task}
+          onToggle={onToggle}
+          onSelect={onSelect}
+          {...(currentUserId ? { currentUserId } : {})}
+        />
       ))}
     </ul>
   );

@@ -14,8 +14,7 @@ import { CompletionDashboard } from '../../src/features/reports/CompletionDashbo
 const now = '2026-08-05T12:00:00.000Z';
 const projectId = '01J00000000000000000000009';
 const zeroFilled: UrgencyCounts = {
-  extra_low: 1,
-  low: 0,
+  low: 1,
   medium: 0,
   high: 1,
   critical: 0,
@@ -85,7 +84,7 @@ const historicalEvent = {
   occurredAt: now,
   counted: true,
   createdAt: now,
-  urgencyAtCompletion: 'extra_low',
+  urgencyAtCompletion: 'low',
 } as unknown as CompletionEvent;
 
 const dashboard = (patch: Partial<DashboardContractProps> = {}) => (
@@ -128,14 +127,14 @@ const workloadTree = {
 };
 
 describe('urgency-aware reporting surfaces', () => {
-  it('shows five-level completion filters, zero-filled breakdowns, and historical snapshot wording', () => {
+  it('shows four-level completion filters, zero-filled breakdowns, and historical snapshot wording', () => {
     const html = renderToStaticMarkup(dashboard());
 
     expect(html).toContain('aria-label="Completion urgency filters"');
-    for (const label of ['Extra Low', 'Low', 'Medium', 'High', 'Critical']) {
+    for (const label of ['Low', 'Medium', 'High', 'Critical']) {
       expect(html).toContain(label);
     }
-    expect(html).toContain('Low: 0');
+    expect(html).toContain('Low: 1');
     expect(html).toContain('Critical: 0');
     expect(html).toContain('Priority at completion');
     expect(html).toContain('uses the priority captured when each to-do was completed');
@@ -153,8 +152,8 @@ describe('urgency-aware reporting surfaces', () => {
     expect(html).toContain('Current priority breakdown for Launch');
     expect(html).toContain('Current priority breakdown for Release');
     expect(html).toContain('Current priority breakdown for Unassigned');
-    expect(html).toContain('Extra Low: 1');
-    expect(html).toContain('Low: 0');
+    expect(html).toContain('Low: 1');
+    expect(html).toContain('Medium: 0');
     expect(html).toContain('Critical: 0');
   });
 
@@ -162,8 +161,8 @@ describe('urgency-aware reporting surfaces', () => {
     const rows = [
       {
         id: 'a',
-        label: 'Extra Low first in Project',
-        urgency: 'extra_low',
+        label: 'Low first in Project',
+        urgency: 'low',
         overallRank: 5,
         projectRank: 1,
       },
@@ -234,7 +233,7 @@ describe('urgency-aware reporting surfaces', () => {
           urgencies: [],
         }}
         changeFilters={vi.fn()}
-        urgencyCounts={{ ...zeroFilled, extra_low: 0, critical: 1 }}
+        urgencyCounts={{ ...zeroFilled, low: 0, critical: 1 }}
         exportCsv={vi.fn()}
       />,
     );

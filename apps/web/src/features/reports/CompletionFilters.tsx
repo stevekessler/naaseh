@@ -71,14 +71,6 @@ export function CompletionFilters({
           ))}
         </select>
       </label>
-      <label>
-        Time zone
-        <input
-          value={value.timeZone}
-          onChange={(event) => change({ ...value, timeZone: event.target.value })}
-          spellCheck={false}
-        />
-      </label>
       {value.period === 'week' && (
         <label>
           Week starts

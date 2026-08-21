@@ -36,8 +36,8 @@ describe('foundation infrastructure', () => {
   it('keeps the production template below the resource budget', () => {
     const resourceCount = Object.keys(template.toJSON().Resources ?? {}).length;
     expect(resourceCount).toBeLessThanOrEqual(400);
-    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 18);
-    template.resourceCountIs('AWS::Lambda::Permission', 24);
+    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 19);
+    template.resourceCountIs('AWS::Lambda::Permission', 25);
   });
 
   it('keeps focused helpers inside one deployable stack', () => {
@@ -148,6 +148,16 @@ describe('foundation infrastructure', () => {
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', { RouteKey: route });
   });
 
+  it('allows the notification API to validate same-origin mutations', () => {
+    const notification = Object.entries(template.findResources('AWS::Lambda::Function')).find(
+      ([logicalId]) => logicalId.startsWith('NotificationFunction'),
+    )?.[1];
+    expect(notification).toBeDefined();
+    expect(notification?.Properties.Environment.Variables.ALLOWED_ORIGINS).toBe(
+      'https://gsd.thepandas.link',
+    );
+  });
+
   it('limits password-pepper access to authentication and provisioning boundaries', () => {
     const policies = Object.values(template.findResources('AWS::IAM::Policy'));
     const pepperReaders = policies.filter((policy) => {
@@ -227,7 +237,7 @@ describe('foundation infrastructure', () => {
   });
 
   it('creates retained log groups, only critical alarms, and a dashboard', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 10);
+    template.resourceCountIs('AWS::Logs::LogGroup', 11);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
     template.hasResourceProperties('AWS::Logs::LogGroup', {
       KmsKeyId: Match.anyValue(),
@@ -254,7 +264,7 @@ describe('foundation infrastructure', () => {
     expect(rendered).toContain('logs.us-west-2.');
     expect(rendered).toContain('AWS::URLSuffix');
     expect(rendered).toContain('Test-RestoreWorkflowLogs*');
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 18);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 26);
     template.resourceCountIs('AWS::SNS::Topic', 1);
     template.resourceCountIs('AWS::SNS::TopicPolicy', 1);
     template.hasResourceProperties('AWS::SNS::Subscription', {
@@ -262,7 +272,7 @@ describe('foundation infrastructure', () => {
       Endpoint: 'alerts@example.com',
     });
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
-    expect(alarms).toHaveLength(18);
+    expect(alarms).toHaveLength(26);
     for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
     const [, runtimeSecretPolicyChangeAlarm] =
       Object.entries(template.findResources('AWS::CloudWatch::Alarm')).find(([logicalId]) =>
@@ -292,6 +302,12 @@ describe('foundation infrastructure', () => {
       'StackOperationLatencyAlarm',
       'BackupFailureAlarm',
       'RestoreWorkflowFailureAlarm',
+      'AuthSecurityFailureAlarm',
+      'AdminTfaRecoveryFailureAlarm',
+      'TaskTimerFailureAlarm',
+      'TaskTimerInvariantAlarm',
+      'TaskTimerConflictAlarm',
+      'ExtraLowInventoryBlockedAlarm',
     ])
       expect(rendered).toContain(alarm);
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);

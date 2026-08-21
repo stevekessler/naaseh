@@ -45,7 +45,7 @@ test('archives, restores, edits, blocks assignment, and warns before permanent d
   await context.setOffline(true);
   await region.getByRole('button', { name: 'Archive Project' }).click();
   await expect(region).toContainText('API (archived)');
-  await page.getByRole('button', { name: 'Tasks' }).click();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(page.getByLabel('Project').getByRole('option', { name: 'API' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Admin' }).click();
   await region.getByRole('button', { name: 'Restore Project' }).click();

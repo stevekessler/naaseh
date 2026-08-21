@@ -44,13 +44,13 @@ function findElement(
 }
 
 describe('TaskFilters urgency controls', () => {
-  it('renders five accessible multi-select urgency checkboxes with full labels', () => {
+  it('renders four accessible multi-select urgency checkboxes with full labels', () => {
     const html = renderToStaticMarkup(
       <UrgencyTaskFilters value={value()} change={vi.fn()} resultCount={10} />,
     );
 
-    expect(html.match(/type="checkbox"/g) ?? []).toHaveLength(5);
-    for (const label of ['Extra Low', 'Low', 'Medium', 'High', 'Critical']) {
+    expect(html.match(/type="checkbox"/g) ?? []).toHaveLength(4);
+    for (const label of ['Low', 'Medium', 'High', 'Critical']) {
       expect(html).toContain(label);
     }
     expect(html).toContain('aria-label="Urgency levels"');
@@ -96,7 +96,7 @@ describe('TaskFilters urgency controls', () => {
 
   it('shows an actionable zero-result message for selected urgency levels', () => {
     const html = renderToStaticMarkup(
-      <UrgencyTaskFilters value={value(['extra_low'])} change={vi.fn()} resultCount={0} />,
+      <UrgencyTaskFilters value={value(['low'])} change={vi.fn()} resultCount={0} />,
     );
     expect(html).toContain('No work matches the selected urgency levels.');
     expect(html).toContain('Clear urgency filters');

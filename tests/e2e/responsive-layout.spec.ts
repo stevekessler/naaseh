@@ -5,6 +5,7 @@ import {
   expectMinimumTarget,
   expectNoDocumentOverflow,
   expectNoIntersection,
+  expectVerticalGap,
 } from './responsive-assertions.js';
 
 for (const width of [320, 375, 390]) {
@@ -26,3 +27,20 @@ for (const width of [320, 375, 390]) {
     await expectContained(filters.getByLabel('Period'), filters);
   });
 }
+
+test('plain form actions remain separated from their fields', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signIn(page);
+  await page.getByRole('button', { name: 'Admin' }).click();
+
+  const users = page.getByRole('region', { name: 'Users' });
+  await expectVerticalGap(users.getByLabel('PIN'), users.getByRole('button', { name: 'Add user' }));
+
+  const organization = page.getByRole('region', { name: 'Categories and Projects' });
+  const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
+  await expectVerticalGap(
+    categoryForm.getByLabel('Default assignee'),
+    categoryForm.getByRole('button', { name: 'Save category' }),
+  );
+  await expectNoDocumentOverflow(page);
+});

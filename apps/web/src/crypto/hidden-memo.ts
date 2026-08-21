@@ -1,4 +1,11 @@
-import { hiddenMemoAad, type HiddenMemoPackage } from '@naaseh/domain';
+import {
+  hiddenMemoAad,
+  hiddenMemoPayloadV2Schema,
+  memoDocumentText,
+  plainMemoDocument,
+  type HiddenMemoPackage,
+  type MemoDocument,
+} from '@naaseh/domain';
 const enc = new TextEncoder(),
   dec = new TextDecoder(),
   b64 = (v: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(v))),
@@ -37,3 +44,29 @@ export async function decryptMemo(
   );
 }
 export const exportDek = (key: CryptoKey) => crypto.subtle.exportKey('raw', key);
+
+export async function createRichMemoCiphertext(
+  taskId: string,
+  memoId: string,
+  document: MemoDocument,
+  providedDek?: CryptoKey,
+) {
+  const payload = hiddenMemoPayloadV2Schema.parse({
+    version: 2,
+    text: memoDocumentText(document),
+    document,
+  });
+  return createMemoCiphertext(taskId, memoId, JSON.stringify(payload), providedDek);
+}
+
+export async function decryptMemoPayload(
+  pkg: Pick<HiddenMemoPackage, 'ciphertext' | 'iv' | 'aad' | 'version'>,
+  dek: CryptoKey,
+) {
+  const plaintext = await decryptMemo(pkg, dek);
+  if (pkg.version === 1) {
+    const document = plainMemoDocument(plaintext);
+    return { version: 1 as const, text: plaintext, document };
+  }
+  return hiddenMemoPayloadV2Schema.parse(JSON.parse(plaintext));
+}

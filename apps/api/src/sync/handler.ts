@@ -26,6 +26,7 @@ import {
   applySharedWorkSyncPayload,
   applyTaskMutation,
   dispatchPersonalStackSyncMutation,
+  dispatchTaskTimerSyncMutation,
   serializeSharedWorkChange,
 } from './sync-service.js';
 import { pullAudience, type SyncFeedChange } from './change-feed-repository.js';
@@ -46,6 +47,15 @@ import {
   getProject,
   updateProjectRecord,
 } from '../projects/project-repository.js';
+import { canReadTaskAs } from '@naaseh/domain';
+import { createTaskTimerService } from '../timers/task-timer-service.js';
+import {
+  commitTaskTimer,
+  getTaskTimer,
+  getTaskTimerFeedSequence,
+  getTaskTimerReceipt,
+} from '../timers/task-timer-repository.js';
+import { recordTaskTimerEvent } from '../timers/telemetry.js';
 const MAX_BODY_BYTES = 1_000_000;
 
 async function saveOrganizationMutationReceipt(
@@ -95,10 +105,15 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       event.requestContext.requestId,
     );
   if (event.rawPath.endsWith('/bootstrap')) {
-    const [shared, owned] = await Promise.all([listPublicTasks(), listOwnerTasks(actorId)]);
+    const [shared, owned, taskTimer] = await Promise.all([
+      listPublicTasks(),
+      listOwnerTasks(actorId),
+      getTaskTimer(actorId),
+    ]);
     const keyRegistry = await loadPublicKeyRegistry();
     return json(200, {
       tasks: [...shared, ...owned].map((task) => taskSchema.parse(task)),
+      ...(taskTimer ? { taskTimer } : {}),
       keyRegistry,
       cursor: { public: 0, owner: 0 },
     });
@@ -181,7 +196,10 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   const includesPersonalStackOperation = body.mutations.some(
     (mutation) => (mutation as { entityType?: string }).entityType === 'personalStackOperation',
   );
-  if (includesPersonalStackOperation) pushRequestSchema.parse(parsed);
+  const includesTaskTimer = body.mutations.some(
+    (mutation) => (mutation as { entityType?: string }).entityType === 'taskTimer',
+  );
+  if (includesPersonalStackOperation || includesTaskTimer) pushRequestSchema.parse(parsed);
   const results = [];
   const backlogDepth = Number(body.backlog?.depth);
   const oldestAgeSeconds = Number(body.backlog?.oldestAgeSeconds);
@@ -197,6 +215,56 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     metric('SyncOldestPendingAge', oldestAgeSeconds, 'Seconds');
   }
   for (const mutation of body.mutations) {
+    if (mutation.entityType === 'taskTimer') {
+      const sourceClientId = event.headers['x-client-id'];
+      if (!sourceClientId)
+        throw new SafeApiError(
+          400,
+          'missing_client_id',
+          'A client identifier is required for timer synchronization.',
+          'validation',
+        );
+      const timerService = createTaskTimerService({
+        repository: {
+          load: getTaskTimer,
+          findReceipt: getTaskTimerReceipt,
+          feedSequence: getTaskTimerFeedSequence,
+          commit: async (input) => {
+            try {
+              await commitTaskTimer(input);
+            } catch (error) {
+              if (error instanceof Error && error.name === 'TransactionCanceledException')
+                return false;
+              throw error;
+            }
+          },
+        },
+        canReadTask: async (_ownerId, taskId) => {
+          const task = await findTask(taskId);
+          return Boolean(task && canReadTaskAs(task, actor).allowed);
+        },
+      });
+      const startedAt = Date.now();
+      const timerResult = await dispatchTaskTimerSyncMutation({
+        actorId,
+        sourceClientId,
+        mutation,
+        service: timerService,
+      });
+      recordTaskTimerEvent({
+        operation: String((mutation.payload as { type?: unknown })?.type ?? 'unknown'),
+        outcome:
+          timerResult.status === 'alreadyApplied'
+            ? 'duplicate'
+            : timerResult.status === 'retry'
+              ? 'failed'
+              : timerResult.status,
+        durationMs: Date.now() - startedAt,
+        correlationId: event.requestContext.requestId,
+      });
+      results.push(timerResult);
+      continue;
+    }
     if (stackSyncMutationSchema.safeParse(mutation).success) {
       const sourceClientId = event.headers['x-client-id'];
       if (!sourceClientId)
@@ -289,10 +357,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
               ? archiveProject(current, actorId)
               : mutation.operation === 'restoreOrganization'
                 ? restoreProject(current)
-                : updateProject(
-                    current,
-                    mutation.payload as Parameters<typeof updateProject>[1],
-                  );
+                : updateProject(current, mutation.payload as Parameters<typeof updateProject>[1]);
           if (next.id !== mutation.entityId || (!current && next.version !== 1))
             throw new Error('Project mutation identity or version is invalid.');
           if (!(await getCategory(next.categoryId)))

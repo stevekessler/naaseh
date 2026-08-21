@@ -10,8 +10,21 @@ authorization—hydrate canonical work and authorize it before return.
 
 Active-work and archive traversal uses audience/lifecycle/scope/urgency pointers. Owner, public, group,
 and sharded administrator streams are merged, deduplicated, then reauthorized. Every pointer change
-advances its partition source epoch. Workload total and five urgency counters change in the same
-transaction as their pointers and canonical lifecycle/urgency change.
+advances its partition source epoch. Workload total and four urgency counters change in the same
+transaction as their pointers and canonical lifecycle/urgency change. The active urgency enum is
+`low|medium|high|critical`; Extra Low has no compatibility-read or rewrite path.
+
+## Extra Low deletion gate
+
+Deletion is allowed only after the read-only inventory reports zero records across current Tasks and
+Lists, completion snapshots, workload counters, stack state, pending mutations, and current backup
+manifests. Set `EXTRA_LOW_INVENTORY_FUNCTION` to the deployed Lambda output and run
+`scripts/operations/verify-no-extra-low.sh`. Optional `AWS_PROFILE` and `AWS_REGION` select the target.
+
+The command fails closed when the scan fails or any count is nonzero. In that case, stop the rollout,
+retain the previous compatible application version, identify the bounded location count, and review
+the unexpected records explicitly. Do not run a backfill or silently map the value to Low. After a
+restore, rerun both the restore validators and this zero-data inventory before exposing the resource.
 
 ## Stack operations and compaction
 
@@ -73,7 +86,7 @@ version. Repair or restore canonical operations first, then rerun compaction. Do
 snapshot active.
 
 For workload mismatch, run projection reconciliation against canonical authorized work. Classify and
-repair missing, stale, orphan, and unauthorized pointers/counters idempotently; verify all five urgency
+repair missing, stale, orphan, and unauthorized pointers/counters idempotently; verify all four urgency
 counts sum to Task plus List totals and source epochs advance. For completion mismatch, verify indexed
 events, detail pointers, reversal state at `asOf`, and immutable completion urgency before rebuilding
 derived aggregates.

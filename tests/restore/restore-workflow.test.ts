@@ -178,6 +178,7 @@ describe('isolated restore workflow', () => {
     expect(restoreStates).toEqual([
       'ValidateRestoreJob',
       'ValidateRestoredResource',
+      'RecoverAuthentication',
       'RecordEvidence',
     ]);
     expect(restoreStates.indexOf('ValidateRestoredResource')).toBeLessThan(

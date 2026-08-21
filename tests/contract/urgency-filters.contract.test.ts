@@ -18,12 +18,12 @@ describe('urgency-filtered API contract', () => {
   it('parses single/multi urgency alongside existing stack content filters', () => {
     expect(
       contracts.stackPageQuerySchema.parse({
-        urgencies: 'extra_low,critical',
+        urgencies: 'low,critical',
         contentType: 'todos',
         limit: '25',
       }),
     ).toEqual({
-      urgencies: 'extra_low,critical',
+      urgencies: 'low,critical',
       contentType: 'todos',
       limit: 25,
     });

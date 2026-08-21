@@ -41,47 +41,51 @@ export function ListItemRow({
   useEffect(() => setDraftName(name), [name]);
   return (
     <li className={`list-item ${done ? 'completed' : ''}`}>
-      <button
-        className="check"
-        aria-label={`${done ? 'Reopen' : 'Complete'} ${name}`}
-        onClick={() => {
-          feedback.complete(name, !done);
-          onToggle();
-        }}
-      >
-        {done ? '✓' : ''}
-      </button>
-      <span className="completion-label">{name}</span>
-      {value && <output>{value}</output>}
-      <button
-        className="quiet"
-        type="button"
-        disabled={!moveUp}
-        onClick={moveUp}
-        aria-label={`Move ${name} up`}
-      >
-        ↑
-      </button>
-      <button
-        className="quiet"
-        type="button"
-        disabled={!moveDown}
-        onClick={moveDown}
-        aria-label={`Move ${name} down`}
-      >
-        ↓
-      </button>
-      <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
-        Edit
-      </button>
-      {!item.directoryItemId && (
-        <button className="quiet" type="button" onClick={onPromote}>
-          Add to global directory
+      <div className="list-item-summary">
+        <button
+          className="check"
+          aria-label={`${done ? 'Reopen' : 'Complete'} ${name}`}
+          onClick={() => {
+            feedback.complete(name, !done);
+            onToggle();
+          }}
+        >
+          {done ? '✓' : ''}
         </button>
-      )}
-      <button className="quiet" aria-label={`Remove ${name}`} onClick={onRemove}>
-        Remove
-      </button>
+        <span className="completion-label">{name}</span>
+        {value && <output>{value}</output>}
+      </div>
+      <div className="list-item-actions" aria-label={`Actions for ${name}`}>
+        <button
+          className="quiet"
+          type="button"
+          disabled={!moveUp}
+          onClick={moveUp}
+          aria-label={`Move ${name} up`}
+        >
+          ↑
+        </button>
+        <button
+          className="quiet"
+          type="button"
+          disabled={!moveDown}
+          onClick={moveDown}
+          aria-label={`Move ${name} down`}
+        >
+          ↓
+        </button>
+        <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
+          {editing ? 'Close editor' : 'Edit'}
+        </button>
+        {!item.directoryItemId && (
+          <button className="quiet" type="button" onClick={onPromote}>
+            Add to global directory
+          </button>
+        )}
+        <button className="quiet" aria-label={`Remove ${name}`} onClick={onRemove}>
+          Remove
+        </button>
+      </div>
       {editing && (
         <div className="list-item-editor">
           <label>
