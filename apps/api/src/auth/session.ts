@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 export interface NewSession {
   token: string;
   tokenHash: string;
@@ -19,3 +20,9 @@ export const sessionCookie = (token: string, maxAge = 28_800) =>
 
 export const preAuthCookie = (token: string, maxAge = 300) =>
   `__Host-naaseh-preauth=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
+
+export function requestCookieHeader(
+  event: Pick<APIGatewayProxyEventV2, 'cookies' | 'headers'>,
+): string | undefined {
+  return event.cookies?.length ? event.cookies.join('; ') : event.headers.cookie;
+}

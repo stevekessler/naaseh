@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionActive } from '@naaseh/domain';
-import { newSession, preAuthCookie, sessionCookie } from '../../src/auth/session.js';
+import {
+  newSession,
+  preAuthCookie,
+  requestCookieHeader,
+  sessionCookie,
+} from '../../src/auth/session.js';
 import { requireMutationSecurity, validCsrf, validOrigin } from '../../src/shared/security.js';
 
 const repository = vi.hoisted(() => ({
@@ -27,6 +32,16 @@ describe('opaque server-side sessions', () => {
       `__Host-naaseh-preauth=${first.token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=300`,
     );
     expect(preAuthCookie('', 0)).toContain('Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0');
+  });
+
+  it('reads cookies from the API Gateway v2 cookie array', () => {
+    expect(
+      requestCookieHeader({
+        cookies: ['first=one', '__Host-naaseh-preauth=transaction-token'],
+        headers: {},
+      }),
+    ).toBe('first=one; __Host-naaseh-preauth=transaction-token');
+    expect(requestCookieHeader({ headers: { cookie: 'legacy=header' } })).toBe('legacy=header');
   });
 
   it('enforces idle, absolute, revocation, and session-epoch expiry', () => {
