@@ -52,48 +52,94 @@ export function createOperationalVisibility(
       statistic,
       period: Duration.minutes(5),
     });
-  for (const [id, metricName] of [
-    ['AttachmentThreatAlarm', 'AttachmentThreats'],
-    ['WorkloadProjectionDriftAlarm', 'WorkloadProjectionDrift'],
-    ['OrganizationDeleteFailureAlarm', 'OrganizationDeleteFailures'],
-    ['StackReorderFailureAlarm', 'StackReorderFailures'],
-    ['StackCompactionFailureAlarm', 'StackCompactionFailures'],
-    ['UrgencyTotalConsistencyAlarm', 'UrgencyTotalConsistencyFailures'],
-    ['ProjectionReconciliationAlarm', 'ProjectionReconciliationFailures'],
-    ['FilteredReadFailureAlarm', 'FilteredReadFailures'],
-    ['ReportExportFailureAlarm', 'UrgencyReportExportFailures'],
-    ['CompletionExportFailureAlarm', 'CompletionExportFailures'],
-    ['CompletionExportIntegrityAlarm', 'CompletionExportIntegrityFailures'],
-    ['AuthSecurityFailureAlarm', 'AuthSecurityFailures'],
-    ['AdminTfaRecoveryFailureAlarm', 'AdminTfaRecoveryFailures'],
-    ['TaskTimerFailureAlarm', 'TaskTimerFailures'],
-    ['TaskTimerInvariantAlarm', 'TaskTimerInvariantFailures'],
-    ['ExtraLowInventoryBlockedAlarm', 'ExtraLowInventoryBlocked'],
-  ] as const) {
+  type AlarmSignal = {
+    metricName: string;
+    threshold: number;
+    statistic?: string;
+  };
+  const createSignalAlarm = (
+    id: string,
+    signals: readonly AlarmSignal[],
+    evaluationPeriods: number,
+    datapointsToAlarm?: number,
+  ) => {
+    const usingMetrics = Object.fromEntries(
+      signals.map((signal, index) => [
+        `m${index + 1}`,
+        applicationMetric(signal.metricName, signal.statistic),
+      ]),
+    );
+    const expression = signals
+      .map((signal, index) => `IF(FILL(m${index + 1}, 0) >= ${signal.threshold}, 1, 0)`)
+      .join(' + ');
     const alarm = new cloudwatch.Alarm(scope, id, {
-      metric: applicationMetric(metricName),
+      alarmDescription: `Naaseh signals: ${signals.map(({ metricName }) => metricName).join(', ')}`,
+      metric: new cloudwatch.MathExpression({
+        expression,
+        usingMetrics,
+        period: Duration.minutes(5),
+      }),
       threshold: 1,
-      evaluationPeriods: 1,
+      evaluationPeriods,
+      ...(datapointsToAlarm === undefined ? {} : { datapointsToAlarm }),
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
     alarm.addAlarmAction(new actions.SnsAction(alerts));
-  }
-  for (const [id, metricName, threshold] of [
-    ['StackReorderConflictAlarm', 'StackReorderConflicts', 10],
-    ['StackOperationLatencyAlarm', 'StackOperationLatency', 1_000],
-    ['CursorContextRestartAlarm', 'PaginationContextRestarts', 10],
-    ['CursorExpiryAlarm', 'PaginationCursorExpiries', 10],
-    ['TaskTimerConflictAlarm', 'TaskTimerConflicts', 10],
-  ] as const) {
-    const alarm = new cloudwatch.Alarm(scope, id, {
-      metric: applicationMetric(metricName, metricName.endsWith('Latency') ? 'p95' : 'Sum'),
-      threshold,
-      evaluationPeriods: 3,
-      datapointsToAlarm: 2,
-      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-    });
-    alarm.addAlarmAction(new actions.SnsAction(alerts));
-  }
+  };
+
+  createSignalAlarm(
+    'SecuritySignalAlarm',
+    [
+      { metricName: 'AttachmentThreats', threshold: 1 },
+      { metricName: 'AuthSecurityFailures', threshold: 1 },
+      { metricName: 'AdminTfaRecoveryFailures', threshold: 1 },
+    ],
+    1,
+  );
+  createSignalAlarm(
+    'DataIntegritySignalAlarm',
+    [
+      { metricName: 'WorkloadProjectionDrift', threshold: 1 },
+      { metricName: 'UrgencyTotalConsistencyFailures', threshold: 1 },
+      { metricName: 'ProjectionReconciliationFailures', threshold: 1 },
+      { metricName: 'CompletionExportIntegrityFailures', threshold: 1 },
+      { metricName: 'TaskTimerInvariantFailures', threshold: 1 },
+    ],
+    1,
+  );
+  createSignalAlarm(
+    'OperationalFailureSignalAlarm',
+    [
+      { metricName: 'OrganizationDeleteFailures', threshold: 1 },
+      { metricName: 'StackReorderFailures', threshold: 1 },
+      { metricName: 'StackCompactionFailures', threshold: 1 },
+      { metricName: 'FilteredReadFailures', threshold: 1 },
+      { metricName: 'UrgencyReportExportFailures', threshold: 1 },
+      { metricName: 'CompletionExportFailures', threshold: 1 },
+      { metricName: 'TaskTimerFailures', threshold: 1 },
+      { metricName: 'ExtraLowInventoryBlocked', threshold: 1 },
+    ],
+    1,
+  );
+  createSignalAlarm(
+    'StackDegradationSignalAlarm',
+    [
+      { metricName: 'StackReorderConflicts', threshold: 10 },
+      { metricName: 'StackOperationLatency', threshold: 1_000, statistic: 'p95' },
+    ],
+    3,
+    2,
+  );
+  createSignalAlarm(
+    'ClientContentionSignalAlarm',
+    [
+      { metricName: 'PaginationContextRestarts', threshold: 10 },
+      { metricName: 'PaginationCursorExpiries', threshold: 10 },
+      { metricName: 'TaskTimerConflicts', threshold: 10 },
+    ],
+    3,
+    2,
+  );
   const dashboard = new cloudwatch.Dashboard(scope, 'OperationsDashboard');
   dashboard.addWidgets(
     new cloudwatch.GraphWidget({

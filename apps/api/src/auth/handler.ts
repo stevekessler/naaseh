@@ -54,6 +54,7 @@ import {
 import { decryptTfaSecret, encryptTfaSecret, generateTfaSecret, verifyTotp } from './tfa-crypto.js';
 import { createPasswordResetService } from './password-reset-service.js';
 import { recordAuthSecurityEvent } from './telemetry.js';
+import { preAuthCookie } from './session.js';
 
 const authCachePolicy = 'no-store';
 
@@ -213,7 +214,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       },
       {
         'cache-control': authCachePolicy,
-        'set-cookie': `${session.cookie}, __Host-naaseh-preauth=; Path=/api/v1/auth/tfa; Secure; HttpOnly; SameSite=Strict; Max-Age=0`,
+        'set-cookie': `${session.cookie}, ${preAuthCookie('', 0)}`,
       },
     );
   }
@@ -489,7 +490,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       { next, expiresAt: expiresAt.toISOString() },
       {
         'cache-control': authCachePolicy,
-        'set-cookie': `__Host-naaseh-preauth=${challengeToken}; Path=/api/v1/auth/tfa; Secure; HttpOnly; SameSite=Strict; Max-Age=300`,
+        'set-cookie': preAuthCookie(challengeToken),
       },
     );
   }
