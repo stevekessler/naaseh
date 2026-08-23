@@ -148,14 +148,26 @@ Never mark a command or check complete unless it actually ran successfully.
 ## 5. Review and merge
 
 Wait for the required GitHub `validate` check and review feedback. Mark the pull request ready only
-after its description and testing evidence are complete:
+after its description and testing evidence are complete. Resolve the pull request number from the
+current branch instead of copying the `PR_NUMBER` placeholder literally:
 
 ```console
-gh pr ready PR_NUMBER
-gh pr checks PR_NUMBER --watch \
+PR_NUMBER="$(gh pr view --json number --jq '.number')"
+test -n "$PR_NUMBER"
+printf 'Pull request: %s\n' "$PR_NUMBER"
+
+if [ "$(gh pr view "$PR_NUMBER" --json isDraft --jq '.isDraft')" = true ]; then
+  gh pr ready "$PR_NUMBER"
+fi
+
+gh pr checks "$PR_NUMBER" --watch
+gh pr checks "$PR_NUMBER" \
   --json name,state,workflow,link \
   --jq '.[] | {name, state, workflow, link}'
 ```
+
+The watch command and structured JSON command are intentionally separate because GitHub CLI does
+not allow `--watch` and `--json` in the same invocation.
 
 Obtain any required approval. Merge only when GitHub reports the pull request clean and all required
 checks pass:
@@ -183,7 +195,7 @@ Choose an approved change ticket or descriptive release identifier. Do not inclu
 private data:
 
 ```console
-CHANGE_TICKET='pr-PR_NUMBER-SHORT-DESCRIPTION'
+CHANGE_TICKET="pr-${PR_NUMBER}-SHORT-DESCRIPTION"
 ```
 
 Dispatch the production workflow from `main` with the saved pre-merge rollback SHA:
