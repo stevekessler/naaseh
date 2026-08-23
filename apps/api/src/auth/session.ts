@@ -16,3 +16,6 @@ export function newSession(now = new Date()): NewSession {
 }
 export const sessionCookie = (token: string, maxAge = 28_800) =>
   `__Host-naaseh=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
+
+export const preAuthCookie = (token: string, maxAge = 300) =>
+  `__Host-naaseh-preauth=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;

@@ -341,7 +341,7 @@ their recovery material. Lost administrator application factors require the sepa
 Read the completed workflow record:
 
 ```console
-gh run view RUN_ID \
+gh run view "$(gh run list --limit 1 --json databaseId --jq '.[0].databaseId')" \
   --json headSha,conclusion,url \
   --jq '{headSha, conclusion, url}'
 ```

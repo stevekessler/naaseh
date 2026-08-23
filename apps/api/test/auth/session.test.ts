@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sessionActive } from '@naaseh/domain';
-import { newSession, sessionCookie } from '../../src/auth/session.js';
+import { newSession, preAuthCookie, sessionCookie } from '../../src/auth/session.js';
 import { requireMutationSecurity, validCsrf, validOrigin } from '../../src/shared/security.js';
 
 const repository = vi.hoisted(() => ({
@@ -23,6 +23,10 @@ describe('opaque server-side sessions', () => {
     expect(first.token).not.toContain(first.tokenHash);
     expect(sessionCookie(first.token)).toContain('__Host-naaseh=');
     expect(sessionCookie(first.token)).toContain('Path=/; Secure; HttpOnly; SameSite=Strict');
+    expect(preAuthCookie(first.token)).toBe(
+      `__Host-naaseh-preauth=${first.token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=300`,
+    );
+    expect(preAuthCookie('', 0)).toContain('Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0');
   });
 
   it('enforces idle, absolute, revocation, and session-epoch expiry', () => {

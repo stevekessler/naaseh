@@ -264,7 +264,7 @@ describe('foundation infrastructure', () => {
     expect(rendered).toContain('logs.us-west-2.');
     expect(rendered).toContain('AWS::URLSuffix');
     expect(rendered).toContain('Test-RestoreWorkflowLogs*');
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 26);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 10);
     template.resourceCountIs('AWS::SNS::Topic', 1);
     template.resourceCountIs('AWS::SNS::TopicPolicy', 1);
     template.hasResourceProperties('AWS::SNS::Subscription', {
@@ -272,7 +272,7 @@ describe('foundation infrastructure', () => {
       Endpoint: 'alerts@example.com',
     });
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
-    expect(alarms).toHaveLength(26);
+    expect(alarms).toHaveLength(10);
     for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
     const [, runtimeSecretPolicyChangeAlarm] =
       Object.entries(template.findResources('AWS::CloudWatch::Alarm')).find(([logicalId]) =>
@@ -293,23 +293,39 @@ describe('foundation infrastructure', () => {
       'RecoveryKeyPolicyChangeAlarm',
       'RuntimeSecretPolicyChangeAlarm',
       'PermanentDeletionFailureAlarm',
-      'AttachmentThreatAlarm',
-      'WorkloadProjectionDriftAlarm',
-      'OrganizationDeleteFailureAlarm',
-      'StackReorderFailureAlarm',
-      'StackCompactionFailureAlarm',
-      'StackReorderConflictAlarm',
-      'StackOperationLatencyAlarm',
       'BackupFailureAlarm',
       'RestoreWorkflowFailureAlarm',
-      'AuthSecurityFailureAlarm',
-      'AdminTfaRecoveryFailureAlarm',
-      'TaskTimerFailureAlarm',
-      'TaskTimerInvariantAlarm',
-      'TaskTimerConflictAlarm',
-      'ExtraLowInventoryBlockedAlarm',
+      'SecuritySignalAlarm',
+      'DataIntegritySignalAlarm',
+      'OperationalFailureSignalAlarm',
+      'StackDegradationSignalAlarm',
+      'ClientContentionSignalAlarm',
     ])
       expect(rendered).toContain(alarm);
+    for (const metric of [
+      'AttachmentThreats',
+      'WorkloadProjectionDrift',
+      'OrganizationDeleteFailures',
+      'StackReorderFailures',
+      'StackCompactionFailures',
+      'UrgencyTotalConsistencyFailures',
+      'ProjectionReconciliationFailures',
+      'FilteredReadFailures',
+      'UrgencyReportExportFailures',
+      'CompletionExportFailures',
+      'CompletionExportIntegrityFailures',
+      'AuthSecurityFailures',
+      'AdminTfaRecoveryFailures',
+      'TaskTimerFailures',
+      'TaskTimerInvariantFailures',
+      'ExtraLowInventoryBlocked',
+      'StackReorderConflicts',
+      'StackOperationLatency',
+      'PaginationContextRestarts',
+      'PaginationCursorExpiries',
+      'TaskTimerConflicts',
+    ])
+      expect(JSON.stringify(alarms)).toContain(metric);
     template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
   });
 });
