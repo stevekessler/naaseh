@@ -420,7 +420,8 @@ GitHub's OIDC subject for this repository includes the immutable owner and repos
 above. Verify the current prefix before creating or repairing the trust policy:
 
 ```console
-gh api repos/stevekessler/naaseh/actions/oidc/customization/sub
+gh api repos/stevekessler/naaseh/actions/oidc/customization/sub \
+  --jq '{use_default, include_claim_keys}'
 ```
 
 The role condition must match the subject GitHub actually issues exactly. A name-only subject such
@@ -544,9 +545,12 @@ Set `VITE_WEB_PUSH_PUBLIC_KEY` only after Web Push is enabled; it is a public va
 an environment variable, not a secret. Verify names without revealing secret values:
 
 ```console
-gh variable list --env production
-gh secret list --env production
-gh api repos/stevekessler/naaseh/environments/production
+gh variable list --env production --json name,value,updatedAt \
+  --jq '.[] | {name, value, updatedAt}'
+gh secret list --env production --json name,updatedAt \
+  --jq '.[] | {name, updatedAt}'
+gh api repos/stevekessler/naaseh/environments/production \
+  --jq '{name, protection_rules, deployment_branch_policy}'
 ```
 
 Do not create the `staging` GitHub environment until the staging stack isolation described above is
@@ -713,7 +717,8 @@ commit SHA as the known-good `rollback_ref` for the next release.
    ```console
    gh secret set PRODUCTION_SMOKE_USERNAME --env production
    gh secret set PRODUCTION_SMOKE_PASSWORD --env production
-   gh secret list --env production
+   gh secret list --env production --json name,updatedAt \
+     --jq '.[] | {name, updatedAt}'
    ```
 
 7. Verify malware scanning, backup ownership, and alarms without uploading private data:
@@ -740,7 +745,9 @@ commit SHA as the known-good `rollback_ref` for the next release.
    gh workflow run deploy-production.yml --ref main \
      -f change_ticket=initial-production-handoff \
      -f rollback_ref="$RELEASE_SHA"
-   gh run list --workflow deploy-production.yml --limit 1
+   gh run list --workflow deploy-production.yml --limit 1 \
+     --json databaseId,headSha,status,conclusion,url \
+     --jq '.[] | {runId: .databaseId, headSha, status, conclusion, url}'
    ```
 
    Follow the run in GitHub Actions or use `gh run watch RUN_ID`. The deploy, authenticated smoke,

@@ -20,6 +20,8 @@ Tasks support modal editing, a constrained rich-text memo, browser-local due tim
 
 See `specs/001-naaseh-v1-baseline/` for requirements and architecture. Before the first cloud deployment, follow the [first AWS deployment runbook](docs/operations/first-aws-deployment.md); see `docs/operations/recovery.md` for recovery controls.
 
+For routine changes, choose either [changes without an AWS deployment](docs/operations/release-without-aws.md) or [changes with an AWS deployment](docs/operations/release-with-aws.md). Anything that must appear in the running web application or API uses the AWS procedure, even when no CloudFormation resource changes.
+
 ## Lists and completion feedback
 
 Lists are named collections whose items can be edited, reordered, completed with an animated
