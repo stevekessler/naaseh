@@ -1,5 +1,6 @@
 import { GetCommand, PutCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
-import { usernameLookupSchema, type UserRecord } from '@naaseh/domain';
+import { userSchema, usernameLookupSchema, type UserRecord } from '@naaseh/domain';
+import { z } from 'zod';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { keys } from '../shared/keys.js';
 export interface StoredUser extends UserRecord {
@@ -7,6 +8,14 @@ export interface StoredUser extends UserRecord {
   pinHash: string;
   pepperVersion: string;
 }
+const storedUserSchema = userSchema
+  .extend({
+    passwordHash: z.string().min(1),
+    pinHash: z.string().min(1),
+    pepperVersion: z.string().min(1),
+  })
+  .passthrough();
+const storedUser = (value: unknown): StoredUser => storedUserSchema.parse(value) as StoredUser;
 export const canonicalUsername = (value: string) =>
   value.trim().normalize('NFKC').toLocaleLowerCase('en-US');
 export async function userByUsername(username: string): Promise<StoredUser | undefined> {
@@ -22,13 +31,13 @@ export async function userByUsername(username: string): Promise<StoredUser | und
   const pointer = usernameLookupSchema.safeParse(data);
   if (pointer.success) return userById(pointer.data.userId);
   // Compatibility read only; the migration replaces legacy duplicated user rows with pointers.
-  return data as StoredUser;
+  return storedUser(data);
 }
 export async function userById(id: string): Promise<StoredUser | undefined> {
   const result = await dynamodb.send(
     new GetCommand({ TableName: tableName, Key: keys.user(id), ConsistentRead: true }),
   );
-  return result.Item?.data as StoredUser | undefined;
+  return result.Item?.data ? storedUser(result.Item.data) : undefined;
 }
 export async function userByProvisionToken(token: string): Promise<StoredUser | undefined> {
   const result = await dynamodb.send(
@@ -38,7 +47,7 @@ export async function userByProvisionToken(token: string): Promise<StoredUser | 
       ConsistentRead: true,
     }),
   );
-  return result.Item?.data as StoredUser | undefined;
+  return result.Item?.data ? storedUser(result.Item.data) : undefined;
 }
 export async function putUser(user: StoredUser, idempotencyToken?: string): Promise<void> {
   await dynamodb.send(
