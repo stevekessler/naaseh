@@ -54,12 +54,12 @@ import {
 import { decryptTfaSecret, encryptTfaSecret, generateTfaSecret, verifyTotp } from './tfa-crypto.js';
 import { createPasswordResetService } from './password-reset-service.js';
 import { recordAuthSecurityEvent } from './telemetry.js';
-import { preAuthCookie } from './session.js';
+import { preAuthCookie, requestCookieHeader } from './session.js';
 
 const authCachePolicy = 'no-store';
 
 const authenticatedRequest = async (event: APIGatewayProxyEventV2) => {
-  const token = sessionToken(event.headers.cookie);
+  const token = sessionToken(requestCookieHeader(event));
   if (!token) return undefined;
   const candidate = await findSession(sessionTokenHash(token));
   const user = candidate ? await userById(candidate.userId) : undefined;
@@ -106,11 +106,12 @@ const tfaService = createTfaService({
 async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> {
   const correlationId = event.requestContext.requestId || randomUUID();
   const path = event.rawPath;
-  const token = sessionToken(event.headers.cookie);
+  const cookieHeader = requestCookieHeader(event);
+  const token = sessionToken(cookieHeader);
   if (path.endsWith('/tfa/enrollment') && event.requestContext.http.method === 'POST') {
     if (!validOrigin(event.headers.origin))
       return problem(403, 'forbidden', 'Request rejected.', correlationId);
-    const challengeToken = preAuthToken(event.headers.cookie);
+    const challengeToken = preAuthToken(cookieHeader);
     if (!challengeToken)
       return problem(401, 'authentication_failed', 'Unable to start enrollment.', correlationId);
     const tokenDigest = sessionTokenHash(challengeToken);
@@ -134,7 +135,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   if (path.endsWith('/tfa/enrollment/confirm') && event.requestContext.http.method === 'POST') {
     if (!validOrigin(event.headers.origin))
       return problem(403, 'forbidden', 'Request rejected.', correlationId);
-    const challengeToken = preAuthToken(event.headers.cookie);
+    const challengeToken = preAuthToken(cookieHeader);
     if (!challengeToken)
       return problem(401, 'authentication_failed', 'Unable to verify enrollment.', correlationId);
     const tokenDigest = sessionTokenHash(challengeToken);
@@ -177,7 +178,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   if (path.endsWith('/tfa/challenge') && event.requestContext.http.method === 'POST') {
     if (!validOrigin(event.headers.origin))
       return problem(403, 'forbidden', 'Request rejected.', correlationId);
-    const challengeToken = preAuthToken(event.headers.cookie);
+    const challengeToken = preAuthToken(cookieHeader);
     if (!challengeToken)
       return problem(401, 'authentication_failed', 'Unable to verify the factor.', correlationId);
     const tokenDigest = sessionTokenHash(challengeToken);
