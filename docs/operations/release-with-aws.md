@@ -36,6 +36,9 @@ Before starting, confirm:
 - The protected GitHub `production` environment has its deployment role, break-glass role,
   production URL, domain values, and current smoke-user credentials.
 - An active application administrator and dedicated ordinary `naaseh-smoke` user already exist.
+- The smoke user has completed Journal enrollment and owns a synthetic, non-sensitive Crisis Plan.
+  The production canary reads these encrypted records twice but never creates, edits, shares, or
+  deletes production data. Do not use a personal account or real crisis-plan content.
 - The previous production release completed its authenticated smoke test successfully.
 
 ## 1. Record the rollback release before merging
@@ -166,6 +169,20 @@ gh pr checks "$PR_NUMBER" \
   --jq '.[] | {name, state, workflow, link}'
 ```
 
+The required hosted check must remain at or below ten minutes. Record its exact run URL and wall
+time before merge (the workflow timeout is only a safety limit):
+
+```console
+VALIDATE_RUN_ID="$(gh run list --workflow validate.yml --branch "$(git branch --show-current)" \
+  --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId')"
+gh run view "$VALIDATE_RUN_ID" --json conclusion,startedAt,updatedAt,url \
+  --jq '{conclusion,url,startedAt,updatedAt,durationSeconds:((.updatedAt|fromdateiso8601)-(.startedAt|fromdateiso8601))}'
+```
+
+Stop before merge if `durationSeconds` exceeds 600. Do not hide a regression by raising the
+timeout; follow `AGENTS.md`, reduce required coverage to representative journeys, or obtain the
+user's explicit approval with a documented reason.
+
 The watch command and structured JSON command are intentionally separate because GitHub CLI does
 not allow `--watch` and `--json` in the same invocation.
 
@@ -280,6 +297,38 @@ arrive.
 For infrastructure changes, also verify every affected control, such as CloudFront, WAF, KMS,
 GuardDuty, backup, restore testing, retention, migrations, or IAM denials. Do not repeat unrelated
 bootstrap checks for an application-only release.
+
+### Journal and Crisis Plan deployment verification
+
+For the Journal/Crisis Plan production release, do all of the following after deployment and before
+marking the release fully verified:
+
+1. Confirm the production smoke job passed its read-only checks for both API routes, repeated
+   DynamoDB-backed reads across separate Lambda invocations, the cryptographically verified signed
+   sharing-key registry, concealed broker denial, and `Cache-Control: no-store`.
+2. With synthetic owner and recipient accounts only, create a share and open it online. This must
+   exercise a real broker `kms:Decrypt`, render the plan read-only, and leave no recipient offline
+   copy. Revoke the share through the owner flow and confirm the recipient list, direct-open route,
+   and broker all deny the recipient afterward. Never use private plan text as test data.
+3. Inspect CloudTrail for the successful decrypt and confirm its principal is the dedicated Crisis
+   Plan broker role. Use IAM policy simulation or an equivalent read-only review to confirm the
+   ordinary API, admin, recovery, reporting, export, and notification roles are denied
+   `kms:Decrypt` on the sharing key.
+4. Inspect the broker/API log groups and Crisis Plan alarms. Logs must be content-free; investigate
+   `ALARM`, unexpected broker volume, authorization denials, or KMS failures. Do not copy request
+   bodies, ciphertext, grants, identities, or plan content into evidence.
+5. Confirm the production DynamoDB table is still included in PITR and the locked AWS Backup plan,
+   and that a current completed recovery point exists.
+6. Run the approved isolated restore test for this feature release. Restore to temporary isolated
+   resources, run the ciphertext-only Journal/Crisis Plan validators, verify share generations and
+   revoked/removed states, then destroy only the temporary restore resources through the approved
+   cleanup procedure. Never validate by decrypting user plan content. See
+   [Crisis Plan operations](../runbooks/crisis-plan-operations.md) and
+   [Journal restore](../runbooks/journal-restore.md).
+
+The isolated restore has usage-based AWS cost. Keep it bounded to the scheduled/feature-release
+test, record its duration and cleanup, and do not weaken backup or restore evidence merely to avoid
+that modest temporary cost.
 
 ### Backup recovery-point verification when relevant
 

@@ -1,4 +1,4 @@
-export const currentSchemaVersion = 11;
+export const currentSchemaVersion = 13;
 
 const storeIntroductions = [
   {
@@ -28,6 +28,20 @@ const storeIntroductions = [
     ],
   },
   { version: 11, stores: ['secureTaskTimers', 'secureTimerCheckpoints'] },
+  {
+    version: 12,
+    stores: [
+      'secureJournalEntries',
+      'secureJournalProfiles',
+      'secureJournalKeyEnvelopes',
+      'secureJournalConflicts',
+      'secureJournalOutbox',
+    ],
+  },
+  {
+    version: 13,
+    stores: ['secureCrisisPlans', 'secureCrisisPlanOutbox', 'secureCrisisPlanOwnerKeys'],
+  },
 ] as const;
 
 export const enhancedEncryptedStores = storeIntroductions.flatMap(({ stores }) => stores);

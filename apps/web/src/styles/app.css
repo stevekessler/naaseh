@@ -1251,6 +1251,61 @@ dialog input {
   border-radius: 0.35rem;
   padding: 0.6rem;
 }
+
+.journal-page {
+  display: grid;
+  gap: var(--space-4);
+  max-width: 72rem;
+  margin-inline: auto;
+}
+
+.triggered-crisis-plan {
+  border: 2px solid var(--border-color, #355070);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-block: 1rem;
+  background: color-mix(in srgb, var(--surface, #fff) 92%, #dbeafe);
+}
+
+.journal-page .select2-container {
+  max-width: 100%;
+  min-height: 44px;
+}
+.journal-page nav,
+.journal-filters,
+.journal-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+.journal-field {
+  margin-block: var(--space-3);
+  padding: var(--space-3);
+}
+.journal-field input[type='range'] {
+  min-width: min(20rem, 100%);
+}
+.journal-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--space-3);
+}
+.journal-metric {
+  aspect-ratio: 1;
+  display: grid;
+  place-content: center;
+  gap: var(--space-2);
+  text-align: center;
+}
+.journal-document a {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 320px) {
+  .journal-metric-grid {
+    grid-template-columns: 1fr;
+  }
+}
 .memo-placeholder {
   color: #666;
   pointer-events: none;

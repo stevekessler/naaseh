@@ -195,7 +195,7 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
         TableName: tableName,
         Key: keys.user(id),
         UpdateExpression:
-          'SET #data.#active = :active, #data.#sessionEpoch = #data.#sessionEpoch + :one, #data.#version = :nextVersion',
+          'SET #data.#active = :active, brokerActive = :active, #data.#sessionEpoch = #data.#sessionEpoch + :one, #data.#version = :nextVersion',
         ConditionExpression:
           '#data.#sessionEpoch = :expectedEpoch AND (attribute_not_exists(#data.#version) OR #data.#version = :expectedVersion)',
         ExpressionAttributeNames: {

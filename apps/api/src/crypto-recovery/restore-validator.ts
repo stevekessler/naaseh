@@ -3,6 +3,25 @@ import { assertDeletionLedgerApplied } from './deletion-ledger-validator.js';
 
 export const MAX_RPO_SECONDS = 5 * 60;
 export const MAX_RTO_SECONDS = 4 * 60 * 60;
+export const journalRestoreEntityNames = [
+  'journalEntry',
+  'journalProfile',
+  'journalKeyEnvelope',
+  'journalMutationReceipt',
+  'journalFeedChange',
+  'journalRecoveryRequest',
+  'journalRecoveryAudit',
+] as const;
+export function validateJournalRestoreInventory(inventory: Record<string, number>) {
+  const missing = journalRestoreEntityNames.filter(
+    (name) => !Number.isSafeInteger(inventory[name]) || (inventory[name] ?? -1) < 0,
+  );
+  if (missing.length)
+    throw new Error(`Journal restore inventory is incomplete: ${missing.join(', ')}`);
+  return {
+    records: journalRestoreEntityNames.reduce((total, name) => total + (inventory[name] ?? 0), 0),
+  };
+}
 
 export type RestoreExpectations = {
   tasks: number;

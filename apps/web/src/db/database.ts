@@ -60,6 +60,35 @@ export interface EncryptedEntityRecord {
   chunkIndex?: number;
   value: Ciphertext;
 }
+export interface EncryptedJournalRecord {
+  id: string;
+  ownerId: string;
+  entityType:
+    | 'journalEntry'
+    | 'journalProfile'
+    | 'journalKeyEnvelope'
+    | 'journalConflict'
+    | 'journalMutation';
+  dateToken?: string;
+  version?: number;
+  mutationId?: string;
+  updatedAt: string;
+  value: unknown;
+}
+export interface EncryptedCrisisPlanRecord {
+  id: string;
+  ownerId: string;
+  entityType:
+    | 'crisisPlan'
+    | 'crisisPlanMutation'
+    | 'crisisPlanAccessIntent'
+    | 'crisisPlanOwnerKey'
+    | 'crisisPlanConflict';
+  version?: number;
+  mutationId?: string;
+  updatedAt: string;
+  value: unknown;
+}
 
 class NaasehDatabase extends Dexie {
   tasks!: EntityTable<Task, 'id'>;
@@ -90,6 +119,14 @@ class NaasehDatabase extends Dexie {
   secureStackConflicts!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureTaskTimers!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureTimerCheckpoints!: EntityTable<EncryptedEntityRecord, 'id'>;
+  secureJournalEntries!: EntityTable<EncryptedJournalRecord, 'id'>;
+  secureJournalProfiles!: EntityTable<EncryptedJournalRecord, 'id'>;
+  secureJournalKeyEnvelopes!: EntityTable<EncryptedJournalRecord, 'id'>;
+  secureJournalConflicts!: EntityTable<EncryptedJournalRecord, 'id'>;
+  secureJournalOutbox!: EntityTable<EncryptedJournalRecord, 'id'>;
+  secureCrisisPlans!: EntityTable<EncryptedCrisisPlanRecord, 'id'>;
+  secureCrisisPlanOutbox!: EntityTable<EncryptedCrisisPlanRecord, 'id'>;
+  secureCrisisPlanOwnerKeys!: EntityTable<EncryptedCrisisPlanRecord, 'id'>;
   constructor() {
     super('naaseh');
     this.version(1).stores({
@@ -283,6 +320,48 @@ class NaasehDatabase extends Dexie {
       secureStackConflicts: 'id,ownerId,scopeKey,operationId,updatedAt',
       secureTaskTimers: 'id,ownerId,taskId,updatedAt',
       secureTimerCheckpoints: 'id,ownerId,taskId,updatedAt',
+    });
+    this.version(12).stores({
+      tasks: 'id,ownerId,status,dueAt,assigneeId,categoryId,parentId,visibility,updatedAt',
+      secureTasks:
+        'id,ownerId,status,lifecycle,completionState,urgency,dueAt,dueTimeZone,assigneeId,categoryId,projectId,groupId,parentId,visibility,updatedAt',
+      revisions: 'id,taskId,changedAt',
+      outbox: 'id,entityId,entityType,createdAt,attempts',
+      settings: 'key',
+      cryptoKeys: 'id',
+      secureCategories: 'id,lifecycle,updatedAt',
+      secureProjects: 'id,categoryId,lifecycle,updatedAt',
+      secureCompletionEvents:
+        'id,taskId,completedBy,occurredAt,projectId,categoryId,urgencyAtCompletion,reversedAt,updatedAt',
+      secureDeletionJobs: 'id,taskId,updatedAt',
+      secureRevisions: 'id,taskId,mutationId,updatedAt',
+      secureReminders: 'id,taskId,updatedAt',
+      secureConflicts: 'id,updatedAt',
+      secureGroups: 'id,updatedAt',
+      secureLists: 'id,projectId,lifecycle,urgency,updatedAt',
+      secureListItems: 'id,taskId,updatedAt',
+      secureDirectoryItems: 'id,updatedAt',
+      secureAttachments: 'id,taskId,updatedAt',
+      secureJobs: 'id,updatedAt',
+      secureGoogleSync: 'id,updatedAt',
+      secureStackScopes: 'id,ownerId,scopeType,scopeId,updatedAt',
+      secureStackMemberships: 'id,ownerId,scopeKey,workType,workId,membershipEpoch,updatedAt',
+      secureStackOperations: 'id,ownerId,scopeKey,stackVersion,mutationId,updatedAt',
+      secureStackOperationChunks: 'id,ownerId,scopeKey,operationId,chunkIndex,updatedAt',
+      secureStackSnapshots: 'id,ownerId,scopeKey,generation,chunkIndex,updatedAt',
+      secureStackConflicts: 'id,ownerId,scopeKey,operationId,updatedAt',
+      secureTaskTimers: 'id,ownerId,taskId,updatedAt',
+      secureTimerCheckpoints: 'id,ownerId,taskId,updatedAt',
+      secureJournalEntries: 'id,ownerId,&[ownerId+dateToken],updatedAt',
+      secureJournalProfiles: 'id,ownerId,updatedAt',
+      secureJournalKeyEnvelopes: 'id,ownerId,updatedAt',
+      secureJournalConflicts: 'id,ownerId,updatedAt',
+      secureJournalOutbox: 'id,ownerId,mutationId,updatedAt',
+    });
+    this.version(13).stores({
+      secureCrisisPlans: 'id,&ownerId,updatedAt',
+      secureCrisisPlanOutbox: 'id,ownerId,mutationId,updatedAt',
+      secureCrisisPlanOwnerKeys: 'id,&ownerId,updatedAt',
     });
   }
 }

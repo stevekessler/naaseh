@@ -15,6 +15,9 @@ export const entityTypeSchema = z.enum([
   'completionEvent',
   'deletionJob',
   'taskTimer',
+  'journalEntry',
+  'journalProfile',
+  'crisisPlan',
 ]);
 export type EntityType = z.infer<typeof entityTypeSchema>;
 export const supportedEntityTypes = entityTypeSchema.options;
@@ -42,6 +45,7 @@ export const mutationOperationSchema = z.enum([
   'archiveOrganization',
   'restoreOrganization',
   'timerCommand',
+  'upsert',
 ]);
 export type MutationOperation = z.infer<typeof mutationOperationSchema>;
 
@@ -61,9 +65,10 @@ export const supportedSyncContractVersionSchema = z.union([
   z.literal(3),
   z.literal(4),
   z.literal(5),
+  z.literal(6),
 ]);
 export type SupportedSyncContractVersion = z.infer<typeof supportedSyncContractVersionSchema>;
-export const currentSyncContractVersion = 5 as const;
+export const currentSyncContractVersion = 6 as const;
 export const minimumNegotiatedSyncContractVersion = 4 as const;
 
 const mutationResultIdSchema = z.string().min(1).max(300);

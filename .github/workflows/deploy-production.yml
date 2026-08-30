@@ -86,7 +86,7 @@ jobs:
           test "$PRODUCTION_BASE_URL" = https://gsd.thepandas.link
           test -n "$PRODUCTION_SMOKE_USERNAME"
           test -n "$PRODUCTION_SMOKE_PASSWORD"
-      - name: Run production canary without logging credentials
+      - name: Run non-destructive production canary
         run: npm run test:e2e -- --project=chromium tests/e2e/production-smoke.spec.ts
   rollback:
     needs: [deploy, smoke]

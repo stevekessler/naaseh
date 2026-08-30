@@ -12,3 +12,5 @@ export { redact as redactLogFields };
 export * from './logger.js';
 export * from './redaction.js';
 export * from './archive-project-reporting.js';
+export * from './journal.js';
+export * from './crisis-plan.js';

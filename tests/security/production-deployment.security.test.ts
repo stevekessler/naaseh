@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const workflow = readFileSync('.github/workflows/deploy-production.yml', 'utf8');
+const smoke = readFileSync('tests/e2e/production-smoke.spec.ts', 'utf8');
 
 describe('production deployment workflow', () => {
   it('gates deployment on validation, the protected environment, and OIDC only in AWS jobs', () => {
@@ -25,5 +26,14 @@ describe('production deployment workflow', () => {
     expect(workflow).toContain('naaseh-production-rollback');
     expect(workflow).toContain('Build known-good web assets for rollback');
     expect(workflow.match(/--rollback/g)?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('uses a non-destructive Journal/Crisis Plan production canary', () => {
+    expect(smoke).toContain('/api/v1/journal/key-envelope');
+    expect(smoke).toContain('/api/v1/journal/crisis-plan/sharing-key');
+    expect(smoke).toContain('/api/v1/journal/crisis-plan/broker');
+    expect(smoke).toContain("toContain('no-store')");
+    expect(smoke).toContain('crypto.subtle.verify');
+    expect(smoke).not.toMatch(/request\.(put|delete|patch)\(/);
   });
 });

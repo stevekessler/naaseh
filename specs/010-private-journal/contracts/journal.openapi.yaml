@@ -1,0 +1,442 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Private Journal API Delta
+  version: 1.0.0
+  description: >-
+    Ciphertext-only journal synchronization, key-envelope, and two-party recovery
+    additions. Journal dates, answers, notes, task associations, preferences, and
+    dashboard values never appear in this contract.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /journal/key-envelope:
+    get:
+      summary: Read the authenticated owner's wrapped journal key envelope
+      responses:
+        '200':
+          description: Current owner and recovery wraps
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JournalKeyEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      summary: Enroll or replace the authenticated owner's wrapped journal key
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/Csrf'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JournalKeyEnvelopeWrite' }
+      responses:
+        '200':
+          description: Accepted key envelope
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JournalKeyEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+  /sync/push:
+    post:
+      summary: Push ciphertext-only journal mutations through sync contract version 5
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JournalPushRequest' }
+      responses:
+        '200':
+          description: Stable per-mutation outcomes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JournalPushResponse' }
+        '400': { $ref: '#/components/responses/InvalidRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /sync/pull:
+    post:
+      summary: Pull owner-only ciphertext journal changes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version, journalCursor]
+              properties:
+                version: { type: integer, const: 5 }
+                journalCursor: { type: integer, minimum: 0 }
+                limit: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        '200':
+          description: Ciphertext changes and an atomic next cursor
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JournalPullResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /sync/bootstrap:
+    get:
+      summary: Paginate the authenticated owner's current journal ciphertext records
+      parameters:
+        - name: journalCursor
+          in: query
+          schema: { type: string, maxLength: 2048 }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 100 }
+      responses:
+        '200':
+          description: Current profile and entry ciphertext envelopes
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JournalBootstrapResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /journal/recovery/requests:
+    post:
+      summary: Create an owner-approved, short-lived journal recovery request
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password, reason, keyEnvelopeVersion, ephemeralPublicKeySpki, idempotencyKey]
+              properties:
+                password: { type: string, minLength: 1, maxLength: 256, writeOnly: true }
+                reason: { type: string, minLength: 1, maxLength: 200, writeOnly: true }
+                keyEnvelopeVersion: { type: integer, minimum: 1 }
+                ephemeralPublicKeySpki: { type: string, minLength: 1, maxLength: 8192, writeOnly: true }
+                idempotencyKey: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Request awaiting designated administrator approval
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OwnerRecoveryView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RecoveryUnavailable' }
+  /journal/recovery/requests/{requestId}:
+    get:
+      summary: Read only the authenticated owner's recovery status
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Owner status without recovered key material
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OwnerRecoveryView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /journal/recovery/requests/{requestId}/consume:
+    post:
+      summary: Consume the one-use rewrap into the initiating owner browser
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Csrf'
+      responses:
+        '200':
+          description: JMK encrypted only to the request-bound owner ephemeral key
+          headers:
+            Cache-Control: { $ref: '#/components/headers/NoStore' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OwnerRecoveryResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /admin/journal-recovery/{requestId}/approve:
+    post:
+      summary: Approve one exact owner request as a designated recovery administrator
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Csrf'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [password, factorMethod, factorCode, approvalId]
+              properties:
+                password: { type: string, minLength: 1, maxLength: 256, writeOnly: true }
+                factorMethod: { type: string, enum: [totp, recovery_code] }
+                factorCode: { type: string, minLength: 6, maxLength: 64, writeOnly: true }
+                approvalId: { type: string, format: uuid }
+      responses:
+        '204': { description: Request approved and rewrapped for the owner browser }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/RecoveryUnavailable' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RecoveryUnavailable' }
+  /journal/recovery/requests/{requestId}/complete:
+    post:
+      summary: Commit a replacement owner wrap after the owner consumes the one-use result
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [ownerWrap]
+              properties:
+                ownerWrap: { $ref: '#/components/schemas/OwnerWrap' }
+      responses:
+        '204': { description: Recovery consumed, owner wrap replaced, sessions advanced }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: naaseh_session
+  headers:
+    NoStore:
+      schema: { type: string, const: no-store }
+  parameters:
+    Csrf:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 1 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: integer, minimum: 0 }
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 128 }
+  schemas:
+    CiphertextEnvelope:
+      type: object
+      additionalProperties: false
+      required: [recordKind, schemaVersion, keyVersion, iv, ciphertext, byteSize]
+      properties:
+        recordKind: { type: string, enum: [profile, projection, body] }
+        schemaVersion: { type: integer, minimum: 1 }
+        keyVersion: { type: integer, minimum: 1 }
+        iv: { type: string, minLength: 16, maxLength: 32 }
+        ciphertext: { type: string, minLength: 24, maxLength: 409600 }
+        byteSize: { type: integer, minimum: 16, maximum: 307200 }
+    OwnerWrap:
+      type: object
+      additionalProperties: false
+      required: [algorithm, salt, parameters, iv, ciphertext]
+      properties:
+        algorithm: { type: string, const: ARGON2ID-AES-256-GCM }
+        salt: { type: string, minLength: 22, maxLength: 128 }
+        parameters:
+          type: object
+          additionalProperties: false
+          required: [memoryKiB, iterations, parallelism]
+          properties:
+            memoryKiB: { type: integer, minimum: 65536, maximum: 262144 }
+            iterations: { type: integer, minimum: 2, maximum: 10 }
+            parallelism: { type: integer, minimum: 1, maximum: 4 }
+        iv: { type: string, minLength: 16, maxLength: 32 }
+        ciphertext: { type: string, minLength: 24, maxLength: 1024 }
+    RecoveryWrap:
+      type: object
+      additionalProperties: false
+      required: [algorithm, authority, keyVersion, ciphertext]
+      properties:
+        algorithm: { type: string, const: RSA-OAEP-256 }
+        authority: { type: string, const: recovery }
+        keyVersion: { type: integer, minimum: 1 }
+        ciphertext: { type: string, minLength: 128, maxLength: 8192 }
+    JournalKeyEnvelopeWrite:
+      type: object
+      additionalProperties: false
+      required: [keyVersion, ownerWrap, recoveryWrap]
+      properties:
+        keyVersion: { type: integer, minimum: 1 }
+        ownerWrap: { $ref: '#/components/schemas/OwnerWrap' }
+        recoveryWrap: { $ref: '#/components/schemas/RecoveryWrap' }
+    JournalKeyEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/JournalKeyEnvelopeWrite'
+        - type: object
+          required: [version, createdAt, updatedAt]
+          properties:
+            version: { type: integer, minimum: 1 }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    JournalEntryCiphertext:
+      type: object
+      additionalProperties: false
+      required: [entryId, dateToken, projection, body]
+      properties:
+        entryId: { type: string, format: uuid }
+        dateToken: { type: string, minLength: 43, maxLength: 64 }
+        projection: { $ref: '#/components/schemas/CiphertextEnvelope' }
+        body: { $ref: '#/components/schemas/CiphertextEnvelope' }
+    JournalMutation:
+      type: object
+      additionalProperties: false
+      required: [id, entityType, operation, entityId, baseVersion, payload, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, enum: [journalEntry, journalProfile] }
+        operation: { type: string, const: upsert }
+        entityId: { type: string, minLength: 1, maxLength: 128 }
+        baseVersion: { type: integer, minimum: 0 }
+        priorDateToken: { type: string, minLength: 43, maxLength: 64 }
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/JournalEntryCiphertext'
+            - $ref: '#/components/schemas/CiphertextEnvelope'
+        createdAt: { type: string, format: date-time }
+    JournalPushRequest:
+      type: object
+      additionalProperties: false
+      required: [version, clientId, mutations]
+      properties:
+        version: { type: integer, const: 5 }
+        clientId: { type: string, minLength: 1, maxLength: 128 }
+        mutations:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/JournalMutation' }
+    MutationResult:
+      type: object
+      additionalProperties: false
+      required: [mutationId, status]
+      properties:
+        mutationId: { type: string, format: uuid }
+        status: { type: string, enum: [applied, alreadyApplied, conflict, rejected] }
+        version: { type: integer, minimum: 1 }
+        conflictKind: { type: string, enum: [version, dateToken] }
+    JournalPushResponse:
+      type: object
+      additionalProperties: false
+      required: [version, results]
+      properties:
+        version: { type: integer, const: 5 }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/MutationResult' }
+    JournalChange:
+      type: object
+      additionalProperties: false
+      required: [sequence, entityType, entityId, entityVersion, payload]
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        entityType: { type: string, enum: [journalEntry, journalProfile] }
+        entityId: { type: string, minLength: 1, maxLength: 128 }
+        entityVersion: { type: integer, minimum: 1 }
+        payload:
+          oneOf:
+            - $ref: '#/components/schemas/JournalEntryCiphertext'
+            - $ref: '#/components/schemas/CiphertextEnvelope'
+    JournalPullResponse:
+      type: object
+      additionalProperties: false
+      required: [version, changes, journalCursor, hasMore]
+      properties:
+        version: { type: integer, const: 5 }
+        changes:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/JournalChange' }
+        journalCursor: { type: integer, minimum: 0 }
+        hasMore: { type: boolean }
+    JournalBootstrapResponse:
+      type: object
+      additionalProperties: false
+      required: [version, records, journalCursor]
+      properties:
+        version: { type: integer, const: 5 }
+        records:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/JournalChange' }
+        nextPageCursor: { type: string, maxLength: 2048 }
+        journalCursor: { type: integer, minimum: 0 }
+    OwnerRecoveryView:
+      type: object
+      additionalProperties: false
+      required: [requestId, state, expiresAt]
+      properties:
+        requestId: { type: string, minLength: 16, maxLength: 128 }
+        state: { type: string, enum: [requested, adminApproved, rewrapped, consumed, completed, cancelled, expired, denied] }
+        expiresAt: { type: string, format: date-time }
+        recoveryKeyVersion: { type: integer, minimum: 1 }
+    OwnerRecoveryResult:
+      type: object
+      additionalProperties: false
+      required: [requestId, algorithm, encryptedJmk, recoveryKeyVersion]
+      properties:
+        requestId: { type: string, minLength: 16, maxLength: 128 }
+        algorithm: { type: string, const: RSA-OAEP-256 }
+        encryptedJmk: { type: string, minLength: 128, maxLength: 8192 }
+        recoveryKeyVersion: { type: integer, minimum: 1 }
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [code, message, correlationId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        correlationId: { type: string }
+  responses:
+    Unauthorized:
+      description: Authentication required or no longer valid
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Generic concealed not-found response
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidRequest:
+      description: Strict ciphertext envelope validation failed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Conflict:
+      description: Entity, date token, key envelope, or recovery state changed
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    PreconditionRequired:
+      description: If-Match is required
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RecoveryUnavailable:
+      description: Generic denied, expired, rate-limited, or dependency-unavailable recovery response
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
