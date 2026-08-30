@@ -1,5 +1,7 @@
 # Production deployment controls
 
+Last reviewed: 2026-08-30
+
 Production is deployed at `https://gsd.thepandas.link`. The workflow builds the PWA, deploys the
 `NaasehEdge` stack in `us-east-1` and `NaasehProd` in `us-west-2`, publishes the web bundle,
 invalidates CloudFront, and runs an authenticated smoke test against that exact HTTPS URL.
@@ -27,11 +29,37 @@ IDs and is not isolated by stage or hostname. Production changes must follow
 [Complete routine production release with AWS](release-with-aws.md) from a feature branch, through
 a reviewed pull request whose hosted required check is measured at ten minutes or less.
 
+## Why the current staging workflow is disabled
+
+“Do not use staging” means do not dispatch
+[`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml). It does not mean that a future
+isolated staging environment is undesirable.
+
+The current workflow checks that its configured hostname is not `gsd.thepandas.link`, but then runs
+`cdk deploy --all` against the same CDK application and fixed CloudFormation stack IDs
+`NaasehEdge` and `NaasehProd`. It does not pass a stage-qualified stack name, assert a distinct AWS
+account, or run the production rollback and authenticated canary jobs. If its staging OIDC role or
+environment variables point at the production account, CloudFormation can update the production
+stacks despite the hostname check. A different hostname alone is not an isolation boundary.
+
+Before staging may be enabled, it needs a separate AWS account, separate DNS name and hosted zone,
+stage-qualified stack/resource names, an environment-specific OIDC role and secrets, an explicit
+account/Region assertion, and its own rollback and smoke procedure. Until those controls are
+implemented and reviewed, use only `deploy-production.yml` for AWS releases; do not use staging as
+a stack-size workaround or deployment rehearsal.
+
 The production smoke account is synthetic and must be pre-enrolled in Journal with a non-sensitive
 encrypted key envelope and Crisis Plan. The canary is non-destructive: it reads those records in
 separate Lambda invocations, validates both API routes and no-store headers, verifies the signed
 sharing-key registry cryptographically, and confirms an unauthorized broker request is concealed.
-It must never use a real user's journal or Crisis Plan.
+It must never use a real user's journal or Crisis Plan. Follow
+[Seed the production smoke account](seed-production-smoke-account.md); for the first Journal
+rollout, use its two-release sequence because the records cannot exist before the Journal runtime is
+deployed.
+
+The linked seeding runbook currently records a client enrollment blocker: the supported UI does
+not yet write the complete durable Journal key envelope. The Journal/Crisis Plan production rollout
+must not begin until that blocker is implemented, tested, and removed through review.
 
 After every deployment, confirm the `SiteUrl` output, HTTPS response, HTTP-to-HTTPS redirect,
 authenticated canary, CloudWatch alarms, and CloudFront invalidation. Record the release SHA and

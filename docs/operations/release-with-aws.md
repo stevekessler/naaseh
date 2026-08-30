@@ -1,5 +1,7 @@
 # Complete routine production release with AWS
 
+Last reviewed: 2026-08-30
+
 This is the standalone procedure for changing and deploying the existing Na'aseh production
 application. Follow it in order for every routine production release after the one-time bootstrap.
 
@@ -13,8 +15,10 @@ deployed artifact use [Changes without an AWS deployment](release-without-aws.md
 
 ## Safety rules
 
-- Do not use the current staging workflow. Stage-specific stack IDs and a separate staging hostname
-  have not been implemented, so that workflow can target the production stack IDs.
+- Do not dispatch `deploy-staging.yml`. It runs `cdk deploy --all` with the fixed `NaasehEdge` and
+  `NaasehProd` IDs and does not assert a distinct AWS account, so a misconfigured staging role can
+  update production stacks. See
+  [Why the current staging workflow is disabled](production-deployment.md#why-the-current-staging-workflow-is-disabled).
 - Never deploy with the AWS root identity or long-lived root credentials.
 - Never invent a rollback SHA. It must be the full SHA of the version currently known to work in
   production.
@@ -27,6 +31,14 @@ deployed artifact use [Changes without an AWS deployment](release-without-aws.md
 For a genuinely new environment with no known-good release or smoke user, stop and follow
 [First AWS deployment](first-aws-deployment.md).
 
+For the first release that introduces Journal/Crisis Plan to an existing environment, the smoke
+records cannot be created until the runtime exists. Follow the two-release sequence in
+[Seed the production smoke account](seed-production-smoke-account.md); do not deploy the runtime and
+the pre-seeded-record assertions for the first time in one workflow run.
+
+Stop before the Journal rollout while the seeding runbook's current durable-envelope enrollment
+blocker remains open. There is no approved manual database workaround.
+
 ## Prerequisites
 
 Before starting, confirm:
@@ -38,7 +50,8 @@ Before starting, confirm:
 - An active application administrator and dedicated ordinary `naaseh-smoke` user already exist.
 - The smoke user has completed Journal enrollment and owns a synthetic, non-sensitive Crisis Plan.
   The production canary reads these encrypted records twice but never creates, edits, shares, or
-  deletes production data. Do not use a personal account or real crisis-plan content.
+  deletes production data. Do not use a personal account or real crisis-plan content. Verify the
+  account using [Seed the production smoke account](seed-production-smoke-account.md).
 - The previous production release completed its authenticated smoke test successfully.
 
 ## 1. Record the rollback release before merging

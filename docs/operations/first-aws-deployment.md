@@ -1,6 +1,6 @@
 # First AWS deployment
 
-Last reviewed: 2026-07-25
+Last reviewed: 2026-08-30
 
 Production is served at **https://gsd.thepandas.link**. CDK deploys two CloudFormation stacks:
 
@@ -710,11 +710,11 @@ commit SHA as the known-good `rollback_ref` for the next release.
 
    Use distinct passwords and PINs. Sign in manually as each account over HTTPS. Confirm the
    administrator can reach administration and that the smoke user has only ordinary user access.
-   As `naaseh-smoke`, complete Journal enrollment and create one synthetic Crisis Plan containing
-   no personal or crisis information. Sign out, sign in again, unlock Journal, and verify both are
-   readable. The routine production canary requires these durable records and only reads them; it
-   never creates or modifies them. Store the smoke PIN with the operator's protected test-account
-   credentials, not in GitHub Actions, because the canary does not need the PIN.
+   Seed and verify `naaseh-smoke` by following
+   [Seed the production smoke account](seed-production-smoke-account.md). The routine production
+   canary requires its durable encrypted Journal envelope and synthetic Crisis Plan and only reads
+   them; it never creates or modifies them. Store the Journal PIN with the operator's protected
+   test-account credentials, not in GitHub Actions, because the canary does not need it.
 
 6. Replace the GitHub smoke secrets with the exact smoke-user credentials. Enter values only at the
    hidden prompts:
