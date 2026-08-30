@@ -12,6 +12,9 @@ export default defineConfig({
     : {
         command:
           'npm exec -w @naaseh/web vite build -- --mode test && npm exec -w @naaseh/web vite preview -- --host 127.0.0.1',
+        env: {
+          VITE_DISABLE_BROWSER_AUDIO: 'true',
+        },
         port: 4173,
         reuseExistingServer: true,
       },

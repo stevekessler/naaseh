@@ -22,4 +22,9 @@ describe('completion feedback', () => {
     expect(play).toHaveBeenCalledOnce();
     await Promise.resolve();
   });
+  it('suppresses actual playback when browser automation mutes audio', () => {
+    const play = vi.fn(() => Promise.resolve());
+    playScrunch(() => ({ volume: 0, play }) as Pick<HTMLAudioElement, 'play' | 'volume'>, true);
+    expect(play).not.toHaveBeenCalled();
+  });
 });

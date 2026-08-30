@@ -4,7 +4,9 @@ import { loadCompletionSound } from '../../db/preferences-repository.js';
 export function playScrunch(
   audioFactory: () => Pick<HTMLAudioElement, 'play' | 'volume'> = () =>
     new Audio('/sounds/post-it-scrunch.ogg'),
+  muted = import.meta.env.VITE_DISABLE_BROWSER_AUDIO === 'true',
 ) {
+  if (muted) return;
   const audio = audioFactory();
   audio.volume = 0.35;
   const playback = audio.play();
