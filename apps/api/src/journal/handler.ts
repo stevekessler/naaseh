@@ -1,12 +1,16 @@
 import { journalKeyEnvelopeResponseSchema } from '@naaseh/contracts';
 import type { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { DynamoJournalRepository } from './journal-repository.js';
+import { requireMutationSecurity } from '../shared/security.js';
 
 export interface JournalRequest {
   method?: string;
   path?: string;
   ownerId?: string;
   body?: unknown;
+  origin?: string;
+  expectedCsrf?: string;
+  providedCsrf?: string;
 }
 export interface JournalResponse {
   statusCode: number;
@@ -33,6 +37,12 @@ export async function journalHandler(event: JournalRequest): Promise<JournalResp
       : concealed(404, 'JOURNAL_NOT_FOUND');
   }
   if (event.method === 'PUT' && event.path === '/journal/key-envelope') {
+    try {
+      if (!event.expectedCsrf) throw new Error('Missing session security context.');
+      requireMutationSecurity(event.origin, event.expectedCsrf, event.providedCsrf);
+    } catch {
+      return concealed(403, 'JOURNAL_WRITE_FORBIDDEN');
+    }
     const parsed = journalKeyEnvelopeResponseSchema.safeParse(event.body);
     if (!parsed.success || parsed.data.ownerId !== event.ownerId)
       return concealed(400, 'INVALID_JOURNAL_ENVELOPE');
@@ -51,7 +61,7 @@ export async function journalHandler(event: JournalRequest): Promise<JournalResp
 
 export const handler: APIGatewayProxyHandlerV2 = async (event: APIGatewayProxyEventV2) => {
   const context = event.requestContext as typeof event.requestContext & {
-    authorizer?: { lambda?: { userId?: string } };
+    authorizer?: { lambda?: { userId?: string; csrfToken?: string } };
   };
   let body: unknown;
   try {
@@ -64,5 +74,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event: APIGatewayProxyEv
     path: event.rawPath.replace(/^\/api\/v1/u, ''),
     ...(context.authorizer?.lambda?.userId ? { ownerId: context.authorizer.lambda.userId } : {}),
     body,
+    ...(event.headers.origin ? { origin: event.headers.origin } : {}),
+    ...(context.authorizer?.lambda?.csrfToken
+      ? { expectedCsrf: context.authorizer.lambda.csrfToken }
+      : {}),
+    ...(event.headers['x-csrf-token'] ? { providedCsrf: event.headers['x-csrf-token'] } : {}),
   });
 };

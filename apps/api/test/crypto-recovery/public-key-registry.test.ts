@@ -26,14 +26,21 @@ describe('signed recovery public-key registry', () => {
         KeySpec: 'RSA_3072',
         KeyUsage: 'ENCRYPT_DECRYPT',
       })
+      .mockResolvedValueOnce({
+        PublicKey: Uint8Array.from([2]),
+        KeySpec: 'RSA_3072',
+        KeyUsage: 'SIGN_VERIFY',
+      })
       .mockResolvedValueOnce({ Signature: Uint8Array.from([3]) });
     const result = await buildPublicKeyRegistry(metadata, 'arn:signing', {
       send,
     } as unknown as Pick<KMSClient, 'send'>);
     expect(send.mock.calls[0]?.[0]).toBeInstanceOf(GetPublicKeyCommand);
-    expect(send.mock.calls[1]?.[0]).toBeInstanceOf(SignCommand);
+    expect(send.mock.calls[1]?.[0]).toBeInstanceOf(GetPublicKeyCommand);
+    expect(send.mock.calls[2]?.[0]).toBeInstanceOf(SignCommand);
     expect(result.region).toBe('us-west-2');
     expect(result.keys.map((key) => key.publicKey)).toEqual(['AQ==']);
+    expect(result.signingPublicKeySpki).toBe('Ag==');
     expect(result.signature).toBe('Aw==');
   });
 

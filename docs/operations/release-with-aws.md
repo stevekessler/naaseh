@@ -15,9 +15,9 @@ deployed artifact use [Changes without an AWS deployment](release-without-aws.md
 
 ## Safety rules
 
-- Do not dispatch `deploy-staging.yml`. It runs `cdk deploy --all` with the fixed `NaasehEdge` and
-  `NaasehProd` IDs and does not assert a distinct AWS account, so a misconfigured staging role can
-  update production stacks. See
+- No development/staging AWS environment exists today. `deploy-staging.yml` is a deliberately
+  failing placeholder with no OIDC permission or deployment command. Use only
+  `deploy-production.yml` unless a future isolated environment is explicitly designed. See
   [Why the current staging workflow is disabled](production-deployment.md#why-the-current-staging-workflow-is-disabled).
 - Never deploy with the AWS root identity or long-lived root credentials.
 - Never invent a rollback SHA. It must be the full SHA of the version currently known to work in
@@ -36,8 +36,8 @@ records cannot be created until the runtime exists. Follow the two-release seque
 [Seed the production smoke account](seed-production-smoke-account.md); do not deploy the runtime and
 the pre-seeded-record assertions for the first time in one workflow run.
 
-Stop before the Journal rollout while the seeding runbook's current durable-envelope enrollment
-blocker remains open. There is no approved manual database workaround.
+Seed Journal only through the reviewed application enrollment path. It writes and reads back the
+complete owner/recovery key envelope; there is no approved manual database workaround.
 
 ## Prerequisites
 

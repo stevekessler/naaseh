@@ -24,23 +24,19 @@ The first release is intentionally different because no previous rollback SHA or
 exists. Follow the one-time bootstrap procedure in the first-deployment runbook; do not invent a
 placeholder rollback commit.
 
-Do not use the staging workflow. It still resolves the fixed `NaasehEdge` and `NaasehProd` stack
-IDs and is not isolated by stage or hostname. Production changes must follow
+No development or staging AWS environment is currently provisioned; production-only is an
+intentional fit for the application's present pre-use phase. The staging workflow is disabled and
+has no AWS credentials or deployment steps. Production changes must follow
 [Complete routine production release with AWS](release-with-aws.md) from a feature branch, through
 a reviewed pull request whose hosted required check is measured at ten minutes or less.
 
 ## Why the current staging workflow is disabled
 
-“Do not use staging” means do not dispatch
-[`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml). It does not mean that a future
-isolated staging environment is undesirable.
-
-The current workflow checks that its configured hostname is not `gsd.thepandas.link`, but then runs
-`cdk deploy --all` against the same CDK application and fixed CloudFormation stack IDs
-`NaasehEdge` and `NaasehProd`. It does not pass a stage-qualified stack name, assert a distinct AWS
-account, or run the production rollback and authenticated canary jobs. If its staging OIDC role or
-environment variables point at the production account, CloudFormation can update the production
-stacks despite the hostname check. A different hostname alone is not an isolation boundary.
+[`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml) is a deliberately failing
+placeholder. It has read-only repository permission, no OIDC permission, no environment secrets,
+and no CDK command, so it cannot deploy or change AWS resources. This replaced the earlier unsafe
+version that used the production stack IDs. A development or staging environment is not required
+while Naaseh remains production-only and is not in active use.
 
 Before staging may be enabled, it needs a separate AWS account, separate DNS name and hosted zone,
 stage-qualified stack/resource names, an environment-specific OIDC role and secrets, an explicit
@@ -57,9 +53,10 @@ It must never use a real user's journal or Crisis Plan. Follow
 rollout, use its two-release sequence because the records cannot exist before the Journal runtime is
 deployed.
 
-The linked seeding runbook currently records a client enrollment blocker: the supported UI does
-not yet write the complete durable Journal key envelope. The Journal/Crisis Plan production rollout
-must not begin until that blocker is implemented, tested, and removed through review.
+The supported enrollment path verifies the signed recovery-key registry, creates both the owner and
+recovery wraps in the browser, writes the complete ciphertext-only envelope through the
+authenticated API, reads it back for durability verification, and restores the owner wrap after a
+later sign-in. Direct DynamoDB seeding remains prohibited.
 
 After every deployment, confirm the `SiteUrl` output, HTTPS response, HTTP-to-HTTPS redirect,
 authenticated canary, CloudWatch alarms, and CloudFront invalidation. Record the release SHA and

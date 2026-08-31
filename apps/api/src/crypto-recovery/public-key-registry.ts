@@ -53,11 +53,16 @@ export async function buildPublicKeyRegistry(
       };
     }),
   );
+  const signing = await client.send(new GetPublicKeyCommand({ KeyId: signingKeyId }));
+  if (!signing.PublicKey) throw new Error('Recovery registry signing public key is unavailable.');
   const unsigned = {
     schema: metadata.schema,
     region: metadata.region,
     generatedAt: new Date().toISOString(),
     signingKeyId,
+    signingPublicKeySpki: Buffer.from(signing.PublicKey).toString('base64'),
+    signingKeySpec: signing.KeySpec,
+    signingKeyUsage: signing.KeyUsage,
     keys,
   };
   const digest = Buffer.from(canonicalManifestHash(unsigned), 'hex');

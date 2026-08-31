@@ -32,21 +32,6 @@ editing data while it runs, or inject handcrafted ciphertext directly into Dynam
 If Journal is already deployed and the smoke account already has the required durable records, the
 two-release bootstrap is unnecessary. Re-seeding is not part of routine releases.
 
-## Current rollout blocker
-
-The repository audit on 2026-08-30 found that the current Journal enrollment UI stores the PIN
-owner wrap in local encrypted browser storage but does not yet construct and `PUT` the complete
-server Journal key envelope with its recovery wrap. The client can read `/journal/key-envelope`,
-but its enrollment path does not write that resource. A fresh smoke account will therefore fail the
-canary's durable key-envelope assertion.
-
-Do not start the Journal production rollout or mark the account seeded until a reviewed client
-change performs authenticated envelope creation, verifies the active recovery-key registry, writes
-the ciphertext-only envelope through the supported API, and proves it can be read back after a
-separate invocation. Direct DynamoDB insertion is prohibited. Once that implementation and its
-tests are merged, remove this blocker notice as part of the same reviewed change and execute the
-steps below.
-
 ## Prerequisites
 
 - Production is `https://gsd.thepandas.link`; stop if the browser is on another hostname.
@@ -89,6 +74,11 @@ The browser must generate the Journal master key, owner wrap, and recovery wrap.
 key envelope may leave the browser. Never generate a replacement envelope in an AWS console,
 Lambda console, shell script, or DynamoDB editor.
 
+Enrollment fails closed unless the browser verifies the signed, same-account recovery-key registry,
+creates both wraps, writes the complete envelope through the authenticated API, and reads the same
+envelope back from durable storage. Do not treat a locally displayed unlock screen as proof that
+server enrollment completed.
+
 ## 3. Create the non-sensitive Crisis Plan
 
 1. In Journal, open **Crisis Plans**, then **My Crisis Plan**.
@@ -105,14 +95,16 @@ Lambda console, shell script, or DynamoDB editor.
 
 ## 4. Verify owner access without changing data
 
-1. Choose **Lock** in Journal.
-2. Unlock with the stored Journal PIN.
-3. Open **Crisis Plans** and confirm the exact synthetic plan renders.
-4. Refresh the page once and confirm the encrypted plan still renders after unlocking if prompted.
+1. Choose **Lock** in Journal, then unlock with the stored Journal PIN.
+2. Open **Crisis Plans** and confirm the exact synthetic plan renders.
+3. Sign out normally, which removes the browser's authorized local Journal data.
+4. Sign in again as `naaseh-smoke`, open **Journal**, and wait for the server enrollment to restore.
+5. Unlock with the same Journal PIN and confirm the exact synthetic Crisis Plan renders.
+6. Refresh once and confirm the encrypted plan still renders after unlocking if prompted.
 
-Do not use a second browser or clear site storage as an enrollment test unless cross-device Journal
-envelope retrieval is part of the release under review. The production canary verifies server-side
-durability through authenticated API reads; this step verifies the owner's current browser flow.
+This sign-out/sign-in check proves the supported application path can restore the owner wrap from
+the durable server envelope rather than relying on the original browser enrollment state. It does
+not expose or recreate the Journal master key.
 
 ## 5. Configure protected smoke credentials
 

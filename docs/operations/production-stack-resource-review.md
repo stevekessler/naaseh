@@ -36,4 +36,5 @@ At 399 resources, an emergency split is not required for this release, but 101 r
 large long-term expansion budget. Re-run this inventory for every material infrastructure feature.
 Begin a planned stack split before the template approaches 450 resources, preserving explicit
 dependencies, rollback order, retained resources, and production names. Do not deploy the current
-staging workflow as a workaround; its stack IDs are not stage-scoped.
+staging as a workaround; no staging AWS environment is provisioned, and its workflow is a
+non-deploying placeholder until stage-scoped infrastructure is designed.

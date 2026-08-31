@@ -16,6 +16,9 @@ export interface CrisisPlanRequest {
   ownerId?: string;
   body?: unknown;
   query?: Record<string, string | undefined>;
+  origin?: string;
+  expectedCsrf?: string;
+  providedCsrf?: string;
 }
 export interface CrisisPlanResponse {
   statusCode: number;
@@ -277,7 +280,7 @@ export async function crisisPlanHandler(event: CrisisPlanRequest): Promise<Crisi
 
 export const handler: APIGatewayProxyHandlerV2 = async (event: APIGatewayProxyEventV2) => {
   const context = event.requestContext as typeof event.requestContext & {
-    authorizer?: { lambda?: { userId?: string } };
+    authorizer?: { lambda?: { userId?: string; csrfToken?: string } };
   };
   let body: unknown;
   try {
@@ -291,5 +294,10 @@ export const handler: APIGatewayProxyHandlerV2 = async (event: APIGatewayProxyEv
     ...(context.authorizer?.lambda?.userId ? { ownerId: context.authorizer.lambda.userId } : {}),
     body,
     ...(event.queryStringParameters ? { query: event.queryStringParameters } : {}),
+    ...(event.headers.origin ? { origin: event.headers.origin } : {}),
+    ...(context.authorizer?.lambda?.csrfToken
+      ? { expectedCsrf: context.authorizer.lambda.csrfToken }
+      : {}),
+    ...(event.headers['x-csrf-token'] ? { providedCsrf: event.headers['x-csrf-token'] } : {}),
   });
 };

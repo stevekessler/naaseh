@@ -36,6 +36,11 @@ import {
   unwrapCrisisPlanKeyForOwner,
   zeroizeCrisisPlanKey,
 } from '../../crypto/crisis-plan-crypto.js';
+import {
+  changeDurableJournalPin,
+  createDurableJournalEnrollment,
+  restoreDurableJournalEnrollment,
+} from './journal-enrollment.js';
 
 export function JournalPage({
   ownerId,
@@ -46,6 +51,7 @@ export function JournalPage({
   csrfToken: string;
   tasks?: Task[];
 }) {
+  const localOnlyEnrollment = import.meta.env.DEV || import.meta.env.MODE === 'test';
   const [jmk, setJmk] = useState<Uint8Array>();
   const [profile, setProfile] = useState<JournalProfile>({
     schemaVersion: 1,
@@ -69,12 +75,41 @@ export function JournalPage({
   const [projections, setProjections] = useState<JournalEntryDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<JournalEntryDraft>();
   const [crisisPlanDocument, setCrisisPlanDocument] = useState<JournalDocument | null>(null);
-  const ownerWrap = useLiveQuery(() => readLocalJournalOwnerWrap(ownerId), [ownerId]);
+  const [enrollmentLookupComplete, setEnrollmentLookupComplete] = useState(false);
+  const [enrollmentLookupError, setEnrollmentLookupError] = useState('');
+  const [enrollmentLookupAttempt, setEnrollmentLookupAttempt] = useState(0);
+  const ownerWrap = useLiveQuery(() => readLocalJournalOwnerWrap(ownerId), [ownerId], null);
   const encryptedEntries =
     useLiveQuery(() => listEncryptedJournalEntries(ownerId), [ownerId]) ?? [];
   const encryptedProfile = useLiveQuery(() => readEncryptedJournalProfile(ownerId), [ownerId]);
   const encryptedCrisisPlan = useLiveQuery(() => readLocalCrisisPlan(ownerId), [ownerId]);
   const draft = useMemo(() => emptyJournalEntry(ownerId), [ownerId]);
+  useEffect(() => {
+    if (ownerWrap === null) return;
+    if (ownerWrap || localOnlyEnrollment) {
+      setEnrollmentLookupError('');
+      setEnrollmentLookupComplete(true);
+      return;
+    }
+    let active = true;
+    setEnrollmentLookupComplete(false);
+    setEnrollmentLookupError('');
+    void restoreDurableJournalEnrollment(ownerId)
+      .then(() => {
+        if (active) setEnrollmentLookupComplete(true);
+      })
+      .catch(() => {
+        if (active) {
+          setEnrollmentLookupError(
+            'Journal enrollment could not be checked. Connect and retry before creating a Journal.',
+          );
+          setEnrollmentLookupComplete(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [enrollmentLookupAttempt, localOnlyEnrollment, ownerId, ownerWrap]);
   useEffect(() => {
     if (!jmk) return;
     const lock = () => {
@@ -185,14 +220,31 @@ export function JournalPage({
       setSection('new');
     }
   }, [projections]);
+  if (!jmk && (ownerWrap === null || !enrollmentLookupComplete))
+    return <p role="status">Checking encrypted Journal enrollment…</p>;
+  if (!jmk && enrollmentLookupError)
+    return (
+      <section className="journal-unlock">
+        <h1>Journal unavailable</h1>
+        <p role="alert">{enrollmentLookupError}</p>
+        <button type="button" onClick={() => setEnrollmentLookupAttempt((value) => value + 1)}>
+          Retry
+        </button>
+      </section>
+    );
   if (!jmk)
     return (
       <JournalUnlock
         enrolled={Boolean(ownerWrap)}
         onEnroll={async (pin) => {
-          const next = generateJournalMasterKey();
-          await saveLocalJournalOwnerWrap(ownerId, await wrapJournalMasterKeyWithPin(next, pin));
-          setJmk(next);
+          if (localOnlyEnrollment) {
+            const next = generateJournalMasterKey();
+            await saveLocalJournalOwnerWrap(ownerId, await wrapJournalMasterKeyWithPin(next, pin));
+            setJmk(next);
+          } else {
+            const enrollment = await createDurableJournalEnrollment(ownerId, pin, csrfToken);
+            setJmk(enrollment.jmk);
+          }
         }}
         onUnlock={async (pin) => {
           if (!ownerWrap) throw new Error('Journal is not enrolled');
@@ -335,10 +387,12 @@ export function JournalPage({
           onChange={changeProfile}
           onChangePin={async (oldPin, newPin) => {
             if (!ownerWrap) throw new Error('Journal is not enrolled');
-            await saveLocalJournalOwnerWrap(
-              ownerId,
-              await changeJournalPin(ownerWrap, oldPin, newPin),
-            );
+            if (localOnlyEnrollment)
+              await saveLocalJournalOwnerWrap(
+                ownerId,
+                await changeJournalPin(ownerWrap, oldPin, newPin),
+              );
+            else await changeDurableJournalPin(ownerId, ownerWrap, oldPin, newPin, csrfToken);
           }}
           onLock={() => {
             zeroizeJournalKey(jmk);

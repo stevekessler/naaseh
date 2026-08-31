@@ -23,6 +23,93 @@ const fromBase64Url = (value: string) => {
   return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 };
 
+export interface JournalRecoveryRegistry {
+  schema: 'naaseh-recovery-key-registry/v1';
+  region: 'us-west-2';
+  generatedAt: string;
+  signingKeyId: string;
+  signingPublicKeySpki: string;
+  signingKeySpec: 'RSA_3072';
+  signingKeyUsage: 'SIGN_VERIFY';
+  keys: Array<{
+    authority: 'recovery';
+    region: 'us-west-2';
+    keyId: string;
+    algorithm: 'RSAES_OAEP_SHA_256';
+    version: number;
+    state: 'active' | 'decrypt-only';
+    publicKey: string;
+    keySpec: 'RSA_3072';
+    keyUsage: 'ENCRYPT_DECRYPT';
+  }>;
+  signature: string;
+}
+
+const canonicalize = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalize(child)]),
+    );
+  return value;
+};
+
+const kmsArn = /^arn:aws:kms:us-west-2:(\d{12}):key\/[A-Za-z0-9-]+$/u;
+
+export async function verifiedActiveJournalRecoveryKey(input: unknown) {
+  if (!input || typeof input !== 'object')
+    throw new Error('The Journal recovery-key registry is invalid.');
+  const registry = input as JournalRecoveryRegistry;
+  const signingAccount = registry.signingKeyId?.match(kmsArn)?.[1];
+  if (
+    registry.schema !== 'naaseh-recovery-key-registry/v1' ||
+    registry.region !== 'us-west-2' ||
+    !Number.isFinite(Date.parse(registry.generatedAt)) ||
+    !signingAccount ||
+    registry.signingKeySpec !== 'RSA_3072' ||
+    registry.signingKeyUsage !== 'SIGN_VERIFY' ||
+    !Array.isArray(registry.keys) ||
+    typeof registry.signingPublicKeySpki !== 'string' ||
+    typeof registry.signature !== 'string'
+  )
+    throw new Error('The Journal recovery-key registry is invalid.');
+  const active = registry.keys.filter(
+    (key) =>
+      key.authority === 'recovery' &&
+      key.region === 'us-west-2' &&
+      key.algorithm === 'RSAES_OAEP_SHA_256' &&
+      key.state === 'active' &&
+      key.keySpec === 'RSA_3072' &&
+      key.keyUsage === 'ENCRYPT_DECRYPT' &&
+      Number.isInteger(key.version) &&
+      key.version > 0 &&
+      key.keyId.match(kmsArn)?.[1] === signingAccount &&
+      typeof key.publicKey === 'string',
+  );
+  if (active.length !== 1) throw new Error('Exactly one active Journal recovery key is required.');
+  const { signature, ...unsigned } = registry;
+  const signingKey = await crypto.subtle.importKey(
+    'spki',
+    fromBase64Url(registry.signingPublicKeySpki),
+    { name: 'RSA-PSS', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  const valid = await crypto.subtle.verify(
+    { name: 'RSA-PSS', saltLength: 32 },
+    signingKey,
+    fromBase64Url(signature),
+    encoder.encode(JSON.stringify(canonicalize(unsigned))),
+  );
+  if (!valid) throw new Error('The Journal recovery-key registry signature is invalid.');
+  return {
+    keyVersion: active[0]!.version,
+    publicKeySpki: fromBase64Url(active[0]!.publicKey),
+  };
+}
+
 export function generateJournalMasterKey(): Uint8Array {
   return crypto.getRandomValues(new Uint8Array(32));
 }
@@ -110,7 +197,7 @@ export interface LocalJournalOwnerWrap {
   iv: string;
   ciphertext: string;
   algorithm: 'ARGON2ID-AES-256-GCM';
-  parameters: { memoryKiB: 102_400; iterations: 3; parallelism: 1 };
+  parameters: { memoryKiB: number; iterations: number; parallelism: number };
 }
 export async function wrapJournalMasterKeyWithPin(
   jmk: Uint8Array,
@@ -135,6 +222,12 @@ export async function unwrapJournalMasterKeyWithPin(
   value: LocalJournalOwnerWrap,
   pin: string,
 ): Promise<Uint8Array> {
+  if (
+    value.parameters.memoryKiB !== 102_400 ||
+    value.parameters.iterations !== 3 ||
+    value.parameters.parallelism !== 1
+  )
+    throw new Error('This Journal PIN-wrap configuration is not supported.');
   const pinKey = await derivePinKey(pin, fromBase64Url(value.salt));
   const key = await unwrapDekWithPin(
     { algorithm: 'AES-256-GCM', iv: value.iv, ciphertext: value.ciphertext },
