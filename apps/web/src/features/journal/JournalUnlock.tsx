@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { JournalEnrollmentError } from './journal-enrollment.js';
 
 export function JournalUnlock({
   enrolled,
@@ -16,11 +17,13 @@ export function JournalUnlock({
       setError('');
       await (enrolled ? onUnlock(pin) : onEnroll(pin));
       setPin('');
-    } catch {
+    } catch (error) {
       setError(
         enrolled
           ? 'The journal could not be unlocked. Check the PIN and try again.'
-          : 'The Journal could not be created. No enrollment was saved. Refresh and try again.',
+          : error instanceof JournalEnrollmentError
+            ? error.message
+            : 'The Journal could not be created. No enrollment was saved. Refresh and try again.',
       );
     }
   };
