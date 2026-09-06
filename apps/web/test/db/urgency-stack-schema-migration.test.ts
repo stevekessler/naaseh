@@ -3,13 +3,13 @@ import { currentSchemaVersion, planEnhancedSchemaMigration } from '../../src/db/
 import { supportedLocalSchema } from '../../src/db/sync-cursor.js';
 
 describe('urgency and personal-stack encrypted schema migration', () => {
-  it('reconciles the existing v9 database through the v11 scaffold', () => {
-    expect(currentSchemaVersion).toBe(11);
-    expect(supportedLocalSchema(11)).toBe(true);
+  it('reconciles the existing v9 database through the v13 Crisis Plan schema', () => {
+    expect(currentSchemaVersion).toBe(13);
+    expect(supportedLocalSchema(13)).toBe(true);
     expect(supportedLocalSchema(10)).toBe(false);
     expect(planEnhancedSchemaMigration(9)).toMatchObject({
       from: 9,
-      to: 11,
+      to: 13,
       preserveOutbox: true,
     });
   });
@@ -36,12 +36,12 @@ describe('urgency and personal-stack encrypted schema migration', () => {
     );
   });
 
-  it('is idempotent at v11 and still rejects future schemas', () => {
-    expect(planEnhancedSchemaMigration(11)).toMatchObject({
-      from: 11,
-      to: 11,
+  it('is idempotent at v13 and still rejects future schemas', () => {
+    expect(planEnhancedSchemaMigration(13)).toMatchObject({
+      from: 13,
+      to: 13,
       storesToAdd: [],
     });
-    expect(() => planEnhancedSchemaMigration(12)).toThrow('newer');
+    expect(() => planEnhancedSchemaMigration(14)).toThrow('newer');
   });
 });

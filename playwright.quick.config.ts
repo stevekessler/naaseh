@@ -15,6 +15,10 @@ const chromiumJourneys = [
   'responsive-dialogs.spec.ts',
   'responsive-state.spec.ts',
   'responsive-targets.spec.ts',
+  'journal.spec.ts',
+  'journal-full.spec.ts',
+  'crisis-plan-sharing.spec.ts',
+  'crisis-plan-connectivity.spec.ts',
 ];
 
 export default defineConfig({

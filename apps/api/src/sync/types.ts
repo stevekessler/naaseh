@@ -24,6 +24,9 @@ export {
   supportedSyncContractVersionSchema,
   syncConflictEnvelopeSchema,
   syncRetryEnvelopeSchema,
+  journalMutationSchema,
+  journalEntryCiphertextSchema,
+  ciphertextEnvelopeSchema,
 } from '@naaseh/domain';
 export type {
   ContractV4MutationResult,

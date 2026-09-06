@@ -12,6 +12,7 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
 export const backupControls = {
+  journalCiphertextAndRecoveryAudit: true,
   daily: true,
   crossRegion: false,
   crossAccount: false,
@@ -52,13 +53,16 @@ export function createBackupResources(
         recoveryPointTags: {
           NaasehPersonalStackCanonicalOperations: backupControls.personalStack.canonicalOperations,
           NaasehPersonalStackSnapshots: backupControls.personalStack.snapshots,
+          NaasehJournalCiphertext: 'included',
+          NaasehCrisisPlanCiphertext: 'included',
         },
       }),
     ],
   });
 
-  // The personal-stack operation log and its derived snapshots share the durable table. Selecting
-  // the table ARN (rather than row tags) guarantees a recovery point cannot omit operation chunks.
+  // Journal entries, Crisis Plans, grants, mutation receipts, and the personal-stack operation log
+  // share this durable table. Selecting its ARN guarantees row-level additions cannot be omitted
+  // from backup or quarterly restore testing.
   const backupSelection = plan.addSelection('CanonicalOperationsAndDurableResources', {
     resources: [
       backup.BackupResource.fromDynamoDbTable(options.table),

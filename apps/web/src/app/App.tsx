@@ -16,6 +16,8 @@ import { TaskForm } from '../features/tasks/TaskForm.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
 import { SyncStatus } from '../features/sync/SyncStatus.js';
 import { drainSequentially } from '../sync/sync-engine.js';
+import { drainJournalOutbox } from '../sync/journal-sync.js';
+import { drainJournalDataInDependencyOrder } from '../sync/crisis-plan-sync.js';
 import { filtersFromSearch, safeSearchState } from '../features/search/search-state.js';
 import { TaskSearchBar } from '../features/search/TaskSearchBar.js';
 import { TaskFilters } from '../features/search/TaskFilters.js';
@@ -150,6 +152,11 @@ const UsersAdminPage = lazy(() =>
     default: UsersAdminPage,
   })),
 );
+const JournalPage = lazy(() =>
+  import('../features/journal/JournalPage.js').then(({ JournalPage }) => ({
+    default: JournalPage,
+  })),
+);
 
 const emptyFilters: Filters = {
   query: '',
@@ -202,6 +209,7 @@ export function App() {
     | 'google'
     | 'profile'
     | 'admin'
+    | 'journal'
   >(initialRoute.section);
   const [stackScope, setStackScope] = useState<LocalStackScope>({ scopeType: 'overall' });
   const [stackAnnouncement, setStackAnnouncement] = useState('');
@@ -280,7 +288,18 @@ export function App() {
       ...categories.map((category) => category.defaultAssigneeId),
     ]);
   }, [adminUsers, session, tasks, categories]);
-  const pending = useLiveQuery(() => db.outbox.count(), []) ?? 0;
+  const pending =
+    useLiveQuery(
+      async () =>
+        (
+          await Promise.all([
+            db.outbox.count(),
+            db.secureCrisisPlanOutbox.count(),
+            db.secureJournalOutbox.count(),
+          ])
+        ).reduce((total, count) => total + count, 0),
+      [],
+    ) ?? 0;
   const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
   const eligibleStackWork = useMemo(
     () => [
@@ -602,6 +621,11 @@ export function App() {
     }
     syncing.current = true;
     try {
+      await drainJournalDataInDependencyOrder(
+        session.userId,
+        session.csrfToken,
+        drainJournalOutbox,
+      );
       await drainSequentially(session.csrfToken, (delay) => {
         if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
         syncRetryTimer.current = window.setTimeout(() => {
@@ -784,6 +808,13 @@ export function App() {
             </button>
             <button
               className="quiet"
+              aria-current={section === 'journal' ? 'page' : undefined}
+              onClick={() => navigate({ section: 'journal' })}
+            >
+              Journal
+            </button>
+            <button
+              className="quiet"
               aria-current={section === 'stack' ? 'page' : undefined}
               onClick={() => navigate({ section: 'stack' })}
             >
@@ -860,7 +891,9 @@ export function App() {
         </div>
       </header>
       <main>
-        {section === 'stack' ? (
+        {section === 'journal' ? (
+          <JournalPage ownerId={session.userId} csrfToken={session.csrfToken} tasks={tasks} />
+        ) : section === 'stack' ? (
           <PersonalStackPage
             scope={stackScope}
             projects={projects

@@ -1,6 +1,6 @@
 # First AWS deployment
 
-Last reviewed: 2026-07-25
+Last reviewed: 2026-08-30
 
 Production is served at **https://gsd.thepandas.link**. CDK deploys two CloudFormation stacks:
 
@@ -476,7 +476,8 @@ The role ARN must be
 `naaseh-recovery-break-glass`.
 
 Do not create or run the staging deployment role yet. The current CDK entry point uses the fixed
-stack IDs `NaasehEdge` and `NaasehProd`; the staging workflow would target the production stacks.
+stack IDs `NaasehEdge` and `NaasehProd`. The repository's staging workflow is currently a
+non-deploying placeholder because no staging AWS environment exists.
 First implement stage-specific stack IDs and a separate staging hostname, then create a staging
 role with an exact `repo:stevekessler/naaseh:environment:staging` subject.
 
@@ -710,6 +711,11 @@ commit SHA as the known-good `rollback_ref` for the next release.
 
    Use distinct passwords and PINs. Sign in manually as each account over HTTPS. Confirm the
    administrator can reach administration and that the smoke user has only ordinary user access.
+   Seed and verify `naaseh-smoke` by following
+   [Seed the production smoke account](seed-production-smoke-account.md). The routine production
+   canary requires its durable encrypted Journal envelope and synthetic Crisis Plan and only reads
+   them; it never creates or modifies them. Store the Journal PIN with the operator's protected
+   test-account credentials, not in GitHub Actions, because the canary does not need it.
 
 6. Replace the GitHub smoke secrets with the exact smoke-user credentials. Enter values only at the
    hidden prompts:
@@ -903,8 +909,9 @@ of the currently deployed known-good commit. The workflow validates, builds, dep
 tests `https://gsd.thepandas.link`, and redeploys the known-good commit if the smoke test fails.
 
 The first production bootstrap follows the local administrator procedure above; the guarded
-**Deploy production** workflow is the only GitHub production path. Do not run **Deploy staging**
-until stage-specific stack IDs and a separate staging hostname have been implemented and reviewed.
+**Deploy production** is the only AWS deployment path. The staging workflow intentionally fails
+without requesting AWS credentials until a separate account, stage-specific stack IDs, and a
+separate staging hostname have been implemented and reviewed.
 
 AWS references: [CloudFront certificate Region](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html),
 [WAF CloudFront scope](https://docs.aws.amazon.com/waf/latest/developerguide/web-acl-associating-aws-resource.html),

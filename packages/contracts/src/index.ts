@@ -19,3 +19,5 @@ export * from './archive-project-reporting-openapi.js';
 export * from './google-sync-openapi.js';
 export * from './urgency-stack-ranking-openapi.js';
 export * from './completed-task-csv.js';
+export * from './journal-openapi.js';
+export * from './crisis-plan-openapi.js';

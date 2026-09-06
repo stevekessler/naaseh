@@ -168,6 +168,8 @@ async function pushMutation(
   const clientId = await getClientId();
   const isStackMutation = mutation.entityType === ('personalStackOperation' as string);
   const isTimerMutation = mutation.entityType === 'taskTimer';
+  const isJournalMutation = ['journalEntry', 'journalProfile'].includes(mutation.entityType);
+  const isCrisisPlanMutation = mutation.entityType === ('crisisPlan' as string);
   const wireMutation = {
     id: mutation.id,
     entityId: mutation.entityId,
@@ -187,15 +189,17 @@ async function pushMutation(
       'x-client-id': clientId,
     },
     body: JSON.stringify({
-      contractVersion: isTimerMutation
-        ? 5
-        : ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
-          ? 3
-          : isStackMutation
-            ? 4
-            : ['task', 'category', 'group'].includes(mutation.entityType)
-              ? 1
-              : 2,
+      contractVersion: isCrisisPlanMutation
+        ? 6
+        : isTimerMutation || isJournalMutation
+          ? 5
+          : ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
+            ? 3
+            : isStackMutation
+              ? 4
+              : ['task', 'category', 'group'].includes(mutation.entityType)
+                ? 1
+                : 2,
       mutations: [wireMutation],
       ...(isStackMutation ? {} : { backlog }),
     }),

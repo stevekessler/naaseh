@@ -1,0 +1,89 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Journal Crisis Plan API
+  version: 6.0.0
+  description: Ciphertext-only owner storage and online-only access for selected recipients.
+servers: [{ url: /api/v1 }]
+security: [{ sessionCookie: [] }]
+paths:
+  /journal/crisis-plan:
+    get: { summary: Read the owner's current encrypted plan, responses: { '200': { $ref: '#/components/responses/Plan' }, '409': { $ref: '#/components/responses/Problem' } } }
+    post: { summary: Create the owner's first encrypted plan, requestBody: { $ref: '#/components/requestBodies/Create' }, responses: { '201': { $ref: '#/components/responses/Plan' }, '409': { $ref: '#/components/responses/Problem' } } }
+    put: { summary: Replace the owner's current encrypted plan, requestBody: { $ref: '#/components/requestBodies/Replace' }, responses: { '200': { $ref: '#/components/responses/Plan' }, '409': { $ref: '#/components/responses/Problem' } } }
+  /journal/crisis-plan/shareable-users:
+    get:
+      summary: Search minimal active non-self identities for Select2
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 100 } }
+        - { name: cursor, in: query, schema: { type: string, maxLength: 512 } }
+      responses: { '200': { description: At most 20 minimal identities, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } } }, '429': { $ref: '#/components/responses/Problem' } }
+  /journal/crisis-plan/shares:
+    get: { summary: List owner share relationships and rotation state, responses: { '200': { description: Share list, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } } } } }
+    post: { summary: Immediately grant one active recipient read-only access, responses: { '201': { description: Active share }, '409': { $ref: '#/components/responses/Problem' } } }
+  /journal/crisis-plan/shares/{recipientId}/revoke:
+    post:
+      summary: Revoke one recipient while atomically rotating the body, owner wrap, and remaining grants
+      parameters: [{ name: recipientId, in: path, required: true, schema: { type: string } }]
+      requestBody: { $ref: '#/components/requestBodies/Rotate' }
+      responses: { '200': { $ref: '#/components/responses/Rotation' }, '409': { $ref: '#/components/responses/Problem' } }
+  /journal/crisis-plan/rotate:
+    post: { summary: Clear rotation-required state after recipient self-removal, requestBody: { $ref: '#/components/requestBodies/Rotate' }, responses: { '200': { $ref: '#/components/responses/Rotation' }, '409': { $ref: '#/components/responses/Problem' } } }
+  /journal/crisis-plan/shared:
+    get: { summary: List plans shared with the authenticated active recipient, responses: { '200': { description: Online-only shared summaries, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } } } } }
+  /journal/crisis-plan/shared/{planId}:
+    get:
+      summary: Reauthorize and read current shared-plan ciphertext
+      parameters: [{ name: planId, in: path, required: true, schema: { type: string, format: uuid } }]
+      responses: { '200': { description: Ciphertext and current binding metadata only, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } } }, '400': { $ref: '#/components/responses/Problem' } }
+  /journal/crisis-plan/shared/{planId}/remove-access:
+    post: { summary: Remove the authenticated recipient and require owner rotation, responses: { '200': { description: Recipient-removed share }, '400': { $ref: '#/components/responses/Problem' } } }
+  /journal/crisis-plan/broker:
+    post: { summary: Reauthorize an active share and rewrap only its CPK to a one-use key, responses: { '200': { description: Ephemeral CPK wrap, headers: { Cache-Control: { $ref: '#/components/headers/NoStorePrivate' } } }, '503': { $ref: '#/components/responses/Problem' } } }
+  /journal/crisis-plan/sharing-key:
+    get: { summary: Read the signed public sharing-key registry, responses: { '200': { description: Signed public material only, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } } }, '503': { $ref: '#/components/responses/Problem' } } }
+components:
+  securitySchemes:
+    sessionCookie: { type: apiKey, in: cookie, name: naaseh_session }
+  headers:
+    NoStore: { schema: { type: string, const: no-store } }
+    NoStorePrivate: { schema: { type: string, const: 'no-store, private' } }
+  requestBodies:
+    Create: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreatePlan' } } } }
+    Replace: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ReplacePlan' } } } }
+    Rotate: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RotationRequest' } } } }
+  responses:
+    Plan: { description: Current encrypted plan, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } }, content: { application/json: { schema: { $ref: '#/components/schemas/Plan' } } } }
+    Rotation: { description: Atomic plan-and-share rotation result, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } } }
+    Problem: { description: Actionable error without protected data, headers: { Cache-Control: { $ref: '#/components/headers/NoStore' } }, content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } } }
+  schemas:
+    Ciphertext:
+      type: object
+      additionalProperties: false
+      required: [algorithm, schemaVersion, keyGeneration, iv, ciphertext, byteSize]
+      properties: { algorithm: { const: AES-256-GCM }, schemaVersion: { const: 1 }, keyGeneration: { type: integer, minimum: 1 }, iv: { type: string }, ciphertext: { type: string, maxLength: 409600 }, byteSize: { type: integer, maximum: 307200 } }
+    OwnerWrap:
+      type: object
+      additionalProperties: false
+      required: [algorithm, keyGeneration, iv, ciphertext]
+      properties: { algorithm: { const: JMK-HKDF-AES-256-GCM }, keyGeneration: { type: integer, minimum: 1 }, iv: { type: string }, ciphertext: { type: string, maxLength: 1024 } }
+    Plan:
+      type: object
+      additionalProperties: false
+      required: [planId, ownerId, version, keyGeneration, rotationState, body, ownerWrap, createdAt, updatedAt]
+      properties: { planId: { type: string, format: uuid }, ownerId: { type: string }, version: { type: integer, minimum: 1 }, keyGeneration: { type: integer, minimum: 1 }, rotationState: { enum: [current, rotation_required] }, body: { $ref: '#/components/schemas/Ciphertext' }, ownerWrap: { $ref: '#/components/schemas/OwnerWrap' }, createdAt: { type: string, format: date-time }, updatedAt: { type: string, format: date-time } }
+    CreatePlan:
+      type: object
+      required: [mutationId, planId, baseVersion, keyGeneration, body, ownerWrap]
+      properties: { mutationId: { type: string, format: uuid }, planId: { type: string, format: uuid }, baseVersion: { const: 0 }, keyGeneration: { const: 1 }, body: { $ref: '#/components/schemas/Ciphertext' }, ownerWrap: { $ref: '#/components/schemas/OwnerWrap' } }
+    ReplacePlan:
+      type: object
+      required: [mutationId, baseVersion, keyGeneration, body, ownerWrap]
+      properties: { mutationId: { type: string, format: uuid }, baseVersion: { type: integer, minimum: 1 }, keyGeneration: { type: integer, minimum: 1 }, body: { $ref: '#/components/schemas/Ciphertext' }, ownerWrap: { $ref: '#/components/schemas/OwnerWrap' } }
+    RotationRequest:
+      type: object
+      required: [mutationId, baseVersion, keyGeneration, body, ownerWrap, grants]
+      properties: { mutationId: { type: string, format: uuid }, baseVersion: { type: integer, minimum: 1 }, keyGeneration: { type: integer, minimum: 1 }, body: { $ref: '#/components/schemas/Ciphertext' }, ownerWrap: { $ref: '#/components/schemas/OwnerWrap' }, grants: { type: array, maxItems: 90 } }
+    Problem:
+      type: object
+      required: [code, message, correlationId]
+      properties: { code: { type: string }, message: { type: string }, correlationId: { type: string }, currentVersion: { type: integer }, retryAfterSeconds: { type: integer } }

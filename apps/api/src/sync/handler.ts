@@ -56,7 +56,13 @@ import {
   getTaskTimerReceipt,
 } from '../timers/task-timer-repository.js';
 import { recordTaskTimerEvent } from '../timers/telemetry.js';
+import { applyCrisisPlanSyncMutation } from '../journal/crisis-plan-handler.js';
+import { journalMutationSchema } from '@naaseh/domain';
+import { DynamoJournalRepository } from '../journal/journal-repository.js';
+import { JournalService } from '../journal/journal-service.js';
 const MAX_BODY_BYTES = 1_000_000;
+const journalRepository = new DynamoJournalRepository();
+const journalService = new JournalService(journalRepository);
 
 async function saveOrganizationMutationReceipt(
   actorId: string,
@@ -215,6 +221,22 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     metric('SyncOldestPendingAge', oldestAgeSeconds, 'Seconds');
   }
   for (const mutation of body.mutations) {
+    if (
+      (mutation as { entityType?: string }).entityType === 'journalEntry' ||
+      (mutation as { entityType?: string }).entityType === 'journalProfile'
+    ) {
+      const parsedJournalMutation = journalMutationSchema.safeParse(mutation);
+      results.push(
+        parsedJournalMutation.success
+          ? await journalService.apply(actorId, parsedJournalMutation.data)
+          : { mutationId: mutation.id, status: 'rejected' as const },
+      );
+      continue;
+    }
+    if ((mutation as { entityType?: string }).entityType === 'crisisPlan') {
+      results.push(await applyCrisisPlanSyncMutation(actorId, mutation));
+      continue;
+    }
     if (mutation.entityType === 'taskTimer') {
       const sourceClientId = event.headers['x-client-id'];
       if (!sourceClientId)

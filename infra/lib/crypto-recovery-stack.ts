@@ -13,6 +13,7 @@ export const cryptoRecoveryControls = {
   reservedConcurrency: 1,
   ownerPasswordReverification: true,
   auditAlarm: true,
+  journalOwnerBoundRewrap: true,
 } as const;
 
 /** Creates the only runtime principal permitted to decrypt hidden-memo recovery wraps. */

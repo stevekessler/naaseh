@@ -19,6 +19,13 @@ export const enhancedRecoveryEntityNames = [
   'blobreferences',
   'copyjobs',
   'exportjobs',
+  'journalentries',
+  'journalprofiles',
+  'journalkeyenvelopes',
+  'journalmutationreceipts',
+  'journalfeedchanges',
+  'journalrecoveryrequests',
+  'journalrecoveryaudit',
 ] as const;
 
 export function validateEnhancedRecoveryRows(rows: readonly EnhancedRecoveryRow[]) {

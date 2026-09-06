@@ -7,6 +7,18 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import type { Construct } from 'constructs';
 
+export const journalObservabilityControls = {
+  protectedContentInLogs: false,
+  metrics: [
+    'saveFailure',
+    'syncFailure',
+    'authorizationDenied',
+    'decryptionFailure',
+    'recoveryFailure',
+  ],
+  costModel: 'existing-log-groups-and-metric-filters',
+} as const;
+
 export const retention = {
   applicationDays: 30,
   authenticationDays: 90,
@@ -41,6 +53,8 @@ export function createOperationalVisibility(
     sync: lambda.IFunction;
     reporting?: lambda.IFunction;
     googleSync?: lambda.IFunction;
+    crisisPlan?: lambda.IFunction;
+    crisisPlanBroker?: lambda.IFunction;
   },
   table: dynamodb.ITable,
   alerts: sns.ITopic,
@@ -149,12 +163,16 @@ export function createOperationalVisibility(
         functions.sync.metricErrors(),
         functions.auth.metricErrors(),
         ...(functions.googleSync ? [functions.googleSync.metricErrors()] : []),
+        ...(functions.crisisPlan ? [functions.crisisPlan.metricErrors()] : []),
+        ...(functions.crisisPlanBroker ? [functions.crisisPlanBroker.metricErrors()] : []),
       ],
       right: [
         functions.task.metricThrottles(),
         functions.sync.metricThrottles(),
         functions.auth.metricThrottles(),
         ...(functions.googleSync ? [functions.googleSync.metricThrottles()] : []),
+        ...(functions.crisisPlan ? [functions.crisisPlan.metricThrottles()] : []),
+        ...(functions.crisisPlanBroker ? [functions.crisisPlanBroker.metricThrottles()] : []),
       ],
     }),
     new cloudwatch.GraphWidget({
@@ -287,3 +305,38 @@ export function createOperationalVisibility(
   );
   return dashboard;
 }
+
+export const crisisPlanObservabilityControls = Object.freeze({
+  logRetentionDays: 90,
+  alarms: [
+    'crisis-plan-save-failure',
+    'crisis-plan-conflict',
+    'crisis-plan-rotation-required',
+    'crisis-plan-broker-denied',
+    'crisis-plan-kms-failure',
+    'crisis-plan-restore-invalid',
+  ],
+  allowedDimensions: [
+    'operation',
+    'outcome',
+    'latencyBucket',
+    'schemaVersion',
+    'keyGeneration',
+    'shareGeneration',
+    'retryKind',
+    'conflictKind',
+  ],
+  protectedFields: [
+    'planHtml',
+    'ciphertext',
+    'ownerWrap',
+    'recipientGrant',
+    'cpk',
+    'jmk',
+    'publicKey',
+    'searchQuery',
+    'recipientId',
+    'journalAnswers',
+  ],
+  expectedCost: 'bounded low-cardinality metrics and 90-day logs plus CloudTrail KMS evidence',
+});

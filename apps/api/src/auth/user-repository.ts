@@ -1,4 +1,10 @@
-import { GetCommand, PutCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  PutCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import { userSchema, usernameLookupSchema, type UserRecord } from '@naaseh/domain';
 import { z } from 'zod';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
@@ -39,6 +45,24 @@ export async function userById(id: string): Promise<StoredUser | undefined> {
   );
   return result.Item?.data ? storedUser(result.Item.data) : undefined;
 }
+
+export async function activeUsersForCrisisPlan(): Promise<
+  Array<Pick<StoredUser, 'id' | 'displayName' | 'username' | 'active'>>
+> {
+  const result = await dynamodb.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :partition',
+      ExpressionAttributeValues: { ':partition': 'ADMIN#USER' },
+      ProjectionExpression: '#data.id, #data.displayName, #data.username, #data.active',
+      ExpressionAttributeNames: { '#data': 'data' },
+    }),
+  );
+  return (result.Items ?? [])
+    .map((item) => item.data as Pick<StoredUser, 'id' | 'displayName' | 'username' | 'active'>)
+    .filter((user) => user.active === true);
+}
 export async function userByProvisionToken(token: string): Promise<StoredUser | undefined> {
   const result = await dynamodb.send(
     new GetCommand({
@@ -70,6 +94,7 @@ export async function putUser(user: StoredUser, idempotencyToken?: string): Prom
               ...keys.user(user.id),
               GSI1PK: 'ADMIN#USER',
               GSI1SK: `${user.username}#${user.id}`,
+              brokerActive: user.active,
               data: user,
             },
             ConditionExpression: 'attribute_not_exists(PK)',
@@ -87,6 +112,19 @@ export async function putUser(user: StoredUser, idempotencyToken?: string): Prom
             ]
           : []),
       ],
+    }),
+  );
+}
+
+/** Copies only the current active flag into the broker-readable top-level projection. */
+export async function syncBrokerActiveProjection(userId: string) {
+  await dynamodb.send(
+    new UpdateCommand({
+      TableName: tableName,
+      Key: keys.user(userId),
+      UpdateExpression: 'SET brokerActive = #data.#active',
+      ConditionExpression: 'attribute_exists(PK) AND attribute_exists(#data.#active)',
+      ExpressionAttributeNames: { '#data': 'data', '#active': 'active' },
     }),
   );
 }

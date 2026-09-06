@@ -62,3 +62,17 @@ export function canRecover(claims: unknown, now: Date = new Date()): boolean {
     return false;
   }
 }
+
+export function authorizeJournalRecoveryAdmin(
+  input: { claims: unknown; passwordReverifiedAt: string; tfaVerifiedAt: string },
+  now = new Date(),
+) {
+  const authorization = authorizeRecovery(input.claims, now);
+  const fresh = (value: string) => {
+    const age = now.getTime() - Date.parse(value);
+    return Number.isFinite(age) && age >= 0 && age <= 5 * 60_000;
+  };
+  if (!fresh(input.passwordReverifiedAt) || !fresh(input.tfaVerifiedAt))
+    throw new RecoveryAuthorizationError();
+  return authorization;
+}

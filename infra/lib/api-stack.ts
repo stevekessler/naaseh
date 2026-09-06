@@ -23,6 +23,7 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import { createDeletionResources } from './deletion-stack.js';
 import { createGoogleSyncResources } from './google-sync-stack.js';
 import { withArgon2Bundling } from './native-node-bundling.js';
+import { createCrisisPlanSharingResources } from './crisis-plan-sharing-stack.js';
 
 export const sharedLambdaDefaults = (
   environment: Record<string, string>,
@@ -277,6 +278,14 @@ export function createApplicationApi(
     dataKey: options.dataKey,
     oauthSecret: options.googleOAuthSecret,
   }).api;
+  const crisisPlan = createCrisisPlanSharingResources(scope, {
+    environment: options.environment,
+    table: options.table,
+    manifestSigningKey: options.manifestSigningKey,
+    apiLogGroup: options.logGroups.sync,
+  });
+  for (const fn of [crisisPlan.api, crisisPlan.broker])
+    fn.addEnvironment('ALLOWED_ORIGINS', options.allowedOrigin);
   const authorizerFunction = new nodejs.NodejsFunction(scope, 'AuthorizerFunction', {
     ...defaults,
     entry: fileURLToPath(new URL('../../apps/api/src/auth/authorizer.ts', import.meta.url)),
@@ -555,6 +564,72 @@ export function createApplicationApi(
   route('SyncIntegration', '/api/v1/sync/push', [apigwv2.HttpMethod.POST], sync);
   route('SyncPullIntegration', '/api/v1/sync/pull', [apigwv2.HttpMethod.POST], sync);
   route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
+  route(
+    'JournalKeyEnvelopeIntegration',
+    '/api/v1/journal/key-envelope',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT],
+    crisisPlan.api,
+  );
+  route(
+    'CrisisPlanIntegration',
+    '/api/v1/journal/crisis-plan',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST, apigwv2.HttpMethod.PUT],
+    crisisPlan.api,
+  );
+  route(
+    'CrisisPlanUserSearchIntegration',
+    '/api/v1/journal/crisis-plan/shareable-users',
+    [apigwv2.HttpMethod.GET],
+    crisisPlan.api,
+  );
+  route(
+    'CrisisPlanSharesIntegration',
+    '/api/v1/journal/crisis-plan/shares',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+    crisisPlan.api,
+  );
+  route(
+    'CrisisPlanRevokeIntegration',
+    '/api/v1/journal/crisis-plan/shares/{recipientId}/revoke',
+    [apigwv2.HttpMethod.POST],
+    crisisPlan.api,
+  );
+  route(
+    'CrisisPlanRotateIntegration',
+    '/api/v1/journal/crisis-plan/rotate',
+    [apigwv2.HttpMethod.POST],
+    crisisPlan.api,
+  );
+  route(
+    'SharedCrisisPlansIntegration',
+    '/api/v1/journal/crisis-plan/shared',
+    [apigwv2.HttpMethod.GET],
+    crisisPlan.api,
+  );
+  route(
+    'SharedCrisisPlanIntegration',
+    '/api/v1/journal/crisis-plan/shared/{planId}',
+    [apigwv2.HttpMethod.GET],
+    crisisPlan.api,
+  );
+  route(
+    'SharedCrisisPlanRemoveIntegration',
+    '/api/v1/journal/crisis-plan/shared/{ownerId}/remove-access',
+    [apigwv2.HttpMethod.POST],
+    crisisPlan.api,
+  );
+  route(
+    'CrisisPlanBrokerIntegration',
+    '/api/v1/journal/crisis-plan/broker',
+    [apigwv2.HttpMethod.POST],
+    crisisPlan.broker,
+  );
+  route(
+    'CrisisPlanSharingKeyIntegration',
+    '/api/v1/journal/crisis-plan/sharing-key',
+    [apigwv2.HttpMethod.GET],
+    crisisPlan.api,
+  );
   route('OverallStackIntegration', '/api/v1/stacks/overall', [apigwv2.HttpMethod.GET], ranking);
   route(
     'OverallStackReorderIntegration',
@@ -839,6 +914,10 @@ export function createApplicationApi(
       exportCoordinator,
       deletion: deletion.apiHandler,
       googleSync,
+      crisisPlan: crisisPlan.api,
+      journal: crisisPlan.api,
+      crisisPlanBroker: crisisPlan.broker,
+      crisisPlanSharingKey: crisisPlan.sharingKey,
     },
   };
 }

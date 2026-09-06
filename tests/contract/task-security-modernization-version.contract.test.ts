@@ -12,8 +12,8 @@ import {
 } from '../../packages/domain/src/sync.js';
 
 describe('feature 009 version negotiation contract', () => {
-  it('accepts sync v5 while retaining compatibility reads', () => {
-    expect(currentSyncContractVersion).toBe(5);
+  it('uses sync v6 while retaining v5 compatibility reads', () => {
+    expect(currentSyncContractVersion).toBe(6);
     expect(supportedSyncContractVersionSchema.parse(5)).toBe(5);
     expect(
       pushRequestSchema.safeParse({

@@ -11,9 +11,34 @@ export type AppRoute =
   | { section: 'stack' }
   | { section: 'google' }
   | { section: 'profile' }
-  | { section: 'admin' };
+  | { section: 'admin' }
+  | {
+      section: 'journal';
+      entryId?: string;
+      sharedPlanId?: string;
+      create?: boolean;
+      view?: 'settings' | 'dashboard' | 'crisis-plans';
+    };
 
 export function parseAppRoute(pathname: string): AppRoute {
+  if (/^\/journal\/new\/?$/.test(pathname)) return { section: 'journal', create: true };
+  if (/^\/journal\/settings\/?$/.test(pathname)) return { section: 'journal', view: 'settings' };
+  if (/^\/journal\/dashboard\/?$/.test(pathname)) return { section: 'journal', view: 'dashboard' };
+  if (/^\/journal\/crisis-plans\/?$/.test(pathname))
+    return { section: 'journal', view: 'crisis-plans' };
+  const sharedCrisisPlan = pathname.match(/^\/journal\/crisis-plans\/shared\/([^/]+)\/?$/u);
+  if (sharedCrisisPlan)
+    return {
+      section: 'journal',
+      view: 'crisis-plans',
+      sharedPlanId: decodeURIComponent(sharedCrisisPlan[1]!),
+    };
+  const journal = pathname.match(/^\/journal(?:\/([^/]+))?\/?$/);
+  if (journal)
+    return {
+      section: 'journal',
+      ...(journal[1] ? { entryId: decodeURIComponent(journal[1]) } : {}),
+    };
   const list = pathname.match(/^\/lists(?:\/([^/]+))?\/?$/);
   if (list)
     return { section: 'lists', ...(list[1] ? { listId: decodeURIComponent(list[1]) } : {}) };
@@ -37,6 +62,16 @@ export function routePath(route: AppRoute): string {
     return route.listId ? `/lists/${encodeURIComponent(route.listId)}` : '/lists';
   if (route.section === 'tasks')
     return route.taskId ? `/tasks/${encodeURIComponent(route.taskId)}` : '/tasks';
+  if (route.section === 'journal')
+    return route.sharedPlanId
+      ? `/journal/crisis-plans/shared/${encodeURIComponent(route.sharedPlanId)}`
+      : route.create
+        ? '/journal/new'
+        : route.view
+          ? `/journal/${route.view}`
+          : route.entryId
+            ? `/journal/${encodeURIComponent(route.entryId)}`
+            : '/journal';
   return `/${route.section}`;
 }
 

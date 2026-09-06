@@ -18,13 +18,14 @@ describe('GitHub Actions supply-chain controls', () => {
     expect(findUnsafeActionReferences("uses: './.github/workflows/validate.yml'")).toEqual([]);
   });
 
-  it('limits staging OIDC to its deploy job and keeps secrets out of shell interpolation', () => {
+  it('keeps the unprovisioned staging placeholder unable to access or deploy AWS', () => {
     const workflow = readFileSync('.github/workflows/deploy-staging.yml', 'utf8');
     expect(workflow).toMatch(/^permissions: \{ contents: read \}$/m);
-    expect(workflow.match(/id-token: write/g)).toHaveLength(1);
-    expect(workflow).toContain("BREAK_GLASS_ROLE: '${{ secrets.RECOVERY_BREAK_GLASS_ROLE_ARN }}'");
-    expect(workflow).toContain('-c "breakGlassRoleArn=$BREAK_GLASS_ROLE"');
-    expect(workflow).not.toContain('breakGlassRoleArn=${{ secrets.');
+    expect(workflow).toContain('staging-not-provisioned');
+    expect(workflow).not.toContain('id-token: write');
+    expect(workflow).not.toContain('secrets.');
+    expect(workflow).not.toMatch(/cdk (deploy|synth)/u);
+    expect(workflow).not.toContain('configure-aws-credentials');
   });
 
   it('keeps automatic validation on one bounded runner and cancels superseded commits', () => {
