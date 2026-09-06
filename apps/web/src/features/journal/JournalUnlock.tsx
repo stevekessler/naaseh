@@ -17,7 +17,11 @@ export function JournalUnlock({
       await (enrolled ? onUnlock(pin) : onEnroll(pin));
       setPin('');
     } catch {
-      setError('The journal could not be unlocked. Check the PIN and try again.');
+      setError(
+        enrolled
+          ? 'The journal could not be unlocked. Check the PIN and try again.'
+          : 'The Journal could not be created. No enrollment was saved. Refresh and try again.',
+      );
     }
   };
   return (
