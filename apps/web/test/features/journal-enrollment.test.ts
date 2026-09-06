@@ -4,6 +4,7 @@ import { unwrapJournalMasterKeyWithPin } from '../../src/crypto/journal-crypto.j
 import {
   changeDurableJournalPin,
   createDurableJournalEnrollment,
+  JournalEnrollmentError,
   restoreDurableJournalEnrollment,
   type JournalEnrollmentDependencies,
 } from '../../src/features/journal/journal-enrollment.js';
@@ -129,4 +130,21 @@ describe('durable Journal enrollment', () => {
     await expect(unwrapJournalMasterKeyWithPin(durable!.ownerWrap, '246810')).rejects.toThrow();
     expect(await unwrapJournalMasterKeyWithPin(durable!.ownerWrap, '864200')).toEqual(created.jmk);
   }, 60_000);
+
+  it('reports the safe pre-persistence stage and zeroizes the generated key', async () => {
+    const dependencies = {
+      fetchRegistry: vi.fn(async () => {
+        throw new Error('response details');
+      }),
+    } as unknown as JournalEnrollmentDependencies;
+
+    await expect(
+      createDurableJournalEnrollment('owner-1', '246810', 'csrf-token', dependencies),
+    ).rejects.toMatchObject<JournalEnrollmentError>({
+      name: 'JournalEnrollmentError',
+      stage: 'registry-load',
+      message:
+        'Journal creation stopped while loading the recovery-key registry. No enrollment was saved.',
+    });
+  });
 });
