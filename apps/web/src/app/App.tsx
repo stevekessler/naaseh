@@ -67,8 +67,13 @@ import {
 } from '../db/category-repository.js';
 import { useWorkloadTree } from '../features/projects/useWorkloadTree.js';
 import { listLocalCompletionEvents } from '../db/completion-event-repository.js';
-import { purgeAllAuthorizedData, purgePrivateStackStateForSession } from '../sync/privacy-purge.js';
-import { revalidateProtectedSession, validateBrowserSession } from '../features/auth/session.js';
+import { purgeAllAuthorizedData } from '../sync/privacy-purge.js';
+import {
+  revalidateProtectedSession,
+  saveSessionView,
+  validateBrowserSession,
+} from '../features/auth/session.js';
+import { signOutBrowser } from '../features/auth/sign-out.js';
 import {
   initializeLocalStack,
   latestAppliedStackOperationAt,
@@ -657,7 +662,10 @@ export function App() {
       purge: purgeAllAuthorizedData,
       unlock: () => setSessionValidation('valid'),
     });
-    if (result.status === 'revoked') setSession(null);
+    if (result.status === 'valid' && result.session) {
+      saveSessionView(result.session);
+      setSession(result.session);
+    } else if (result.status === 'revoked') setSession(null);
     else if (result.status === 'offline_locked' || result.status === 'purge_failed')
       setSessionValidation('retry');
   }, [session]);
@@ -882,8 +890,13 @@ export function App() {
           <button
             className="quiet"
             onClick={() => {
-              sessionStorage.removeItem('naaseh-session-view');
-              void purgePrivateStackStateForSession(session.userId).finally(() => setSession(null));
+              setSessionValidation('locked');
+              void signOutBrowser(session.csrfToken)
+                .then(() => {
+                  setSession(null);
+                  setSessionValidation('valid');
+                })
+                .catch(() => setSessionValidation('retry'));
             }}
           >
             Sign out

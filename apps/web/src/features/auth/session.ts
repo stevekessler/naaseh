@@ -50,7 +50,11 @@ export async function revalidateProtectedSession(options: {
   }
   if (validation.valid) {
     options.unlock();
-    return { status: 'valid' as const, retryable: false as const };
+    return {
+      status: 'valid' as const,
+      retryable: false as const,
+      ...(validation.session ? { session: validation.session } : {}),
+    };
   }
   try {
     await options.purge();

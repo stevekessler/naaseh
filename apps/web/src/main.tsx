@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import { App } from './app/App.js';
 import { ErrorBoundary } from './app/ErrorBoundary.js';
 import { installPreloadRecovery } from './app/preload-recovery.js';
+import { signOutBrowser } from './features/auth/sign-out.js';
 import { announceServiceWorkerUpdate } from './app/service-worker-update.js';
 import './styles/app.css';
 
@@ -17,7 +18,12 @@ const applyServiceWorkerUpdate = registerSW({
 });
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary>
+    <ErrorBoundary
+      onResetLocalData={async () => {
+        await signOutBrowser();
+        window.location.reload();
+      }}
+    >
       <Suspense fallback={<p role="status">Loading…</p>}>
         <App />
       </Suspense>
