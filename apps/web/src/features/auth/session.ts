@@ -40,7 +40,10 @@ export async function revalidateProtectedSession(options: {
   >;
   purge: () => Promise<void>;
   unlock: () => void;
+  cancelled?: () => boolean;
 }) {
+  if (options.cancelled?.())
+    return { status: 'cancelled' as const, retryable: false as const };
   options.lock();
   let validation: Awaited<ReturnType<typeof options.validate>>;
   try {
@@ -48,6 +51,8 @@ export async function revalidateProtectedSession(options: {
   } catch {
     return { status: 'offline_locked' as const, retryable: true as const };
   }
+  if (options.cancelled?.())
+    return { status: 'cancelled' as const, retryable: false as const };
   if (validation.valid) {
     options.unlock();
     return {

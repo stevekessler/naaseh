@@ -42,4 +42,42 @@ describe('protected session revalidation', () => {
       }),
     ).resolves.toEqual({ status: 'valid', retryable: false, session });
   });
+
+  it('does not restore a session when sign-out begins during revalidation', async () => {
+    let finishValidation!: (value: {
+      valid: true;
+      session: {
+        userId: string;
+        displayName: string;
+        csrfToken: string;
+        role: 'user';
+      };
+    }) => void;
+    const validation = new Promise<Parameters<typeof finishValidation>[0]>((resolve) => {
+      finishValidation = resolve;
+    });
+    let signingOut = false;
+    const unlock = vi.fn();
+    const pending = revalidateProtectedSession({
+      lock: vi.fn(),
+      validate: () => validation,
+      purge: vi.fn(),
+      unlock,
+      cancelled: () => signingOut,
+    });
+
+    signingOut = true;
+    finishValidation({
+      valid: true,
+      session: {
+        userId: 'smoke-user',
+        displayName: 'Production Smoke Test',
+        csrfToken: 'csrf',
+        role: 'user',
+      },
+    });
+
+    await expect(pending).resolves.toEqual({ status: 'cancelled', retryable: false });
+    expect(unlock).not.toHaveBeenCalled();
+  });
 });
