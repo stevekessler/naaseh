@@ -435,6 +435,8 @@ export function App() {
     ) ?? [];
   const [syncError, setSyncError] = useState<string>();
   const [applyUpdate, setApplyUpdate] = useState<(() => void) | undefined>();
+  const [signingOut, setSigningOut] = useState(false);
+  const signingOutRef = useRef(false);
   const syncing = useRef(false);
   const syncRetryTimer = useRef<number | undefined>(undefined);
   const visible = useMemo(() => filterTasks(tasks, filters), [tasks, filters]);
@@ -661,6 +663,7 @@ export function App() {
       validate: validateBrowserSession,
       purge: purgeAllAuthorizedData,
       unlock: () => setSessionValidation('valid'),
+      cancelled: () => signingOutRef.current,
     });
     if (result.status === 'valid' && result.session) {
       saveSessionView(result.session);
@@ -889,17 +892,23 @@ export function App() {
           </nav>
           <button
             className="quiet"
+            disabled={signingOut}
             onClick={() => {
-              setSessionValidation('locked');
+              signingOutRef.current = true;
+              setSigningOut(true);
               void signOutBrowser(session.csrfToken)
                 .then(() => {
                   setSession(null);
                   setSessionValidation('valid');
                 })
-                .catch(() => setSessionValidation('retry'));
+                .catch(() => setSessionValidation('retry'))
+                .finally(() => {
+                  signingOutRef.current = false;
+                  setSigningOut(false);
+                });
             }}
           >
-            Sign out
+            {signingOut ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
       </header>
