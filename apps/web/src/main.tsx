@@ -2,8 +2,12 @@ import { StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { registerSW } from 'virtual:pwa-register';
 import { App } from './app/App.js';
+import { ErrorBoundary } from './app/ErrorBoundary.js';
+import { installPreloadRecovery } from './app/preload-recovery.js';
 import { announceServiceWorkerUpdate } from './app/service-worker-update.js';
 import './styles/app.css';
+
+installPreloadRecovery();
 
 const applyServiceWorkerUpdate = registerSW({
   immediate: true,
@@ -13,8 +17,10 @@ const applyServiceWorkerUpdate = registerSW({
 });
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Suspense fallback={<p role="status">Loading…</p>}>
-      <App />
-    </Suspense>
+    <ErrorBoundary>
+      <Suspense fallback={<p role="status">Loading…</p>}>
+        <App />
+      </Suspense>
+    </ErrorBoundary>
   </StrictMode>,
 );
