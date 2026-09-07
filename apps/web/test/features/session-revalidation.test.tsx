@@ -25,4 +25,21 @@ describe('protected session revalidation', () => {
       }),
     ).resolves.toEqual({ status: 'purge_failed', retryable: true });
   });
+
+  it('returns the refreshed server session after successful validation', async () => {
+    const session = {
+      userId: 'user-1',
+      displayName: 'Smoke User',
+      csrfToken: 'fresh-csrf',
+      role: 'user' as const,
+    };
+    await expect(
+      revalidateProtectedSession({
+        lock: vi.fn(),
+        validate: vi.fn(async () => ({ valid: true as const, session })),
+        purge: vi.fn(),
+        unlock: vi.fn(),
+      }),
+    ).resolves.toEqual({ status: 'valid', retryable: false, session });
+  });
 });
