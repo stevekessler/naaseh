@@ -12,6 +12,7 @@ import {
   wrapJournalMasterKeyWithPin,
 } from '../../src/crypto/journal-crypto.js';
 import { JournalUnlockSession } from '../../src/crypto/journal-unlock-session.js';
+import { ownerWrapSchema } from '@naaseh/domain';
 
 describe('journal browser cryptography', () => {
   const canonicalize = (value: unknown): unknown => {
@@ -80,6 +81,9 @@ describe('journal browser cryptography', () => {
       algorithm: 'ARGON2ID-AES-256-GCM',
       parameters: { memoryKiB: 102400, iterations: 3, parallelism: 1 },
     });
+    expect(ownerWrapSchema.parse(ownerWrap)).toEqual(ownerWrap);
+    expect(ownerWrap.iv).not.toMatch(/[+/=]/u);
+    expect(ownerWrap.ciphertext).not.toMatch(/[+/=]/u);
     expect(await unwrapJournalMasterKeyWithPin(ownerWrap, '246810')).toEqual(jmk);
     await expect(
       unwrapJournalMasterKeyWithPin(
