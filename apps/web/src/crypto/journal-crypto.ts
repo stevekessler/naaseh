@@ -22,6 +22,13 @@ const fromBase64Url = (value: string) => {
     .padEnd(Math.ceil(value.length / 4) * 4, '=');
   return Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
 };
+const base64ToBase64Url = (value: string) =>
+  value.replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '');
+const base64UrlToBase64 = (value: string) =>
+  value
+    .replaceAll('-', '+')
+    .replaceAll('_', '/')
+    .padEnd(Math.ceil(value.length / 4) * 4, '=');
 
 export interface JournalRecoveryRegistry {
   schema: 'naaseh-recovery-key-registry/v1';
@@ -212,8 +219,8 @@ export async function wrapJournalMasterKeyWithPin(
   const wrapped = await wrapDekWithPin(masterKey, pinKey);
   return {
     salt: toBase64Url(salt),
-    iv: wrapped.iv,
-    ciphertext: wrapped.ciphertext,
+    iv: base64ToBase64Url(wrapped.iv),
+    ciphertext: base64ToBase64Url(wrapped.ciphertext),
     algorithm: 'ARGON2ID-AES-256-GCM',
     parameters: { memoryKiB: 102_400, iterations: 3, parallelism: 1 },
   };
@@ -230,7 +237,11 @@ export async function unwrapJournalMasterKeyWithPin(
     throw new Error('This Journal PIN-wrap configuration is not supported.');
   const pinKey = await derivePinKey(pin, fromBase64Url(value.salt));
   const key = await unwrapDekWithPin(
-    { algorithm: 'AES-256-GCM', iv: value.iv, ciphertext: value.ciphertext },
+    {
+      algorithm: 'AES-256-GCM',
+      iv: base64UrlToBase64(value.iv),
+      ciphertext: base64UrlToBase64(value.ciphertext),
+    },
     pinKey,
   );
   return new Uint8Array(await crypto.subtle.exportKey('raw', key));
