@@ -1,5 +1,7 @@
 # Crisis Plan operations runbook
 
+Last reviewed: 2026-09-06
+
 ## Broker or sharing-key failure
 
 1. Confirm the owner plan remains readable and shared views show an online/unavailable state without cached content.
@@ -29,6 +31,9 @@ puts under `CRISIS_PLAN_BROKER_REQUEST#*` with the table TTL; a cold start must 
 Recipient self-removal immediately blocks broker delivery and marks the owner plan `rotation_required`. Owner edits and new shares remain blocked until the unlocked owner browser creates a new CPK, re-encrypts the plan, recreates remaining grants, and the conditional transaction succeeds. Failed attempts retain the old encrypted generation and pending intent; never claim revocation or rotation succeeded before the server receipt.
 
 ## Restore validation
+
+Use the exact production commands in
+[Verify Journal and Crisis Plan in production](../operations/verify-journal-crisis-plan-production.md#6-run-the-isolated-restore-test).
 
 Restore encrypted plans, owner wraps, shares, grants, mutation receipts, generations, and rotation flags. Run the ciphertext-only validator and compare key generations with later revocation evidence. Do not silently roll back a generation or restore a grant for a revoked/removed relationship. Feature-010 JMK recovery restores owner access but does not grant recovery staff plan, share, grant, or CPK visibility.
 

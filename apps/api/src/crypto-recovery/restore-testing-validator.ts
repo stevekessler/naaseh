@@ -24,6 +24,12 @@ import {
   taskSchema,
   urgencyValues,
   zeroUrgencyCounts,
+  ciphertextEnvelopeSchema,
+  journalEntryCiphertextSchema,
+  journalKeyEnvelopeSchema,
+  crisisPlanRecordSchema,
+  crisisPlanShareSchema,
+  userSchema,
   type BackupManifest,
   type HiddenMemoPackage,
 } from '@naaseh/domain';
@@ -35,6 +41,8 @@ import { validateEnhancedRecoveryRows } from './backup-manifest.js';
 import { assertDeletionLedgerApplied } from './deletion-ledger-validator.js';
 import { validatePersonalStackRestore } from './personal-stack-restore-validator.js';
 import { validateTaskTimerRestore } from './task-timer-restore-validator.js';
+import { validateJournalRestore } from './journal-restore-validator.js';
+import { validateCrisisPlanRestore } from '../journal/crisis-plan-restore-validator.js';
 
 const restoreEventSchema = z
   .object({
@@ -404,7 +412,14 @@ async function probeRestoredResource(
   };
 }
 
-export type RestoredItem = { PK?: unknown; SK?: unknown; data?: unknown; count?: unknown };
+export type RestoredItem = {
+  PK?: unknown;
+  SK?: unknown;
+  GSI1PK?: unknown;
+  GSI1SK?: unknown;
+  data?: unknown;
+  count?: unknown;
+};
 
 export function validateUrgencyRestore(items: RestoredItem[]) {
   let currentWork = 0;
@@ -493,7 +508,7 @@ async function readDynamoItems(tableName: string, client: CommandClient) {
       new ScanCommand({
         TableName: tableName,
         ConsistentRead: true,
-        ProjectionExpression: 'PK, SK, #data, #count',
+        ProjectionExpression: 'PK, SK, GSI1PK, GSI1SK, #data, #count',
         ExpressionAttributeNames: { '#data': 'data', '#count': 'count' },
         ExclusiveStartKey: exclusiveStartKey,
       }),
@@ -553,6 +568,7 @@ export async function validateRestoredInventory(
     ),
   );
   const urgencyIntegrity = validateUrgencyRestore(items);
+  const journalAndCrisisPlanIntegrity = validateJournalAndCrisisPlanRestore(items);
   const discrepancies = Object.entries(manifest.entityCounts)
     .filter(([name, expected]) => (actualCounts[normalizeEntityName(name)] ?? 0) !== expected)
     .map(([name]) => name)
@@ -608,6 +624,163 @@ export async function validateRestoredInventory(
     },
     urgencyIntegrity,
     taskTimerIntegrity,
+    journalAndCrisisPlanIntegrity,
+  };
+}
+
+/**
+ * Verifies encrypted Journal and Crisis Plan rows in-place. This deliberately validates only
+ * schemas, ownership, generations, and recipient-index state; it never decrypts user content.
+ */
+export function validateJournalAndCrisisPlanRestore(items: RestoredItem[]) {
+  const authorizedOwners = new Set(
+    items.flatMap((item) => {
+      if (item.SK !== 'PROFILE' || typeof item.PK !== 'string' || !item.PK.startsWith('USER#'))
+        return [];
+      const user = userSchema.safeParse(item.data);
+      return user.success && user.data.id === item.PK.slice('USER#'.length) ? [user.data.id] : [];
+    }),
+  );
+  const journalRows = items.filter(
+    (item): item is RestoredItem & { PK: string; SK: string } =>
+      typeof item.PK === 'string' &&
+      item.PK.startsWith('JOURNAL#OWNER#') &&
+      typeof item.SK === 'string',
+  );
+  const keyVersions = new Map<string, number>();
+  let keyEnvelopeCount = 0;
+  for (const item of journalRows.filter((row) => row.SK === 'KEY_ENVELOPE')) {
+    const ownerId = item.PK.slice('JOURNAL#OWNER#'.length);
+    const envelope = journalKeyEnvelopeSchema.parse(item.data);
+    if (envelope.ownerId !== ownerId)
+      throw new Error('Restored Journal key envelope owner invariant failed.');
+    if (!authorizedOwners.has(ownerId))
+      throw new Error('Restored journal record has an unauthorized owner.');
+    keyVersions.set(ownerId, envelope.keyVersion);
+    keyEnvelopeCount += 1;
+  }
+
+  const recordsByOwner = new Map<string, Array<Record<string, unknown>>>();
+  const addJournalRecord = (ownerId: string, record: Record<string, unknown>) => {
+    const records = recordsByOwner.get(ownerId) ?? [];
+    records.push(record);
+    recordsByOwner.set(ownerId, records);
+  };
+  let entryCount = 0;
+  let profileCount = 0;
+  for (const item of journalRows) {
+    const ownerId = item.PK.slice('JOURNAL#OWNER#'.length);
+    if (item.SK.startsWith('ENTRY#')) {
+      const raw = z
+        .object({
+          ownerId: z.string().min(1),
+          entryId: z.string().uuid(),
+          dateToken: z.string().min(1),
+          version: z.number().int().positive(),
+          payload: journalEntryCiphertextSchema,
+          createdAt: z.string().datetime(),
+          updatedAt: z.string().datetime(),
+        })
+        .strict()
+        .parse(item.data);
+      if (
+        raw.ownerId !== ownerId ||
+        raw.entryId !== item.SK.slice('ENTRY#'.length) ||
+        raw.entryId !== raw.payload.entryId ||
+        raw.dateToken !== raw.payload.dateToken
+      )
+        throw new Error('Restored Journal entry identity invariant failed.');
+      addJournalRecord(ownerId, {
+        ...raw,
+        keyVersion: Math.min(raw.payload.projection.keyVersion, raw.payload.body.keyVersion),
+      });
+      entryCount += 1;
+    } else if (item.SK === 'PROFILE') {
+      const raw = z
+        .object({
+          ownerId: z.string().min(1),
+          version: z.number().int().positive(),
+          payload: ciphertextEnvelopeSchema.refine((value) => value.recordKind === 'profile'),
+        })
+        .strict()
+        .parse(item.data);
+      if (raw.ownerId !== ownerId)
+        throw new Error('Restored Journal profile owner invariant failed.');
+      addJournalRecord(ownerId, { ...raw, keyVersion: raw.payload.keyVersion });
+      profileCount += 1;
+    }
+  }
+  for (const [ownerId, records] of recordsByOwner) {
+    const keyVersion = keyVersions.get(ownerId);
+    if (!keyVersion) throw new Error('Restored Journal owner is missing its key envelope.');
+    validateJournalRestore({
+      records,
+      audit: [],
+      authorizedOwners,
+      minimumKeyVersion: keyVersion,
+    });
+  }
+
+  const planRows = journalRows.filter((item) => item.SK === 'CRISIS_PLAN');
+  const plans = planRows.map((item) => {
+    const plan = crisisPlanRecordSchema.parse(item.data);
+    const ownerId = item.PK.slice('JOURNAL#OWNER#'.length);
+    if (plan.ownerId !== ownerId || !authorizedOwners.has(ownerId))
+      throw new Error('Restored Crisis Plan owner invariant failed.');
+    if (!keyVersions.has(ownerId))
+      throw new Error('Restored Crisis Plan owner is missing its Journal key envelope.');
+    return plan;
+  });
+  const shareRows = items.filter(
+    (item): item is RestoredItem & { PK: string; SK: string } =>
+      typeof item.PK === 'string' &&
+      item.PK.startsWith('CRISIS_PLAN#') &&
+      typeof item.SK === 'string' &&
+      item.SK.startsWith('SHARE#'),
+  );
+  const shares = shareRows.map((item) => {
+    const share = crisisPlanShareSchema.parse(item.data);
+    if (
+      share.planId !== item.PK.slice('CRISIS_PLAN#'.length) ||
+      share.recipientId !== item.SK.slice('SHARE#'.length)
+    )
+      throw new Error('Restored Crisis Plan share identity invariant failed.');
+    const expectedGsiPk = `CRISIS_PLAN_RECIPIENT#${share.recipientId}`;
+    const expectedGsiSuffix = `#${share.planId}`;
+    if (
+      share.state === 'active' &&
+      (item.GSI1PK !== expectedGsiPk ||
+        typeof item.GSI1SK !== 'string' ||
+        !item.GSI1SK.startsWith('ACTIVE#') ||
+        !item.GSI1SK.endsWith(expectedGsiSuffix))
+    )
+      throw new Error('Restored active Crisis Plan share index is invalid.');
+    if (share.state !== 'active' && (item.GSI1PK !== undefined || item.GSI1SK !== undefined))
+      throw new Error('Restored revoked Crisis Plan share remains recipient-indexed.');
+    return share;
+  });
+  const priorKeyGenerations: Record<string, number> = {};
+  for (const item of items) {
+    if (
+      typeof item.PK !== 'string' ||
+      !item.PK.startsWith('FEED#OWNER#') ||
+      typeof item.SK !== 'string' ||
+      !item.SK.startsWith('CHANGE#')
+    )
+      continue;
+    const data = item.data as { entityType?: unknown; payload?: unknown } | undefined;
+    if (data?.entityType !== 'crisisPlan') continue;
+    const historical = crisisPlanRecordSchema.safeParse(data.payload);
+    if (!historical.success) throw new Error('Restored Crisis Plan feed row is invalid.');
+    priorKeyGenerations[historical.data.planId] = Math.max(
+      priorKeyGenerations[historical.data.planId] ?? 0,
+      historical.data.keyGeneration,
+    );
+  }
+  const crisisPlan = validateCrisisPlanRestore({ plans, shares, priorKeyGenerations });
+  return {
+    journal: { entryCount, profileCount, keyEnvelopeCount, auditRows: 0 },
+    crisisPlan: { ...crisisPlan, recipientIndexesVerified: true as const },
   };
 }
 
@@ -661,6 +834,11 @@ function countRestoredEntities(items: RestoredItem[]) {
     else if (pk.startsWith('BLOB#') && sk.startsWith('REF#')) add('blobreferences');
     else if (pk.startsWith('COPYJOB#') && sk === 'CURRENT') add('copyjobs');
     else if (pk.startsWith('EXPORTJOB#') && sk === 'CURRENT') add('exportjobs');
+    else if (pk.startsWith('JOURNAL#OWNER#') && sk.startsWith('ENTRY#')) add('journalentries');
+    else if (pk.startsWith('JOURNAL#OWNER#') && sk === 'PROFILE') add('journalprofiles');
+    else if (pk.startsWith('JOURNAL#OWNER#') && sk === 'KEY_ENVELOPE') add('journalkeyenvelopes');
+    else if (pk.startsWith('JOURNAL#OWNER#') && sk === 'CRISIS_PLAN') add('crisisplans');
+    else if (pk.startsWith('CRISIS_PLAN#') && sk.startsWith('SHARE#')) add('crisisplanshares');
   }
   return counts;
 }
@@ -687,6 +865,11 @@ function normalizeEntityName(name: string) {
     blobreference: 'blobreferences',
     copyjob: 'copyjobs',
     exportjob: 'exportjobs',
+    journalentry: 'journalentries',
+    journalprofile: 'journalprofiles',
+    journalkeyenvelope: 'journalkeyenvelopes',
+    crisisplan: 'crisisplans',
+    crisisplanshare: 'crisisplanshares',
   };
   return aliases[normalized] ?? normalized;
 }

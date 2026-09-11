@@ -53,7 +53,9 @@ export class ErrorBoundary extends Component<
               stored only in this browser.
             </p>
             {this.state.resetFailed ? (
-              <p role="alert">The local cache could not be reset. No additional data was removed.</p>
+              <p role="alert">
+                The local cache could not be reset. No additional data was removed.
+              </p>
             ) : null}
             <button type="button" disabled={this.state.resetting} onClick={this.resetLocalData}>
               {this.state.resetting ? 'Resetting…' : 'Confirm reset and sign out'}

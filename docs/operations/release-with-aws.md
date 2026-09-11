@@ -1,6 +1,6 @@
 # Complete routine production release with AWS
 
-Last reviewed: 2026-08-30
+Last reviewed: 2026-09-06
 
 This is the standalone procedure for changing and deploying the existing Na'aseh production
 application. Follow it in order for every routine production release after the one-time bootstrap.
@@ -115,7 +115,7 @@ aws sts get-caller-identity --profile naaseh-admin
 npm run build -w '@naaseh/web'
 AWS_PROFILE=naaseh-admin CDK_DEFAULT_ACCOUNT=093733938983 npm run cdk:synth -- \
   -c breakGlassRoleArn=arn:aws:iam::093733938983:role/naaseh-recovery-break-glass
-AWS_PROFILE=naaseh-admin npx cdk diff --app infra/cdk.out --all
+AWS_PROFILE=naaseh-admin npx cdk diff --app infra/cdk.out
 ```
 
 The identity must be the expected assumed Identity Center role in account `093733938983`. Stop if
@@ -152,7 +152,7 @@ testing section. Remove inapplicable lines and leave post-merge items unchecked:
 - [x] `npm run validate:pre-aws:browsers`
 - [x] `npm run build -w '@naaseh/web'`
 - [x] CDK synthesis completed (infrastructure or runtime-configuration changes)
-- [x] Reviewed `npx cdk diff --app infra/cdk.out --all` (infrastructure changes)
+- [x] Reviewed `npx cdk diff --app infra/cdk.out` (infrastructure changes)
 - [x] Required GitHub `validate` check passed
 - [ ] Production workflow completed
 - [ ] Authenticated production smoke test passed
@@ -313,8 +313,9 @@ bootstrap checks for an application-only release.
 
 ### Journal and Crisis Plan deployment verification
 
-For the Journal/Crisis Plan production release, do all of the following after deployment and before
-marking the release fully verified:
+Follow [Verify Journal and Crisis Plan in production](verify-journal-crisis-plan-production.md)
+after deployment and before marking the release fully verified. That command-by-command runbook
+covers all of the following:
 
 1. Confirm the production smoke job passed its read-only checks for both API routes, repeated
    DynamoDB-backed reads across separate Lambda invocations, the cryptographically verified signed
@@ -369,10 +370,12 @@ aws backup list-recovery-points-by-backup-vault \
   --query 'RecoveryPoints[].{Status:Status,Created:CreationDate,Resource:ResourceType,Arn:RecoveryPointArn}'
 ```
 
-The Identity Center permission set needs `backup:ListRecoveryPointsByBackupVault` scoped to the
-specific production backup-vault ARN. If AWS returns `AccessDeniedException`, update and reprovision
-the permission set through IAM Identity Center, refresh the SSO session, and retry. Do not use the
-root account. An empty list means the vault exists but has no completed recovery point yet.
+For Vault Lock status, use `backup list-backup-vaults` as documented in the Journal/Crisis Plan
+verification runbook. In this account, IAM simulation allows `backup:DescribeBackupVault` while the
+live operation returns AWS Backup's `Insufficient privileges`; adding another IAM allow does not
+resolve that service-side result. `list-backup-vaults` returns `Locked`, retention, lock date, and
+recovery-point count without weakening access. An empty recovery-point list means the vault exists
+but has no completed recovery point yet.
 
 ## 9. Use the application and enroll administrator TFA
 
