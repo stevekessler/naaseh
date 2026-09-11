@@ -5,7 +5,10 @@ import {
   restoreStates,
   type RestoreState,
 } from '../../infra/lib/restore-workflow-stack.js';
-import { runRestoreTestingAction } from '../../apps/api/src/crypto-recovery/restore-testing-validator.js';
+import {
+  runRestoreTestingAction,
+  validateJournalAndCrisisPlanRestore,
+} from '../../apps/api/src/crypto-recovery/restore-testing-validator.js';
 import {
   DescribeRestoreJobCommand,
   PutRestoreValidationResultCommand,
@@ -13,6 +16,7 @@ import {
 import { DescribeTableCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { marshall } from '@aws-sdk/util-dynamodb';
 import { createTask, hiddenMemoAad } from '@naaseh/domain';
+import { crisisPlanBackupFixture } from './fixtures/crisis-plan-backup.js';
 
 const planArn = 'arn:aws:backup:us-west-2:111111111111:restore-testing-plan:plan-1';
 const tableArn = 'arn:aws:dynamodb:us-west-2:111111111111:table/awsbackup-restore-test-table-1';
@@ -76,6 +80,87 @@ const restoredItems = [
   { PK: `BACKUP#${restoredManifest.manifestId}`, SK: 'MANIFEST', data: restoredManifest },
   { PK: `TASK#${restoredTask.id}`, SK: 'CURRENT', data: restoredTask },
 ];
+
+const encryptedFeatureRows = (() => {
+  const { plan, shares } = crisisPlanBackupFixture();
+  const entryId = '22222222-2222-4222-8222-222222222222';
+  const envelope = (recordKind: 'projection' | 'body') => ({
+    recordKind,
+    schemaVersion: 1,
+    keyVersion: 1,
+    iv: 'A'.repeat(16),
+    ciphertext: 'B'.repeat(24),
+    byteSize: 16,
+  });
+  return [
+    {
+      PK: 'USER#owner-1',
+      SK: 'PROFILE',
+      data: {
+        id: 'owner-1',
+        username: 'owner',
+        displayName: 'Synthetic Owner',
+        role: 'user',
+        active: true,
+        sessionEpoch: 0,
+        credentialVersion: 0,
+        tfaStatus: 'disabled',
+        version: 1,
+      },
+    },
+    {
+      PK: 'JOURNAL#OWNER#owner-1',
+      SK: 'KEY_ENVELOPE',
+      data: {
+        id: 'journal-key',
+        ownerId: 'owner-1',
+        version: 1,
+        keyVersion: 1,
+        ownerWrap: {
+          algorithm: 'ARGON2ID-AES-256-GCM',
+          salt: 'C'.repeat(22),
+          parameters: { memoryKiB: 65_536, iterations: 2, parallelism: 1 },
+          iv: 'D'.repeat(16),
+          ciphertext: 'E'.repeat(24),
+        },
+        recoveryWrap: {
+          algorithm: 'RSA-OAEP-256',
+          authority: 'recovery',
+          keyVersion: 1,
+          ciphertext: 'F'.repeat(128),
+        },
+        createdAt: restoredAt,
+        updatedAt: restoredAt,
+      },
+    },
+    {
+      PK: 'JOURNAL#OWNER#owner-1',
+      SK: `ENTRY#${entryId}`,
+      data: {
+        ownerId: 'owner-1',
+        entryId,
+        dateToken: 'G'.repeat(43),
+        version: 1,
+        payload: {
+          entryId,
+          dateToken: 'G'.repeat(43),
+          projection: envelope('projection'),
+          body: envelope('body'),
+        },
+        createdAt: restoredAt,
+        updatedAt: restoredAt,
+      },
+    },
+    { PK: 'JOURNAL#OWNER#owner-1', SK: 'CRISIS_PLAN', data: plan },
+    {
+      PK: `CRISIS_PLAN#${plan.planId}`,
+      SK: `SHARE#${shares[0]!.recipientId}`,
+      GSI1PK: `CRISIS_PLAN_RECIPIENT#${shares[0]!.recipientId}`,
+      GSI1SK: `ACTIVE#${shares[0]!.updatedAt}#${plan.planId}`,
+      data: shares[0],
+    },
+  ];
+})();
 
 const restoredStackRows = [
   {
@@ -243,6 +328,69 @@ describe('isolated restore workflow', () => {
       expect.any(DescribeTableCommand),
       expect.any(ScanCommand),
     ]);
+  });
+
+  it('runs Journal and Crisis Plan ciphertext, owner, generation, and index validation', async () => {
+    const manifest = {
+      ...restoredManifest,
+      entityCounts: {
+        ...restoredManifest.entityCounts,
+        users: 1,
+        journalEntries: 1,
+        journalKeyEnvelopes: 1,
+        crisisPlans: 1,
+        crisisPlanShares: 1,
+      },
+    };
+    const items = [
+      { PK: `BACKUP#${manifest.manifestId}`, SK: 'MANIFEST', data: manifest },
+      restoredItems[1]!,
+      ...encryptedFeatureRows,
+    ];
+    const job = await runRestoreTestingAction(
+      'ValidateRestoreJob',
+      restoreEvent,
+      dependencies().value,
+    );
+    await expect(
+      runRestoreTestingAction('ValidateRestoredResource', { job }, dependencies({}, items).value),
+    ).resolves.toMatchObject({
+      probe: {
+        integrity: {
+          journalAndCrisisPlanIntegrity: {
+            journal: { entryCount: 1, keyEnvelopeCount: 1, auditRows: 0 },
+            crisisPlan: {
+              planCount: 1,
+              shareCount: 1,
+              plaintextInspected: false,
+              recipientIndexesVerified: true,
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('fails closed on Journal key rollback and stale Crisis Plan recipient indexes', () => {
+    const rollbackRows = encryptedFeatureRows.map((row) =>
+      row.SK === 'KEY_ENVELOPE'
+        ? {
+            ...row,
+            data: {
+              ...(row.data as Record<string, unknown>),
+              keyVersion: 2,
+            },
+          }
+        : row,
+    );
+    expect(() => validateJournalAndCrisisPlanRestore(rollbackRows)).toThrow('rolls back');
+
+    const staleIndexRows = encryptedFeatureRows.map((row) =>
+      row.SK.startsWith('SHARE#') ? { ...row, GSI1PK: 'CRISIS_PLAN_RECIPIENT#other' } : row,
+    );
+    expect(() => validateJournalAndCrisisPlanRestore(staleIndexRows)).toThrow(
+      'share index is invalid',
+    );
   });
 
   it('rebuilds derived personal-stack snapshots while requiring canonical continuity', async () => {

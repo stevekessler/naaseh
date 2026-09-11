@@ -107,6 +107,8 @@ export function createOperationalVisibility(
       { metricName: 'AttachmentThreats', threshold: 1 },
       { metricName: 'AuthSecurityFailures', threshold: 1 },
       { metricName: 'AdminTfaRecoveryFailures', threshold: 1 },
+      { metricName: 'CrisisPlanKmsFailure', threshold: 1 },
+      { metricName: 'CrisisPlanBrokerDenied', threshold: 10 },
     ],
     1,
   );
@@ -132,6 +134,7 @@ export function createOperationalVisibility(
       { metricName: 'CompletionExportFailures', threshold: 1 },
       { metricName: 'TaskTimerFailures', threshold: 1 },
       { metricName: 'ExtraLowInventoryBlocked', threshold: 1 },
+      { metricName: 'CrisisPlanOperationFailure', threshold: 1 },
     ],
     1,
   );
@@ -309,12 +312,10 @@ export function createOperationalVisibility(
 export const crisisPlanObservabilityControls = Object.freeze({
   logRetentionDays: 90,
   alarms: [
-    'crisis-plan-save-failure',
-    'crisis-plan-conflict',
-    'crisis-plan-rotation-required',
-    'crisis-plan-broker-denied',
-    'crisis-plan-kms-failure',
-    'crisis-plan-restore-invalid',
+    'security-signal:CrisisPlanKmsFailure>=1',
+    'security-signal:CrisisPlanBrokerDenied>=10',
+    'operational-failure:CrisisPlanOperationFailure>=1',
+    'restore-workflow-failure',
   ],
   allowedDimensions: [
     'operation',
