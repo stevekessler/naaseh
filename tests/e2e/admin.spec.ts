@@ -78,7 +78,7 @@ test('an administrator responsively lists, disables, and reactivates users witho
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
-  await page.getByLabel('Password').fill('local-password');
+  await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('button', { name: 'Admin' }).click();
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
@@ -87,8 +87,12 @@ test('an administrator responsively lists, disables, and reactivates users witho
   await page.getByLabel('Username').fill('new-admin');
   await page.getByLabel('Display name').fill('New Admin');
   await page.getByLabel('Role').selectOption('admin');
-  await page.getByLabel('Password').fill('correct horse battery staple');
-  await page.getByLabel('PIN').fill('246810');
+  await page.getByLabel('Password', { exact: true }).fill('correct horse battery staple');
+  await page.getByLabel('PIN', { exact: true }).fill('246810');
+  await page.getByLabel('Confirm PIN', { exact: true }).fill('246810');
+  await page
+    .getByLabel('Confirm password', { exact: true })
+    .fill(await page.getByLabel('Password', { exact: true }).inputValue());
   await page.getByRole('button', { name: 'Add user' }).click();
   await expect(page.getByRole('cell', { name: '@new-admin' })).toBeVisible();
   await page.getByRole('button', { name: 'Disable Alex' }).click();
@@ -119,7 +123,7 @@ test('a regular user has no administration surface and cannot see another user p
   );
   await page.goto('/');
   await page.getByLabel('Username').fill('alex');
-  await page.getByLabel('Password').fill('local-password');
+  await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('button', { name: 'Admin' })).toHaveCount(0);
   await expect(page.getByText('other-user-private-task')).toHaveCount(0);

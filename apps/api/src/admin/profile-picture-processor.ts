@@ -50,6 +50,9 @@ export const handler: S3Handler = async (event) => {
             ContentType: 'image/webp',
             CacheControl: 'private, max-age=300',
             ServerSideEncryption: 'aws:kms',
+            ...(process.env.PROFILE_MEDIA_KMS_KEY_ID
+              ? { SSEKMSKeyId: process.env.PROFILE_MEDIA_KMS_KEY_ID }
+              : {}),
             Metadata: { owner: userId, sourceUpload: uploadId },
           }),
         );

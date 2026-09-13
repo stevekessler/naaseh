@@ -16,6 +16,7 @@ export function JournalSettings({
 }) {
   const [oldPin, setOldPin] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [pinStatus, setPinStatus] = useState('');
   return (
     <section>
@@ -62,14 +63,28 @@ export function JournalSettings({
               onChange={(event) => setNewPin(event.target.value)}
             />
           </label>
+          <label>
+            Confirm new PIN
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="off"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+            />
+          </label>
+          {confirmation && newPin !== confirmation && <p role="status">PINs must match.</p>}
           <button
             type="button"
-            disabled={!/^\d{6,32}$/u.test(oldPin) || !/^\d{6,32}$/u.test(newPin)}
+            disabled={
+              !/^\d{6,32}$/u.test(oldPin) || !/^\d{6,32}$/u.test(newPin) || newPin !== confirmation
+            }
             onClick={() =>
               void onChangePin(oldPin, newPin)
                 .then(() => {
                   setOldPin('');
                   setNewPin('');
+                  setConfirmation('');
                   setPinStatus('Journal PIN changed.');
                 })
                 .catch(() => setPinStatus('The Journal PIN could not be changed.'))

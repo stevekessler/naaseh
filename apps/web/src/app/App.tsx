@@ -1,3 +1,9 @@
+import {
+  UserAvatar,
+  UserDirectoryContext,
+  readUserDirectory,
+  type DirectoryUser,
+} from '../features/profile/user-directory.js';
 import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   effectiveDirectoryFields,
@@ -274,6 +280,35 @@ export function App() {
       () => (selectedId ? listRevisions(selectedId) : Promise.resolve([])),
       [selectedId],
     ) ?? [];
+  const [adminLoadError, setAdminLoadError] = useState('');
+  const [adminLoadAttempt, setAdminLoadAttempt] = useState(0);
+  const [directoryUsers, setDirectoryUsers] = useState<DirectoryUser[]>([]);
+  const refreshUsers = useCallback(async () => {
+    setDirectoryUsers(await readUserDirectory());
+  }, []);
+  useEffect(() => {
+    if (!session) {
+      setDirectoryUsers([]);
+      return;
+    }
+    let active = true;
+    const refresh = () => {
+      if (navigator.onLine && document.visibilityState !== 'hidden')
+        void readUserDirectory()
+          .then((users) => {
+            if (active) setDirectoryUsers(users);
+          })
+          .catch(() => undefined);
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 240_000);
+    window.addEventListener('online', refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('online', refresh);
+    };
+  }, [session]);
   const assignees = useMemo<AssigneeOption[]>(() => {
     const known = adminUsers
       .filter((user) => user.active)
@@ -288,11 +323,14 @@ export function App() {
         displayName: session.displayName,
         username: '',
       });
-    return mergeAssigneeOptions(known, [
-      ...tasks.map((task) => task.assigneeId),
-      ...categories.map((category) => category.defaultAssigneeId),
-    ]);
-  }, [adminUsers, session, tasks, categories]);
+    return mergeAssigneeOptions(
+      [...directoryUsers, ...known],
+      [
+        ...tasks.map((task) => task.assigneeId),
+        ...categories.map((category) => category.defaultAssigneeId),
+      ],
+    );
+  }, [directoryUsers, adminUsers, session, tasks, categories]);
   const pending =
     useLiveQuery(
       async () =>
@@ -601,7 +639,9 @@ export function App() {
       setAdminUsersCursor(undefined);
       return;
     }
+    if (section !== 'admin') return;
     let active = true;
+    setAdminLoadError('');
     void listAdminUsersPage(session.csrfToken)
       .then((page) => {
         if (!active) return;
@@ -609,12 +649,12 @@ export function App() {
         setAdminUsersCursor(page.nextCursor);
       })
       .catch(() => {
-        if (active) setSyncError('Administrative users could not be loaded.');
+        if (active) setAdminLoadError('Administrative users could not be loaded.');
       });
     return () => {
       active = false;
     };
-  }, [session]);
+  }, [session, section, adminLoadAttempt]);
   useEffect(() => {
     const query = safeSearchState(filters.query, filters);
     history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
@@ -785,552 +825,579 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
-      <UpdatePrompt
-        waiting={Boolean(applyUpdate)}
-        apply={() =>
-          void (async () => {
-            if (await safeToActivateUpdate(false)) {
-              applyUpdate?.();
-              setApplyUpdate(undefined);
-            } else setSyncError('The update is waiting until pending changes synchronize.');
-          })()
-        }
-      />
-      <header className={`topbar${headerCollapsed ? ' topbar-collapsed' : ''}`}>
-        <img src="/naaseh_logo.png" alt="Na'aseh — We will do it" />
-        <div className="topbar-actions">
-          <div className="sync-state">
-            <SyncStatus
-              online={online}
-              pending={pending}
-              conflicts={conflicts}
-              error={syncError}
-              retry={() => void synchronize()}
-            />
-          </div>
-          <nav aria-label="Main navigation">
-            <button
-              className="quiet"
-              aria-current={section === 'tasks' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'tasks' })}
-            >
-              Tasks
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'journal' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'journal' })}
-            >
-              Journal
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'stack' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'stack' })}
-            >
-              Personal Stack
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'profile' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'profile' })}
-            >
-              Profile
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'dashboard' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'dashboard' })}
-            >
-              Completed Tasks
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'projects' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'projects' })}
-            >
-              Projects
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'archive' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'archive' })}
-            >
-              Archive
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'lists' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'lists' })}
-            >
-              Lists
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'directory' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'directory' })}
-            >
-              Global Items
-            </button>
-            <button
-              className="quiet"
-              aria-current={section === 'groups' ? 'page' : undefined}
-              onClick={() => navigate({ section: 'groups' })}
-            >
-              Groups
-            </button>
-            {session.role === 'admin' && (
+    <UserDirectoryContext.Provider value={directoryUsers}>
+      <div className="app-shell">
+        <UpdatePrompt
+          waiting={Boolean(applyUpdate)}
+          apply={() =>
+            void (async () => {
+              if (await safeToActivateUpdate(false)) {
+                applyUpdate?.();
+                setApplyUpdate(undefined);
+              } else setSyncError('The update is waiting until pending changes synchronize.');
+            })()
+          }
+        />
+        <header className={`topbar${headerCollapsed ? ' topbar-collapsed' : ''}`}>
+          <img src="/naaseh_logo.png" alt="Na'aseh — We will do it" />
+          <div className="topbar-actions">
+            <div className="sync-state">
+              <SyncStatus
+                online={online}
+                pending={pending}
+                conflicts={conflicts}
+                error={syncError}
+                retry={() => void synchronize()}
+              />
+            </div>
+            <nav aria-label="Main navigation">
               <button
                 className="quiet"
-                aria-current={section === 'admin' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'admin' })}
+                aria-current={section === 'tasks' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'tasks' })}
               >
-                Admin
+                Tasks
               </button>
-            )}
-          </nav>
-          <button
-            className="quiet"
-            disabled={signingOut}
-            onClick={() => {
-              signingOutRef.current = true;
-              setSigningOut(true);
-              void signOutBrowser(session.csrfToken)
-                .then(() => {
-                  setSession(null);
-                  setSessionValidation('valid');
-                })
-                .catch(() => setSessionValidation('retry'))
-                .finally(() => {
-                  signingOutRef.current = false;
-                  setSigningOut(false);
-                });
-            }}
-          >
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </button>
-        </div>
-      </header>
-      <main>
-        {section === 'journal' ? (
-          <JournalPage ownerId={session.userId} csrfToken={session.csrfToken} tasks={tasks} />
-        ) : section === 'stack' ? (
-          <PersonalStackPage
-            scope={stackScope}
-            projects={projects
-              .filter((project) => project.lifecycle === 'active')
-              .map((project) => ({ id: project.id, name: project.name }))}
-            projectRecords={projects}
-            categories={categories}
-            assignees={assignees}
-            parentTasks={tasks}
-            defaultAssigneeId={session.userId}
-            createTask={addTask}
-            updateTask={async (task, patch) => {
-              await updateTask(task, patch, session.userId);
-            }}
-            items={
-              remoteStackItems ??
-              rankedStackItems.map(({ work, rank }) => ({
-                reference: work.reference,
-                label: work.label,
-                urgency: work.urgency,
-                overallPosition: rank.overallPosition,
-                ...(rank.projectPosition === undefined
-                  ? {}
-                  : { projectPosition: rank.projectPosition }),
-              }))
-            }
-            announcement={stackAnnouncement}
-            pendingOperationIds={pendingStackOperations.map((operation) => operation.operationId)}
-            conflictCount={stackConflicts.length}
-            {...(lastStackSyncedAt ? { lastSyncedAt: lastStackSyncedAt } : {})}
-            filters={filters}
-            changeFilters={setFilters}
-            changeScope={setStackScope}
-            {...(stackReadError ? { readError: stackReadError } : {})}
-            retryRead={() => setStackReadAttempt((value) => value + 1)}
-            restartRead={() => setStackReadAttempt((value) => value + 1)}
-            move={async (work, destinationPosition) => {
-              const displayed =
-                remoteStackItems?.map((item) => item.reference) ??
-                rankedStackItems.map((item) => item.work.reference);
-              const fullScope = allRankedStackItems.map((item) => item.work.reference);
-              const currentPosition =
-                displayed.findIndex(
-                  (reference) => workReferenceIdentity(reference) === workReferenceIdentity(work),
-                ) + 1;
-              if (currentPosition < 1 || currentPosition === destinationPosition) return;
-              const existing = await readLocalStack(session.userId, stackScope);
-              const existingIdentities = new Set(existing?.work.map(workReferenceIdentity) ?? []);
-              const needsReconciliation =
-                !existing ||
-                fullScope.length !== existing.work.length ||
-                fullScope.some(
-                  (reference) => !existingIdentities.has(workReferenceIdentity(reference)),
-                );
-              const current = needsReconciliation
-                ? await initializeLocalStack({
-                    ownerId: session.userId,
-                    scope: stackScope,
-                    version: existing?.version ?? 0,
-                    work: fullScope,
+              <button
+                className="quiet"
+                aria-current={section === 'journal' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'journal' })}
+              >
+                Journal
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'stack' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'stack' })}
+              >
+                Personal Stack
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'profile' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'profile' })}
+              >
+                Profile
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'dashboard' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'dashboard' })}
+              >
+                Completed Tasks
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'projects' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'projects' })}
+              >
+                Projects
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'archive' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'archive' })}
+              >
+                Archive
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'lists' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'lists' })}
+              >
+                Lists
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'directory' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'directory' })}
+              >
+                Global Items
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'groups' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'groups' })}
+              >
+                Groups
+              </button>
+              {session.role === 'admin' && (
+                <button
+                  className="quiet"
+                  aria-current={section === 'admin' ? 'page' : undefined}
+                  onClick={() => navigate({ section: 'admin' })}
+                >
+                  Admin
+                </button>
+              )}
+            </nav>
+            <button
+              className="quiet signed-in-user"
+              aria-label={`Signed in as ${session.displayName}. Open profile`}
+              onClick={() => navigate({ section: 'profile' })}
+            >
+              <UserAvatar userId={session.userId} displayName={session.displayName} showName />
+            </button>
+            <button
+              className="quiet"
+              disabled={signingOut}
+              onClick={() => {
+                signingOutRef.current = true;
+                setSigningOut(true);
+                void signOutBrowser(session.csrfToken)
+                  .then(() => {
+                    setSession(null);
+                    setSessionValidation('valid');
                   })
-                : existing;
-              const isFiltered = displayed.length !== fullScope.length;
-              const destinationIndex = Math.max(
-                0,
-                Math.min(displayed.length - 1, destinationPosition - 1),
-              );
-              const remaining = current.work.filter(
-                (reference) => workReferenceIdentity(reference) !== workReferenceIdentity(work),
-              );
-              const fullDestinationIndex = Math.max(
-                0,
-                Math.min(remaining.length, destinationPosition - 1),
-              );
-              const beforeWork = remaining[fullDestinationIndex - 1];
-              const afterWork = remaining[fullDestinationIndex];
-              const queryHash = isFiltered ? await searchBasisHash(filters.query) : undefined;
-              await queuePersonalStackReorder({
-                ownerId: session.userId,
-                scope: stackScope,
-                baseVersion: current.version,
-                move: isFiltered
-                  ? {
-                      kind: 'filtered_permutation',
-                      movedWork: work,
-                      destinationIndex,
-                      affectedWork: displayed,
-                      filterBasis: {
-                        ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
-                        ...(filters.from ? { from: filters.from } : {}),
-                        ...(filters.to ? { to: filters.to } : {}),
-                        ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
-                        ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
-                        ...(filters.projectId ? { projectId: filters.projectId } : {}),
-                        lifecycle: 'active',
-                        contentType: filters.contentType ?? 'all',
-                        ...(queryHash ? { searchBasisHash: queryHash } : {}),
-                      },
-                    }
-                  : {
-                      kind: 'simple_move',
-                      movedWork: work,
-                      ...(beforeWork ? { beforeWork } : {}),
-                      ...(afterWork ? { afterWork } : {}),
-                    },
-              });
-              const moved = eligibleStackWork.find(
-                (item) => workReferenceIdentity(item.reference) === workReferenceIdentity(work),
-              );
-              const scopeName =
-                stackScope.scopeType === 'overall'
-                  ? 'Overall stack'
-                  : `${projects.find((project) => project.id === stackScope.scopeId)?.name ?? 'Project'} Project stack`;
-              setStackAnnouncement(
-                `Moved ${moved?.label ?? 'work'} to position ${destinationPosition} of ${displayed.length} in ${scopeName}.`,
-              );
-            }}
-            reapplyConflicts={async () => {
-              for (const conflict of stackConflicts)
-                await resolveLocalStackConflict(conflict.id, 'reapply');
-            }}
-            discardConflicts={async () => {
-              for (const conflict of stackConflicts)
-                await resolveLocalStackConflict(conflict.id, 'discard');
-            }}
-          />
-        ) : section === 'profile' ? (
-          <ProfilePage csrfToken={session.csrfToken} role={session.role} />
-        ) : section === 'admin' ? (
-          session.role !== 'admin' ? (
-            <section role="alert" className="panel">
-              <h1>Administrator access required</h1>
-              <p>Your account cannot open system administration.</p>
-            </section>
-          ) : (
-            <>
-              <UsersAdminPage
-                users={adminUsers}
-                currentUserId={session.userId}
-                online={online}
-                {...(adminUsersCursor
-                  ? {
-                      nextCursor: adminUsersCursor,
-                      loadMore: async () => {
-                        const page = await listAdminUsersPage(session.csrfToken, adminUsersCursor);
-                        setAdminUsers((users) => [
-                          ...users,
-                          ...page.items.filter(
-                            (item) => !users.some((user) => user.id === item.id),
-                          ),
-                        ]);
-                        setAdminUsersCursor(page.nextCursor);
-                      },
-                    }
-                  : {})}
-                create={async (input) => {
-                  const created = await createAdminUser(input, session.csrfToken);
-                  setAdminUsers((users) => [
-                    ...users.filter((user) => user.id !== created.id),
-                    created,
-                  ]);
-                }}
-                toggle={async (userId, active, version) => {
-                  const updated = await changeAdminUserStatus(
-                    userId,
-                    active,
-                    session.csrfToken,
-                    version,
-                  );
-                  setAdminUsers((users) =>
-                    users.map((user) => (user.id === userId ? updated : user)),
-                  );
-                }}
-              />
-              <CategoriesAdminPage
-                categories={categories}
-                projects={projects}
-                assignees={assignees}
-                createCategory={(value) => void saveNewLocalCategory(value)}
-                updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
-                createProject={(value) => void saveNewLocalProject(value)}
-                updateProject={(project, patch) => void updateLocalProject(project, patch)}
-                actorId={session.userId}
-                csrfToken={session.csrfToken}
-                changeCategoryLifecycle={(category, action, actorId) =>
-                  void changeLocalCategoryLifecycle(category, action, actorId)
-                }
-                changeProjectLifecycle={(project, action, actorId) =>
-                  void changeLocalProjectLifecycle(project, action, actorId)
-                }
-              />
-            </>
-          )
-        ) : section === 'groups' ? (
-          <GroupPage
-            groups={groups}
-            online={online}
-            create={async (name, pin) => {
-              await createRemoteGroup(name, pin, session.csrfToken);
-            }}
-            join={async (group, pin) => {
-              await joinRemoteGroup(group, pin, session.csrfToken);
-            }}
-          />
-        ) : section === 'projects' ? (
-          <ProjectTree
-            tree={workloadTree}
-            selectedUrgencies={filters.urgencies}
-            changeUrgencies={(urgencies) =>
-              setFilters((current) => ({
-                ...current,
-                urgencies: urgencies as Filters['urgencies'],
-              }))
-            }
-            detailRows={projectDetailRows}
-            detailScope={
-              filters.projectId && filters.projectId !== 'unassigned' ? 'project' : 'category'
-            }
-            orderBy={projectReportOrder}
-            changeOrder={setProjectReportOrder}
-          />
-        ) : section === 'dashboard' ? (
-          <CompletionDashboard
-            events={completionEvents}
-            categories={categories}
-            projects={projects}
-            pending={pending}
-            {...(completionReport
-              ? { urgencyCounts: completionReport.urgencyCounts, remoteReport: completionReport }
-              : {})}
-            selectedUrgencies={completionFilters.urgencies}
-            changeFilters={setCompletionFilters}
-            detailRows={completionDetailRows}
-            orderBy="completedAt"
-            {...(completionReportState ? { reportState: completionReportState } : {})}
-            retry={() => setCompletionReportAttempt((value) => value + 1)}
-            restart={() => setCompletionReportAttempt((value) => value + 1)}
-            refreshAfterReconnect={() => setCompletionReportAttempt((value) => value + 1)}
-            exportCsv={async (filters) => {
-              await runCompletionExport(filters, session.csrfToken);
-            }}
-          />
-        ) : section === 'archive' ? (
-          <ArchivePage
-            entries={archive}
-            csrfToken={session.csrfToken}
-            filters={filters}
-            changeFilters={setFilters}
-            categories={categories}
-            projects={projects}
-            assignees={assignees}
-            restore={async (entry) => {
-              if (entry.task) await updateTask(entry.task, { status: 'open' }, session.userId);
-              if (entry.list)
-                await updateLocalList(entry.list, { status: 'active', lifecycle: 'active' });
-            }}
-          />
-        ) : section === 'directory' ? (
-          <GlobalDirectoryPage
-            actorId={session.userId}
-            lists={lists.filter((list) => list.lifecycle !== 'archived')}
-            addToList={async (listId, item) => {
-              await addLocalListItem(
-                listId,
-                { name: item.name, amountMinor: item.amountMinor },
-                session.userId,
-                item,
-              );
-            }}
-          />
-        ) : section === 'lists' ? (
-          <ListPage
-            csrfToken={session.csrfToken}
-            lists={lists.filter((list) => list.lifecycle !== 'archived')}
-            items={listItems}
-            {...(selectedListId ? { selectedId: selectedListId } : {})}
-            openList={(list) => navigate({ section: 'lists', listId: list.id })}
-            groups={groups.map((group) => ({ id: group.id, name: group.name }))}
-            categories={categories}
-            projects={projects}
-            createList={async (name, projectId, urgency) => {
-              await saveNewList(name, session.userId, projectId, urgency);
-            }}
-            addItem={async (listId, input) => {
-              await addLocalListItem(listId, input, session.userId);
-            }}
-            changeList={async (list, patch) => {
-              await updateLocalList(list, patch);
-            }}
-            editItem={(item, name, amountMinor) => {
-              void editLocalListItem(item, { name, amountMinor }, session.userId);
-            }}
-            resetItem={(item) => {
-              void resetLocalListItemOverrides(item);
-            }}
-            promoteItem={(item, name, amountMinor) => {
-              void saveDirectoryItem({ name, amountMinor }, session.userId).then((directory) =>
-                linkLocalListItemToDirectory(item, directory, session.userId),
-              );
-            }}
-            reorderItems={(ordered) => {
-              void reorderLocalListItems(ordered);
-            }}
-            copyReady={() => {
-              void synchronize();
-            }}
-            toggle={(item) => {
-              void updateLocalListItem(
-                item,
-                { status: item.status === 'completed' ? 'open' : 'completed' },
-                session.userId,
-              );
-            }}
-            remove={(item) => {
-              void updateLocalListItem(item, { status: 'removed' }, session.userId);
-            }}
-          />
-        ) : (
-          <>
-            <section className="welcome">
-              <div>
-                <p className="eyebrow">My tasks</p>
-                <h1>Ready when you are, {session.displayName}.</h1>
-              </div>
-              <ViewSwitcher
-                view={view}
-                change={(next) => {
-                  setView(next);
-                  void saveView(next);
-                }}
-              />
-            </section>
-            <TaskForm
-              save={addTask}
+                  .catch(() => setSessionValidation('retry'))
+                  .finally(() => {
+                    signingOutRef.current = false;
+                    setSigningOut(false);
+                  });
+              }}
+            >
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          </div>
+        </header>
+        <main>
+          {section === 'journal' ? (
+            <JournalPage ownerId={session.userId} csrfToken={session.csrfToken} tasks={tasks} />
+          ) : section === 'stack' ? (
+            <PersonalStackPage
+              scope={stackScope}
+              projects={projects
+                .filter((project) => project.lifecycle === 'active')
+                .map((project) => ({ id: project.id, name: project.name }))}
+              projectRecords={projects}
               categories={categories}
-              projects={projects}
               assignees={assignees}
               parentTasks={tasks}
               defaultAssigneeId={session.userId}
+              createTask={addTask}
+              updateTask={async (task, patch) => {
+                await updateTask(task, patch, session.userId);
+              }}
+              items={
+                remoteStackItems ??
+                rankedStackItems.map(({ work, rank }) => ({
+                  reference: work.reference,
+                  label: work.label,
+                  urgency: work.urgency,
+                  overallPosition: rank.overallPosition,
+                  ...(rank.projectPosition === undefined
+                    ? {}
+                    : { projectPosition: rank.projectPosition }),
+                }))
+              }
+              announcement={stackAnnouncement}
+              pendingOperationIds={pendingStackOperations.map((operation) => operation.operationId)}
+              conflictCount={stackConflicts.length}
+              {...(lastStackSyncedAt ? { lastSyncedAt: lastStackSyncedAt } : {})}
+              filters={filters}
+              changeFilters={setFilters}
+              changeScope={setStackScope}
+              {...(stackReadError ? { readError: stackReadError } : {})}
+              retryRead={() => setStackReadAttempt((value) => value + 1)}
+              restartRead={() => setStackReadAttempt((value) => value + 1)}
+              move={async (work, destinationPosition) => {
+                const displayed =
+                  remoteStackItems?.map((item) => item.reference) ??
+                  rankedStackItems.map((item) => item.work.reference);
+                const fullScope = allRankedStackItems.map((item) => item.work.reference);
+                const currentPosition =
+                  displayed.findIndex(
+                    (reference) => workReferenceIdentity(reference) === workReferenceIdentity(work),
+                  ) + 1;
+                if (currentPosition < 1 || currentPosition === destinationPosition) return;
+                const existing = await readLocalStack(session.userId, stackScope);
+                const existingIdentities = new Set(existing?.work.map(workReferenceIdentity) ?? []);
+                const needsReconciliation =
+                  !existing ||
+                  fullScope.length !== existing.work.length ||
+                  fullScope.some(
+                    (reference) => !existingIdentities.has(workReferenceIdentity(reference)),
+                  );
+                const current = needsReconciliation
+                  ? await initializeLocalStack({
+                      ownerId: session.userId,
+                      scope: stackScope,
+                      version: existing?.version ?? 0,
+                      work: fullScope,
+                    })
+                  : existing;
+                const isFiltered = displayed.length !== fullScope.length;
+                const destinationIndex = Math.max(
+                  0,
+                  Math.min(displayed.length - 1, destinationPosition - 1),
+                );
+                const remaining = current.work.filter(
+                  (reference) => workReferenceIdentity(reference) !== workReferenceIdentity(work),
+                );
+                const fullDestinationIndex = Math.max(
+                  0,
+                  Math.min(remaining.length, destinationPosition - 1),
+                );
+                const beforeWork = remaining[fullDestinationIndex - 1];
+                const afterWork = remaining[fullDestinationIndex];
+                const queryHash = isFiltered ? await searchBasisHash(filters.query) : undefined;
+                await queuePersonalStackReorder({
+                  ownerId: session.userId,
+                  scope: stackScope,
+                  baseVersion: current.version,
+                  move: isFiltered
+                    ? {
+                        kind: 'filtered_permutation',
+                        movedWork: work,
+                        destinationIndex,
+                        affectedWork: displayed,
+                        filterBasis: {
+                          ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
+                          ...(filters.from ? { from: filters.from } : {}),
+                          ...(filters.to ? { to: filters.to } : {}),
+                          ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
+                          ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+                          ...(filters.projectId ? { projectId: filters.projectId } : {}),
+                          lifecycle: 'active',
+                          contentType: filters.contentType ?? 'all',
+                          ...(queryHash ? { searchBasisHash: queryHash } : {}),
+                        },
+                      }
+                    : {
+                        kind: 'simple_move',
+                        movedWork: work,
+                        ...(beforeWork ? { beforeWork } : {}),
+                        ...(afterWork ? { afterWork } : {}),
+                      },
+                });
+                const moved = eligibleStackWork.find(
+                  (item) => workReferenceIdentity(item.reference) === workReferenceIdentity(work),
+                );
+                const scopeName =
+                  stackScope.scopeType === 'overall'
+                    ? 'Overall stack'
+                    : `${projects.find((project) => project.id === stackScope.scopeId)?.name ?? 'Project'} Project stack`;
+                setStackAnnouncement(
+                  `Moved ${moved?.label ?? 'work'} to position ${destinationPosition} of ${displayed.length} in ${scopeName}.`,
+                );
+              }}
+              reapplyConflicts={async () => {
+                for (const conflict of stackConflicts)
+                  await resolveLocalStackConflict(conflict.id, 'reapply');
+              }}
+              discardConflicts={async () => {
+                for (const conflict of stackConflicts)
+                  await resolveLocalStackConflict(conflict.id, 'discard');
+              }}
             />
-            <section className="filters" aria-label="Search and filters">
-              <TaskSearchBar
-                value={filters.query}
-                setValue={(query) => setFilters({ ...filters, query })}
-                count={visible.length + matchingLists.length}
-              />
-              <TaskFilters
-                value={filters}
-                change={setFilters}
-                resultCount={visible.length + matchingLists.length}
-                categories={categories}
-                projects={projects}
-                assignees={assignees}
-              />
-              {(filters.query ||
-                filters.from ||
-                filters.to ||
-                filters.assigneeId ||
-                filters.categoryId ||
-                filters.projectId) && (
-                <button className="quiet" onClick={() => setFilters(emptyFilters)}>
-                  Clear filters
-                </button>
-              )}
-            </section>
-            <SearchResults
-              lists={matchingLists}
+          ) : section === 'profile' ? (
+            <ProfilePage
+              csrfToken={session.csrfToken}
+              role={session.role}
+              userId={session.userId}
+              refreshUsers={refreshUsers}
+            />
+          ) : section === 'admin' ? (
+            session.role !== 'admin' ? (
+              <section role="alert" className="panel">
+                <h1>Administrator access required</h1>
+                <p>Your account cannot open system administration.</p>
+              </section>
+            ) : (
+              <>
+                {adminLoadError && (
+                  <div role="alert">
+                    {adminLoadError}
+                    <button onClick={() => setAdminLoadAttempt((attempt) => attempt + 1)}>
+                      Retry loading users
+                    </button>
+                  </div>
+                )}
+                <UsersAdminPage
+                  users={adminUsers}
+                  currentUserId={session.userId}
+                  online={online}
+                  {...(adminUsersCursor
+                    ? {
+                        nextCursor: adminUsersCursor,
+                        loadMore: async () => {
+                          const page = await listAdminUsersPage(
+                            session.csrfToken,
+                            adminUsersCursor,
+                          );
+                          setAdminUsers((users) => [
+                            ...users,
+                            ...page.items.filter(
+                              (item) => !users.some((user) => user.id === item.id),
+                            ),
+                          ]);
+                          setAdminUsersCursor(page.nextCursor);
+                        },
+                      }
+                    : {})}
+                  create={async (input) => {
+                    const created = await createAdminUser(input, session.csrfToken);
+                    void refreshUsers().catch(() => undefined);
+                    setAdminUsers((users) => [
+                      ...users.filter((user) => user.id !== created.id),
+                      created,
+                    ]);
+                  }}
+                  toggle={async (userId, active, version) => {
+                    const updated = await changeAdminUserStatus(
+                      userId,
+                      active,
+                      session.csrfToken,
+                      version,
+                    );
+                    void refreshUsers().catch(() => undefined);
+                    setAdminUsers((users) =>
+                      users.map((user) => (user.id === userId ? updated : user)),
+                    );
+                  }}
+                />
+                <CategoriesAdminPage
+                  categories={categories}
+                  projects={projects}
+                  assignees={assignees}
+                  createCategory={(value) => void saveNewLocalCategory(value)}
+                  updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
+                  createProject={(value) => void saveNewLocalProject(value)}
+                  updateProject={(project, patch) => void updateLocalProject(project, patch)}
+                  actorId={session.userId}
+                  csrfToken={session.csrfToken}
+                  changeCategoryLifecycle={(category, action, actorId) =>
+                    void changeLocalCategoryLifecycle(category, action, actorId)
+                  }
+                  changeProjectLifecycle={(project, action, actorId) =>
+                    void changeLocalProjectLifecycle(project, action, actorId)
+                  }
+                />
+              </>
+            )
+          ) : section === 'groups' ? (
+            <GroupPage
+              groups={groups}
+              online={online}
+              create={async (name, pin) => {
+                await createRemoteGroup(name, pin, session.csrfToken);
+              }}
+              join={async (group, pin) => {
+                await joinRemoteGroup(group, pin, session.csrfToken);
+              }}
+            />
+          ) : section === 'projects' ? (
+            <ProjectTree
+              tree={workloadTree}
+              selectedUrgencies={filters.urgencies}
+              changeUrgencies={(urgencies) =>
+                setFilters((current) => ({
+                  ...current,
+                  urgencies: urgencies as Filters['urgencies'],
+                }))
+              }
+              detailRows={projectDetailRows}
+              detailScope={
+                filters.projectId && filters.projectId !== 'unassigned' ? 'project' : 'category'
+              }
+              orderBy={projectReportOrder}
+              changeOrder={setProjectReportOrder}
+            />
+          ) : section === 'dashboard' ? (
+            <CompletionDashboard
+              events={completionEvents}
+              categories={categories}
+              projects={projects}
+              pending={pending}
+              {...(completionReport
+                ? { urgencyCounts: completionReport.urgencyCounts, remoteReport: completionReport }
+                : {})}
+              selectedUrgencies={completionFilters.urgencies}
+              changeFilters={setCompletionFilters}
+              detailRows={completionDetailRows}
+              orderBy="completedAt"
+              {...(completionReportState ? { reportState: completionReportState } : {})}
+              retry={() => setCompletionReportAttempt((value) => value + 1)}
+              restart={() => setCompletionReportAttempt((value) => value + 1)}
+              refreshAfterReconnect={() => setCompletionReportAttempt((value) => value + 1)}
+              exportCsv={async (filters) => {
+                await runCompletionExport(filters, session.csrfToken);
+              }}
+            />
+          ) : section === 'archive' ? (
+            <ArchivePage
+              entries={archive}
+              csrfToken={session.csrfToken}
+              filters={filters}
+              changeFilters={setFilters}
+              categories={categories}
+              projects={projects}
+              assignees={assignees}
+              restore={async (entry) => {
+                if (entry.task) await updateTask(entry.task, { status: 'open' }, session.userId);
+                if (entry.list)
+                  await updateLocalList(entry.list, { status: 'active', lifecycle: 'active' });
+              }}
+            />
+          ) : section === 'directory' ? (
+            <GlobalDirectoryPage
+              actorId={session.userId}
+              lists={lists.filter((list) => list.lifecycle !== 'archived')}
+              addToList={async (listId, item) => {
+                await addLocalListItem(
+                  listId,
+                  { name: item.name, amountMinor: item.amountMinor },
+                  session.userId,
+                  item,
+                );
+              }}
+            />
+          ) : section === 'lists' ? (
+            <ListPage
+              csrfToken={session.csrfToken}
+              lists={lists.filter((list) => list.lifecycle !== 'archived')}
               items={listItems}
-              open={(list) => navigate({ section: 'lists', listId: list.id })}
+              {...(selectedListId ? { selectedId: selectedListId } : {})}
+              openList={(list) => navigate({ section: 'lists', listId: list.id })}
+              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              categories={categories}
+              projects={projects}
+              createList={async (name, projectId, urgency) => {
+                await saveNewList(name, session.userId, projectId, urgency);
+              }}
+              addItem={async (listId, input) => {
+                await addLocalListItem(listId, input, session.userId);
+              }}
+              changeList={async (list, patch) => {
+                await updateLocalList(list, patch);
+              }}
+              editItem={(item, name, amountMinor) => {
+                void editLocalListItem(item, { name, amountMinor }, session.userId);
+              }}
+              resetItem={(item) => {
+                void resetLocalListItemOverrides(item);
+              }}
+              promoteItem={(item, name, amountMinor) => {
+                void saveDirectoryItem({ name, amountMinor }, session.userId).then((directory) =>
+                  linkLocalListItemToDirectory(item, directory, session.userId),
+                );
+              }}
+              reorderItems={(ordered) => {
+                void reorderLocalListItems(ordered);
+              }}
+              copyReady={() => {
+                void synchronize();
+              }}
+              toggle={(item) => {
+                void updateLocalListItem(
+                  item,
+                  { status: item.status === 'completed' ? 'open' : 'completed' },
+                  session.userId,
+                );
+              }}
+              remove={(item) => {
+                void updateLocalListItem(item, { status: 'removed' }, session.userId);
+              }}
             />
-            {view === 'list' ? (
-              <TaskListPage
-                csrfToken={session.csrfToken}
+          ) : (
+            <>
+              <section className="welcome">
+                <div>
+                  <p className="eyebrow">My tasks</p>
+                  <h1>Ready when you are, {session.displayName}.</h1>
+                </div>
+                <ViewSwitcher
+                  view={view}
+                  change={(next) => {
+                    setView(next);
+                    void saveView(next);
+                  }}
+                />
+              </section>
+              <TaskForm
+                save={addTask}
                 categories={categories}
                 projects={projects}
                 assignees={assignees}
                 parentTasks={tasks}
                 defaultAssigneeId={session.userId}
-                currentUserId={session.userId}
-                tasks={visible}
-                loading={taskResult === undefined}
-                selected={tasks.find((item) => item.id === selectedId)}
-                revisions={revisions}
-                onToggle={toggle}
-                onSelect={(task) => {
-                  history.pushState(
-                    {},
-                    '',
-                    `/tasks/${encodeURIComponent(task.id)}${location.search}`,
-                  );
-                  setSelectedId(task.id);
-                }}
-                onClose={() => {
-                  history.pushState({}, '', `/${location.search}`);
-                  setSelectedId(undefined);
-                }}
-                onUpdate={async (task, patch) => {
-                  await updateTask(task, patch, session.userId);
-                }}
               />
-            ) : (
-              <PostItBoard
-                tasks={visible}
-                categories={categories}
-                projects={projects}
-                assignees={assignees}
-                onToggle={toggle}
-                onUpdate={async (task, patch) => {
-                  await updateTask(task, patch, session.userId);
-                }}
+              <section className="filters" aria-label="Search and filters">
+                <TaskSearchBar
+                  value={filters.query}
+                  setValue={(query) => setFilters({ ...filters, query })}
+                  count={visible.length + matchingLists.length}
+                />
+                <TaskFilters
+                  value={filters}
+                  change={setFilters}
+                  resultCount={visible.length + matchingLists.length}
+                  categories={categories}
+                  projects={projects}
+                  assignees={assignees}
+                />
+                {(filters.query ||
+                  filters.from ||
+                  filters.to ||
+                  filters.assigneeId ||
+                  filters.categoryId ||
+                  filters.projectId) && (
+                  <button className="quiet" onClick={() => setFilters(emptyFilters)}>
+                    Clear filters
+                  </button>
+                )}
+              </section>
+              <SearchResults
+                lists={matchingLists}
+                items={listItems}
+                open={(list) => navigate({ section: 'lists', listId: list.id })}
               />
-            )}
-          </>
-        )}
-      </main>
-    </div>
+              {view === 'list' ? (
+                <TaskListPage
+                  csrfToken={session.csrfToken}
+                  categories={categories}
+                  projects={projects}
+                  assignees={assignees}
+                  parentTasks={tasks}
+                  defaultAssigneeId={session.userId}
+                  currentUserId={session.userId}
+                  tasks={visible}
+                  loading={taskResult === undefined}
+                  selected={tasks.find((item) => item.id === selectedId)}
+                  revisions={revisions}
+                  onToggle={toggle}
+                  onSelect={(task) => {
+                    history.pushState(
+                      {},
+                      '',
+                      `/tasks/${encodeURIComponent(task.id)}${location.search}`,
+                    );
+                    setSelectedId(task.id);
+                  }}
+                  onClose={() => {
+                    history.pushState({}, '', `/${location.search}`);
+                    setSelectedId(undefined);
+                  }}
+                  onUpdate={async (task, patch) => {
+                    await updateTask(task, patch, session.userId);
+                  }}
+                />
+              ) : (
+                <PostItBoard
+                  tasks={visible}
+                  categories={categories}
+                  projects={projects}
+                  assignees={assignees}
+                  onToggle={toggle}
+                  onUpdate={async (task, patch) => {
+                    await updateTask(task, patch, session.userId);
+                  }}
+                />
+              )}
+            </>
+          )}
+        </main>
+      </div>
+    </UserDirectoryContext.Provider>
   );
 }

@@ -11,12 +11,15 @@ export function JournalUnlock({
   onUnlock: (pin: string) => Promise<void>;
 }) {
   const [pin, setPin] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
   const submit = async () => {
     try {
       setError('');
+      if (!enrolled && pin !== confirmation) return;
       await (enrolled ? onUnlock(pin) : onEnroll(pin));
       setPin('');
+      setConfirmation('');
     } catch (error) {
       setError(
         enrolled
@@ -46,8 +49,25 @@ export function JournalUnlock({
           onChange={(event) => setPin(event.target.value)}
         />
       </label>
+      {!enrolled && (
+        <label>
+          Confirm Journal PIN
+          <input
+            type="password"
+            inputMode="numeric"
+            autoComplete="off"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+          />
+        </label>
+      )}
+      {!enrolled && confirmation && pin !== confirmation && <p role="status">PINs must match.</p>}
       {error && <p role="alert">{error}</p>}
-      <button type="button" disabled={!/^\d{6,32}$/u.test(pin)} onClick={() => void submit()}>
+      <button
+        type="button"
+        disabled={!/^\d{6,32}$/u.test(pin) || (!enrolled && pin !== confirmation)}
+        onClick={() => void submit()}
+      >
         {enrolled ? 'Unlock' : 'Create Journal'}
       </button>
     </section>

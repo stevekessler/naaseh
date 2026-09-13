@@ -13,6 +13,10 @@ export function CreateGroupDialog({
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const pin = String(data.get('pin') ?? '');
+    if (pin !== String(data.get('confirmPin') ?? '')) {
+      setError('PINs must match.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -35,6 +39,10 @@ export function CreateGroupDialog({
         <label>
           Optional group PIN
           <input name="pin" type="password" inputMode="numeric" pattern="[0-9]{6,32}" />
+        </label>
+        <label>
+          Confirm group PIN
+          <input name="confirmPin" type="password" inputMode="numeric" pattern="[0-9]{6,32}" />
         </label>
         <p>A PIN is required before another user can join. It never makes public tasks private.</p>
         {error && <p role="alert">{error}</p>}

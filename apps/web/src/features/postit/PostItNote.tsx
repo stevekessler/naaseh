@@ -1,3 +1,5 @@
+import { UrgencyBadge } from '../../components/UrgencyBadge.js';
+import { UserAvatar } from '../profile/user-directory.js';
 import type { Task } from '@naaseh/domain';
 import { resolvePostItPalette } from '../../styles/category-color.js';
 import { useBrowserTimeZone } from '../tasks/due-value.js';
@@ -34,6 +36,8 @@ export function PostItNote({
         {completed ? '✓' : ''}
       </button>
       <h2>{task.label}</h2>
+      <UrgencyBadge urgency={task.urgency} mode="compact" />
+      <UserAvatar userId={task.assigneeId ?? task.ownerId} />
       {edit ? (
         <button
           id={`task-edit-trigger-postit-${task.id}`}

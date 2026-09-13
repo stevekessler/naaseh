@@ -28,7 +28,7 @@ test('discovers personal settings on Profile and renders a responsive administra
     }),
   );
   await signIn(page);
-  await page.getByRole('button', { name: 'Profile' }).click();
+  await page.getByRole('button', { name: 'Profile', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
   await expect(page.getByText('Completion sounds')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();

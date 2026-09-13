@@ -81,11 +81,30 @@ describe('foundation infrastructure', () => {
       ResponseHeadersPolicyConfig: Match.objectLike({
         SecurityHeadersConfig: Match.objectLike({
           ContentSecurityPolicy: Match.objectLike({
-            ContentSecurityPolicy: Match.stringLikeRegexp("frame-ancestors 'none'"),
+            ContentSecurityPolicy: {
+              'Fn::Join': ['', Match.arrayWith([Match.stringLikeRegexp("frame-ancestors 'none'")])],
+            },
           }),
           FrameOptions: { FrameOption: 'DENY', Override: true },
         }),
       }),
+    });
+    const headerPolicy = Object.values(
+      template.findResources('AWS::CloudFront::ResponseHeadersPolicy'),
+    )[0]!;
+    const csp =
+      headerPolicy.Properties.ResponseHeadersPolicyConfig.SecurityHeadersConfig
+        .ContentSecurityPolicy.ContentSecurityPolicy;
+    const serializedCsp = JSON.stringify(csp);
+    expect(serializedCsp).toContain('RegionalDomainName');
+    expect(serializedCsp).not.toContain('*.amazonaws.com');
+    template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+      RouteKey: 'GET /api/v1/users/directory',
+      AuthorizationType: 'CUSTOM',
+    });
+    template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+      RouteKey: 'POST /api/v1/profile/picture/upload',
+      AuthorizationType: 'CUSTOM',
     });
     edgeTemplate.hasResourceProperties('AWS::WAFv2::WebACL', {
       Scope: 'CLOUDFRONT',

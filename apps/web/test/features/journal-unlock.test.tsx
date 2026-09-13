@@ -14,6 +14,7 @@ describe('Journal PIN form failures', () => {
     const view = render(<JournalUnlock enrolled={false} onEnroll={onEnroll} onUnlock={vi.fn()} />);
 
     fireEvent.change(view.getByLabelText('Journal PIN'), { target: { value: '246810' } });
+    fireEvent.change(view.getByLabelText('Confirm Journal PIN'), { target: { value: '246810' } });
     fireEvent.click(view.getByRole('button', { name: 'Create Journal' }));
 
     await waitFor(() =>
@@ -57,6 +58,7 @@ describe('Journal PIN form failures', () => {
     );
 
     fireEvent.change(view.getByLabelText('Journal PIN'), { target: { value: '246810' } });
+    fireEvent.change(view.getByLabelText('Confirm Journal PIN'), { target: { value: '246810' } });
     fireEvent.click(view.getByRole('button', { name: 'Create Journal' }));
 
     await waitFor(() =>

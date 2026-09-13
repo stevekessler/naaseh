@@ -4,7 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const allowed = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MAX_BYTES = 5_000_000;
-const s3 = new S3Client({});
+const s3 = new S3Client({ requestChecksumCalculation: 'WHEN_REQUIRED' });
 
 export function validatePicture(contentType: string, bytes: number) {
   if (!allowed.has(contentType) || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_BYTES)
@@ -14,9 +14,9 @@ export function validatePicture(contentType: string, bytes: number) {
 
 export function validatePictureSignature(contentType: string, bytes: Uint8Array) {
   const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const png = bytes
-    .slice(0, 8)
-    .every((value, index) => value === [137, 80, 78, 71, 13, 10, 26, 10][index]);
+  const png =
+    bytes.length >= 8 &&
+    bytes.slice(0, 8).every((value, index) => value === [137, 80, 78, 71, 13, 10, 26, 10][index]);
   const webp =
     new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF' &&
     new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
@@ -55,6 +55,9 @@ export async function createProfilePictureUpload(input: {
       ContentType: input.contentType,
       ContentLength: input.contentLength,
       ServerSideEncryption: 'aws:kms',
+      ...(process.env.PROFILE_MEDIA_KMS_KEY_ID
+        ? { SSEKMSKeyId: process.env.PROFILE_MEDIA_KMS_KEY_ID }
+        : {}),
       Metadata: { owner: input.userId, processing: 'pending' },
     }),
     { expiresIn: 300 },
@@ -67,6 +70,9 @@ export async function createProfilePictureUpload(input: {
       'content-type': input.contentType,
       'content-length': String(input.contentLength),
       'x-amz-server-side-encryption': 'aws:kms',
+      ...(process.env.PROFILE_MEDIA_KMS_KEY_ID
+        ? { 'x-amz-server-side-encryption-aws-kms-key-id': process.env.PROFILE_MEDIA_KMS_KEY_ID }
+        : {}),
     },
   };
 }

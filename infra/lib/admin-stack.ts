@@ -165,6 +165,8 @@ export function createAdminFunctions(
   options.table.grantReadWriteData(processor);
   options.table.grantReadWriteData(categories);
   options.table.grantReadWriteData(projects);
+  admin.addEnvironment('PROFILE_MEDIA_KMS_KEY_ID', options.dataKey.keyArn);
+  processor.addEnvironment('PROFILE_MEDIA_KMS_KEY_ID', options.dataKey.keyArn);
   options.media.grantReadWrite(admin, 'profiles/*');
   options.media.grantReadWrite(processor, 'profiles/*');
   options.media.grantDelete(processor, 'profiles/*');
@@ -246,6 +248,8 @@ export function attachAdminRoutes(
     ['/api/v1/admin/users', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST], admin],
     ['/api/v1/admin/users/{userId}', [apigwv2.HttpMethod.PATCH], admin],
     ['/api/v1/admin/profile-pictures/upload', [apigwv2.HttpMethod.POST], admin],
+    ['/api/v1/users/directory', [apigwv2.HttpMethod.GET], admin],
+    ['/api/v1/profile/picture/upload', [apigwv2.HttpMethod.POST], admin],
     ['/api/v1/categories', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST], categories],
     [
       '/api/v1/categories/{categoryId}',

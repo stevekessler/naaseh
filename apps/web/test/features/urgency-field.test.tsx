@@ -28,3 +28,15 @@ describe('urgency controls', () => {
     expect(html).toContain('Critical');
   });
 });
+
+it.each(['low', 'medium', 'high', 'critical'] as const)(
+  'renders accessible compact and responsive icons for %s',
+  (urgency) => {
+    for (const mode of ['compact', 'responsive'] as const) {
+      const html = renderToStaticMarkup(<UrgencyBadge urgency={urgency} mode={mode} />);
+      expect(html).toContain('aria-label="Priority:');
+      expect(html).toContain('aria-hidden="true"');
+      expect(html).toContain(`urgency-badge--${mode}`);
+    }
+  },
+);

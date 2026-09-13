@@ -22,7 +22,9 @@ export const preAuthCookie = (token: string, maxAge = 300) =>
   `__Host-naaseh-preauth=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
 
 export function requestCookieHeader(
-  event: Pick<APIGatewayProxyEventV2, 'cookies' | 'headers'>,
+  event: Partial<Pick<APIGatewayProxyEventV2, 'cookies' | 'headers'>>,
 ): string | undefined {
-  return event.cookies?.length ? event.cookies.join('; ') : event.headers.cookie;
+  return event.cookies?.length
+    ? event.cookies.join('; ')
+    : (event.headers?.cookie ?? event.headers?.Cookie);
 }

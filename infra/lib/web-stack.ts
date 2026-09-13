@@ -15,11 +15,19 @@ export function createWebResources(
     domainName: string;
     webAclArn: string;
     webAssetPath: string;
+    mediaOrigin?: string;
   },
 ) {
   const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(scope, 'SecurityHeaders', {
     securityHeadersBehavior: {
-      contentSecurityPolicy: { contentSecurityPolicy, override: true },
+      contentSecurityPolicy: {
+        contentSecurityPolicy: options.mediaOrigin
+          ? contentSecurityPolicy
+              .replace("img-src 'self' data:", `img-src 'self' data: ${options.mediaOrigin}`)
+              .replace("connect-src 'self'", `connect-src 'self' ${options.mediaOrigin}`)
+          : contentSecurityPolicy,
+        override: true,
+      },
       contentTypeOptions: { override: true },
       frameOptions: { frameOption: cloudfront.HeadersFrameOption.DENY, override: true },
       referrerPolicy: {

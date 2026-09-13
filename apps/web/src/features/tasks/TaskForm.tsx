@@ -301,9 +301,19 @@ export function TaskForm({
           />
         </div>
         <label className="checkbox">
-          <input name="private" type="checkbox" defaultChecked={task?.visibility === 'private'} />{' '}
+          <input
+            aria-describedby="task-privacy-help"
+            name="private"
+            type="checkbox"
+            defaultChecked={task?.visibility === 'private'}
+          />{' '}
           Private task
         </label>
+        <p id="task-privacy-help">
+          Private tasks are visible to you and administrators. Assignees and group members cannot
+          see them. Unchecked tasks are visible to signed-in users, or only group members when a
+          group is selected; administrators retain read access.
+        </p>
         {task && (
           <fieldset className="post-it-color-picker">
             <legend>Post-it color</legend>

@@ -2,9 +2,10 @@ import type { APIGatewayRequestSimpleAuthorizerHandlerV2 } from 'aws-lambda';
 import { createHash } from 'node:crypto';
 import { findSession, refreshIdleExpiry } from './session-repository.js';
 import { userById } from './user-repository.js';
+import { requestCookieHeader } from './session.js';
 import { listUserMemberships } from '../groups/group-repository.js';
 export const handler: APIGatewayRequestSimpleAuthorizerHandlerV2 = async (event) => {
-  const cookie = (event.headers?.cookie ?? '')
+  const cookie = (requestCookieHeader(event) ?? '')
     .split(';')
     .map((v: string) => v.trim())
     .find((v: string) => v.startsWith('__Host-naaseh='));
