@@ -1,3 +1,4 @@
+import { listUserDirectory } from './user-directory.js';
 import { randomUUID } from 'node:crypto';
 import type { APIGatewayProxyEventV2, APIGatewayProxyHandlerV2 } from 'aws-lambda';
 import { z } from 'zod';
@@ -37,6 +38,19 @@ async function handle(event: APIGatewayProxyEventV2) {
   const correlationId = event.requestContext.requestId || randomUUID();
   const logger = createLogger(process.env);
   const auth = claims(event);
+  if (!auth?.userId) return problem(401, 'unauthorized', 'Sign in required.', correlationId);
+  const method = event.requestContext.http.method;
+  if (method === 'GET' && event.rawPath.endsWith('/users/directory'))
+    return json(200, await listUserDirectory());
+  if (method === 'POST' && event.rawPath.endsWith('/profile/picture/upload')) {
+    requireMutationSecurity(
+      event.headers.origin,
+      auth.csrfToken ?? '',
+      event.headers['x-csrf-token'],
+    );
+    const body = uploadSchema.omit({ userId: true }).parse(JSON.parse(event.body ?? '{}'));
+    return json(201, await createProfilePictureUpload({ ...body, userId: auth.userId }));
+  }
   try {
     requireAdminMutation(auth ?? {});
   } catch {
@@ -45,7 +59,6 @@ async function handle(event: APIGatewayProxyEventV2) {
   }
   if (!auth?.userId)
     return problem(403, 'forbidden', 'Administrator access required.', correlationId);
-  const method = event.requestContext.http.method;
   if (method === 'GET' && event.rawPath.endsWith('/admin/users')) {
     const query = pageSchema.parse(event.queryStringParameters ?? {});
     return json(

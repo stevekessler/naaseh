@@ -34,7 +34,8 @@
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "check:runtime": "node -e \"if (Number(process.versions.node.split('.')[0]) !== 24) { throw new Error('Naaseh requires Node.js 24.x') }\"",
-    "validate": "npm run check:runtime && npm run typecheck && npm run lint && npm test && npm run build"
+    "validate": "npm run check:runtime && npm run typecheck && npm run lint && npm test && npm run build",
+    "release:production": "node tools/deploy-production.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.10.2",

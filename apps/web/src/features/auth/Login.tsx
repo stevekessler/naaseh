@@ -70,6 +70,11 @@ export function Login({
     setBusy(true);
     setError('');
     const data = new FormData(event.currentTarget);
+    if (data.get('newPassword') !== data.get('confirmPassword')) {
+      setError('Passwords must match.');
+      setBusy(false);
+      return;
+    }
     try {
       const result = await resetPassword({
         username: String(data.get('username') ?? ''),

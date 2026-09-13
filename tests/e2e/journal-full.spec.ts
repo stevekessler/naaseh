@@ -4,7 +4,8 @@ import { addTask, setOffline, signIn } from './enhanced-helpers.js';
 async function enroll(page: import('@playwright/test').Page) {
   await signIn(page);
   await page.getByRole('button', { name: 'Journal', exact: true }).click();
-  await page.getByLabel('Journal PIN').fill('246810');
+  await page.getByLabel('Journal PIN', { exact: true }).fill('246810');
+  await page.getByLabel('Confirm Journal PIN', { exact: true }).fill('246810');
   await page.getByRole('button', { name: 'Create Journal' }).click();
   await createCrisisPlan(page);
 }
@@ -42,7 +43,8 @@ test('task reflection remains encrypted and available offline without expanding 
   await signIn(page);
   await addTask(page, 'Journal reflection task');
   await page.getByRole('button', { name: 'Journal', exact: true }).click();
-  await page.getByLabel('Journal PIN').fill('246810');
+  await page.getByLabel('Journal PIN', { exact: true }).fill('246810');
+  await page.getByLabel('Confirm Journal PIN', { exact: true }).fill('246810');
   await page.getByRole('button', { name: 'Create Journal' }).click();
   await createCrisisPlan(page);
   await page.getByRole('button', { name: 'New entry' }).click();

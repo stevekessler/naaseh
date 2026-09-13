@@ -37,6 +37,10 @@ test.describe('deployed production canary', () => {
     const body = (await response.json()) as Record<string, unknown>;
     expect(body).toHaveProperty('tasks');
     expect(body).toHaveProperty('keyRegistry');
+    const directory = await page.request.get(`${productionUrl}/api/v1/users/directory`);
+    expect(directory.status()).toBe(200);
+    expectNoStore(directory);
+    expect(await directory.json()).toHaveProperty('items');
     expect(JSON.stringify(body)).not.toMatch(/password|pepper|privateKey|sessionToken/i);
   });
 
