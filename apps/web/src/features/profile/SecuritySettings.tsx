@@ -86,7 +86,13 @@ export function SecuritySettings({
   async function updatePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    if (data.get('newPassword') !== data.get('confirmPassword')) {
+      setStatus('Passwords must match.');
+      setBusy(false);
+      return;
+    }
     try {
       await changePassword(csrfToken, {
         ...proof(event.currentTarget),
@@ -94,7 +100,7 @@ export function SecuritySettings({
         confirmPassword: String(data.get('confirmPassword') ?? ''),
       });
       setStatus('Password changed and other sessions were revoked.');
-      event.currentTarget.reset();
+      form.reset();
     } catch {
       setStatus('Unable to change the password. Verify every entry.');
     } finally {

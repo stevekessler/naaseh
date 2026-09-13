@@ -48,6 +48,14 @@ export function UsersAdminPage({
           if (!online) return;
           const form = event.currentTarget;
           const data = new FormData(form);
+          if (data.get('password') !== data.get('confirmPassword')) {
+            setError('Passwords must match.');
+            return;
+          }
+          if (data.get('pin') !== data.get('confirmPin')) {
+            setError('PINs must match.');
+            return;
+          }
           setCreating(true);
           setError('');
           void create({
@@ -94,6 +102,20 @@ export function UsersAdminPage({
             type="password"
             inputMode="numeric"
             pattern="[0-9]{6,12}"
+            required
+            autoComplete="new-password"
+          />
+        </label>
+        <label>
+          Confirm password
+          <input name="confirmPassword" type="password" required autoComplete="new-password" />
+        </label>
+        <label>
+          Confirm PIN
+          <input
+            name="confirmPin"
+            type="password"
+            inputMode="numeric"
             required
             autoComplete="new-password"
           />

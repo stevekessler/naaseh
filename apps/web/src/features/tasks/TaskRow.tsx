@@ -1,3 +1,4 @@
+import { UserAvatar } from '../profile/user-directory.js';
 import type { Task } from '@naaseh/domain';
 import { ReminderStatus } from '../reminders/ReminderStatus.js';
 import { useCompletionFeedback } from './useCompletionFeedback.js';
@@ -55,7 +56,8 @@ export function TaskRow({
           revision {task.version}
         </small>{' '}
         <ReminderStatus task={task} />
-        <UrgencyBadge urgency={task.urgency} />
+        <UrgencyBadge urgency={task.urgency} mode="responsive" />
+        <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
       </div>
       {task.visibility === 'private' && <span title="Private">🔒</span>}
       {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} /> : null}

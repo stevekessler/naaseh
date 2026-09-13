@@ -3,6 +3,7 @@ import fullConfig from './playwright.config.js';
 
 const chromiumJourneys = [
   'auth.spec.ts',
+  'profile-identity.spec.ts',
   'baseline.spec.ts',
   'tasks-list.spec.ts',
   'lists-basic.spec.ts',

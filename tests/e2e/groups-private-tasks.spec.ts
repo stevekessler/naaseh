@@ -81,6 +81,7 @@ test.describe('mocked group API', () => {
     const createDialog = page.getByRole('dialog', { name: 'Create group' });
     await createDialog.getByLabel('Group name').fill('Work');
     await createDialog.getByLabel('Optional group PIN').fill('654321');
+    await createDialog.getByLabel('Confirm group PIN').fill('654321');
     await createDialog.getByRole('button', { name: 'Create group' }).click();
     await expect(page.getByRole('heading', { name: 'Work' })).toBeVisible();
     await expect(page.getByText('Active owner')).toBeVisible();

@@ -1,3 +1,4 @@
+import { UserAvatar } from '../profile/user-directory.js';
 import { useState } from 'react';
 import type { GroupView } from '@naaseh/domain';
 import { CreateGroupDialog } from './CreateGroupDialog.js';
@@ -14,6 +15,9 @@ export function GroupPage({
   create: (name: string, pin?: string) => Promise<void>;
   join: (group: GroupView, pin?: string) => Promise<void>;
 }) {
+  const [members, setMembers] = useState<Record<string, string[]>>({});
+  const [memberError, setMemberError] = useState('');
+  const [loadingGroup, setLoadingGroup] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState<GroupView>();
   return (
@@ -43,6 +47,44 @@ export function GroupPage({
                   {group.joined ? `Active ${group.role ?? 'member'}` : 'Not joined'}
                 </p>
               </div>
+              {group.joined && (
+                <div>
+                  <button
+                    disabled={!online || loadingGroup === group.id}
+                    onClick={() => {
+                      setLoadingGroup(group.id);
+                      setMemberError('');
+                      void fetch(`/api/v1/groups/${encodeURIComponent(group.id)}`, {
+                        credentials: 'include',
+                        cache: 'no-store',
+                      })
+                        .then(async (response) => {
+                          if (!response.ok) throw new Error('members');
+                          const result = (await response.json()) as {
+                            members: { userId: string }[];
+                          };
+                          setMembers((current) => ({
+                            ...current,
+                            [group.id]: result.members.map((member) => member.userId),
+                          }));
+                        })
+                        .catch(() => setMemberError('Group members could not be loaded.'))
+                        .finally(() => setLoadingGroup(''));
+                    }}
+                  >
+                    Show members
+                  </button>
+                  {members[group.id] && (
+                    <ul aria-label={`${group.name} members`}>
+                      {members[group.id]!.map((userId) => (
+                        <li key={userId}>
+                          <UserAvatar userId={userId} showName />
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               {!group.joined && (
                 <button disabled={!online} onClick={() => setJoining(group)}>
                   Join
@@ -52,6 +94,7 @@ export function GroupPage({
           ))}
         </ul>
       )}
+      {memberError && <p role="alert">{memberError}</p>}
       {creating && <CreateGroupDialog create={create} close={() => setCreating(false)} />}
       {joining && (
         <JoinGroupDialog

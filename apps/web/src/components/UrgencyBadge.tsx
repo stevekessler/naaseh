@@ -12,7 +12,7 @@ export function UrgencyBadge({
   mode = 'full',
 }: {
   urgency: Urgency;
-  mode?: 'full' | 'compact';
+  mode?: 'full' | 'compact' | 'responsive';
 }) {
   const label = urgencyLabels[urgency];
   return (
@@ -22,7 +22,14 @@ export function UrgencyBadge({
       aria-label={`Priority: ${label}`}
       title={`Priority: ${label}`}
     >
-      {mode === 'compact' ? (
+      {mode === 'responsive' ? (
+        <>
+          <span className="priority-icon" aria-hidden="true">
+            {compactGlyphs[urgency]}
+          </span>
+          <span className="priority-text">Priority: {label}</span>
+        </>
+      ) : mode === 'compact' ? (
         <span aria-hidden="true">{compactGlyphs[urgency]}</span>
       ) : (
         `Priority: ${label}`

@@ -7,7 +7,8 @@ test('shared Crisis Plans deny offline access and disclose the online requiremen
 }) => {
   await signIn(page);
   await page.getByRole('button', { name: 'Journal', exact: true }).click();
-  await page.getByLabel('Journal PIN').fill('246810');
+  await page.getByLabel('Journal PIN', { exact: true }).fill('246810');
+  await page.getByLabel('Confirm Journal PIN', { exact: true }).fill('246810');
   await page.getByRole('button', { name: 'Create Journal' }).click();
   await page.getByRole('button', { name: 'Crisis Plans' }).click();
   await page
