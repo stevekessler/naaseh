@@ -215,8 +215,10 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       },
       {
         'cache-control': authCachePolicy,
-        'set-cookie': `${session.cookie}, ${preAuthCookie('', 0)}`,
       },
+      // HTTP API v2 emits one Set-Cookie header per entry. Combining these
+      // applies the pre-auth deletion's Max-Age=0 to the new session.
+      [session.cookie, preAuthCookie('', 0)],
     );
   }
   if (path.endsWith('/password-reset') && event.requestContext.http.method === 'POST') {
