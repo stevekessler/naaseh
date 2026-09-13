@@ -15,9 +15,11 @@ export function json(
   statusCode: number,
   body: unknown,
   headers: Record<string, string> = {},
+  cookies: string[] = [],
 ): APIGatewayProxyResultV2 {
   return {
     statusCode,
+    ...(cookies.length ? { cookies } : {}),
     headers: { ...securityHeaders, 'content-type': 'application/json', ...headers },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   };
