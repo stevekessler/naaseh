@@ -110,14 +110,16 @@ test('preserves an owner private-task transition while offline and after reload'
   await page.getByRole('button', { name: 'Owner offline private task', exact: true }).click();
   const detail = page.getByRole('dialog', { name: 'Edit task' });
   await context.setOffline(true);
-  await detail.getByLabel('Private task').check();
+  await detail.getByRole('checkbox', { name: 'Private task', exact: true }).check();
   await detail.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByTitle('Private')).toBeVisible();
   if (testInfo.project.name === 'chromium') {
     await page.reload();
     await page.getByRole('button', { name: 'Owner offline private task', exact: true }).click();
     await expect(
-      page.getByRole('dialog', { name: 'Edit task' }).getByLabel('Private task'),
+      page
+        .getByRole('dialog', { name: 'Edit task' })
+        .getByRole('checkbox', { name: 'Private task', exact: true }),
     ).toBeChecked();
   }
   await context.setOffline(false);
