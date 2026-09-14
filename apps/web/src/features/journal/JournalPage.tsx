@@ -406,7 +406,6 @@ export function JournalPage({
           profile={profile}
           tasks={eligibleJournalTasks(tasks, ownerId, new Date().toLocaleDateString('en-CA'))}
           crisisPlan={crisisPlanDocument}
-          onEditCrisisPlan={() => setSection('crisis-plans')}
           onSave={save}
         />
       )}

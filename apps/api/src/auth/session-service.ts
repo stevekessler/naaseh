@@ -11,7 +11,8 @@ export async function issueSession(userId: string, sessionEpoch: number, now = n
     csrfToken: generated.csrfToken,
     sessionEpoch,
     createdAt: now.toISOString(),
-    idleExpiresAt: new Date(now.getTime() + 30 * 60_000).toISOString(),
+    // Inactive windows remain signed in until the fixed 30-day deadline.
+    idleExpiresAt: generated.expiresAt,
     absoluteExpiresAt: generated.expiresAt,
   };
   await saveSession(generated.tokenHash, record);

@@ -54,10 +54,30 @@ describe('API Gateway v2 authenticated routes', () => {
       createHash('sha256').update('opaque-token').digest('hex'),
     );
   });
-  it('retains legacy header support', async () => {
-    expect(await invoke({ headers: { cookie: '__Host-naaseh=token' } })).toMatchObject({
-      isAuthorized: true,
-    });
+  it('retains header support and enforces the fixed 30-day deadline across windows', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.findSession.mockResolvedValue({
+        userId: 'steve',
+        csrfToken: 'csrf',
+        sessionEpoch: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        idleExpiresAt: '2026-01-31T00:00:00.000Z',
+        absoluteExpiresAt: '2026-01-31T00:00:00.000Z',
+      });
+      vi.setSystemTime(new Date('2026-01-30T23:59:59Z'));
+      for (const event of [
+        { headers: { cookie: '__Host-naaseh=token' } },
+        { cookies: ['__Host-naaseh=token'] },
+      ]) {
+        expect(await invoke(event)).toMatchObject({ isAuthorized: true });
+      }
+      expect(mocks.refreshIdleExpiry).not.toHaveBeenCalled();
+      vi.setSystemTime(new Date('2026-01-31T00:00:00Z'));
+      expect(await invoke({ cookies: ['__Host-naaseh=token'] })).toEqual({ isAuthorized: false });
+    } finally {
+      vi.useRealTimers();
+    }
   });
   it('rejects absent cookies without a database lookup', async () => {
     expect(await invoke({})).toEqual({ isAuthorized: false });

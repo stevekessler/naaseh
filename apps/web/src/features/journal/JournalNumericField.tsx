@@ -17,7 +17,7 @@ export function JournalNumericField({
 }) {
   const update = (raw: string) => onChange(raw === '' ? null : Number(raw));
   return (
-    <fieldset className="journal-field">
+    <fieldset className="journal-field journal-numeric-field">
       <legend>
         {label} <span>(optional)</span>
       </legend>

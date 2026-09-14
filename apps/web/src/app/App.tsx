@@ -1,3 +1,4 @@
+import { AdminNavigation } from '../components/AdminNavigation.js';
 import {
   UserAvatar,
   UserDirectoryContext,
@@ -874,13 +875,6 @@ export function App() {
               </button>
               <button
                 className="quiet"
-                aria-current={section === 'profile' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'profile' })}
-              >
-                Profile
-              </button>
-              <button
-                className="quiet"
                 aria-current={section === 'dashboard' ? 'page' : undefined}
                 onClick={() => navigate({ section: 'dashboard' })}
               >
@@ -907,33 +901,16 @@ export function App() {
               >
                 Lists
               </button>
-              <button
-                className="quiet"
-                aria-current={section === 'directory' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'directory' })}
-              >
-                Global Items
-              </button>
-              <button
-                className="quiet"
-                aria-current={section === 'groups' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'groups' })}
-              >
-                Groups
-              </button>
-              {session.role === 'admin' && (
-                <button
-                  className="quiet"
-                  aria-current={section === 'admin' ? 'page' : undefined}
-                  onClick={() => navigate({ section: 'admin' })}
-                >
-                  Admin
-                </button>
-              )}
+              <AdminNavigation
+                isAdmin={session.role === 'admin'}
+                section={section}
+                navigate={(next) => navigate({ section: next })}
+              />
             </nav>
             <button
               className="quiet signed-in-user"
               aria-label={`Signed in as ${session.displayName}. Open profile`}
+              aria-current={section === 'profile' ? 'page' : undefined}
               onClick={() => navigate({ section: 'profile' })}
             >
               <UserAvatar userId={session.userId} displayName={session.displayName} showName />

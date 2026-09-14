@@ -25,15 +25,9 @@ describe('triggered Crisis Plan', () => {
       'Use coping skills',
     );
     const failed = renderToStaticMarkup(
-      <TriggeredCrisisPlan
-        document={null}
-        error="Could not decrypt"
-        onRetry={() => undefined}
-        onEdit={() => undefined}
-      />,
+      <TriggeredCrisisPlan document={null} error="Could not decrypt" onRetry={() => undefined} />,
     );
     expect(failed).toContain('aria-live="polite"');
     expect(failed).toContain('Retry Crisis Plan');
-    expect(failed).toContain('Edit Crisis Plan');
   });
 });

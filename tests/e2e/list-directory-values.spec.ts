@@ -6,7 +6,8 @@ test('@enhanced-lists global values can be signed, overridden, reset, and totale
 }) => {
   await signIn(page);
   const list = await createListWithItem(page, 'Shopping', 'Bread');
-  await page.getByRole('button', { name: 'Global Items' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Global Items', exact: true }).click();
   await page.getByLabel('Item name').fill('Refund');
   await page.getByLabel('Cost or credit').fill('+5.00');
   await page.getByRole('button', { name: 'Add global item' }).click();

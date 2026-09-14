@@ -424,6 +424,41 @@ form > label {
   text-decoration: underline;
   text-underline-offset: 0.3rem;
 }
+.admin-navigation {
+  position: relative;
+}
+.admin-navigation > [data-active] {
+  text-decoration: underline;
+  text-underline-offset: 0.3rem;
+}
+.admin-navigation-links {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  z-index: 20;
+  display: grid;
+  gap: var(--button-gap);
+  width: 14rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px #22382b20;
+}
+.admin-navigation-links button {
+  text-align: left;
+}
+@media (max-width: 1100px) {
+  .admin-navigation {
+    width: 100%;
+  }
+  .admin-navigation-links {
+    position: static;
+    width: 100%;
+    margin-top: var(--button-gap);
+  }
+}
 .quiet {
   background: transparent;
   color: var(--navy);
@@ -547,7 +582,7 @@ main {
   margin-bottom: 1.25rem;
 }
 .filters .search {
-  flex: 1 1 300px;
+  flex: 1 1 100%;
 }
 .filter-fields {
   display: grid;
@@ -784,13 +819,65 @@ main {
 }
 .task-list li {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: start;
   background: white;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 1rem;
+}
+.task-row-content {
+  display: grid;
+  gap: 0.5rem;
+  line-height: 1.5;
+}
+.task-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+.filter-fields > .priority-filter-group,
+.filter-fields > .filter-chips {
+  grid-column: 1 / -1;
+}
+.filter-fields .priority-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--button-gap);
+}
+.filter-fields .priority-options label[data-priority] {
+  flex: 0 0 auto;
+  width: auto;
+}
+.filter-fields .priority-options span {
+  white-space: nowrap;
+  min-height: var(--control-min-size);
+  display: flex;
+  align-items: center;
+  padding-inline: 1rem;
+}
+.filters select {
+  height: var(--control-min-size);
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: inherit;
+}
+.task-list .task-timer-trigger {
+  align-self: start;
+}
+@media (max-width: 900px) {
+  .task-list li {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .task-list .task-timer,
+  .task-list .task-timer-trigger {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 .task-list h2,
 .postit h2 {
@@ -842,6 +929,10 @@ main {
   padding: 1rem;
 }
 .postit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
   min-height: 210px;
   padding: 1.25rem;
   box-shadow: 4px 8px 18px #22382b20;
@@ -855,9 +946,25 @@ main {
   transform: rotate(0.7deg);
 }
 .postit .check {
-  float: right;
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+}
+.postit h2 {
+  width: 100%;
+  padding-right: calc(var(--control-min-size) + 0.5rem);
+  min-height: var(--control-min-size);
+  line-height: 1.4;
+}
+.postit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 .postit p {
+  margin: 0;
+  line-height: 1.5;
   white-space: pre-wrap;
 }
 .postit.crumpled {
@@ -1254,7 +1361,7 @@ dialog input {
 
 .journal-page {
   display: grid;
-  gap: var(--space-4);
+  gap: 1rem;
   max-width: 72rem;
   margin-inline: auto;
 }
@@ -1271,17 +1378,64 @@ dialog input {
   max-width: 100%;
   min-height: 44px;
 }
+.crisis-plan-editor {
+  display: grid;
+  gap: var(--field-gap);
+}
+.crisis-plan-editor > h2,
+.crisis-plan-editor > p,
+.crisis-plan-editor > .memo-toolbar {
+  margin: 0;
+}
+.crisis-plan-editor > button {
+  justify-self: start;
+}
+.crisis-plan-sharing > label {
+  display: block;
+  margin-bottom: var(--button-gap);
+}
+.crisis-plan-sharing .select2-selection--single {
+  min-height: var(--control-min-size);
+  display: flex;
+  align-items: center;
+}
+.crisis-plan-sharing .select2-selection__arrow {
+  min-height: var(--control-min-size);
+}
+.crisis-plan-sharing li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--field-gap);
+  margin-block: var(--field-gap);
+}
 .journal-page nav,
 .journal-filters,
 .journal-field {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-3);
+  gap: var(--field-gap);
   align-items: center;
 }
+.journal-page nav {
+  gap: var(--button-gap);
+}
+.journal-filters {
+  align-items: flex-end;
+}
+.journal-filters label {
+  display: grid;
+  gap: var(--button-gap);
+  min-width: 0;
+  max-width: 100%;
+}
+.journal-filters input {
+  min-width: 0;
+  max-width: 100%;
+}
 .journal-field {
-  margin-block: var(--space-3);
-  padding: var(--space-3);
+  margin-block: var(--field-gap);
+  padding: var(--field-gap);
 }
 .journal-field input[type='range'] {
   min-width: min(20rem, 100%);
@@ -1289,17 +1443,117 @@ dialog input {
 .journal-metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--space-3);
+  gap: var(--field-gap);
 }
 .journal-metric {
   aspect-ratio: 1;
   display: grid;
   place-content: center;
-  gap: var(--space-2);
+  gap: var(--button-gap);
   text-align: center;
 }
 .journal-document a {
   overflow-wrap: anywhere;
+}
+.journal-entry-form {
+  gap: 1.25rem;
+  line-height: 1.5;
+}
+.journal-entry-form h2,
+.journal-entry-form h3 {
+  margin: 0;
+}
+.journal-entry-form fieldset {
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.journal-entry-form legend {
+  padding-inline: 0.4rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.journal-entry-form legend span {
+  font-weight: 400;
+  color: #53675f;
+}
+.journal-entry-form input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.journal-entry-form select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+}
+.journal-entry-form .journal-numeric-field input[type='range'] {
+  flex: 1 1 12rem;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+}
+.journal-entry-form select {
+  height: var(--control-min-size);
+}
+.journal-entry-form .journal-numeric-field input[type='number'] {
+  flex: 0 1 6rem;
+  width: 6rem;
+  min-width: 0;
+}
+.journal-choice-field label,
+.journal-skill-group label {
+  display: flex;
+  align-items: center;
+  gap: var(--button-gap);
+  min-height: var(--control-min-size);
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.journal-choice-field label:has(:checked),
+.journal-skill-group label:has(:checked) {
+  background: #eaf3ee;
+}
+.journal-choice-field input,
+.journal-skill-group input {
+  flex: 0 0 auto;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+  accent-color: var(--navy);
+}
+.journal-emotions,
+.journal-dbt-fields {
+  display: grid;
+  gap: 1rem;
+}
+.journal-dbt-fields > label,
+.journal-task-reflection,
+.journal-task-reflection > div {
+  display: grid;
+  gap: var(--field-gap);
+}
+.journal-skill-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 0.5rem 1rem;
+}
+.journal-entry-form > button,
+.journal-dbt-fields > button,
+.journal-task-reflection button {
+  justify-self: start;
+}
+.journal-task-reflection ul:empty {
+  display: none;
+}
+@media (max-width: 640px) {
+  .journal-entry-form .journal-numeric-field input[type='range'] {
+    flex-basis: 100%;
+  }
+  .journal-entry-form fieldset {
+    padding: 0.75rem;
+  }
 }
 @media (max-width: 320px) {
   .journal-metric-grid {

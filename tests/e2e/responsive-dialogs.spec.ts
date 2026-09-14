@@ -9,7 +9,8 @@ import {
 test('native dialog actions remain reachable in a phone dynamic viewport', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await signIn(page);
-  await page.getByRole('button', { name: 'Groups' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Groups', exact: true }).click();
   await page.getByRole('button', { name: 'Create group' }).click();
   const dialog = page.getByRole('dialog', { name: 'Create group' });
   await expectContained(dialog.getByLabel('Group name'), dialog);

@@ -16,9 +16,16 @@ test('representative responsive pages have no serious or critical axe findings',
     'Groups',
     'Archive',
     'Projects',
-    'Admin',
+    'Users and categories',
   ]) {
-    await page.getByRole('button', { name: pageName, exact: true }).click();
+    if (['Global Items', 'Groups', 'Users and categories'].includes(pageName))
+      await page.getByRole('button', { name: 'Admin', exact: true }).click();
+    await page
+      .getByRole('button', {
+        name: pageName === 'Profile' ? /^Signed in as .+\. Open profile$/u : pageName,
+        exact: true,
+      })
+      .click();
     const result = await new AxeBuilder({ page }).analyze();
     expect(
       result.violations.filter(({ impact }) => impact === 'serious' || impact === 'critical'),

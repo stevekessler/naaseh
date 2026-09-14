@@ -23,7 +23,8 @@ test('creates a list item with an initial signed amount offline and keeps direct
   await expect(list.getByLabel('List total')).toContainText('$6.25');
 
   await context.setOffline(false);
-  await page.getByRole('button', { name: 'Global Items' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Global Items', exact: true }).click();
   await expect(page).toHaveURL(/\/directory(?:\?|$)/);
   await expect(page.getByRole('heading', { name: 'Global directory' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Add global item' })).toBeVisible();

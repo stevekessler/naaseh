@@ -64,7 +64,8 @@ test.describe('mocked group API', () => {
     });
 
     await signIn(page);
-    await page.getByRole('button', { name: 'Groups' }).click();
+    await page.getByRole('button', { name: 'Admin', exact: true }).click();
+    await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
     await page.getByRole('button', { name: 'Join' }).click();
     await page.getByLabel('Group PIN').fill('111111');
@@ -88,7 +89,8 @@ test.describe('mocked group API', () => {
 
     await context.setOffline(true);
     await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-    await page.getByRole('button', { name: 'Groups' }).click();
+    await page.getByRole('button', { name: 'Admin', exact: true }).click();
+    await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByText(/Offline: showing saved group status/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Work' })).toBeVisible();

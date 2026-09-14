@@ -36,16 +36,19 @@ export function PostItNote({
         {completed ? '✓' : ''}
       </button>
       <h2>{task.label}</h2>
-      <UrgencyBadge urgency={task.urgency} mode="compact" />
-      <UserAvatar userId={task.assigneeId ?? task.ownerId} />
+      <div className="postit-meta">
+        <UrgencyBadge urgency={task.urgency} mode="compact" />
+        <UserAvatar userId={task.assigneeId ?? task.ownerId} />
+      </div>
       {edit ? (
         <button
           id={`task-edit-trigger-postit-${task.id}`}
           type="button"
           className="quiet"
+          aria-label={`Edit ${task.label}`}
           onClick={edit}
         >
-          Edit {task.label}
+          Edit
         </button>
       ) : null}
       {!task.memoHidden &&

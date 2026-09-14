@@ -26,7 +26,7 @@ export function JournalTaskReflection({
     onChange({ taskId: null, notes: null });
   };
   return (
-    <section>
+    <section className="journal-task-reflection">
       <h3>Task reflection</h3>
       <div>
         <label {...combo.getLabelProps()}>Related task (optional)</label>

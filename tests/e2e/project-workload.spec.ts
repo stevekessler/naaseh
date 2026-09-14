@@ -6,7 +6,8 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   context,
 }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   const organization = page.getByRole('region', { name: 'Categories and Projects' });
   const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
   await categoryForm.getByLabel('Name').fill('PAAO');

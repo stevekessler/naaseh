@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
+export const SESSION_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
 export interface NewSession {
   token: string;
   tokenHash: string;
@@ -12,10 +13,10 @@ export function newSession(now = new Date()): NewSession {
     token,
     tokenHash: createHash('sha256').update(token).digest('hex'),
     csrfToken: randomBytes(24).toString('base64url'),
-    expiresAt: new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(now.getTime() + SESSION_LIFETIME_SECONDS * 1000).toISOString(),
   };
 }
-export const sessionCookie = (token: string, maxAge = 28_800) =>
+export const sessionCookie = (token: string, maxAge = SESSION_LIFETIME_SECONDS) =>
   `__Host-naaseh=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`;
 
 export const preAuthCookie = (token: string, maxAge = 300) =>

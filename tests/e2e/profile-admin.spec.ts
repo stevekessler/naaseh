@@ -28,13 +28,15 @@ test('discovers personal settings on Profile and renders a responsive administra
     }),
   );
   await signIn(page);
-  await page.getByRole('button', { name: 'Profile', exact: true }).click();
+  await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
   await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
   await expect(page.getByText('Completion sounds')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();
   await expect(page.getByText(/password reset/i).first()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   const table = page.getByRole('table', { name: 'System user accounts' });
   await expect(table).toBeVisible();
   await expect(table.getByRole('row', { name: /Steve.*enabled.*team/ })).toBeVisible();
@@ -66,5 +68,7 @@ test('keeps system administration unavailable to an ordinary user', async ({ pag
   await page.getByLabel('Password').fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Administrator access required' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Admin' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Users and categories' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
 });

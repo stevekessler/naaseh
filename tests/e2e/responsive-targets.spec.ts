@@ -11,7 +11,8 @@ test('navigation and primary controls meet touch targets and expose non-color st
     await expectMinimumTarget(control);
   const submit = page.locator('.task-form').first().getByRole('button', { name: 'Add task' });
   await expectMinimumTarget(submit);
-  await page.getByRole('button', { name: 'Groups' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Groups', exact: true }).click();
   await setOffline(page);
   const create = page.getByRole('button', { name: 'Create group' });
   await expect(create).toBeDisabled();

@@ -22,6 +22,9 @@ export function TaskTimerForTask({ ownerId, task }: { ownerId: string; task: Tas
       <button
         className="task-timer-trigger"
         type="button"
+        aria-label={
+          projected ? `Switch timer to ${task.label}` : `Start 10 minute timer for ${task.label}`
+        }
         disabled={pending}
         onClick={() => {
           const switching = projected && projected.status !== 'stopped';
@@ -33,7 +36,7 @@ export function TaskTimerForTask({ ownerId, task }: { ownerId: string; task: Tas
           );
         }}
       >
-        {projected ? `Switch timer to ${task.label}` : `Start 10 minute timer for ${task.label}`}
+        {projected ? 'Switch timer' : 'Start 10 minute timer'}
       </button>
     );
   }
