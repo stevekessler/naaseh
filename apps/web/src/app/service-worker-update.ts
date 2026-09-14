@@ -1,6 +1,6 @@
 import { db } from '../db/database.js';
 
-type ApplyUpdate = () => void;
+export type ApplyUpdate = () => void | Promise<void>;
 let pendingUpdate: ApplyUpdate | undefined;
 const updateListeners = new Set<(apply: ApplyUpdate) => void>();
 
