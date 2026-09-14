@@ -29,7 +29,11 @@ import { filtersFromSearch, safeSearchState } from '../features/search/search-st
 import { TaskSearchBar } from '../features/search/TaskSearchBar.js';
 import { TaskFilters } from '../features/search/TaskFilters.js';
 import { UpdatePrompt } from './UpdatePrompt.js';
-import { safeToActivateUpdate, subscribeToServiceWorkerUpdate } from './service-worker-update.js';
+import {
+  safeToActivateUpdate,
+  subscribeToServiceWorkerUpdate,
+  type ApplyUpdate,
+} from './service-worker-update.js';
 import { ViewSwitcher } from '../features/tasks/ViewSwitcher.js';
 import { loadView, saveView } from '../db/preferences-repository.js';
 import { listLocalGroups } from '../db/group-repository.js';
@@ -473,7 +477,7 @@ export function App() {
       [session?.userId],
     ) ?? [];
   const [syncError, setSyncError] = useState<string>();
-  const [applyUpdate, setApplyUpdate] = useState<(() => void) | undefined>();
+  const [applyUpdate, setApplyUpdate] = useState<ApplyUpdate | undefined>();
   const [signingOut, setSigningOut] = useState(false);
   const signingOutRef = useRef(false);
   const syncing = useRef(false);
@@ -771,9 +775,9 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const accept = (apply: () => void) => setApplyUpdate(() => apply);
+    const accept = (apply: ApplyUpdate) => setApplyUpdate(() => apply);
     const ready = (event: Event) => {
-      const detail = (event as CustomEvent<{ apply?: () => void }>).detail;
+      const detail = (event as CustomEvent<{ apply?: ApplyUpdate }>).detail;
       if (detail?.apply) accept(detail.apply);
     };
     const unsubscribe = subscribeToServiceWorkerUpdate(accept);
@@ -830,14 +834,23 @@ export function App() {
       <div className="app-shell">
         <UpdatePrompt
           waiting={Boolean(applyUpdate)}
-          apply={() =>
-            void (async () => {
-              if (await safeToActivateUpdate(false)) {
-                applyUpdate?.();
-                setApplyUpdate(undefined);
-              } else setSyncError('The update is waiting until pending changes synchronize.');
-            })()
-          }
+          apply={async () => {
+            if (!(await safeToActivateUpdate(false)) && navigator.onLine) await synchronize();
+            if (!(await safeToActivateUpdate(false)))
+              throw new Error(
+                navigator.onLine
+                  ? 'Saved changes still need to sync. Your work is safe. Wait for sync to finish, then retry the update.'
+                  : 'Connect to the internet to sync your saved changes, then retry the update. Your work is safe.',
+              );
+            try {
+              await applyUpdate?.();
+            } catch {
+              throw new Error(
+                'The update could not be applied. Your saved work is safe. Try again.',
+              );
+            }
+            setApplyUpdate(undefined);
+          }}
         />
         <header className={`topbar${headerCollapsed ? ' topbar-collapsed' : ''}`}>
           <img src="/naaseh_logo.png" alt="Na'aseh — We will do it" />

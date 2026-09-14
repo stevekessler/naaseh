@@ -13,7 +13,7 @@ installPreloadRecovery();
 const applyServiceWorkerUpdate = registerSW({
   immediate: true,
   onNeedRefresh() {
-    announceServiceWorkerUpdate(() => void applyServiceWorkerUpdate(true));
+    announceServiceWorkerUpdate(() => applyServiceWorkerUpdate(true));
   },
 });
 createRoot(document.getElementById('root')!).render(
