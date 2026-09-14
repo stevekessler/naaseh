@@ -64,7 +64,8 @@ test.describe('mocked group API', () => {
     });
 
     await signIn(page);
-    await page.getByRole('button', { name: 'Groups' }).click();
+    await page.getByRole('button', { name: 'Admin', exact: true }).click();
+    await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
     await page.getByRole('button', { name: 'Join' }).click();
     await page.getByLabel('Group PIN').fill('111111');
@@ -88,7 +89,8 @@ test.describe('mocked group API', () => {
 
     await context.setOffline(true);
     await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-    await page.getByRole('button', { name: 'Groups' }).click();
+    await page.getByRole('button', { name: 'Admin', exact: true }).click();
+    await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByText(/Offline: showing saved group status/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Work' })).toBeVisible();
@@ -108,14 +110,16 @@ test('preserves an owner private-task transition while offline and after reload'
   await page.getByRole('button', { name: 'Owner offline private task', exact: true }).click();
   const detail = page.getByRole('dialog', { name: 'Edit task' });
   await context.setOffline(true);
-  await detail.getByLabel('Private task').check();
+  await detail.getByRole('checkbox', { name: 'Private task', exact: true }).check();
   await detail.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByTitle('Private')).toBeVisible();
   if (testInfo.project.name === 'chromium') {
     await page.reload();
     await page.getByRole('button', { name: 'Owner offline private task', exact: true }).click();
     await expect(
-      page.getByRole('dialog', { name: 'Edit task' }).getByLabel('Private task'),
+      page
+        .getByRole('dialog', { name: 'Edit task' })
+        .getByRole('checkbox', { name: 'Private task', exact: true }),
     ).toBeChecked();
   }
   await context.setOffline(false);

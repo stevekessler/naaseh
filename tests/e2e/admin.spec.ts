@@ -80,7 +80,8 @@ test('an administrator responsively lists, disables, and reactivates users witho
   await page.getByLabel('Username').fill('steve');
   await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
   await expect(page.getByText(/Administration is online only/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Disable Steve' })).toBeDisabled();
@@ -125,6 +126,8 @@ test('a regular user has no administration surface and cannot see another user p
   await page.getByLabel('Username').fill('alex');
   await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('button', { name: 'Admin' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Users and categories' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await expect(page.getByText('other-user-private-task')).toHaveCount(0);
 });

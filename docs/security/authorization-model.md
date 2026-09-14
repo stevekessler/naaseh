@@ -1,5 +1,17 @@
 # Authorization model
 
+## Session lifetime
+
+New authenticated sessions and their secure, HttpOnly cookies last 30 days from issuance.
+Idle time does not shorten that period, and activity does not extend the fixed deadline.
+Windows sharing the browser cookie can continue using the session without another TFA sign-in
+until it expires. Existing sessions retain their original expiry; signing in again after this
+change takes effect creates a 30-day session. Logout, account disablement, session revocation,
+and security-epoch changes can end access sooner. Sensitive security changes still require
+password and factor verification where applicable.
+
+## Content access
+
 Every active user may see every non-private task. Group membership supports collaboration but does not narrow public visibility. Private tasks, their revisions, search terms, counts, reminders, feed changes, and cached copies are owner-only. APIs query the public or owner index directly and return not-found for unauthorized object IDs. A visibility change emits an atomic tombstone to the old audience and an upsert to the new audience. Offline clients purge revoked records on their next successful synchronization; until then, a previously authorized device may retain encrypted cached data.
 
 Groups are discoverable and explicitly self-joined. An active join is idempotent, while a

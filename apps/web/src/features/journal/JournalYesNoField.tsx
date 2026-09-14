@@ -10,7 +10,7 @@ export function JournalYesNoField({
   onChange: (value: boolean | null) => void;
 }) {
   return (
-    <fieldset className="journal-field">
+    <fieldset className="journal-field journal-choice-field">
       <legend>
         {label} <span>(optional)</span>
       </legend>

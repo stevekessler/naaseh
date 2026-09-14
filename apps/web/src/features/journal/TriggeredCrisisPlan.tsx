@@ -5,12 +5,10 @@ export function TriggeredCrisisPlan({
   document,
   error,
   onRetry,
-  onEdit,
 }: {
   document: JournalDocument | null;
   error?: string;
   onRetry?: () => void;
-  onEdit?: () => void;
 }) {
   return (
     <aside
@@ -28,11 +26,6 @@ export function TriggeredCrisisPlan({
       {error && onRetry && (
         <button type="button" onClick={onRetry}>
           Retry Crisis Plan
-        </button>
-      )}
-      {onEdit && (
-        <button type="button" onClick={onEdit}>
-          Edit Crisis Plan
         </button>
       )}
     </aside>

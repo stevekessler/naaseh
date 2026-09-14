@@ -31,7 +31,7 @@ export function TaskRow({
       >
         {task.status === 'completed' ? '✓' : ''}
       </button>
-      <div>
+      <div className="task-row-content">
         <h2>
           <button
             id={`task-edit-trigger-${task.id}`}
@@ -47,19 +47,21 @@ export function TaskRow({
           ) : (
             task.memo && <p>{task.memo}</p>
           ))}
-        <small>
-          {task.dueAt
-            ? `Due ${new Date(task.dueAt).toLocaleString()} · `
-            : task.dueDate
-              ? `Due ${task.dueDate} · `
-              : ''}
-          revision {task.version}
-        </small>{' '}
-        <ReminderStatus task={task} />
-        <UrgencyBadge urgency={task.urgency} mode="responsive" />
-        <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
+        <div className="task-row-meta">
+          <small>
+            {task.dueAt
+              ? `Due ${new Date(task.dueAt).toLocaleString()} · `
+              : task.dueDate
+                ? `Due ${task.dueDate} · `
+                : ''}
+            revision {task.version}
+          </small>
+          <ReminderStatus task={task} />
+          <UrgencyBadge urgency={task.urgency} mode="responsive" />
+          <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
+          {task.visibility === 'private' && <span title="Private">🔒</span>}
+        </div>
       </div>
-      {task.visibility === 'private' && <span title="Private">🔒</span>}
       {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} /> : null}
       <span className="visually-hidden" role="status" aria-live="polite">
         {feedback.announcement}

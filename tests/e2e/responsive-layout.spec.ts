@@ -31,7 +31,8 @@ for (const width of [320, 375, 390]) {
 test('plain form actions remain separated from their fields', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await signIn(page);
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
 
   const users = page.getByRole('region', { name: 'Users' });
   await expectVerticalGap(

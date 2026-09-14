@@ -33,7 +33,8 @@ test('archives, restores, edits, blocks assignment, and warns before permanent d
   context,
 }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   const region = page.getByRole('region', { name: 'Categories and Projects' });
   const categoryForm = region.locator('form').filter({ hasText: 'Save category' });
   await categoryForm.getByLabel('Name').fill('PAAO');
@@ -47,7 +48,8 @@ test('archives, restores, edits, blocks assignment, and warns before permanent d
   await expect(region).toContainText('API (archived)');
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(page.getByLabel('Project').getByRole('option', { name: 'API' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   await region.getByRole('button', { name: 'Restore Project' }).click();
   await context.setOffline(false);
   const apiRow = region.locator('li').filter({ hasText: 'API' }).last();

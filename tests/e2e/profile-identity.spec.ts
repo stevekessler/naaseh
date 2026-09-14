@@ -22,7 +22,9 @@ test('ordinary users see identity, all assignees, compact priorities, and consis
   );
   await signIn(page);
   await expect(page.getByRole('button', { name: 'Signed in as Alex. Open profile' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Admin', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Users and categories', exact: true })).toHaveCount(
+    0,
+  );
   const form = page.locator('.task-form').first();
   await expandTaskDetails(form);
   await expect(form.getByRole('option', { name: 'Steve (@steve)', exact: true })).toHaveCount(1);

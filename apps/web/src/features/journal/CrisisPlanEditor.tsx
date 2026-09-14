@@ -56,7 +56,7 @@ export function CrisisPlanEditor({
     }
   };
   return (
-    <section>
+    <section className="crisis-plan-editor">
       <h2>{initial ? 'My Crisis Plan' : 'Create your Crisis Plan'}</h2>
       <p>Your Crisis Plan is one private rich-text field. You can change it at any time.</p>
       <JournalRichTextEditor

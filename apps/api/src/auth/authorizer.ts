@@ -25,7 +25,11 @@ export const handler: APIGatewayRequestSimpleAuthorizerHandlerV2 = async (event)
   if (!user?.active || user.sessionEpoch !== record.sessionEpoch) return { isAuthorized: false };
   if (user.tfaStatus === 'recovery_required') return { isAuthorized: false };
   if (user.role === 'admin' && user.tfaStatus !== 'enabled') return { isAuthorized: false };
-  if (new Date(record.idleExpiresAt).getTime() - now.getTime() < 15 * 60_000) {
+  // Only older sessions have a sliding idle deadline; new sessions expire at 30 days.
+  if (
+    record.idleExpiresAt !== record.absoluteExpiresAt &&
+    new Date(record.idleExpiresAt).getTime() - now.getTime() < 15 * 60_000
+  ) {
     const refreshed = new Date(
       Math.min(now.getTime() + 30 * 60_000, new Date(record.absoluteExpiresAt).getTime()),
     ).toISOString();

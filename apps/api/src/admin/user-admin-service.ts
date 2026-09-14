@@ -2,7 +2,7 @@ import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { UserRecord } from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { keys } from '../shared/keys.js';
-import { listUserMemberships } from '../groups/group-repository.js';
+import { getGroup, listUserMemberships } from '../groups/group-repository.js';
 
 export type AdminUserView = Pick<
   UserRecord,
@@ -178,10 +178,11 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
     };
   },
   async groupsForUser(id) {
-    return (await listUserMemberships(id))
-      .filter((membership) => membership.status === 'active')
-      .map((membership) => membership.groupId)
-      .sort();
+    const memberships = (await listUserMemberships(id)).filter(
+      (membership) => membership.status === 'active',
+    );
+    const groups = await Promise.all(memberships.map((membership) => getGroup(membership.groupId)));
+    return groups.map((group) => group?.name ?? 'Unavailable group').sort();
   },
   async get(id) {
     const result = await dynamodb.send(

@@ -38,7 +38,7 @@ export function JournalDbtFields({
       [key]: checked ? [...current[key], skill] : current[key].filter((item) => item !== skill),
     } as DbtSkillsResponse);
   return (
-    <fieldset>
+    <fieldset className="journal-dbt-fields">
       <legend>DBT skills (optional)</legend>
       <label>
         Practice outcome
@@ -60,7 +60,7 @@ export function JournalDbtFields({
         </select>
       </label>
       {groups.map((group) => (
-        <fieldset key={group.key}>
+        <fieldset className="journal-skill-group" key={group.key}>
           <legend>{group.label}</legend>
           {group.values.map((skill) => (
             <label key={skill}>

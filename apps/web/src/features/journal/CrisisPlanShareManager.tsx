@@ -83,7 +83,7 @@ export function CrisisPlanShareManager({
     };
   }, [online, onShare, rotationRequired, search]);
   return (
-    <section>
+    <section className="crisis-plan-sharing">
       <h3>Share this Crisis Plan</h3>
       <p>
         Selected users receive read-only access while online. They may still make copies outside

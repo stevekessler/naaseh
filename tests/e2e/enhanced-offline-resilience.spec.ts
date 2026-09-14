@@ -11,6 +11,8 @@ test('@enhanced-lists offline creation survives restart and reports pending work
   await page.getByLabel('List name').fill('Offline supplies');
   await page.getByRole('button', { name: 'Create list' }).click();
   await expect(page.getByRole('heading', { name: 'Offline supplies' })).toBeVisible();
+  // Mobile scrolling collapses the header containing the sync status.
+  await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page.getByText(/pending/i).first()).toBeVisible();
   await context.setOffline(false);
   await page.reload();

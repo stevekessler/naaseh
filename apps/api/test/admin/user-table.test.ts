@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { createUserAdminService } from '../../src/admin/user-admin-service.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  createUserAdminService,
+  dynamoUserAdminRepository,
+} from '../../src/admin/user-admin-service.js';
+import { dynamodb } from '../../src/shared/dynamodb.js';
 
 const users = [
   {
@@ -43,5 +47,28 @@ describe('administrator user table service', () => {
     await expect(service.setUserActive('admin-a', 'admin-a', false, 3)).rejects.toMatchObject({
       statusCode: 409,
     });
+    const send = vi.spyOn(dynamodb, 'send');
+    try {
+      send
+        .mockResolvedValueOnce({
+          Items: [
+            { data: { groupId: 'group-z', status: 'active' } },
+            { data: { groupId: 'group-revoked', status: 'revoked' } },
+            { data: { groupId: 'group-a', status: 'active' } },
+            { data: { groupId: 'group-missing', status: 'active' } },
+          ],
+        })
+        .mockResolvedValueOnce({ Item: { data: { name: 'Weekend crew' } } })
+        .mockResolvedValueOnce({ Item: { data: { name: 'Family' } } })
+        .mockResolvedValueOnce({});
+      await expect(dynamoUserAdminRepository.groupsForUser!('admin-a')).resolves.toEqual([
+        'Family',
+        'Unavailable group',
+        'Weekend crew',
+      ]);
+      expect(send).toHaveBeenCalledTimes(4);
+    } finally {
+      send.mockRestore();
+    }
   });
 });

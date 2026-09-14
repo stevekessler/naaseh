@@ -63,7 +63,7 @@ describe('TFA HTTP session cookies', () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers?.['set-cookie']).toBeUndefined();
       expect(response.cookies).toEqual([sessionCookie('new-session'), preAuthCookie('', 0)]);
-      expect(response.cookies?.[0]).toContain('Max-Age=28800');
+      expect(response.cookies?.[0]).toContain('Max-Age=2592000');
       expect(response.cookies?.[0]).not.toContain('Max-Age=0');
       expect(response.cookies?.[1]).toContain('Max-Age=0');
       expect(mocks.consumeLoginTransaction).toHaveBeenCalledWith('digest-pending');

@@ -92,14 +92,12 @@ export function JournalEntryEditor({
   profile,
   tasks = [],
   crisisPlan = null,
-  onEditCrisisPlan,
   onSave,
 }: {
   initial: JournalEntryDraft;
   profile: JournalProfile;
   tasks?: Task[];
   crisisPlan?: JournalDocument | null;
-  onEditCrisisPlan?: () => void;
   onSave: (draft: JournalEntryDraft) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(initial);
@@ -128,6 +126,7 @@ export function JournalEntryEditor({
   );
   return (
     <form
+      className="journal-entry-form"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -162,7 +161,7 @@ export function JournalEntryEditor({
             onChange={(value) => patch(field.key, value)}
           />
         ))}
-      <fieldset>
+      <fieldset className="journal-emotions">
         <legend>Emotions</legend>
         {emotions.map((emotion) => (
           <JournalNumericField
@@ -209,7 +208,6 @@ export function JournalEntryEditor({
                 error:
                   'Your Crisis Plan could not be decrypted. Your journal answers are preserved.',
               })}
-          {...(onEditCrisisPlan ? { onEdit: onEditCrisisPlan } : {})}
         />
       )}
       {profile.dbtSkillsEnabled && (

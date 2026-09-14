@@ -28,6 +28,9 @@ describe('opaque server-side sessions', () => {
     expect(first.token).not.toContain(first.tokenHash);
     expect(sessionCookie(first.token)).toContain('__Host-naaseh=');
     expect(sessionCookie(first.token)).toContain('Path=/; Secure; HttpOnly; SameSite=Strict');
+    expect(first.expiresAt).toBe('2026-01-31T00:00:00.000Z');
+    expect(sessionCookie(first.token)).toContain('Max-Age=2592000');
+    expect(sessionCookie('', 0)).toContain('Max-Age=0');
     expect(preAuthCookie(first.token)).toBe(
       `__Host-naaseh-preauth=${first.token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=300`,
     );
@@ -72,10 +75,18 @@ describe('opaque server-side sessions', () => {
       expect.not.stringContaining(issued.token),
       expect.objectContaining({ userId: 'u', sessionEpoch: 3 }),
     );
-    repository.findSession.mockResolvedValueOnce(issued.record);
-    expect(await authenticateSession(issued.token, 3, new Date('2026-01-01T00:01:00Z'))).toEqual(
+    expect(issued.record.idleExpiresAt).toBe('2026-01-31T00:00:00.000Z');
+    expect(issued.record.absoluteExpiresAt).toBe(issued.record.idleExpiresAt);
+    repository.findSession.mockResolvedValue(issued.record);
+    expect(await authenticateSession(issued.token, 3, new Date('2026-01-30T23:59:59Z'))).toEqual(
       issued.record,
     );
+    expect(
+      await authenticateSession(issued.token, 3, new Date('2026-01-31T00:00:00Z')),
+    ).toBeUndefined();
+    expect(
+      await authenticateSession(issued.token, 4, new Date('2026-01-02T00:00:00Z')),
+    ).toBeUndefined();
     await rotateSession(issued.token, 'u', 3, new Date('2026-01-01T00:02:00Z'));
     await revokeSession(issued.token);
     expect(repository.deleteSession).toHaveBeenCalledTimes(2);

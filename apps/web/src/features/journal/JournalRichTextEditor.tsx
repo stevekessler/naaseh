@@ -90,7 +90,7 @@ function Toolbar() {
     if (href && href.startsWith('https://')) editor.dispatchCommand(TOGGLE_LINK_COMMAND, href);
   };
   return (
-    <div role="toolbar" aria-label="Journal formatting">
+    <div className="memo-toolbar" role="toolbar" aria-label="Journal formatting">
       {(['bold', 'italic', 'underline', 'strikethrough'] as const).map((mark) => (
         <button key={mark} type="button" onClick={() => format(mark)}>
           {mark}

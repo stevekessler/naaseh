@@ -18,7 +18,8 @@ const urgencyFiltersFor = (page: Page) =>
   filtersFor(page).getByRole('group', { name: 'Urgency levels' });
 
 async function createOrganization(page: Page) {
-  await page.getByRole('button', { name: 'Admin' }).click();
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   const organization = page.getByRole('region', { name: 'Categories and Projects' });
   const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
   await categoryForm.getByLabel('Name').fill('Urgency E2E Category');
