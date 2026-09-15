@@ -30,6 +30,7 @@ import {
   encryptLocalValue,
   taskToEncryptedRecord,
   markRevisionSynced,
+  readLocalTaskSnapshot,
 } from '../db/task-repository.js';
 import { getClientId } from '../db/client-id.js';
 import { listLocalLists } from '../db/list-repository.js';
@@ -53,7 +54,13 @@ type MutationResult = {
   version?: number;
   reason?: StackConflictReason;
   currentVersion?: number;
-  problem?: { reason?: StackConflictReason; currentVersion?: number };
+  problem?: {
+    reason?: StackConflictReason;
+    currentVersion?: number;
+    code?: string;
+    message?: string;
+    correlationId?: string;
+  };
   current?: Task;
 };
 
@@ -115,16 +122,23 @@ export function shouldBootstrapTaskSnapshot(
   pendingCount: number,
   bootstrapComplete: boolean,
 ) {
-  return taskCount === 0 && pendingCount === 0 && !bootstrapComplete;
+  return taskCount === 0 && (!bootstrapComplete || pendingCount > 0);
 }
 
 async function recoverMissingTaskSnapshot(): Promise<void> {
-  const [taskCount, pendingCount, bootstrapState] = await Promise.all([
-    db.secureTasks.count(),
-    db.outbox.count(),
+  const [snapshot, bootstrapState, pendingCount] = await Promise.all([
+    readLocalTaskSnapshot(),
     db.settings.get('task-snapshot-bootstrapped'),
+    db.outbox.count(),
   ]);
-  if (shouldBootstrapTaskSnapshot(taskCount, pendingCount, bootstrapState?.value === 'true')) {
+  if (
+    snapshot.unreadable.length ||
+    shouldBootstrapTaskSnapshot(
+      snapshot.tasks.length,
+      pendingCount,
+      bootstrapState?.value === 'true',
+    )
+  ) {
     const response = await fetch('/api/v1/sync/bootstrap', {
       credentials: 'include',
     });
@@ -150,12 +164,38 @@ async function recoverMissingTaskSnapshot(): Promise<void> {
       db.outbox,
       db.settings,
       async () => {
-        // A task created while bootstrap was in flight wins. Never replace or
-        // discard a local snapshot or pending mutation during recovery.
-        if ((await db.secureTasks.count()) || (await db.outbox.count())) return;
-        if (records.length) await db.secureTasks.bulkPut(records);
-        if (timerRecord) await db.secureTaskTimers.put(timerRecord);
-        await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+        const pending = await db.outbox.toArray();
+        const protectedTasks = new Set(
+          pending.filter((item) => item.entityType === 'task').map((item) => item.entityId),
+        );
+        const unreadable = new Map(snapshot.unreadable.map((record) => [record.id, record]));
+        for (const record of records) {
+          if (protectedTasks.has(record.id)) continue;
+          const existing = await db.secureTasks.get(record.id);
+          if (existing) {
+            const broken = unreadable.get(record.id);
+            // Recheck inside the transaction so a concurrent local save wins.
+            if (
+              !broken ||
+              existing.value.ciphertext !== broken.value.ciphertext ||
+              existing.value.iv !== broken.value.iv
+            )
+              continue;
+            await db.settings.put({
+              key: `task-recovery:${existing.id}:${existing.value.iv}`,
+              value: JSON.stringify(existing),
+            });
+          }
+          await db.secureTasks.put(record);
+        }
+        if (
+          timerRecord &&
+          !pending.some((item) => item.entityType === 'taskTimer') &&
+          !(await db.secureTaskTimers.count())
+        )
+          await db.secureTaskTimers.put(timerRecord);
+        if (!protectedTasks.size)
+          await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
       },
     );
   }
@@ -211,65 +251,74 @@ async function pushMutation(
 export async function drainOutbox(csrfToken: string): Promise<void> {
   if (!navigator.onLine) return;
   const stored = await db.outbox.orderBy('createdAt').toArray();
+  let firstError: unknown;
   for (const queue of groupSequentialMutations(stored)) {
     for (const item of queue) {
-      const mutation = await decryptMutation(item);
-      const result = await pushMutation(csrfToken, mutation, await durableBacklogSnapshot());
-      if (!result) throw new Error('Synchronization returned no mutation result.');
-      const isStackMutation = (item.entityType as string) === 'personalStackOperation';
-      if (['applied', 'duplicate', 'alreadyApplied'].includes(result.status)) {
-        if (isStackMutation) {
-          await acknowledgeLocalStackOperation({
-            mutationId: item.id,
-            status: result.status as 'applied' | 'alreadyApplied' | 'duplicate',
-            ...(result.operationId ? { operationId: result.operationId } : {}),
-            ...(result.version === undefined ? {} : { version: result.version }),
-          });
-        } else {
-          await markRevisionSynced(item.id, result.status === 'applied' ? 'applied' : 'replayed');
-          await db.outbox.delete(item.id);
-        }
-        continue;
-      }
-      if (result.status === 'conflict') {
-        if (isStackMutation) {
-          await conflictLocalStackOperation({
-            mutationId: item.id,
-            reason: result.reason ?? result.problem?.reason ?? 'version_mismatch',
-            currentVersion:
-              result.currentVersion ??
-              result.problem?.currentVersion ??
-              result.version ??
-              item.baseVersion,
-          });
-        } else if (item.entityType === 'taskTimer') {
-          await conflictLocalTaskTimer({
-            ownerId: item.entityId,
-            mutationId: item.id,
-            reason:
-              result.reason === 'authorization_changed'
-                ? 'authorization_changed'
-                : 'version_mismatch',
-            command: mutation.payload as import('@naaseh/domain').TaskTimerCommand,
-          });
-        } else {
-          const value = await encryptLocalValue('conflict', item.id, { mutation, result });
-          await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
-            await db.secureConflicts.put({
-              id: item.id,
-              updatedAt: new Date().toISOString(),
-              value,
+      try {
+        const mutation = await decryptMutation(item);
+        const result = await pushMutation(csrfToken, mutation, await durableBacklogSnapshot());
+        if (!result) throw new Error('Synchronization returned no mutation result.');
+        const isStackMutation = (item.entityType as string) === 'personalStackOperation';
+        if (['applied', 'duplicate', 'alreadyApplied'].includes(result.status)) {
+          if (isStackMutation) {
+            await acknowledgeLocalStackOperation({
+              mutationId: item.id,
+              status: result.status as 'applied' | 'alreadyApplied' | 'duplicate',
+              ...(result.operationId ? { operationId: result.operationId } : {}),
+              ...(result.version === undefined ? {} : { version: result.version }),
             });
+          } else {
+            await markRevisionSynced(item.id, result.status === 'applied' ? 'applied' : 'replayed');
             await db.outbox.delete(item.id);
-          });
+          }
+          continue;
         }
-        continue;
+        if (result.status === 'conflict') {
+          if (isStackMutation) {
+            await conflictLocalStackOperation({
+              mutationId: item.id,
+              reason: result.reason ?? result.problem?.reason ?? 'version_mismatch',
+              currentVersion:
+                result.currentVersion ??
+                result.problem?.currentVersion ??
+                result.version ??
+                item.baseVersion,
+            });
+          } else if (item.entityType === 'taskTimer') {
+            await conflictLocalTaskTimer({
+              ownerId: item.entityId,
+              mutationId: item.id,
+              reason:
+                result.reason === 'authorization_changed'
+                  ? 'authorization_changed'
+                  : 'version_mismatch',
+              command: mutation.payload as import('@naaseh/domain').TaskTimerCommand,
+            });
+          } else {
+            const value = await encryptLocalValue('conflict', item.id, { mutation, result });
+            await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
+              await db.secureConflicts.put({
+                id: item.id,
+                updatedAt: new Date().toISOString(),
+                value,
+              });
+              await db.outbox.delete(item.id);
+            });
+          }
+          continue;
+        }
+        if (result.status === 'rejected')
+          throw new Error(
+            `A pending ${item.entityType} change was rejected and remains stored. Other tasks can still download.${result.problem?.message ? ` ${result.problem.message}` : ''}${result.problem?.correlationId ? ` Reference: ${result.problem.correlationId}` : ''}`,
+          );
+        throw new Error('The server asked the browser to retry synchronization.');
+      } catch (error) {
+        firstError ??= error;
+        break; // Keep this entity ordered; unrelated queues may still synchronize.
       }
-      if (result.status === 'rejected')
-        throw new Error('A pending change was rejected and remains stored.');
-      throw new Error('The server asked the browser to retry synchronization.');
     }
   }
+  if (firstError) throw firstError;
 }
 export async function pullChanges(): Promise<void> {
   if (!navigator.onLine) return;
@@ -458,12 +507,30 @@ export async function pullChanges(): Promise<void> {
   const cursor = mergeCursor(current, body.cursor);
   if (enhanced.length) await commitEnhancedPull(enhanced, [], cursor, revocations);
   if (records.length || tombstones.length || !enhanced.length)
-    await commitPull(records, tombstones, [], cursor);
+    await commitPull(
+      records,
+      tombstones,
+      [],
+      cursor,
+      records.length ? (await readLocalTaskSnapshot()).unreadable : [],
+    );
 }
 async function performSync(csrfToken: string) {
-  await recoverMissingTaskSnapshot();
-  await drainOutbox(csrfToken);
+  let recoveryError: unknown;
+  try {
+    await recoverMissingTaskSnapshot();
+  } catch (error) {
+    recoveryError = error;
+  }
+  let pushError: unknown;
+  try {
+    await drainOutbox(csrfToken);
+  } catch (error) {
+    pushError = error;
+  }
   await pullChanges();
+  if (pushError) throw pushError;
+  if (recoveryError) throw recoveryError;
   await refreshGoogleSyncCache(csrfToken).catch(() => undefined);
 }
 

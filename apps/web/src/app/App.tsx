@@ -15,7 +15,7 @@ import {
 } from '@naaseh/domain';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database.js';
-import { listLocalTasks, saveNewTask, updateTask } from '../db/task-repository.js';
+import { readLocalTaskSnapshot, saveNewTask, updateTask } from '../db/task-repository.js';
 import { listCategories, listRevisions } from '../db/reminder-repository.js';
 import { filterTasks, normalizeSearch, type Filters } from '../search/task-search.js';
 import { Login } from '../features/auth/Login.js';
@@ -255,8 +255,8 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | undefined>(
     () => location.pathname.match(/^\/tasks\/([^/]+)$/)?.[1],
   );
-  const taskResult = useLiveQuery(() => listLocalTasks(), []);
-  const tasks = taskResult ?? [];
+  const taskResult = useLiveQuery(() => readLocalTaskSnapshot(), []);
+  const tasks = taskResult?.tasks ?? [];
   const categories = useLiveQuery(() => listCategories(), []) ?? [];
   const projects = useLiveQuery(() => listLocalProjects(), []) ?? [];
   const groups = useLiveQuery(() => listLocalGroups(), []) ?? [];
@@ -673,11 +673,16 @@ export function App() {
     }
     syncing.current = true;
     try {
-      await drainJournalDataInDependencyOrder(
-        session.userId,
-        session.csrfToken,
-        drainJournalOutbox,
-      );
+      let journalError: unknown;
+      try {
+        await drainJournalDataInDependencyOrder(
+          session.userId,
+          session.csrfToken,
+          drainJournalOutbox,
+        );
+      } catch (error) {
+        journalError = error;
+      }
       await drainSequentially(session.csrfToken, (delay) => {
         if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
         syncRetryTimer.current = window.setTimeout(() => {
@@ -685,6 +690,7 @@ export function App() {
           void synchronize();
         }, delay);
       });
+      if (journalError) throw journalError;
       setSyncError(undefined);
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'Synchronization failed.');
@@ -855,7 +861,11 @@ export function App() {
                 online={online}
                 pending={pending}
                 conflicts={conflicts}
-                error={syncError}
+                error={
+                  taskResult?.unreadable.length
+                    ? `${taskResult.unreadable.length} saved task(s) cannot be read on this device. Their original data is preserved. Connect and retry to recover server copies. ${syncError ?? ''}`
+                    : syncError
+                }
                 retry={() => void synchronize()}
               />
             </div>
@@ -1348,6 +1358,9 @@ export function App() {
                   currentUserId={session.userId}
                   tasks={visible}
                   loading={taskResult === undefined}
+                  {...(!tasks.length && taskResult?.unreadable.length
+                    ? { error: 'Saved tasks need recovery.' }
+                    : {})}
                   selected={tasks.find((item) => item.id === selectedId)}
                   revisions={revisions}
                   onToggle={toggle}

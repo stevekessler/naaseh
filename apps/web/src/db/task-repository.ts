@@ -12,33 +12,28 @@ import {
   type TaskRevision,
   type CompletionEvent,
 } from '@naaseh/domain';
+import Dexie from 'dexie';
 import { db } from './database.js';
 import { createDeviceKey, decryptText, encryptText } from '../crypto/vault.js';
 import { getClientId } from './client-id.js';
 import { assertNoExtraLowActiveValues } from './extra-low-removal.js';
 
-let deviceKeyPromise: Promise<CryptoKey> | undefined;
-
-/**
- * Return the per-browser encryption key. React may start several live queries at
- * once, so key creation is deliberately single-flight. Without this guard two
- * callers can both try to insert the fixed `device` record and IndexedDB rejects
- * one with a ConstraintError, preventing the application from rendering.
+/** Read the durable key on every operation: another tab may have reset the account.
+ * Generate outside IndexedDB, then elect one key in a serialized transaction so
+ * simultaneous first loads cannot overwrite each other's encryption key.
  */
-async function loadOrCreateDeviceKey() {
-  const stored = await db.cryptoKeys.get('device');
-  if (stored) return stored.key;
-  const key = await createDeviceKey();
-  await db.cryptoKeys.put({ id: 'device', key });
-  return key;
-}
-
-function deviceKey() {
-  deviceKeyPromise ??= loadOrCreateDeviceKey().catch((error) => {
-    deviceKeyPromise = undefined;
-    throw error;
+async function deviceKey(): Promise<CryptoKey> {
+  return Dexie.ignoreTransaction(async () => {
+    const stored = await db.cryptoKeys.get('device');
+    if (stored) return stored.key;
+    const candidate = await createDeviceKey();
+    return db.transaction('rw', db.cryptoKeys, async () => {
+      const winner = await db.cryptoKeys.get('device');
+      if (winner) return winner.key;
+      await db.cryptoKeys.add({ id: 'device', key: candidate });
+      return candidate;
+    });
   });
-  return deviceKeyPromise;
 }
 export async function encryptLocalValue(namespace: string, id: string, value: unknown) {
   return encryptText(JSON.stringify(value), await deviceKey(), `${namespace}:${id}`);
@@ -139,17 +134,29 @@ async function migrateLegacyTasks() {
     await db.tasks.clear();
   });
 }
-export async function listLocalTasks(): Promise<Task[]> {
+export async function readLocalTaskSnapshot() {
   await migrateLegacyTasks();
-  // Perform the observable Dexie read before awaiting Web Crypto. This keeps
-  // secureTasks in useLiveQuery's dependency set on both Chromium and WebKit.
   const records = await db.secureTasks.orderBy('updatedAt').reverse().toArray();
   const key = await deviceKey();
-  return Promise.all(
-    records.map(async (record) =>
-      taskSchema.parse(JSON.parse(await decryptText(record.value, key, `task:${record.id}`))),
-    ),
-  );
+  const tasks: Task[] = [];
+  const unreadable: import('./database.js').EncryptedTaskRecord[] = [];
+  for (const record of records) {
+    try {
+      tasks.push(
+        taskSchema.parse(JSON.parse(await decryptText(record.value, key, `task:${record.id}`))),
+      );
+    } catch (error) {
+      // Keep the original ciphertext intact. A broken cached task must not take
+      // the entire application down or conceal the other readable tasks.
+      if (!(error instanceof Error) || error.name !== 'OperationError') throw error;
+      unreadable.push(record);
+    }
+  }
+  return { tasks, unreadable };
+}
+
+export async function listLocalTasks(): Promise<Task[]> {
+  return (await readLocalTaskSnapshot()).tasks;
 }
 
 export async function listLocalTasksByUrgency(urgencies: readonly Task['urgency'][]) {
