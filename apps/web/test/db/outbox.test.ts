@@ -39,10 +39,11 @@ describe('durable local outbox rules', () => {
     ).toEqual({ depth: 3, oldestAgeSeconds: 120 });
     expect(buildBacklogSnapshot(0, undefined)).toBeUndefined();
   });
-  it('bootstraps an uninitialized empty task snapshot exactly once', () => {
+  it('recovers an empty task snapshot even with previously bootstrapped pending edits', () => {
     expect(shouldBootstrapTaskSnapshot(0, 0, false)).toBe(true);
     expect(shouldBootstrapTaskSnapshot(1, 0, false)).toBe(false);
     expect(shouldBootstrapTaskSnapshot(0, 1, false)).toBe(true);
     expect(shouldBootstrapTaskSnapshot(0, 0, true)).toBe(false);
+    expect(shouldBootstrapTaskSnapshot(0, 1, true)).toBe(true);
   });
 });

@@ -119,20 +119,25 @@ export const syncHttpError = (operation: string, status: number) =>
 
 export function shouldBootstrapTaskSnapshot(
   taskCount: number,
-  _pendingCount: number,
+  pendingCount: number,
   bootstrapComplete: boolean,
 ) {
-  return taskCount === 0 && !bootstrapComplete;
+  return taskCount === 0 && (!bootstrapComplete || pendingCount > 0);
 }
 
 async function recoverMissingTaskSnapshot(): Promise<void> {
-  const [snapshot, bootstrapState] = await Promise.all([
+  const [snapshot, bootstrapState, pendingCount] = await Promise.all([
     readLocalTaskSnapshot(),
     db.settings.get('task-snapshot-bootstrapped'),
+    db.outbox.count(),
   ]);
   if (
     snapshot.unreadable.length ||
-    shouldBootstrapTaskSnapshot(snapshot.tasks.length, 0, bootstrapState?.value === 'true')
+    shouldBootstrapTaskSnapshot(
+      snapshot.tasks.length,
+      pendingCount,
+      bootstrapState?.value === 'true',
+    )
   ) {
     const response = await fetch('/api/v1/sync/bootstrap', {
       credentials: 'include',

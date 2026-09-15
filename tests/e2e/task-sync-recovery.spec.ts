@@ -119,7 +119,7 @@ for (const brokenCache of [false, true]) {
         await new Promise<void>((resolve, reject) => {
           const tx = database.transaction(['secureTasks', 'outbox', 'settings'], 'readwrite');
           tx.objectStore('secureTasks').clear();
-          tx.objectStore('settings').delete('task-snapshot-bootstrapped');
+          tx.objectStore('settings').put({ key: 'task-snapshot-bootstrapped', value: 'true' });
           tx.objectStore('outbox').put({
             id: 'independent-change',
             entityId: 'independent-category',
