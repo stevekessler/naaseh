@@ -29,28 +29,11 @@ test('preserves offline work in the live tab and across a validated Chromium app
 });
 test.describe('app update recovery', () => {
   test.use({ serviceWorkers: 'block' });
-  test('explains blocked updates on mobile and retries without losing saved work', async ({
+  test('updates with pending offline work and preserves it through an activation retry', async ({
     page,
     context,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.route('**/api/v1/sync/push', async (route) => {
-      const body = route.request().postDataJSON() as { mutations: Array<{ id: string }> };
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          results: body.mutations.map((item) => ({ mutationId: item.id, status: 'applied' })),
-        }),
-      });
-    });
-    await page.route('**/api/v1/sync/pull', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ changes: [], cursor: { public: 0, owner: 0 } }),
-      }),
-    );
     await signIn(page);
     await context.setOffline(true);
     await page.getByLabel('Task label').fill('Keep during update');
@@ -74,17 +57,11 @@ test.describe('app update recovery', () => {
     await expect(page.locator('.topbar')).toHaveClass(/topbar-collapsed/);
     const prompt = page.getByRole('status', { name: 'App update' });
     await prompt.getByRole('button', { name: 'Update', exact: true }).click();
-    await expect(prompt).toContainText('Connect to the internet to sync your saved changes');
+    await expect(prompt).toContainText('The update could not be applied. Your saved work is safe.');
     expect(
       await page.evaluate(() => document.documentElement.dataset.updateApplied),
     ).toBeUndefined();
     await expect(page.getByRole('heading', { name: 'Keep during update' })).toBeVisible();
-    await context.setOffline(false);
-    await page.evaluate(() => window.dispatchEvent(new Event('online')));
-    await page.evaluate(() => window.scrollTo(0, 0));
-    await expect(page.getByRole('status').filter({ hasText: 'Synced' })).toBeVisible();
-    await prompt.getByRole('button', { name: 'Retry update' }).click();
-    await expect(prompt).toContainText('The update could not be applied. Your saved work is safe.');
     await prompt.getByRole('button', { name: 'Retry update' }).click();
     await expect(prompt).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.dataset.updateApplied)).toBe('true');

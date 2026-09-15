@@ -16,6 +16,9 @@ export default defineConfig({
         icons: [{ src: '/naaseh_logo.png', sizes: '1536x1024', type: 'image/png', purpose: 'any' }],
       },
       workbox: {
+        // Activation must not depend on an older app successfully draining its outbox.
+        // Current clients choose when to reload; IndexedDB is independent of shell caches.
+        skipWaiting: true,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,png,svg}'],
         importScripts: ['/push-sw.js'],
