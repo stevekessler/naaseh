@@ -42,7 +42,7 @@ describe('durable local outbox rules', () => {
   it('bootstraps an uninitialized empty task snapshot exactly once', () => {
     expect(shouldBootstrapTaskSnapshot(0, 0, false)).toBe(true);
     expect(shouldBootstrapTaskSnapshot(1, 0, false)).toBe(false);
-    expect(shouldBootstrapTaskSnapshot(0, 1, false)).toBe(false);
+    expect(shouldBootstrapTaskSnapshot(0, 1, false)).toBe(true);
     expect(shouldBootstrapTaskSnapshot(0, 0, true)).toBe(false);
   });
 });

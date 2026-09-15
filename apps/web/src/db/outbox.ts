@@ -75,18 +75,70 @@ export function buildBacklogSnapshot(
     ),
   };
 }
+// Advance normal downloads even when a pending edit protects a local record.
+// Retain a replay cursor so skipped server changes are revisited after it resolves.
+async function commitPullCursor(cursor: VectorCursor) {
+  const current = await db.settings.get('sync-cursor');
+  const highWater: VectorCursor = current ? JSON.parse(current.value) : {};
+  const replay = await db.settings.get('pending-sync-replay-cursor');
+  if (await db.outbox.count()) {
+    if (!replay)
+      await db.settings.put({
+        key: 'pending-sync-replay-cursor',
+        value: JSON.stringify(highWater),
+      });
+  } else if (replay) {
+    if (Object.entries(highWater).every(([feed, sequence]) => (cursor[feed] ?? 0) >= sequence)) {
+      await db.settings.delete('pending-sync-replay-cursor');
+    } else {
+      await db.settings.put({ key: 'pending-sync-replay-cursor', value: JSON.stringify(cursor) });
+    }
+  }
+  await db.settings.put({
+    key: 'sync-cursor',
+    value: JSON.stringify(mergeCursor(highWater, cursor)),
+  });
+}
+
 export async function commitPull(
   records: EncryptedTaskRecord[],
   tombstones: string[],
   conflicts: EncryptedEntityRecord[],
   cursor: VectorCursor,
+  unreadable: EncryptedTaskRecord[] = [],
 ) {
-  await db.transaction('rw', db.secureTasks, db.secureConflicts, db.settings, async () => {
-    if (records.length) await db.secureTasks.bulkPut(records);
-    if (tombstones.length) await db.secureTasks.bulkDelete(tombstones);
-    if (conflicts.length) await db.secureConflicts.bulkPut(conflicts);
-    await db.settings.put({ key: 'sync-cursor', value: JSON.stringify(cursor) });
-  });
+  await db.transaction(
+    'rw',
+    db.secureTasks,
+    db.secureConflicts,
+    db.settings,
+    db.outbox,
+    async () => {
+      const pending = await db.outbox.toArray();
+      const protectedIds = new Set(
+        pending.filter((item) => item.entityType === 'task').map((item) => item.entityId),
+      );
+      const applicable = records.filter((record) => !protectedIds.has(record.id));
+      for (const record of applicable) {
+        const broken = unreadable.find((item) => item.id === record.id);
+        if (!broken) continue;
+        const existing = await db.secureTasks.get(record.id);
+        if (
+          existing?.value.ciphertext === broken.value.ciphertext &&
+          existing.value.iv === broken.value.iv
+        ) {
+          await db.settings.put({
+            key: `task-recovery:${existing.id}:${existing.value.iv}`,
+            value: JSON.stringify(existing),
+          });
+        }
+      }
+      if (applicable.length) await db.secureTasks.bulkPut(applicable);
+      if (tombstones.length) await db.secureTasks.bulkDelete(tombstones);
+      if (conflicts.length) await db.secureConflicts.bulkPut(conflicts);
+      await commitPullCursor(cursor);
+    },
+  );
 }
 export function mergeCursor(current: VectorCursor, next: VectorCursor): VectorCursor {
   const merged = { ...current };
@@ -162,13 +214,21 @@ export async function commitEnhancedPull(
         for (const id of revocation.listIds) await db.settings.delete(`search-document:list:${id}`);
         for (const id of childIds) await db.settings.delete(`search-document:listItem:${id}`);
       }
+      const pending = await db.outbox.toArray();
       for (const change of changes) {
+        if (
+          change.operation === 'upsert' &&
+          pending.some(
+            (item) => item.entityType === change.entityType && item.entityId === change.entityId,
+          )
+        )
+          continue;
         const store = encryptedStoreFor(change.entityType);
         if (change.operation === 'tombstone') await store.delete(change.entityId);
         else if (change.record) await store.put(change.record);
       }
       if (conflicts.length) await db.secureConflicts.bulkPut(conflicts);
-      await db.settings.put({ key: 'sync-cursor', value: JSON.stringify(cursor) });
+      await commitPullCursor(cursor);
     },
   );
 }
