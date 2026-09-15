@@ -835,13 +835,8 @@ export function App() {
         <UpdatePrompt
           waiting={Boolean(applyUpdate)}
           apply={async () => {
-            if (!(await safeToActivateUpdate(false)) && navigator.onLine) await synchronize();
             if (!(await safeToActivateUpdate(false)))
-              throw new Error(
-                navigator.onLine
-                  ? 'Saved changes still need to sync. Your work is safe. Wait for sync to finish, then retry the update.'
-                  : 'Connect to the internet to sync your saved changes, then retry the update. Your work is safe.',
-              );
+              throw new Error('Save your open edits, then retry the update.');
             try {
               await applyUpdate?.();
             } catch {

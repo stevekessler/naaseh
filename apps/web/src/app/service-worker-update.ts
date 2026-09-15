@@ -18,7 +18,11 @@ export function subscribeToServiceWorkerUpdate(listener: (apply: ApplyUpdate) =>
 }
 
 export async function safeToActivateUpdate(hasOpenEdits: boolean) {
-  return !hasOpenEdits && (await db.outbox.count()) === 0;
+  if (hasOpenEdits) return false;
+  // Wait for preceding local writes to commit. Pending mutations stay in IndexedDB
+  // across a shell reload; requiring successful network sync deadlocks broken clients.
+  await db.transaction('r', db.tables, async () => {});
+  return true;
 }
 export const shouldCacheRequest = (request: Request) =>
   request.method === 'GET' &&

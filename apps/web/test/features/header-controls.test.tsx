@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReminderSettings } from '../../src/features/reminders/ReminderSettings.js';
 import { SyncStatus } from '../../src/features/sync/SyncStatus.js';
@@ -6,6 +6,7 @@ import {
   announceServiceWorkerUpdate,
   subscribeToServiceWorkerUpdate,
 } from '../../src/app/service-worker-update.js';
+import { registerAppServiceWorker } from '../../src/app/register-service-worker.js';
 
 describe('header controls', () => {
   it('does not offer push reminders when the deployment has no public key', () => {
@@ -27,7 +28,7 @@ describe('header controls', () => {
     expect(html).toContain('<button>Retry</button>');
   });
 
-  it('retains an early service-worker update until the application subscribes', () => {
+  it('retains updates and reloads an activated shell only after user action', async () => {
     const apply = () => undefined;
     announceServiceWorkerUpdate(apply);
     let observed: (() => void) | undefined;
@@ -36,6 +37,35 @@ describe('header controls', () => {
     });
 
     expect(observed).toBe(apply);
-    unsubscribe();
+    const original = {};
+    const installing = Object.assign(new EventTarget(), { state: 'installing' });
+    const registration = Object.assign(new EventTarget(), {
+      active: original,
+      installing,
+      update: vi.fn(async () => {}),
+    });
+    const register = vi.fn(async () => registration);
+    const reload = vi.fn();
+    vi.stubGlobal('navigator', { serviceWorker: { controller: original, register } });
+    const document = Object.assign(new EventTarget(), { visibilityState: 'visible' });
+    vi.stubGlobal('document', document);
+    vi.stubGlobal('window', { location: { reload } });
+    try {
+      await registerAppServiceWorker();
+      expect(register).toHaveBeenCalledWith('/sw.js', { updateViaCache: 'none' });
+      expect(observed).toBe(apply);
+      registration.active = installing;
+      installing.state = 'activated';
+      installing.dispatchEvent(new Event('statechange'));
+      expect(observed).not.toBe(apply);
+      expect(reload).not.toHaveBeenCalled();
+      await observed?.();
+      expect(reload).toHaveBeenCalledOnce();
+      document.dispatchEvent(new Event('visibilitychange'));
+      expect(registration.update).toHaveBeenCalledOnce();
+    } finally {
+      unsubscribe();
+      vi.unstubAllGlobals();
+    }
   });
 });
