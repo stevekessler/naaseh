@@ -25,8 +25,14 @@ test('keeps pointer/touch drag and keyboard ranking equivalent with compact prio
 
   const first = row(page, 'Drag first');
   const second = row(page, 'Drag second');
-  await expect(first.getByLabel('Priority: Critical')).toHaveText('!');
-  await expect(second.getByLabel('Priority: Low')).toHaveText('○');
+  await expect(first.getByLabel('Priority: Critical').locator('svg')).toHaveAttribute(
+    'data-priority-icon',
+    'critical',
+  );
+  await expect(second.getByLabel('Priority: Low').locator('svg')).toHaveAttribute(
+    'data-priority-icon',
+    'low',
+  );
   const handle = second.getByRole('button', { name: 'Drag Drag second' });
   if (testInfo.project.name !== 'chromium') {
     const box = await handle.boundingBox();

@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   cryptoKeys: new Map<string, Row>(),
   genericConflicts: new Map<string, Row>(),
   failOutbox: false,
+  inTransaction: false,
 }));
 
 const database = vi.hoisted(() => {
@@ -86,6 +87,7 @@ const database = vi.hoisted(() => {
         const callback = arguments_.at(-1) as () => Promise<unknown>;
         const snapshots = maps.map((records) => new Map(records));
         try {
+          state.inTransaction = true;
           return await callback();
         } catch (error) {
           maps.forEach((records, index) => {
@@ -93,6 +95,8 @@ const database = vi.hoisted(() => {
             for (const [id, row] of snapshots[index]!) records.set(id, row);
           });
           throw error;
+        } finally {
+          state.inTransaction = false;
         }
       }),
     },
@@ -101,10 +105,10 @@ const database = vi.hoisted(() => {
 
 vi.mock('../../src/db/database.js', () => database);
 vi.mock('../../src/db/task-repository.js', () => ({
-  encryptLocalValue: async (_namespace: string, _id: string, value: unknown) => ({
-    iv: 'test-iv',
-    ciphertext: Buffer.from(JSON.stringify(value)).toString('base64'),
-  }),
+  encryptLocalValue: async (_namespace: string, _id: string, value: unknown) => {
+    if (state.inTransaction) throw new Error('WebCrypto must finish before opening a transaction');
+    return { iv: 'test-iv', ciphertext: Buffer.from(JSON.stringify(value)).toString('base64') };
+  },
   decryptLocalValue: async (_namespace: string, _id: string, value: { ciphertext: string }) =>
     JSON.parse(Buffer.from(value.ciphertext, 'base64').toString()),
   decryptMutation: async (record: Row) => ({

@@ -311,8 +311,9 @@ export async function acknowledgeLocalStackOperation(result: {
     version: result.version ?? operation.version,
     updatedAt: new Date().toISOString(),
   };
+  const storedOperation = await operationRecord(updated);
   await db.transaction('rw', db.secureStackOperations, db.outbox, async () => {
-    await db.secureStackOperations.put(await operationRecord(updated));
+    await db.secureStackOperations.put(storedOperation);
     await db.outbox.delete(result.mutationId);
   });
 }
@@ -459,13 +460,14 @@ export async function conflictLocalStackOperation(input: {
     updatedAt: now,
     value: await encryptLocalValue('personalStackConflict', conflict.id, conflict),
   };
+  const storedOperation = await operationRecord(conflictedOperation);
   await db.transaction(
     'rw',
     db.secureStackOperations,
     db.secureStackConflicts,
     db.outbox,
     async () => {
-      await db.secureStackOperations.put(await operationRecord(conflictedOperation));
+      await db.secureStackOperations.put(storedOperation);
       await db.secureStackConflicts.put(storedConflict);
       await db.outbox.delete(input.mutationId);
     },

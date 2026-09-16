@@ -1,3 +1,4 @@
+import { useTaskCompletionUndo } from '../features/tasks/useTaskCompletionUndo.js';
 import { AdminNavigation } from '../components/AdminNavigation.js';
 import {
   UserAvatar,
@@ -15,7 +16,7 @@ import {
 } from '@naaseh/domain';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database.js';
-import { readLocalTaskSnapshot, saveNewTask, updateTask } from '../db/task-repository.js';
+import { readLocalTaskSnapshot, saveNewTask } from '../db/task-repository.js';
 import { listCategories, listRevisions } from '../db/reminder-repository.js';
 import { filterTasks, normalizeSearch, type Filters } from '../search/task-search.js';
 import { Login } from '../features/auth/Login.js';
@@ -264,6 +265,7 @@ export function App() {
   const [selectedId, setSelectedId] = useState<string | undefined>(
     () => location.pathname.match(/^\/tasks\/([^/]+)$/)?.[1],
   );
+  const completionUndo = useTaskCompletionUndo(session?.userId);
   const taskResult = useLiveQuery(() => readLocalTaskSnapshot(), []);
   const tasks = taskResult?.tasks ?? [];
   const categories = useLiveQuery(() => listCategories(), []) ?? [];
@@ -844,7 +846,7 @@ export function App() {
     await saveNewTask(input, session!.userId);
   }
   async function toggle(task: Task) {
-    await updateTask(
+    await completionUndo.save(
       task,
       { status: task.status === 'completed' ? 'open' : 'completed' },
       session!.userId,
@@ -854,6 +856,7 @@ export function App() {
   return (
     <UserDirectoryContext.Provider value={directoryUsers}>
       <div className="app-shell">
+        {completionUndo.notice}
         <UpdatePrompt
           waiting={Boolean(applyUpdate)}
           apply={async () => {
@@ -987,7 +990,7 @@ export function App() {
               defaultAssigneeId={session.userId}
               createTask={addTask}
               updateTask={async (task, patch) => {
-                await updateTask(task, patch, session.userId);
+                await completionUndo.save(task, patch, session.userId);
               }}
               items={
                 remoteStackItems ??
@@ -1245,7 +1248,8 @@ export function App() {
               projects={projects}
               assignees={assignees}
               restore={async (entry) => {
-                if (entry.task) await updateTask(entry.task, { status: 'open' }, session.userId);
+                if (entry.task)
+                  await completionUndo.save(entry.task, { status: 'open' }, session.userId);
                 if (entry.list)
                   await updateLocalList(entry.list, { status: 'active', lifecycle: 'active' });
               }}
@@ -1408,7 +1412,7 @@ export function App() {
                     setSelectedId(undefined);
                   }}
                   onUpdate={async (task, patch) => {
-                    await updateTask(task, patch, session.userId);
+                    await completionUndo.save(task, patch, session.userId);
                   }}
                 />
               ) : (
@@ -1419,7 +1423,7 @@ export function App() {
                   assignees={assignees}
                   onToggle={toggle}
                   onUpdate={async (task, patch) => {
-                    await updateTask(task, patch, session.userId);
+                    await completionUndo.save(task, patch, session.userId);
                   }}
                 />
               )}

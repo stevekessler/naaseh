@@ -55,7 +55,9 @@ describe('stack drag and compact priority accessibility', () => {
       .join('');
     for (const label of ['Low', 'Medium', 'High', 'Critical'])
       expect(html).toContain(`aria-label="Priority: ${label}"`);
-    for (const glyph of ['○', '◆', '▲', '!']) expect(html).toContain(glyph);
+    for (const priority of ['low', 'medium', 'high', 'critical'])
+      expect(html).toContain(`data-priority-icon="${priority}"`);
+    for (const color of ['#5674b9', '#80ad3c', '#ee8d2f', '#d51116']) expect(html).toContain(color);
     const css = readFileSync('apps/web/src/styles/app.css', 'utf8');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('.stack-row--drop-target');
