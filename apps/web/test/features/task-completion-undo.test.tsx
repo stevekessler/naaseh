@@ -1,12 +1,22 @@
 // @vitest-environment jsdom
 import { act, cleanup, renderHook, render, fireEvent, waitFor } from '@testing-library/react';
-import { afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { createTask, completeAndArchiveTask } from '@naaseh/domain';
 const repository = vi.hoisted(() => ({ updateTask: vi.fn(), listLocalTasks: vi.fn() }));
 vi.mock('../../src/db/task-repository.js', () => repository);
 import { useTaskCompletionUndo } from '../../src/features/tasks/useTaskCompletionUndo.js';
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+});
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   vi.useRealTimers();
   vi.resetAllMocks();
 });
