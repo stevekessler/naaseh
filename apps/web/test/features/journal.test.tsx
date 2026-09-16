@@ -27,7 +27,9 @@ describe('journal entry controls', () => {
         onChange={() => undefined}
       />,
     );
-    expect(yesNo).toContain('Unanswered');
+    expect(yesNo).not.toContain('Unanswered');
+    expect(yesNo).not.toContain('checked');
+    expect(numeric).not.toContain('(optional)');
     expect(yesNo).not.toContain('delete');
   });
 });

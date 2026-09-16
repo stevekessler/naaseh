@@ -18,18 +18,27 @@ export function JournalNumericField({
   const update = (raw: string) => onChange(raw === '' ? null : Number(raw));
   return (
     <fieldset className="journal-field journal-numeric-field">
-      <legend>
-        {label} <span>(optional)</span>
-      </legend>
-      <input
-        aria-label={`${label} slider`}
-        type="range"
-        min={minimum}
-        max={maximum}
-        step={step}
-        value={value ?? minimum}
-        onChange={(event) => update(event.target.value)}
-      />
+      <legend>{label}</legend>
+      <div className="journal-rating">
+        <output aria-live="polite" aria-label={`${label} selected value`}>
+          {value ?? '—'}
+        </output>
+        <input
+          aria-label={`${label} slider`}
+          aria-valuetext={value === null ? 'No value selected' : String(value)}
+          type="range"
+          min={minimum}
+          max={maximum}
+          step={step}
+          value={value ?? minimum}
+          onChange={(event) => update(event.target.value)}
+          onPointerUp={(event) => update(event.currentTarget.value)}
+        />
+        <div className="journal-rating-endpoints" aria-hidden="true">
+          <span>{minimum}</span>
+          <span>{maximum}</span>
+        </div>
+      </div>
       <input
         id={id}
         aria-label={label}

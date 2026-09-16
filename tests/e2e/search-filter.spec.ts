@@ -43,12 +43,17 @@ test('searches and combines filters without putting memo queries in navigation s
     assignee: 'alex',
   });
 
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const filters = page.getByRole('region', { name: 'Search and filters' });
   await filters.getByLabel('Search').fill('estim');
   await expect(filters.getByRole('status')).toHaveText('1 result');
   await expect(page.getByRole('heading', { name: 'Project Cedar' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
   await expect(page).not.toHaveURL(/estim|roof/i);
+  await page.getByRole('button', { name: 'All tasks', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeVisible();
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
 
   await filters.getByRole('button', { name: 'Clear filters' }).click();
   await filters.getByRole('textbox', { name: 'From' }).fill('2030-01-01');

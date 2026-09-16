@@ -9,6 +9,7 @@ test('@enhanced-lists All, Lists, and To-do lists search works online and offlin
   await createListWithItem(page, 'Saffron shopping', 'Saffron');
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await addTask(page, 'Saffron call');
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const filters = page.getByRole('region', { name: 'Search and filters' });
   await filters.getByLabel('Search').fill('saffron');
   await expect(filters.getByRole('status')).toHaveText('2 results');

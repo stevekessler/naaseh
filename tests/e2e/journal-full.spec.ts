@@ -48,7 +48,7 @@ test('task reflection remains encrypted and available offline without expanding 
   await page.getByRole('button', { name: 'Create Journal' }).click();
   await createCrisisPlan(page);
   await page.getByRole('button', { name: 'New entry' }).click();
-  await page.getByRole('combobox', { name: 'Related task (optional)' }).fill('Journal reflection');
+  await page.getByRole('combobox', { name: 'Related task' }).fill('Journal reflection');
   await page.getByRole('option', { name: 'Journal reflection task' }).click();
   await setOffline(page);
   await page.getByRole('button', { name: 'Save encrypted entry' }).click();

@@ -18,6 +18,7 @@ test('preserves filtered state and preference across responsive list and post-it
   page,
 }) => {
   await signInAndAddTask(page);
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const filters = page.getByRole('region', { name: 'Search and filters' });
   await filters.getByLabel('Search').fill('cedar');
 

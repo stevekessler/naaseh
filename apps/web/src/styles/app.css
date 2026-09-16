@@ -1704,3 +1704,92 @@ dialog input {
     flex: 1;
   }
 }
+
+/* Journal controls share a compact, bounded layout on mobile and desktop. */
+.journal-unlock {
+  display: grid;
+  gap: 1rem;
+  max-width: 42rem;
+  margin-inline: auto;
+}
+.journal-unlock h1,
+.journal-unlock p {
+  margin: 0;
+}
+.journal-unlock label {
+  display: grid;
+  gap: 0.5rem;
+}
+.journal-unlock input {
+  width: 100%;
+  min-width: 0;
+}
+.journal-unlock button {
+  justify-self: start;
+}
+.journal-rating {
+  flex: 1 1 16rem;
+  min-width: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+.journal-rating output {
+  justify-self: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.journal-entry-form .journal-rating input[type='range'] {
+  width: 100%;
+  min-width: 0;
+}
+.journal-rating-endpoints {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+.journal-entry-form > label {
+  display: grid;
+  gap: 0.5rem;
+}
+.journal-rich-text {
+  border: 1px solid var(--border-color, #ccd6d0);
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background: var(--surface, #fff);
+}
+.journal-rich-text .memo-toolbar {
+  margin: 0;
+  padding: 0.25rem;
+  gap: 0.125rem;
+  background: #f0f4f2;
+  border-bottom: 1px solid var(--border-color, #ccd6d0);
+}
+.journal-rich-text .memo-toolbar button {
+  background: transparent;
+  color: #123450;
+  border: 1px solid transparent;
+  border-radius: 0.25rem;
+  padding: 0.35rem 0.6rem;
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 0.9rem;
+}
+.journal-rich-text .memo-toolbar button:hover {
+  background: #dfe9e4;
+}
+.journal-rich-text .memo-editor {
+  border: 0;
+  border-radius: 0;
+}
+.journal-format-bold {
+  font-weight: 800;
+}
+.journal-format-italic {
+  font-style: italic;
+}
+.journal-format-underline {
+  text-decoration: underline;
+}
+.journal-format-strikethrough {
+  text-decoration: line-through;
+}

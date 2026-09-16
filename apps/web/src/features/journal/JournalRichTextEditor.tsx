@@ -92,8 +92,16 @@ function Toolbar() {
   return (
     <div className="memo-toolbar" role="toolbar" aria-label="Journal formatting">
       {(['bold', 'italic', 'underline', 'strikethrough'] as const).map((mark) => (
-        <button key={mark} type="button" onClick={() => format(mark)}>
-          {mark}
+        <button
+          key={mark}
+          type="button"
+          aria-label={mark}
+          title={mark}
+          className={`journal-format-${mark}`}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => format(mark)}
+        >
+          {{ bold: 'B', italic: 'I', underline: 'U', strikethrough: 'S' }[mark]}
         </button>
       ))}
       <button
@@ -135,12 +143,14 @@ export function JournalRichTextEditor({
         },
       }}
     >
-      <Toolbar />
-      <RichTextPlugin
-        contentEditable={<ContentEditable className="memo-editor" aria-label={label} />}
-        placeholder={<span>Write an optional reflection…</span>}
-        ErrorBoundary={({ children }) => children}
-      />
+      <div className="journal-rich-text">
+        <Toolbar />
+        <RichTextPlugin
+          contentEditable={<ContentEditable className="memo-editor" aria-label={label} />}
+          placeholder={null}
+          ErrorBoundary={({ children }) => children}
+        />
+      </div>
       <ListPlugin />
       <OnChangePlugin onChange={(state) => state.read(() => onChange(readDocument()))} />
     </LexicalComposer>

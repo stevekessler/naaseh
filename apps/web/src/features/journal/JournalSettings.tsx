@@ -37,7 +37,7 @@ export function JournalSettings({
           checked={profile.dbtSkillsEnabled}
           onChange={(event) => onChange({ ...profile, dbtSkillsEnabled: event.target.checked })}
         />
-        Show DBT skills fields
+        Show DBT Skills fields
       </label>
       <p aria-live="polite">
         {pending ? 'Settings pending synchronization' : 'Settings saved locally'}

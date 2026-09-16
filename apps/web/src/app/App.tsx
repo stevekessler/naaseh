@@ -251,6 +251,15 @@ export function App() {
   );
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [adminUsersCursor, setAdminUsersCursor] = useState<string>();
+  const [taskTab, setTaskTab] = useState<'all' | 'filtered'>(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get('taskTab') === 'filtered' ||
+      ['urgencies', 'from', 'to', 'assigneeId', 'categoryId', 'projectId'].some((key) =>
+        params.has(key),
+      )
+      ? 'filtered'
+      : 'all';
+  });
   const [filters, setFilters] = useState<Filters>(() => filtersFromSearch(location.search));
   const [selectedId, setSelectedId] = useState<string | undefined>(
     () => location.pathname.match(/^\/tasks\/([^/]+)$/)?.[1],
@@ -482,7 +491,10 @@ export function App() {
   const signingOutRef = useRef(false);
   const syncing = useRef(false);
   const syncRetryTimer = useRef<number | undefined>(undefined);
-  const visible = useMemo(() => filterTasks(tasks, filters), [tasks, filters]);
+  const visible = useMemo(
+    () => filterTasks(tasks, section === 'tasks' && taskTab === 'all' ? emptyFilters : filters),
+    [tasks, filters, section, taskTab],
+  );
   useEffect(() => {
     if (section !== 'dashboard' || !session) return;
     let active = true;
@@ -661,9 +673,13 @@ export function App() {
     };
   }, [session, section, adminLoadAttempt]);
   useEffect(() => {
-    const query = safeSearchState(filters.query, filters);
+    const params = new URLSearchParams(safeSearchState(filters.query, filters));
+    if (section === 'tasks') {
+      if (taskTab === 'filtered') params.set('taskTab', 'filtered');
+    }
+    const query = section === 'tasks' && taskTab === 'all' ? '' : params.toString();
     history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
-  }, [filters]);
+  }, [filters, taskTab, section]);
   const synchronize = useCallback(async () => {
     if (!session || !navigator.onLine || document.visibilityState === 'hidden' || syncing.current)
       return;
@@ -1317,36 +1333,51 @@ export function App() {
                 parentTasks={tasks}
                 defaultAssigneeId={session.userId}
               />
-              <section className="filters" aria-label="Search and filters">
-                <TaskSearchBar
-                  value={filters.query}
-                  setValue={(query) => setFilters({ ...filters, query })}
-                  count={visible.length + matchingLists.length}
-                />
-                <TaskFilters
-                  value={filters}
-                  change={setFilters}
-                  resultCount={visible.length + matchingLists.length}
-                  categories={categories}
-                  projects={projects}
-                  assignees={assignees}
-                />
-                {(filters.query ||
-                  filters.from ||
-                  filters.to ||
-                  filters.assigneeId ||
-                  filters.categoryId ||
-                  filters.projectId) && (
-                  <button className="quiet" onClick={() => setFilters(emptyFilters)}>
-                    Clear filters
-                  </button>
-                )}
-              </section>
-              <SearchResults
-                lists={matchingLists}
-                items={listItems}
-                open={(list) => navigate({ section: 'lists', listId: list.id })}
-              />
+              <div className="view-toggle" role="group" aria-label="Task browsing">
+                <button aria-pressed={taskTab === 'all'} onClick={() => setTaskTab('all')}>
+                  All tasks
+                </button>
+                <button
+                  aria-pressed={taskTab === 'filtered'}
+                  onClick={() => setTaskTab('filtered')}
+                >
+                  Filtered tasks
+                </button>
+              </div>
+              {taskTab === 'filtered' && (
+                <>
+                  <section className="filters" aria-label="Search and filters">
+                    <TaskSearchBar
+                      value={filters.query}
+                      setValue={(query) => setFilters({ ...filters, query })}
+                      count={visible.length + matchingLists.length}
+                    />
+                    <TaskFilters
+                      value={filters}
+                      change={setFilters}
+                      resultCount={visible.length + matchingLists.length}
+                      categories={categories}
+                      projects={projects}
+                      assignees={assignees}
+                    />
+                    {(filters.query ||
+                      filters.from ||
+                      filters.to ||
+                      filters.assigneeId ||
+                      filters.categoryId ||
+                      filters.projectId) && (
+                      <button className="quiet" onClick={() => setFilters(emptyFilters)}>
+                        Clear filters
+                      </button>
+                    )}
+                  </section>
+                  <SearchResults
+                    lists={matchingLists}
+                    items={listItems}
+                    open={(list) => navigate({ section: 'lists', listId: list.id })}
+                  />
+                </>
+              )}
               {view === 'list' ? (
                 <TaskListPage
                   csrfToken={session.csrfToken}

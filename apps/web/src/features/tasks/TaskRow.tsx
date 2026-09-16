@@ -48,16 +48,17 @@ export function TaskRow({
             task.memo && <p>{task.memo}</p>
           ))}
         <div className="task-row-meta">
-          <small>
-            {task.dueAt
-              ? `Due ${new Date(task.dueAt).toLocaleString()} · `
-              : task.dueDate
-                ? `Due ${task.dueDate} · `
-                : ''}
-            revision {task.version}
-          </small>
+          {(task.dueAt || task.dueDate) && (
+            <small>
+              {task.dueAt
+                ? `Due ${new Date(task.dueAt).toLocaleString()}`
+                : task.dueDate
+                  ? `Due ${task.dueDate}`
+                  : ''}
+            </small>
+          )}
           <ReminderStatus task={task} />
-          <UrgencyBadge urgency={task.urgency} mode="responsive" />
+          <UrgencyBadge urgency={task.urgency} mode="full" />
           <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
           {task.visibility === 'private' && <span title="Private">🔒</span>}
         </div>

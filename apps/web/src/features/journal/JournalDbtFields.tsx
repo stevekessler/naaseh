@@ -39,7 +39,7 @@ export function JournalDbtFields({
     } as DbtSkillsResponse);
   return (
     <fieldset className="journal-dbt-fields">
-      <legend>DBT skills (optional)</legend>
+      <legend>DBT Skills</legend>
       <label>
         Practice outcome
         <select
@@ -53,7 +53,7 @@ export function JournalDbtFields({
             })
           }
         >
-          <option value="">Unanswered</option>
+          <option value="" aria-label="No selection" />
           {dbtPracticeOutcomes.map((outcome) => (
             <option key={outcome}>{outcome}</option>
           ))}
@@ -74,9 +74,6 @@ export function JournalDbtFields({
           ))}
         </fieldset>
       ))}
-      <button type="button" onClick={() => onChange(null)}>
-        Clear DBT response
-      </button>
     </fieldset>
   );
 }

@@ -55,21 +55,23 @@ export function emptyJournalEntry(
     taskReflection: null,
   };
 }
-const numeric = [
+const fields = [
   { key: 'suicidalThoughts', label: 'Suicidal thoughts', maximum: 10 },
-  { key: 'selfHarmThoughts', label: 'Self-harm thoughts', maximum: 10 },
-  { key: 'alcoholicDrinks', label: 'Alcoholic drinks', maximum: 10 },
-  { key: 'hoursOfSleep', label: 'Hours of sleep', maximum: 24, step: 0.5 },
-  { key: 'urgeToAvoidCommitments', label: 'Urge to avoid commitments', maximum: 100 },
-] as const;
-const yesNo = [
   { key: 'suicidalBehaviors', label: 'Suicidal behaviors' },
+  { key: 'selfHarmThoughts', label: 'Self-harm thoughts', maximum: 10 },
   { key: 'selfHarmBehaviors', label: 'Self-harm behaviors' },
+  { key: 'alcoholicDrinks', label: 'Number of alcoholic drinks', maximum: 10 },
   { key: 'otherDrugs', label: 'Other drugs' },
   { key: 'medicationsAsPrescribed', label: 'Medications as prescribed' },
+  { key: 'hoursOfSleep', label: 'Hours of sleep', maximum: 24, step: 0.5 },
+  {
+    key: 'urgeToAvoidCommitments',
+    label: 'Urge to avoid commitments or obligations',
+    maximum: 100,
+  },
   { key: 'conflictWithOthers', label: 'Conflict with others' },
   { key: 'balancedEating', label: 'Balanced eating' },
-  { key: 'selfCare', label: 'Self care' },
+  { key: 'selfCare', label: 'Self-care' },
 ] as const;
 const emotions = [
   'anger',
@@ -134,7 +136,7 @@ export function JournalEntryEditor({
     >
       <h2>Journal entry</h2>
       <label>
-        Date
+        Date *
         <input
           aria-label="Journal date"
           type="date"
@@ -143,24 +145,48 @@ export function JournalEntryEditor({
           onChange={(event) => patch('date', event.target.value)}
         />
       </label>
-      {numeric
+      {fields
         .filter(
           (field) =>
             profile.suicidalSelfHarmEnabled ||
-            !['suicidalThoughts', 'selfHarmThoughts'].includes(field.key),
+            ![
+              'suicidalThoughts',
+              'suicidalBehaviors',
+              'selfHarmThoughts',
+              'selfHarmBehaviors',
+            ].includes(field.key),
         )
-        .map((field) => (
-          <JournalNumericField
-            key={field.key}
-            id={field.key}
-            label={field.label}
-            minimum={1}
-            maximum={field.maximum}
-            step={'step' in field ? field.step : 1}
-            value={draft.projection[field.key]}
-            onChange={(value) => patch(field.key, value)}
-          />
-        ))}
+        .map((field) =>
+          'maximum' in field ? (
+            <JournalNumericField
+              key={field.key}
+              id={field.key}
+              label={field.label}
+              minimum={1}
+              maximum={field.maximum}
+              step={'step' in field ? field.step : 1}
+              value={draft.projection[field.key]}
+              onChange={(value) => patch(field.key, value)}
+            />
+          ) : (
+            <JournalYesNoField
+              key={field.key}
+              id={field.key}
+              label={field.label}
+              value={draft.projection[field.key]}
+              onChange={(value) => patch(field.key, value)}
+            />
+          ),
+        )}
+      <label>
+        Other target behavior
+        <textarea
+          aria-label="Other target behavior"
+          value={draft.projection.otherTargetBehavior ?? ''}
+          maxLength={10000}
+          onChange={(event) => patch('otherTargetBehavior', event.target.value || null)}
+        />
+      </label>
       <fieldset className="journal-emotions">
         <legend>Emotions</legend>
         {emotions.map((emotion) => (
@@ -184,21 +210,6 @@ export function JournalEntryEditor({
           />
         ))}
       </fieldset>
-      {yesNo
-        .filter(
-          (field) =>
-            profile.suicidalSelfHarmEnabled ||
-            !['suicidalBehaviors', 'selfHarmBehaviors'].includes(field.key),
-        )
-        .map((field) => (
-          <JournalYesNoField
-            key={field.key}
-            id={field.key}
-            label={field.label}
-            value={draft.projection[field.key]}
-            onChange={(value) => patch(field.key, value)}
-          />
-        ))}
       {crisisTriggered && (
         <TriggeredCrisisPlan
           document={crisisPlan}
