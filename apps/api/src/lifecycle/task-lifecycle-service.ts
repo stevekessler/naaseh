@@ -1,5 +1,6 @@
 import {
   archiveTask,
+  ulidSchema,
   completeAndArchiveTask,
   restoreArchivedTask,
   type Task,
@@ -21,6 +22,7 @@ export interface TaskLifecycleRequest {
   action: 'complete' | 'archive' | 'restore';
   now?: Date;
   sourceClientId?: string;
+  completionEventId?: string;
 }
 
 export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promise<Task> {
@@ -42,6 +44,12 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
         };
     }
     const result = completeAndArchiveTask(current, request.actorId, attribution, now);
+    if (request.completionEventId) {
+      const id = ulidSchema.parse(request.completionEventId);
+      if (await findCompletionEvent(id)) throw new Error('Completion event already exists.');
+      result.completionEvent.id = id;
+      result.task.currentCompletionEventId = id;
+    }
     await saveTaskLifecycleMutation(
       result.task,
       current,

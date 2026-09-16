@@ -1,3 +1,4 @@
+import { saveSyncedTask } from './task-sync.js';
 import type {
   APIGatewayProxyEventV2,
   APIGatewayProxyHandlerV2,
@@ -6,7 +7,7 @@ import type {
 import { errorResponse, json, problem, recordError, SafeApiError } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
 import { getRecord, listOwnerTasks, listPublicTasks, putRecord } from '../shared/store.js';
-import { findTask, saveTaskMutation } from '../tasks/task-repository.js';
+import { findTask } from '../tasks/task-repository.js';
 import {
   directoryItemSchema,
   listItemSchema,
@@ -556,28 +557,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       continue;
     }
     try {
-      const payload = mutation.payload as Record<string, unknown>;
-      const next = applySharedWorkSyncPayload(
-        'task',
-        current,
-        payload,
-        outcome.version ?? (current?.version ?? 0) + 1,
-        new Date().toISOString(),
-      );
-      if (next.ownerId !== actorId) {
-        results.push({ mutationId: mutation.id, status: 'rejected' });
-        continue;
-      }
-      const saved = await saveTaskMutation(
-        next,
-        actorId,
-        mutation.id,
-        current ? 'update' : 'create',
-        Object.keys(payload),
-        current,
-        undefined,
-        event.headers['x-client-id'],
-      );
+      const saved = await saveSyncedTask(current, mutation, actorId, event.headers['x-client-id']);
       results.push({
         mutationId: mutation.id,
         status: saved.replayed ? 'alreadyApplied' : 'applied',

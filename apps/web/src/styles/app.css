@@ -734,25 +734,22 @@ main {
 .stack-drag-handle:active {
   cursor: grabbing;
 }
+.urgency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.urgency-badge .priority-icon {
+  display: inline-block;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: 0 0 auto;
+  overflow: visible;
+}
 .urgency-badge--compact {
-  display: inline-grid;
-  place-items: center;
   width: 1.75rem;
   height: 1.75rem;
-  border: 2px solid currentColor;
-  border-radius: 999px;
-  font-weight: 900;
-  line-height: 1;
-}
-.urgency-badge--compact[data-urgency='medium'] {
-  border-radius: 5px;
-}
-.urgency-badge--compact[data-urgency='high'] {
-  border-style: double;
-}
-.urgency-badge--compact[data-urgency='critical'] {
-  border-radius: 3px;
-  text-decoration: underline;
+  justify-content: center;
 }
 .stack-row-summary h2 {
   margin-block: 0.25rem;
@@ -1792,4 +1789,33 @@ dialog input {
 }
 .journal-format-strikethrough {
   text-decoration: line-through;
+}
+
+.task-undo-notices {
+  position: fixed;
+  inset-inline: 1rem;
+  bottom: 1rem;
+  z-index: 2000;
+  display: grid;
+  gap: 0.5rem;
+  max-width: 36rem;
+  margin-inline: auto;
+  max-height: 45vh;
+  overflow-y: auto;
+}
+.task-undo-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 20px #0003;
+}
+.task-undo-notice p {
+  flex: 1 1 12rem;
+  margin: 0;
 }

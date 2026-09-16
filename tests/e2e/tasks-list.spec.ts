@@ -44,6 +44,15 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
   await page.getByRole('button', { name: 'Complete Call the contractor today' }).click();
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeHidden();
+  await expect(
+    page.getByRole('button', { name: 'Undo completion of Call the contractor today' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Undo completion of Call the contractor today' }).click();
+  await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Undo completion of Call the contractor today' }),
+  ).toBeHidden();
+  await page.getByRole('button', { name: 'Complete Call the contractor today' }).click();
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
 });
