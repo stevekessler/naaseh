@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type AdminSection = 'admin' | 'directory' | 'groups';
 
@@ -13,10 +14,35 @@ export function AdminNavigation({
 }) {
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 16 });
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updatePosition = () => {
+      const trigger = container.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const width = menu.current?.getBoundingClientRect().width ?? 224;
+      setPosition({
+        top: trigger.bottom + 8,
+        left: Math.max(16, Math.min(trigger.left, window.innerWidth - width - 16)),
+      });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !container.current?.contains(event.target))
+      if (
+        event.target instanceof Node &&
+        !container.current?.contains(event.target) &&
+        !menu.current?.contains(event.target)
+      )
         setOpen(false);
     };
     document.addEventListener('pointerdown', closeOutside);
@@ -28,7 +54,11 @@ export function AdminNavigation({
       ref={container}
       className="admin-navigation"
       onBlur={(event) => {
-        if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget))
+        if (
+          event.relatedTarget &&
+          !event.currentTarget.contains(event.relatedTarget) &&
+          !menu.current?.contains(event.relatedTarget)
+        )
           setOpen(false);
       }}
       onKeyDown={(event) => {
@@ -51,30 +81,37 @@ export function AdminNavigation({
       >
         Admin <span aria-hidden="true">▾</span>
       </button>
-      {open && (
-        <div id="admin-navigation-links" className="admin-navigation-links">
-          {(
-            [
-              ...(isAdmin ? [['admin', 'Users and categories'] as const] : []),
-              ['directory', 'Global Items'],
-              ['groups', 'Groups'],
-            ] as const
-          ).map(([target, label]) => (
-            <button
-              type="button"
-              className="quiet"
-              key={target}
-              aria-current={section === target ? 'page' : undefined}
-              onClick={() => {
-                navigate(target);
-                setOpen(false);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {open &&
+        createPortal(
+          <div
+            ref={menu}
+            id="admin-navigation-links"
+            className="admin-navigation-links"
+            style={{ ...position, maxHeight: `calc(100dvh - ${position.top + 16}px)` }}
+          >
+            {(
+              [
+                ...(isAdmin ? [['admin', 'Users and categories'] as const] : []),
+                ['directory', 'Global Items'],
+                ['groups', 'Groups'],
+              ] as const
+            ).map(([target, label]) => (
+              <button
+                type="button"
+                className="quiet"
+                key={target}
+                aria-current={section === target ? 'page' : undefined}
+                onClick={() => {
+                  navigate(target);
+                  setOpen(false);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

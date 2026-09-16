@@ -87,6 +87,16 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
     'aria-current',
     'page',
   );
+  const tasksButton = navigation.getByRole('button', { name: 'Tasks', exact: true });
+  const adminButton = navigation.getByRole('button', { name: 'Admin' });
+  const assertAdminOnSameRow = async () => {
+    const tasksBox = await tasksButton.boundingBox();
+    const adminBox = await adminButton.boundingBox();
+    expect(tasksBox).not.toBeNull();
+    expect(adminBox).not.toBeNull();
+    expect(Math.abs(tasksBox!.y - adminBox!.y)).toBeLessThan(2);
+  };
+  await assertAdminOnSameRow();
 
   await page.evaluate(() => {
     Object.defineProperty(window, 'scrollY', { configurable: true, value: 220 });
@@ -95,4 +105,13 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
   await expect(page.locator('.topbar')).toHaveClass(/topbar-collapsed/);
   await expect(page.locator('.topbar > img')).toBeHidden();
   await expect(navigation).toBeVisible();
+  await assertAdminOnSameRow();
+  await adminButton.click();
+  const menu = page.locator('#admin-navigation-links');
+  await expect(menu.getByRole('button', { name: 'Groups', exact: true })).toBeVisible();
+  const menuBox = await menu.boundingBox();
+  expect(menuBox!.x).toBeGreaterThanOrEqual(0);
+  expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(390);
+  await menu.getByRole('button', { name: 'Groups', exact: true }).click();
+  await expect(menu).toHaveCount(0);
 });

@@ -416,9 +416,16 @@ form > label {
   display: flex;
   gap: var(--button-gap);
   max-width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
   grid-column: 1 / -1;
   grid-row: 2;
+}
+.topbar nav > button,
+.topbar nav > .admin-navigation {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .topbar nav [aria-current='page'] {
   text-decoration: underline;
@@ -432,9 +439,8 @@ form > label {
   text-underline-offset: 0.3rem;
 }
 .admin-navigation-links {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 0.5rem);
+  position: fixed;
+  overflow-y: auto;
   z-index: 20;
   display: grid;
   gap: var(--button-gap);
@@ -448,16 +454,6 @@ form > label {
 }
 .admin-navigation-links button {
   text-align: left;
-}
-@media (max-width: 1100px) {
-  .admin-navigation {
-    width: 100%;
-  }
-  .admin-navigation-links {
-    position: static;
-    width: 100%;
-    margin-top: var(--button-gap);
-  }
 }
 .quiet {
   background: transparent;
