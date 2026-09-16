@@ -140,6 +140,7 @@ test('keeps urgency controls accessible to keyboard, touch, and screen readers a
   page,
 }, testInfo) => {
   await signIn(page);
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const form = page.locator('.task-form').first();
   await expandTaskDetails(form);
   const urgency = form.getByLabel('Priority', { exact: true });
@@ -150,7 +151,9 @@ test('keeps urgency controls accessible to keyboard, touch, and screen readers a
   else await urgency.press('End');
   await urgency.selectOption('critical');
   await expect(urgency).toHaveValue('critical');
-  await expect(page.getByRole('status').first()).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Search and filters' }).getByRole('status').first(),
+  ).toBeVisible();
 
   const dimensions = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth,
