@@ -1819,3 +1819,10 @@ dialog input {
   flex: 1 1 12rem;
   margin: 0;
 }
+
+html:has(.task-undo-notices) {
+  scroll-padding-bottom: var(--task-undo-inset, 12rem);
+}
+.app-shell:has(.task-undo-notices) {
+  padding-bottom: var(--task-undo-inset, 12rem);
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Task } from '@naaseh/domain';
 import { listLocalTasks, updateTask } from '../../db/task-repository.js';
 
@@ -9,6 +9,24 @@ export function useTaskCompletionUndo(ownerId: string | undefined) {
   const [entries, setEntries] = useState<UndoEntry[]>([]);
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const restoring = useRef(new Set<string>());
+  const noticeRef = useRef<HTMLElement>(null);
+  const hasEntries = entries.length > 0;
+  useLayoutEffect(() => {
+    const element = noticeRef.current;
+    if (!element) return;
+    const updateInset = () =>
+      document.documentElement.style.setProperty(
+        '--task-undo-inset',
+        `${element.getBoundingClientRect().height + 32}px`,
+      );
+    updateInset();
+    const observer = new ResizeObserver(updateInset);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      document.documentElement.style.removeProperty('--task-undo-inset');
+    };
+  }, [hasEntries]);
   useEffect(() => {
     const activeTimers = timers.current;
     setEntries([]);
@@ -72,7 +90,7 @@ export function useTaskCompletionUndo(ownerId: string | undefined) {
     }
   };
   const notice = entries.length ? (
-    <aside className="task-undo-notices" aria-label="Recently completed tasks">
+    <aside ref={noticeRef} className="task-undo-notices" aria-label="Recently completed tasks">
       {entries.map((entry) => (
         <div className="task-undo-notice" key={entry.task.id}>
           <p role="status">Completed “{entry.task.label}”. Undo is available for 30 seconds.</p>
