@@ -11,19 +11,16 @@ export function JournalYesNoField({
 }) {
   return (
     <fieldset className="journal-field journal-choice-field">
-      <legend>
-        {label} <span>(optional)</span>
-      </legend>
+      <legend>{label}</legend>
       {(
         [
           ['yes', true],
           ['no', false],
-          ['unanswered', null],
         ] as const
       ).map(([name, next]) => (
         <label key={name}>
           <input type="radio" name={id} checked={value === next} onChange={() => onChange(next)} />
-          {name === 'unanswered' ? 'Unanswered' : name[0]!.toUpperCase() + name.slice(1)}
+          {name[0]!.toUpperCase() + name.slice(1)}
         </label>
       ))}
     </fieldset>

@@ -33,12 +33,16 @@ test('owner creates a Crisis Plan, journals, sees it for a crisis answer, and re
     .getByLabel('Yes')
     .check();
   await expect(page.getByRole('heading', { name: 'Your Crisis Plan' })).toBeVisible();
+  await page.getByLabel('Other target behavior', { exact: true }).fill('Practice asking for help');
   await page.getByRole('button', { name: 'Save encrypted entry' }).click();
   await page.getByRole('button', { name: 'Lock', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Unlock Journal' })).toBeVisible();
   await page.getByLabel('Journal PIN', { exact: true }).fill('246810');
-  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page.getByRole('heading', { name: 'Journal', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Read or edit entry/u }).click();
+  await expect(page.getByLabel('Other target behavior', { exact: true })).toHaveValue(
+    'Practice asking for help',
+  );
   await page.getByRole('spinbutton', { name: 'Hours of sleep' }).fill('7.5');
   await page.getByRole('button', { name: 'Save encrypted entry' }).click();
   await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();

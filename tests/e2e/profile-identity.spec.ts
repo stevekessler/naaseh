@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { signIn, expandTaskDetails, addTask } from './enhanced-helpers.js';
 import { expectNoDocumentOverflow } from './responsive-assertions.js';
 test.use({ serviceWorkers: 'block' });
-test('ordinary users see identity, all assignees, compact priorities, and consistently spaced buttons', async ({
+test('ordinary users see identity, all assignees, readable priorities, and consistently spaced buttons', async ({
   page,
 }) => {
   await page.route('**/api/v1/auth/login', (route) =>
@@ -41,8 +41,7 @@ test('ordinary users see identity, all assignees, compact priorities, and consis
   await addTask(page, 'Shared design review');
   await page.setViewportSize({ width: 375, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(page.locator('.urgency-badge--responsive .priority-icon').first()).toBeVisible();
-  await expect(page.locator('.urgency-badge--responsive .priority-text').first()).toBeHidden();
+  await expect(page.locator('.task-list .urgency-badge').first()).toHaveText('Priority: Medium');
   await expectNoDocumentOverflow(page);
   await page.screenshot({ path: 'test-results/profile-identity-mobile.png', fullPage: true });
 });

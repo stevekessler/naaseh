@@ -125,6 +125,9 @@ test('owner uses Select2 to grant immediate read-only Crisis Plan access', async
   await page.locator('.select2-search__field').fill('tr');
   await page.getByRole('option', { name: /Trusted Person/u }).click();
   await expect(page.getByText(/can now view this Crisis Plan while online/u)).toBeVisible();
+  await expect(
+    page.locator('.crisis-plan-sharing li').getByText('Trusted Person', { exact: true }),
+  ).toBeVisible();
   const revoke = page.getByRole('button', { name: 'Revoke access' });
   await expect(revoke).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());

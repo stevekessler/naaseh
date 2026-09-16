@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { JournalEnrollmentError } from './journal-enrollment.js';
 
 export function JournalUnlock({
@@ -13,7 +13,36 @@ export function JournalUnlock({
   const [pin, setPin] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
+  const lastAttempt = useRef('');
+  const unlockRef = useRef(onUnlock);
+  unlockRef.current = onUnlock;
+  useEffect(() => {
+    if (!enrolled || busy || !/^\d{6,32}$/u.test(pin) || lastAttempt.current === pin) return;
+    const timer = setTimeout(() => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      lastAttempt.current = pin;
+      setBusy(true);
+      setError('');
+      void unlockRef
+        .current(pin)
+        .catch(() => {
+          // A pause while entering a longer PIN is not a submitted failure.
+        })
+        .finally(() => {
+          inFlight.current = false;
+          setBusy(false);
+        });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [pin, enrolled, busy]);
   const submit = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    lastAttempt.current = pin;
+    setBusy(true);
     try {
       setError('');
       if (!enrolled && pin !== confirmation) return;
@@ -28,6 +57,9 @@ export function JournalUnlock({
             ? error.message
             : 'The Journal could not be created. No enrollment was saved. Refresh and try again.',
       );
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
     }
   };
   return (
@@ -38,7 +70,7 @@ export function JournalUnlock({
         your password.
       </p>
       <label>
-        Journal PIN
+        Journal PIN *
         <input
           aria-label="Journal PIN"
           type="password"
@@ -46,13 +78,18 @@ export function JournalUnlock({
           autoComplete="off"
           value={pin}
           minLength={6}
+          maxLength={32}
+          required
           onChange={(event) => setPin(event.target.value)}
         />
       </label>
       {!enrolled && (
         <label>
-          Confirm Journal PIN
+          Confirm Journal PIN *
           <input
+            aria-label="Confirm Journal PIN"
+            required
+            maxLength={32}
             type="password"
             inputMode="numeric"
             autoComplete="off"
@@ -65,10 +102,10 @@ export function JournalUnlock({
       {error && <p role="alert">{error}</p>}
       <button
         type="button"
-        disabled={!/^\d{6,32}$/u.test(pin) || (!enrolled && pin !== confirmation)}
+        disabled={busy || !/^\d{6,32}$/u.test(pin) || (!enrolled && pin !== confirmation)}
         onClick={() => void submit()}
       >
-        {enrolled ? 'Unlock' : 'Create Journal'}
+        {busy ? 'Checking…' : enrolled ? 'Unlock' : 'Create Journal'}
       </button>
     </section>
   );

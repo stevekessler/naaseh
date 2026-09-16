@@ -64,6 +64,8 @@ async function createFilteredTask(
 
 async function selectUrgencies(page: Page, labels: string[]) {
   await page.evaluate(() => window.scrollTo(0, 0));
+  const filteredTab = page.getByRole('button', { name: 'Filtered tasks', exact: true });
+  if (await filteredTab.isVisible()) await filteredTab.click();
   const group = urgencyFiltersFor(page);
   for (const label of labels) {
     const checkbox = group.getByRole('checkbox', { name: label, exact: true });
@@ -309,6 +311,7 @@ test('announces urgency filter results and supports keyboard or touch without ov
   page,
 }, testInfo) => {
   await signIn(page);
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const critical = urgencyFiltersFor(page).getByRole('checkbox', { name: 'Critical' });
   await critical.focus();
   await expect(critical).toBeFocused();

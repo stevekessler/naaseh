@@ -158,6 +158,7 @@ export const journalEntryProjectionSchema = z
     conflictWithOthers: nullableBoolean,
     balancedEating: nullableBoolean,
     selfCare: nullableBoolean,
+    otherTargetBehavior: z.string().max(10_000).nullable().optional(),
     emotions: emotionSchema,
     dbt: dbtSkillsResponseSchema.nullable(),
     createdAt: z.string().datetime(),

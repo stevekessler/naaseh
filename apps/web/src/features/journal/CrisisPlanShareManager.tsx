@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { UserAvatar } from '../profile/user-directory.js';
 import $ from 'jquery';
 import select2Factory from 'select2';
 import 'select2/dist/css/select2.css';
@@ -127,7 +128,13 @@ export function CrisisPlanShareManager({
           .filter((share) => share.state === 'active')
           .map((share) => (
             <li key={share.recipientId}>
-              <span>Active recipient</span>{' '}
+              <UserAvatar
+                userId={share.recipientId}
+                {...(users.current.get(share.recipientId)
+                  ? { displayName: users.current.get(share.recipientId)!.displayName }
+                  : {})}
+                showName
+              />{' '}
               {pendingRecipientIds.includes(share.recipientId) ? (
                 <span role="status">
                   Revocation pending connection; remote access may continue.

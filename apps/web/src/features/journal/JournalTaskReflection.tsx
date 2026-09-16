@@ -27,9 +27,9 @@ export function JournalTaskReflection({
   };
   return (
     <section className="journal-task-reflection">
-      <h3>Task reflection</h3>
+      <h3>Task Reflection</h3>
       <div>
-        <label {...combo.getLabelProps()}>Related task (optional)</label>
+        <label {...combo.getLabelProps()}>Related task</label>
         <input {...combo.getInputProps()} />
         <button type="button" {...combo.getToggleButtonProps()}>
           Choose task
@@ -46,7 +46,7 @@ export function JournalTaskReflection({
       {taskId && (
         <>
           <JournalRichTextEditor
-            label="Task reflection notes"
+            label="Task Reflection notes"
             value={notes}
             onChange={(next) => onChange({ taskId, notes: next })}
           />
