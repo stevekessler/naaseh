@@ -22,6 +22,7 @@ import { filterTasks, normalizeSearch, type Filters } from '../search/task-searc
 import { Login } from '../features/auth/Login.js';
 import { TaskForm } from '../features/tasks/TaskForm.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
+import { ConflictReview } from '../features/sync/ConflictReview.js';
 import { SyncStatus } from '../features/sync/SyncStatus.js';
 import { drainSequentially } from '../sync/sync-engine.js';
 import { drainJournalOutbox } from '../sync/journal-sync.js';
@@ -359,6 +360,7 @@ export function App() {
         ).reduce((total, count) => total + count, 0),
       [],
     ) ?? 0;
+  const [reviewConflicts, setReviewConflicts] = useState(false);
   const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
   const eligibleStackWork = useMemo(
     () => [
@@ -856,6 +858,9 @@ export function App() {
   return (
     <UserDirectoryContext.Provider value={directoryUsers}>
       <div className="app-shell">
+        {reviewConflicts && (
+          <ConflictReview close={() => setReviewConflicts(false)} synchronize={synchronize} />
+        )}
         {completionUndo.notice}
         <UpdatePrompt
           waiting={Boolean(applyUpdate)}
@@ -880,6 +885,7 @@ export function App() {
                 online={online}
                 pending={pending}
                 conflicts={conflicts}
+                reviewConflicts={() => setReviewConflicts(true)}
                 error={
                   taskResult?.unreadable.length
                     ? `${taskResult.unreadable.length} saved task(s) cannot be read on this device. Their original data is preserved. Connect and retry to recover server copies. ${syncError ?? ''}`
