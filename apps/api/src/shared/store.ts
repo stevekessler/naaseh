@@ -13,7 +13,11 @@ import type { EntityRevision, StableMutationResult, Task, TaskRevision } from '@
 import type { PreparedFeedChange } from '../sync/change-feed-repository.js';
 import { keys } from './keys.js';
 
-const document = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const document = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
+  // Task restore and field clearing intentionally leave optional properties
+  // undefined. Omit them from the replacement item, receipt, and feed payload.
+  marshallOptions: { removeUndefinedValues: true },
+});
 const table = process.env.NAASEH_TABLE ?? 'naaseh-local';
 export async function getRecord<T>(pk: string, sk: string): Promise<T | undefined> {
   const result = await document.send(
