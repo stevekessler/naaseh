@@ -1822,3 +1822,42 @@ html:has(.task-undo-notices) {
 .app-shell:has(.task-undo-notices) {
   padding-bottom: var(--task-undo-inset, 12rem);
 }
+
+.sync-conflict-dialog {
+  width: min(58rem, calc(100vw - 2rem));
+}
+.sync-conflict-dialog > header,
+.sync-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.sync-conflict-item {
+  border-top: 1px solid var(--border, #d9e2dd);
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+}
+.sync-conflict-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.sync-conflict-item dd,
+.sync-conflict-item pre {
+  margin-inline-start: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sync-conflict-item dt {
+  font-weight: 700;
+}
+.sync-conflict-item dl > div {
+  margin-block: 0.75rem;
+}
+@media (max-width: 600px) {
+  .sync-conflict-comparison {
+    grid-template-columns: 1fr;
+  }
+}

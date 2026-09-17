@@ -1,3 +1,4 @@
+import type { Task } from '@naaseh/domain';
 import { expect, test, type Page } from '@playwright/test';
 async function signIn(page: Page) {
   await page.goto('/');
@@ -100,25 +101,53 @@ test.describe('mocked reconnect protocol', () => {
     await expect(page.getByRole('status').filter({ hasText: 'Synced' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Reconnect safely' })).toBeVisible();
   });
-  test('surfaces a same-field conflict without discarding the local task', async ({
+  test('reviews and resolves conflicts while preserving failed and offline choices', async ({
     page,
     context,
   }) => {
+    let serverTask: Task;
+    let lastMutationId = '';
+    let reapply = false;
+    let pushedBase: number | undefined;
     await page.route('**/api/v1/sync/push', async (route) => {
-      const body = route.request().postDataJSON() as { mutations: Array<{ id: string }> };
+      const { mutations } = route.request().postDataJSON();
+      const item = mutations[0];
+      if (item.operation === 'create') {
+        serverTask = { ...item.payload, label: 'Server task', version: 7 };
+      } else if (reapply) {
+        expect(item.id).not.toBe(lastMutationId);
+        pushedBase = item.baseVersion;
+        serverTask = { ...serverTask, ...item.payload.patch, version: 9 };
+      }
+      lastMutationId = item.id;
       await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          results: body.mutations.map((item) => ({ mutationId: item.id, status: 'conflict' })),
-        }),
+        json: {
+          results: [
+            {
+              mutationId: item.id,
+              status: reapply ? 'applied' : 'conflict',
+              version: serverTask.version,
+            },
+          ],
+        },
       });
     });
+    await page.route('**/api/v1/tasks/*', (route) => route.fulfill({ json: serverTask }));
     await page.route('**/api/v1/sync/pull', (route) =>
       route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ changes: [], cursor: { public: 0, owner: 0 } }),
+        json: {
+          changes: reapply
+            ? [
+                {
+                  entityType: 'task',
+                  entityId: serverTask.id,
+                  operation: 'upsert',
+                  payload: serverTask,
+                },
+              ]
+            : [],
+          cursor: { public: 0, owner: 0 },
+        },
       }),
     );
     await signIn(page);
@@ -128,11 +157,43 @@ test.describe('mocked reconnect protocol', () => {
     await expect(page.getByRole('heading', { name: 'Conflicting offline edit' })).toBeVisible();
     await context.setOffline(false);
     await page.evaluate(() => scrollTo(0, 0));
-    // Conflict capture encrypts an additional record; allow headroom when all
-    // browser projects run concurrently on a small CI runner.
-    await expect(page.getByRole('status').filter({ hasText: '1 conflict' })).toBeVisible({
+    await expect(page.getByRole('button', { name: 'Review conflicts (1)' })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByRole('heading', { name: 'Conflicting offline edit' })).toBeVisible();
+    await page.getByRole('button', { name: 'Review conflicts (1)' }).click();
+    const review = page.getByRole('dialog', { name: 'Resolve sync conflicts' });
+    await expect(review).toContainText('Conflicting offline edit');
+    await expect(review).toContainText('Server task');
+    // A concurrent server edit must be reviewed before the local copy is replaced.
+    serverTask = { ...serverTask!, label: 'New server task', version: 8 };
+    await review.getByRole('button', { name: 'Keep server version' }).click();
+    await expect(review.getByRole('alert')).toContainText('server version changed');
+    await review.getByRole('button', { name: 'Refresh comparison' }).click();
+    await expect(review).toContainText('New server task');
+    await review.getByRole('button', { name: 'Keep server version' }).click();
+    await expect(review).toContainText('All conflicts resolved');
+    await review.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'New server task' })).toBeVisible();
+    // Now review an update and reapply it against the reviewed server version.
+    await page.getByRole('button', { name: 'New server task', exact: true }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit task' });
+    await edit.getByLabel('Task label').fill('My revised task');
+    await edit.getByRole('button', { name: 'Save changes' }).click();
+    await expect(edit).toBeHidden();
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.getByRole('button', { name: 'Review conflicts (1)' }).click();
+    await expect(review).toContainText('My revised task');
+    await expect(review.getByRole('button', { name: 'Reapply my change' })).toBeEnabled();
+    await context.setOffline(true);
+    await review.getByRole('button', { name: 'Reapply my change' }).click();
+    await expect(review.getByRole('alert')).toContainText('Connect to review');
+    await context.setOffline(false);
+    reapply = true;
+    await review.getByRole('button', { name: 'Reapply my change' }).click();
+    await expect(review).toContainText('All conflicts resolved');
+    await expect.poll(() => pushedBase).toBe(8);
+    await review.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'My revised task' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Review conflicts/ })).toHaveCount(0);
   });
 });

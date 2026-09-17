@@ -4,12 +4,14 @@ export function SyncStatus({
   conflicts = 0,
   error,
   retry,
+  reviewConflicts,
 }: {
   online: boolean;
   pending: number;
   conflicts?: number;
   error?: string | undefined;
   retry: () => void;
+  reviewConflicts?: () => void;
 }) {
   return (
     <div className="sync-status" role="status">
@@ -24,6 +26,9 @@ export function SyncStatus({
                 ? `${pending} pending`
                 : 'Synced'}
       </span>
+      {conflicts > 0 && reviewConflicts && (
+        <button onClick={reviewConflicts}>Review conflicts ({conflicts})</button>
+      )}
       {error && (
         <div className="sync-status-error" role="alert">
           <span>{error}</span>
