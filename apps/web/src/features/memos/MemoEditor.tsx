@@ -133,6 +133,11 @@ export function MemoEditor({
   const config = {
     namespace: 'NaasehMemo',
     nodes: [ListNode, ListItemNode],
+    theme: {
+      text: {
+        strikethrough: 'memo-format-strikethrough',
+      },
+    },
     editorState: initialize(initial),
     onError(error: Error) {
       throw error;

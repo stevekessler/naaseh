@@ -41,4 +41,10 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await expect(project).toContainText('2 remaining');
   await expect(tree.getByText('Unassigned to a project', { exact: true })).toBeVisible();
   await context.setOffline(false);
+
+  await page.setViewportSize({ width: 320, height: 740 });
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
 });
