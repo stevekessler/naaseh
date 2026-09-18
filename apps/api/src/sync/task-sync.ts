@@ -55,6 +55,7 @@ export async function saveSyncedTask(
             (current.lifecycle === 'archived' || current.status === 'archived')
           ? 'restore'
           : undefined;
+  let replaceManualArchiveWithCompletion = false;
   if (action) {
     if (Object.keys(patch).some((key) => key !== 'status'))
       throw new Error('Lifecycle changes must be separate from task edits.');
@@ -79,12 +80,19 @@ export async function saveSyncedTask(
         !event.reversedAt
       )
         return { task: current, replayed: true };
-      throw new SafeApiError(
-        409,
-        'lifecycle_changed',
-        'This task is already archived. Keep the server version or restore the task before completing it.',
-        'conflict',
-      );
+      if (
+        eventId &&
+        current.completionState !== 'completed' &&
+        current.archiveReason !== 'completed'
+      )
+        replaceManualArchiveWithCompletion = true;
+      else
+        throw new SafeApiError(
+          409,
+          'lifecycle_changed',
+          'This task is already completed or archived. Review the current version before completing it.',
+          'conflict',
+        );
     }
 
     const task = await changeTaskLifecycle({
@@ -98,6 +106,7 @@ export async function saveSyncedTask(
       ...(action === 'complete' && envelope.completionEvent?.id
         ? { completionEventId: envelope.completionEvent.id }
         : {}),
+      ...(replaceManualArchiveWithCompletion ? { replaceManualArchiveWithCompletion: true } : {}),
     });
     return { task, replayed: false };
   }

@@ -24,6 +24,7 @@ export interface TaskLifecycleRequest {
   now?: Date;
   sourceClientId?: string;
   completionEventId?: string;
+  replaceManualArchiveWithCompletion?: boolean;
 }
 
 export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promise<Task> {
@@ -32,6 +33,9 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
   if (current.version !== request.expectedVersion) throw new Error('Task version changed.');
   const now = request.now ?? new Date();
   if (request.action === 'complete') {
+    const completionSource = request.replaceManualArchiveWithCompletion
+      ? ({ ...current, status: 'open', lifecycle: 'active' } as Task)
+      : current;
     let attribution = {};
     if (current.projectId) {
       const project = await getProject(current.projectId);
@@ -44,7 +48,7 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
           categoryName: category.name,
         };
     }
-    const result = completeAndArchiveTask(current, request.actorId, attribution, now);
+    const result = completeAndArchiveTask(completionSource, request.actorId, attribution, now);
     if (request.completionEventId) {
       const id = ulidSchema.parse(request.completionEventId);
       if (await findCompletionEvent(id))
