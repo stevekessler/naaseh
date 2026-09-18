@@ -2,7 +2,7 @@ import { taskSchema, transitionTask, type Mutation, type Task } from '@naaseh/do
 import { sanitizeTaskPatch } from '../tasks/task-service.js';
 import { changeTaskLifecycle } from '../lifecycle/task-lifecycle-service.js';
 import { SafeApiError } from '../shared/http.js';
-import { findCompletionEvent, saveTaskMutation } from '../tasks/task-repository.js';
+import { saveTaskMutation } from '../tasks/task-repository.js';
 import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 
 /** Accept the encrypted browser outbox envelope as well as legacy flat patches. */
@@ -65,27 +65,14 @@ export async function saveSyncedTask(
       (current.lifecycle === 'archived' || current.status === 'archived')
     ) {
       const eventId = envelope.completionEvent?.id;
-      const event =
-        eventId && current.currentCompletionEventId === eventId
-          ? await findCompletionEvent(eventId)
-          : undefined;
-      // A conflict resolution has a new mutation ID, but the original completion
-      // event still identifies an already-applied action. Never count it twice.
-      if (
-        current.completionState === 'completed' &&
-        event &&
-        event.taskId === current.id &&
-        event.completedBy === actorId &&
-        event.counted &&
-        !event.reversedAt
-      )
+      // Completion is a state transition, not a repeatable action. If another
+      // client already completed the task, the saved intent is satisfied even
+      // when that client generated a different completion event ID. Treat the
+      // replay as idempotent so conflict review can clear it without counting
+      // a second completion.
+      if (current.completionState === 'completed' || current.archiveReason === 'completed')
         return { task: current, replayed: true };
-      if (
-        eventId &&
-        current.completionState !== 'completed' &&
-        current.archiveReason !== 'completed'
-      )
-        replaceManualArchiveWithCompletion = true;
+      if (eventId) replaceManualArchiveWithCompletion = true;
       else
         throw new SafeApiError(
           409,
