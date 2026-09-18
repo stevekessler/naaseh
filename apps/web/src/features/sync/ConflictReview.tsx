@@ -10,6 +10,7 @@ import {
 
 const fieldLabels: Record<string, string> = {
   label: 'Task label',
+  memo: 'Memo',
   link: 'Link',
   dueAt: 'Due',
   dueKind: 'Due type',
@@ -49,7 +50,7 @@ function ConflictItem({
     payload && typeof payload.patch === 'object' && payload.patch
       ? (payload.patch as Record<string, unknown>)
       : payload;
-  const protectedFields = new Set(['memo', 'memoDocument', 'encryptedMemo']);
+  const protectedFields = new Set(['memoDocument', 'encryptedMemo']);
   const fields = Object.fromEntries(
     Object.entries(savedFields ?? {}).filter(
       ([field]) => !protectedFields.has(field) && (!isTask || field in fieldLabels),
@@ -102,18 +103,12 @@ function ConflictItem({
       {conflict.createdAt && (
         <p>Saved on this device: {new Date(conflict.createdAt).toLocaleString()}</p>
       )}
-      {conflict.mutation && (
-        <p>
-          Change: {conflict.mutation.operation}. Reference: {conflict.mutation.entityId}
-        </p>
-      )}
       {isTask && (
         <>
           <p>
-            Compare your saved change with the current server version. Reapplying sends your saved
-            change again; if the task changes meanwhile, it will need another review.
+            Compare your saved change with the current server version. Keeping your version sends
+            the saved change again; if the task changes meanwhile, it will need another review.
           </p>
-          <p>Memo contents stay protected and are not shown in this comparison.</p>
           {conflict.mutation?.operation === 'create' && (
             <p>
               A task with this ID already exists. Keep the server version, then edit the task to
@@ -183,14 +178,14 @@ function ConflictItem({
           conflict.mutation?.operation !== 'create' &&
           !['authorization_changed', 'hard_deleted'].includes(conflict.reason) && (
             <button disabled={busy || !remote} onClick={() => void resolve('local')}>
-              Reapply my change
+              Keep My Version
             </button>
           )}
         <button
           disabled={busy || (isTask && remote === undefined)}
           onClick={() => void resolve('remote')}
         >
-          {isTask && remote ? 'Keep server version' : 'Discard saved change'}
+          {isTask && remote ? 'Keep Server Version' : 'Discard saved change'}
         </button>
       </div>
     </article>

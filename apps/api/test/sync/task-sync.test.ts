@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import {
+  archiveTask,
   createTask,
   createUlid,
   type Task,
@@ -129,6 +130,27 @@ it('syncs completion and undo with one event ID and reverses its count', async (
   });
   expect(state.events.size).toBe(1);
   expect(state.events.get(eventId)?.counted).toBe(false);
+});
+it('keeps a rebased local completion over a manual server archive', async () => {
+  state.task = archiveTask(state.task!, 'owner');
+  const eventId = createUlid();
+  const completed = await saveSyncedTask(
+    state.task,
+    mutation(
+      { patch: { status: 'completed' }, completionEvent: { id: eventId } },
+      'completeAndArchive',
+    ),
+    'owner',
+  );
+  expect(completed.task).toMatchObject({
+    status: 'archived',
+    lifecycle: 'archived',
+    completionState: 'completed',
+    archiveReason: 'completed',
+    currentCompletionEventId: eventId,
+    version: 3,
+  });
+  expect(state.events.get(eventId)?.counted).toBe(true);
 });
 it('never overwrites another completion event using a supplied event ID', async () => {
   const id = createUlid();

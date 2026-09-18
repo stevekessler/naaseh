@@ -113,7 +113,13 @@ test.describe('mocked reconnect protocol', () => {
       const { mutations } = route.request().postDataJSON();
       const item = mutations[0];
       if (item.operation === 'create') {
-        serverTask = { ...item.payload, label: 'Server task', version: 7 };
+        serverTask = {
+          ...item.payload,
+          label: 'Server task',
+          memo: 'Server memo contents',
+          memoDocument: undefined,
+          version: 7,
+        };
       } else if (reapply) {
         expect(item.id).not.toBe(lastMutationId);
         pushedBase = item.baseVersion;
@@ -153,6 +159,8 @@ test.describe('mocked reconnect protocol', () => {
     await signIn(page);
     await context.setOffline(true);
     await page.getByLabel('Task label').fill('Conflicting offline edit');
+    await page.getByText('Task details', { exact: true }).click();
+    await page.getByLabel('Memo', { exact: true }).fill('My saved memo contents');
     await page.getByRole('button', { name: 'Add task' }).click();
     await expect(page.getByRole('heading', { name: 'Conflicting offline edit' })).toBeVisible();
     await context.setOffline(false);
@@ -164,13 +172,18 @@ test.describe('mocked reconnect protocol', () => {
     const review = page.getByRole('dialog', { name: 'Resolve sync conflicts' });
     await expect(review).toContainText('Conflicting offline edit');
     await expect(review).toContainText('Server task');
+    await expect(review).toContainText('My saved memo contents');
+    await expect(review).toContainText('Server memo contents');
+    await expect(review).not.toContainText('Memo contents stay protected');
+    await expect(review).not.toContainText('Change:');
+    await expect(review).not.toContainText('Reference:');
     // A concurrent server edit must be reviewed before the local copy is replaced.
     serverTask = { ...serverTask!, label: 'New server task', version: 8 };
-    await review.getByRole('button', { name: 'Keep server version' }).click();
+    await review.getByRole('button', { name: 'Keep Server Version' }).click();
     await expect(review.getByRole('alert')).toContainText('server version changed');
     await review.getByRole('button', { name: 'Refresh comparison' }).click();
     await expect(review).toContainText('New server task');
-    await review.getByRole('button', { name: 'Keep server version' }).click();
+    await review.getByRole('button', { name: 'Keep Server Version' }).click();
     await expect(review).toContainText('All conflicts resolved');
     await review.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'New server task' })).toBeVisible();
@@ -183,13 +196,13 @@ test.describe('mocked reconnect protocol', () => {
     await page.evaluate(() => scrollTo(0, 0));
     await page.getByRole('button', { name: 'Review conflicts (1)' }).click();
     await expect(review).toContainText('My revised task');
-    await expect(review.getByRole('button', { name: 'Reapply my change' })).toBeEnabled();
+    await expect(review.getByRole('button', { name: 'Keep My Version' })).toBeEnabled();
     await context.setOffline(true);
-    await review.getByRole('button', { name: 'Reapply my change' }).click();
+    await review.getByRole('button', { name: 'Keep My Version' }).click();
     await expect(review.getByRole('alert')).toContainText('Connect to review');
     await context.setOffline(false);
     reapply = true;
-    await review.getByRole('button', { name: 'Reapply my change' }).click();
+    await review.getByRole('button', { name: 'Keep My Version' }).click();
     await expect(review).toContainText('All conflicts resolved');
     await expect.poll(() => pushedBase).toBe(8);
     await review.getByRole('button', { name: 'Close', exact: true }).click();

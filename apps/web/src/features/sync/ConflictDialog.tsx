@@ -14,8 +14,8 @@ export function ConflictDialog({
         Your offline edit conflicts with server version {conflict.remote.version}. No task content
         is shown in this notice.
       </p>
-      <button onClick={() => resolve('keep-local')}>Keep mine</button>
-      <button onClick={() => resolve('keep-remote')}>Keep server version</button>
+      <button onClick={() => resolve('keep-local')}>Keep My Version</button>
+      <button onClick={() => resolve('keep-remote')}>Keep Server Version</button>
     </dialog>
   );
 }
