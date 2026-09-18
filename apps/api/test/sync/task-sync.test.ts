@@ -107,16 +107,16 @@ it('syncs completion and undo with one event ID and reverses its count', async (
   expect(replayed).toEqual({ task: completed.task, replayed: true });
   expect(state.events.size).toBe(1);
   expect(state.task?.version).toBe(2);
-  await expect(
-    saveSyncedTask(
-      state.task,
-      mutation(
-        { patch: { status: 'completed' }, completionEvent: { id: createUlid() } },
-        'completeAndArchive',
-      ),
-      'owner',
+  const completedElsewhere = await saveSyncedTask(
+    state.task,
+    mutation(
+      { patch: { status: 'completed' }, completionEvent: { id: createUlid() } },
+      'completeAndArchive',
     ),
-  ).rejects.toMatchObject({ classification: 'conflict', retryable: false });
+    'owner',
+  );
+  expect(completedElsewhere).toEqual({ task: completed.task, replayed: true });
+  expect(state.events.size).toBe(1);
   const restored = await saveSyncedTask(
     state.task,
     mutation({ patch: { status: 'open' } }, 'reopenAndRestore'),
