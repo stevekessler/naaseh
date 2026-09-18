@@ -311,7 +311,9 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
           throw new Error(
             `A pending ${item.entityType} change was rejected and remains stored. Other tasks can still download.${result.problem?.message ? ` ${result.problem.message}` : ''}${result.problem?.correlationId ? ` Reference: ${result.problem.correlationId}` : ''}`,
           );
-        throw new Error('The server asked the browser to retry synchronization.');
+        throw new Error(
+          `The server could not sync a saved ${item.entityType} change. Your change remains saved on this device.${result.problem?.message ? ` ${result.problem.message}` : ''}${result.problem?.correlationId ? ` Reference: ${result.problem.correlationId}` : ''}`,
+        );
       } catch (error) {
         firstError ??= error;
         break; // Keep this entity ordered; unrelated queues may still synchronize.

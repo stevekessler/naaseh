@@ -1,7 +1,8 @@
 import { taskSchema, transitionTask, type Mutation, type Task } from '@naaseh/domain';
 import { sanitizeTaskPatch } from '../tasks/task-service.js';
 import { changeTaskLifecycle } from '../lifecycle/task-lifecycle-service.js';
-import { saveTaskMutation } from '../tasks/task-repository.js';
+import { SafeApiError } from '../shared/http.js';
+import { findCompletionEvent, saveTaskMutation } from '../tasks/task-repository.js';
 import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 
 /** Accept the encrypted browser outbox envelope as well as legacy flat patches. */
@@ -58,6 +59,34 @@ export async function saveSyncedTask(
     if (Object.keys(patch).some((key) => key !== 'status'))
       throw new Error('Lifecycle changes must be separate from task edits.');
     const envelope = mutation.payload as { completionEvent?: { id?: string } };
+    if (
+      action === 'complete' &&
+      (current.lifecycle === 'archived' || current.status === 'archived')
+    ) {
+      const eventId = envelope.completionEvent?.id;
+      const event =
+        eventId && current.currentCompletionEventId === eventId
+          ? await findCompletionEvent(eventId)
+          : undefined;
+      // A conflict resolution has a new mutation ID, but the original completion
+      // event still identifies an already-applied action. Never count it twice.
+      if (
+        current.completionState === 'completed' &&
+        event &&
+        event.taskId === current.id &&
+        event.completedBy === actorId &&
+        event.counted &&
+        !event.reversedAt
+      )
+        return { task: current, replayed: true };
+      throw new SafeApiError(
+        409,
+        'lifecycle_changed',
+        'This task is already archived. Keep the server version or restore the task before completing it.',
+        'conflict',
+      );
+    }
+
     const task = await changeTaskLifecycle({
       taskId: current.id,
       actorId,
