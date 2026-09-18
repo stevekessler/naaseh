@@ -37,3 +37,19 @@ test('edits rich memo and five-minute due time atomically', async ({ page }) => 
   await dialog.getByRole('button', { name: 'Save changes' }).click();
   await expect(dialog).toBeHidden();
 });
+
+test('shows strikethrough formatting while editing a memo', async ({ page }) => {
+  await signIn(page);
+  const form = page.locator('.task-form').first();
+  await form.getByLabel('Task label').fill('Strikethrough task');
+  await expandTaskDetails(form);
+
+  const memo = form.getByRole('textbox', { name: 'Memo', exact: true });
+  await memo.fill('This is a test');
+  await memo.selectText();
+  await form.getByRole('button', { name: 'Strikethrough' }).click();
+
+  const formattedText = memo.locator('.memo-format-strikethrough');
+  await expect(formattedText).toHaveText('This is a test');
+  await expect(formattedText).toHaveCSS('text-decoration-line', 'line-through');
+});

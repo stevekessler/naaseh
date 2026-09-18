@@ -60,7 +60,8 @@ describe('responsive markup contracts', () => {
       />,
     );
     expect(html).toContain('Categories and Projects');
-    expect(html).toContain('Category: Personal');
+    expect(html).toContain('class="project-workload-kicker">Category');
+    expect(html).toContain('<strong>Personal</strong>');
     expect(html).toContain('No projects in this category.');
     expect(html).toContain('Unassigned to a project');
   });

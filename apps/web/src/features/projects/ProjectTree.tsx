@@ -58,66 +58,112 @@ export function ProjectTree({
     return leftRank - rightRank || left.id.localeCompare(right.id);
   });
   return (
-    <section aria-labelledby="projects-heading">
-      <header className="welcome">
+    <section className="projects-page" aria-labelledby="projects-heading">
+      <header className="welcome projects-header">
         <div>
           <p className="eyebrow">Workload as of {new Date(tree.asOf).toLocaleString()}</p>
           <h1 id="projects-heading">Categories and Projects</h1>
+          <p className="projects-intro">
+            See where active work is concentrated and what comes next.
+          </p>
         </div>
       </header>
       {changeUrgencies ? (
-        <PriorityFilter value={selected} change={changeUrgencies} ariaLabel="Current priorities" />
+        <div className="projects-filter-panel">
+          <PriorityFilter
+            value={selected}
+            change={changeUrgencies}
+            ariaLabel="Current priorities"
+          />
+        </div>
       ) : null}
       <ul className="project-workload-tree">
         {tree.categories.map(({ category, count, projects }) => (
-          <li key={category.id}>
+          <li className="project-workload-card" key={category.id}>
             <details open>
-              <summary>
-                <strong>Category: {category.name}</strong>{' '}
-                <span className="count-badge">{count.taskCount} to-dos</span>{' '}
-                <span className="count-badge">{count.listCount} lists</span>
+              <summary className="project-workload-heading">
+                <span className="project-workload-title">
+                  <span className="project-workload-kicker">Category</span>
+                  <strong>{category.name}</strong>
+                </span>
+                <span className="workload-counts">
+                  <span className="count-badge">{count.taskCount} to-dos</span>
+                  <span className="count-badge">{count.listCount} lists</span>
+                </span>
               </summary>
-              <UrgencyBreakdown
-                counts={count.urgencyCounts}
-                label={`Current priority breakdown for ${category.name}`}
-              />
-              <ul>
-                {projects.map(({ project, count: projectCount }) => (
-                  <li key={project.id}>
-                    <a href={`/tasks?projectId=${encodeURIComponent(project.id)}`}>
-                      Project: {project.name}
-                    </a>{' '}
-                    <span className="count-badge">{projectCount.taskCount} to-dos</span>{' '}
-                    <span className="count-badge">{projectCount.listCount} lists</span>{' '}
-                    <ProjectStatus
-                      project={project}
-                      remaining={projectCount.taskCount + projectCount.listCount}
-                    />
-                    <UrgencyBreakdown
-                      counts={projectCount.urgencyCounts}
-                      label={`Current priority breakdown for ${project.name}`}
-                    />
-                  </li>
-                ))}
-                {!projects.length ? <li>No projects in this category.</li> : null}
-              </ul>
+              <div className="project-workload-body">
+                <UrgencyBreakdown
+                  counts={count.urgencyCounts}
+                  label={`Current priority breakdown for ${category.name}`}
+                  heading="Priority mix"
+                  tiles
+                />
+                <ul className="project-workload-projects">
+                  {projects.map(({ project, count: projectCount }) => (
+                    <li key={project.id}>
+                      <div className="project-row-heading">
+                        <a href={`/tasks?projectId=${encodeURIComponent(project.id)}`}>
+                          Project: {project.name}
+                        </a>
+                        <span className="workload-counts">
+                          <span className="count-badge">{projectCount.taskCount} to-dos</span>
+                          <span className="count-badge">{projectCount.listCount} lists</span>
+                        </span>
+                      </div>
+                      <ProjectStatus
+                        project={project}
+                        remaining={projectCount.taskCount + projectCount.listCount}
+                      />
+                      <UrgencyBreakdown
+                        counts={projectCount.urgencyCounts}
+                        label={`Current priority breakdown for ${project.name}`}
+                        heading="Priority mix"
+                        tiles
+                      />
+                    </li>
+                  ))}
+                  {!projects.length ? (
+                    <li className="project-empty">No projects in this category.</li>
+                  ) : null}
+                </ul>
+              </div>
             </details>
           </li>
         ))}
-        <li>
-          <a href="/tasks?projectId=unassigned">Unassigned to a project</a>{' '}
-          <span className="count-badge">{tree.unassigned.taskCount} to-dos</span>{' '}
-          <span className="count-badge">{tree.unassigned.listCount} lists</span>
-          <UrgencyBreakdown
-            counts={tree.unassigned.urgencyCounts}
-            label="Current priority breakdown for Unassigned"
-          />
+        <li className="project-workload-card project-workload-unassigned">
+          <div className="project-workload-heading">
+            <span className="project-workload-title">
+              <span className="project-workload-kicker">No project</span>
+              <a href="/tasks?projectId=unassigned">Unassigned to a project</a>
+            </span>
+            <span className="workload-counts">
+              <span className="count-badge">{tree.unassigned.taskCount} to-dos</span>
+              <span className="count-badge">{tree.unassigned.listCount} lists</span>
+            </span>
+          </div>
+          <div className="project-workload-body">
+            <UrgencyBreakdown
+              counts={tree.unassigned.urgencyCounts}
+              label="Current priority breakdown for Unassigned"
+              heading="Priority mix"
+              tiles
+            />
+          </div>
         </li>
       </ul>
       {detailRows.length ? (
-        <section aria-label="Workload report detail">
+        <section className="workload-detail-card" aria-label="Workload report detail">
+          <div className="workload-detail-header">
+            <div>
+              <p className="project-workload-kicker">Active queue</p>
+              <h2>Ranked work</h2>
+            </div>
+            <span>
+              {sortedRows.length} item{sortedRows.length === 1 ? '' : 's'}
+            </span>
+          </div>
           {changeOrder ? (
-            <fieldset>
+            <fieldset className="workload-sort">
               <legend>Sort report rows</legend>
               <label>
                 <input
@@ -143,14 +189,20 @@ export function ProjectTree({
           {!projectRankAvailable && orderBy === 'projectRank' ? (
             <p role="status">Project rank is available only within one Project.</p>
           ) : null}
-          <ol>
+          <ol className="workload-detail-list">
             {sortedRows.map((row) => (
               <li key={row.id}>
-                {row.label} <UrgencyBadge urgency={row.urgency as Urgency} /> Overall position{' '}
-                {row.overallRank}
-                {projectRankAvailable && row.projectRank !== undefined
-                  ? ` Project position ${row.projectRank}`
-                  : ''}
+                <span className="workload-rank" aria-hidden="true">
+                  {effectiveOrder === 'projectRank' ? row.projectRank : row.overallRank}
+                </span>
+                <strong>{row.label}</strong>
+                <UrgencyBadge urgency={row.urgency as Urgency} />
+                <span className="workload-positions">
+                  Overall position {row.overallRank}
+                  {projectRankAvailable && row.projectRank !== undefined
+                    ? ` · Project position ${row.projectRank}`
+                    : ''}
+                </span>
               </li>
             ))}
           </ol>

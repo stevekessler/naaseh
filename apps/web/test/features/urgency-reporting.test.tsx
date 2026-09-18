@@ -152,9 +152,9 @@ describe('urgency-aware reporting surfaces', () => {
     expect(html).toContain('Current priority breakdown for Launch');
     expect(html).toContain('Current priority breakdown for Release');
     expect(html).toContain('Current priority breakdown for Unassigned');
-    expect(html).toContain('Low: 1');
-    expect(html).toContain('Medium: 0');
-    expect(html).toContain('Critical: 0');
+    expect(html).toContain('data-priority="low"><span>Low</span><strong>1</strong>');
+    expect(html).toContain('data-priority="medium"><span>Medium</span><strong>0</strong>');
+    expect(html).toContain('data-priority="critical"><span>Critical</span><strong>0</strong>');
   });
 
   it('supports authorized drilldown sorting by viewer overall/Project rank with scope constraints', () => {
