@@ -1,3 +1,4 @@
+import { SafeApiError } from '../shared/http.js';
 import {
   archiveTask,
   ulidSchema,
@@ -46,7 +47,13 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
     const result = completeAndArchiveTask(current, request.actorId, attribution, now);
     if (request.completionEventId) {
       const id = ulidSchema.parse(request.completionEventId);
-      if (await findCompletionEvent(id)) throw new Error('Completion event already exists.');
+      if (await findCompletionEvent(id))
+        throw new SafeApiError(
+          409,
+          'lifecycle_changed',
+          'Completion event already exists. Review the current task before applying another completion.',
+          'conflict',
+        );
       result.completionEvent.id = id;
       result.task.currentCompletionEventId = id;
     }

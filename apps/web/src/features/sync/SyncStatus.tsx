@@ -15,19 +15,26 @@ export function SyncStatus({
 }) {
   return (
     <div className="sync-status" role="status">
-      <span className="sync-status-summary">
-        {!online
-          ? `Offline${pending ? ` · ${pending} pending` : ''}`
-          : error
-            ? 'Sync failed'
-            : conflicts
-              ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}`
-              : pending
-                ? `${pending} pending`
-                : 'Synced'}
-      </span>
-      {conflicts > 0 && reviewConflicts && (
-        <button onClick={reviewConflicts}>Review conflicts ({conflicts})</button>
+      {conflicts > 0 && reviewConflicts ? (
+        <button
+          className="sync-status-summary"
+          aria-label={`Review conflicts (${conflicts})`}
+          onClick={reviewConflicts}
+        >
+          {conflicts} conflict{conflicts === 1 ? '' : 's'} — review and resolve
+        </button>
+      ) : (
+        <span className="sync-status-summary">
+          {!online
+            ? `Offline${pending ? ` · ${pending} pending` : ''}`
+            : error
+              ? 'Sync failed'
+              : conflicts
+                ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}`
+                : pending
+                  ? `${pending} pending`
+                  : 'Synced'}
+        </span>
       )}
       {error && (
         <div className="sync-status-error" role="alert">

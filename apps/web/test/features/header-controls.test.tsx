@@ -26,6 +26,22 @@ describe('header controls', () => {
     expect(html).toContain('class="sync-status-summary"');
     expect(html).toContain('class="sync-status-error"');
     expect(html).toContain('<button>Retry</button>');
+    const conflicted = renderToStaticMarkup(
+      <SyncStatus
+        online={false}
+        pending={1}
+        conflicts={1}
+        error="Server failure"
+        retry={() => undefined}
+        reviewConflicts={() => undefined}
+      />,
+    );
+    expect(conflicted).toContain(
+      '<button class="sync-status-summary" aria-label="Review conflicts (1)">1 conflict',
+    );
+    expect(conflicted).toContain('review and resolve');
+    expect(conflicted).toContain('Server failure');
+    expect(conflicted).toContain('<button>Retry</button>');
   });
 
   it('retains updates and reloads an activated shell only after user action', async () => {
