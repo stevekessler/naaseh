@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { DeletionPreview } from '@naaseh/domain';
 import { purgeConfirmedDeletion } from '../../db/deletion-purge.js';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../../db/database.js';
 import {
   fetchDeletionPreview,
   startPermanentDeletion,
@@ -26,6 +28,11 @@ export function PermanentDeleteDialog({
   const [status, setStatus] = useState<'idle' | 'loading' | 'deleting' | 'failed'>('idle');
   const [error, setError] = useState('');
   const [online, setOnline] = useState(() => navigator.onLine);
+  const pendingChanges =
+    useLiveQuery(
+      () => db.outbox.where('entityId').equals(target.resourceId).count(),
+      [target.resourceId],
+    ) ?? 0;
   const cancel = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (open) cancel.current?.focus();
@@ -41,6 +48,7 @@ export function PermanentDeleteDialog({
   }, []);
   const begin = async () => {
     setOpen(true);
+    setPreview(undefined);
     setStatus('loading');
     setError('');
     try {
@@ -56,8 +64,14 @@ export function PermanentDeleteDialog({
       <button
         type="button"
         className="danger"
-        disabled={disabled || !online}
-        title={!online ? 'Permanent deletion requires an internet connection.' : undefined}
+        disabled={disabled || !online || pendingChanges > 0}
+        title={
+          !online
+            ? 'Permanent deletion requires an internet connection.'
+            : pendingChanges
+              ? 'Wait for this item to finish syncing before deleting it.'
+              : undefined
+        }
         onClick={() => void begin()}
       >
         Delete permanently
@@ -89,6 +103,11 @@ export function PermanentDeleteDialog({
             {status === 'loading' && <p role="status">Reviewing dependencies…</p>}
             {status === 'deleting' && <p role="status">Permanently deleting…</p>}
             {error && <p role="alert">{error}</p>}
+            {status === 'failed' && (
+              <button type="button" onClick={() => void begin()}>
+                Retry preview
+              </button>
+            )}
             <div className="dialog-actions">
               <button ref={cancel} type="button" onClick={() => setOpen(false)}>
                 Cancel

@@ -154,9 +154,13 @@ function ConflictItem({
         <p>
           {conflict.reason === 'timer_changed'
             ? 'A timer change could not sync. Discard this failed change to keep the synchronized timer state.'
-            : conflict.mutation
-              ? 'This saved operation could not sync. You can discard it and refresh the synchronized state, then make any needed changes again.'
-              : 'This saved change is unavailable or access has changed. Its protected content cannot be displayed. You can discard this notice.'}
+            : conflict.reason === 'project_unavailable'
+              ? 'This project points to a category that is not on the server. Resolve the category conflict, then recreate the project under a synchronized category. Discarding removes only this unsynced project from this device.'
+              : conflict.mutation
+                ? conflict.mutation.operation === 'create'
+                  ? 'This saved operation could not sync. Discarding a new, unsynced category or project removes that local record once it has no dependent work.'
+                  : 'This saved operation could not sync. Discard the failed edit to keep the synchronized server version.'
+                : 'This saved change is unavailable or access has changed. Its protected content cannot be displayed. You can discard this notice.'}
         </p>
       )}
       {!isTask &&

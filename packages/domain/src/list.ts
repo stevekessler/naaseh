@@ -6,6 +6,7 @@ import {
   valueOverrideSchema,
 } from './directory-item.js';
 import { defaultUrgency, urgencySchema } from './urgency.js';
+import { calendarDateSchema } from './project.js';
 
 export const listSchema = z
   .object({
@@ -48,6 +49,8 @@ export const listItemSchema = z
     directorySnapshot: directorySnapshotSchema,
     nameOverride: z.string().trim().min(1).max(300).optional(),
     valueOverride: valueOverrideSchema.optional(),
+    dueDate: calendarDateSchema.optional(),
+    memo: z.string().max(2000).optional(),
     completedAt: z.string().datetime().optional(),
     completedBy: z.string().min(1).optional(),
     createdAt: z.string().datetime(),
@@ -95,6 +98,8 @@ export function createListItem(
   input: {
     name: string;
     amountMinor?: number | null;
+    dueDate?: string;
+    memo?: string;
     directoryItemId?: string;
     directoryVersion?: number;
   },
@@ -114,6 +119,8 @@ export function createListItem(
       amountMinor: input.amountMinor ?? null,
       version: input.directoryVersion ?? 1,
     },
+    ...(input.dueDate ? { dueDate: input.dueDate } : {}),
+    ...(input.memo ? { memo: input.memo } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
     version: 1,

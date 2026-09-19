@@ -11,7 +11,13 @@ import {
   registerDurableFailure,
 } from '../auth/rate-limit.js';
 import { putRecord } from '../shared/store.js';
-import { createGroup, GroupPolicyError, joinGroup, removeGroupMember } from './group-service.js';
+import {
+  createGroup,
+  GroupPolicyError,
+  joinGroup,
+  removeGroupMember,
+  renameGroup,
+} from './group-service.js';
 import {
   getGroup,
   getMembership,
@@ -82,6 +88,39 @@ async function handleGroupRequest(
 
   const group = groupId ? await getGroup(groupId) : undefined;
   if (!group) return problem(404, 'not_found', 'Group not found.', correlationId);
+
+  if (method === 'PATCH' && groupId) {
+    const name = (JSON.parse(event.body ?? '{}') as { name?: unknown }).name;
+    const expectedVersion = Number(event.headers['if-match']);
+    if (typeof name !== 'string' || !expectedVersion)
+      return problem(
+        400,
+        'invalid_group_update',
+        'A name and version are required.',
+        correlationId,
+      );
+    if (group.version !== expectedVersion)
+      return problem(
+        409,
+        'version_conflict',
+        'The group changed. Refresh and try again.',
+        correlationId,
+      );
+    try {
+      const next = await renameGroup(group, actorId, name, expectedVersion);
+      await audit('group.renamed', actorId, { groupId });
+      return json(200, publicGroup(next, await getMembership(groupId, actorId)));
+    } catch (error) {
+      if (error instanceof GroupPolicyError)
+        return problem(
+          403,
+          'forbidden',
+          'Only the group owner can edit this group.',
+          correlationId,
+        );
+      throw error;
+    }
+  }
 
   if (method === 'POST' && event.rawPath.endsWith('/join')) {
     const rateKey = `group:${group.id}:user:${actorId}`;

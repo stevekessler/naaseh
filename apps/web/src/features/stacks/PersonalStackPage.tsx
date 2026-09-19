@@ -89,8 +89,8 @@ export function PersonalStackPage({
   const [editingId, setEditingId] = useState<string>();
   const editing = parentTasks.find((task) => task.id === editingId);
   return (
-    <section className="personal-stack-page">
-      <header className="personal-stack-header">
+    <section className="personal-stack-page projects-page">
+      <header className="personal-stack-header projects-header">
         <div>
           <p className="eyebrow">My priorities</p>
           <h1>Personal Stack</h1>
@@ -115,7 +115,7 @@ export function PersonalStackPage({
       ) : null}
 
       {filters && changeFilters ? (
-        <section className="filters" aria-label="Search and filters">
+        <section className="filters projects-filter-panel" aria-label="Search and filters">
           <TaskFilters
             value={filters}
             change={changeFilters}

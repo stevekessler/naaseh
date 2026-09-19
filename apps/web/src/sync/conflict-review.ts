@@ -64,11 +64,47 @@ export async function resolveReviewedConflict(
     const mutation = conflict.mutation;
     if (mutation?.entityType !== 'task') {
       if (choice === 'local') throw new Error('This change cannot be reapplied here.');
-      // Acknowledge the saved failed operation; download authorized state again.
-      await db.transaction('rw', db.secureConflicts, db.settings, async () => {
-        await db.settings.put({ key: 'pending-sync-replay-cursor', value: '{}' });
-        await db.secureConflicts.delete(conflict.id);
-      });
+      // Never leave a failed local Category/Project visible as if it had synced.
+      // Preserve it when related work still depends on it so the user can review first.
+      await db.transaction(
+        'rw',
+        [
+          db.secureConflicts,
+          db.settings,
+          db.secureCategories,
+          db.secureProjects,
+          db.secureTasks,
+          db.secureLists,
+          db.outbox,
+        ],
+        async () => {
+          if (mutation?.entityType === 'category' && mutation.operation === 'create') {
+            if (await db.secureProjects.where('categoryId').equals(mutation.entityId).count())
+              throw new Error('Resolve or move projects in this category before discarding it.');
+            if (await db.outbox.where('entityId').equals(mutation.entityId).count())
+              throw new Error(
+                'This category has newer pending changes. Let them sync before discarding it.',
+              );
+            await db.secureCategories.delete(mutation.entityId);
+          }
+          if (mutation?.entityType === 'project' && mutation.operation === 'create') {
+            const [tasks, lists, pending] = await Promise.all([
+              db.secureTasks.where('projectId').equals(mutation.entityId).count(),
+              db.secureLists.where('projectId').equals(mutation.entityId).count(),
+              db.outbox.where('entityId').equals(mutation.entityId).count(),
+            ]);
+            if (tasks || lists)
+              throw new Error('Move work out of this project before discarding it.');
+            if (pending)
+              throw new Error(
+                'This project has newer pending changes. Let them sync before discarding it.',
+              );
+            await db.secureProjects.delete(mutation.entityId);
+          }
+          await db.settings.put({ key: 'pending-sync-replay-cursor', value: '{}' });
+          await db.secureConflicts.delete(conflict.id);
+        },
+      );
       return;
     }
     const current = await readConflictTask(conflict);

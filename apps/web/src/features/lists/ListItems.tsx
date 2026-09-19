@@ -9,7 +9,12 @@ import {
 import { ListItemRow } from './ListItemRow.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 
-export type NewListItem = { name: string; amountMinor: number | null };
+export type NewListItem = {
+  name: string;
+  amountMinor: number | null;
+  dueDate?: string;
+  memo?: string;
+};
 
 export function parseInitialListItem(name: string, amount: string, positive: boolean): NewListItem {
   return {
@@ -22,6 +27,8 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [positive, setPositive] = useState(false);
+  const [dueDate, setDueDate] = useState('');
+  const [memo, setMemo] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -31,7 +38,11 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
     if (!trimmedName || pending) return;
     let input: NewListItem;
     try {
-      input = parseInitialListItem(name, amount, positive);
+      input = {
+        ...parseInitialListItem(name, amount, positive),
+        ...(dueDate ? { dueDate } : {}),
+        ...(memo.trim() ? { memo: memo.trim() } : {}),
+      };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Enter a valid amount.');
       return;
@@ -43,6 +54,8 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
       setName('');
       setAmount('');
       setPositive(false);
+      setDueDate('');
+      setMemo('');
     } catch {
       setError('The item was not saved. Your entry is still here; try again.');
     } finally {
@@ -56,24 +69,45 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
         Add an item
         <input required value={name} onChange={(event) => setName(event.target.value)} />
       </label>
-      <label>
-        Amount
-        <input
-          inputMode="decimal"
-          placeholder="12.34"
-          value={amount}
-          onChange={(event) => setAmount(event.target.value)}
-          aria-describedby={error ? 'list-item-amount-error' : undefined}
-        />
-      </label>
-      <label className="inline-choice">
-        <input
-          type="checkbox"
-          checked={positive}
-          onChange={(event) => setPositive(event.target.checked)}
-        />
-        Credit
-      </label>
+      <details className="list-item-options">
+        <summary>Optional money and details</summary>
+        <div className="list-item-option-fields">
+          <label>
+            Amount (optional)
+            <input
+              inputMode="decimal"
+              placeholder="12.34"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              aria-describedby={error ? 'list-item-amount-error' : undefined}
+            />
+          </label>
+          <label className="inline-choice">
+            <input
+              type="checkbox"
+              checked={positive}
+              onChange={(event) => setPositive(event.target.checked)}
+            />
+            Credit
+          </label>
+          <label>
+            Due date (optional)
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(event) => setDueDate(event.target.value)}
+            />
+          </label>
+          <label>
+            Memo (optional)
+            <textarea
+              maxLength={2000}
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+            />
+          </label>
+        </div>
+      </details>
       <button disabled={pending}>{pending ? 'Adding…' : 'Add item'}</button>
       {error && (
         <p id="list-item-amount-error" role="alert">
@@ -98,7 +132,7 @@ export function ListItems({
   items: ListItem[];
   toggle: (item: ListItem) => void;
   remove: (item: ListItem) => void;
-  edit: (item: ListItem, name: string, amountMinor: number | null) => void;
+  edit: (item: ListItem, input: NewListItem) => void;
   reset: (item: ListItem) => void;
   promote: (item: ListItem, name: string, amountMinor: number | null) => void;
   reorder: (items: ListItem[]) => void;
@@ -137,7 +171,7 @@ export function ListItems({
               : { value: formatMinor(effective.amountMinor, current?.currency ?? 'USD') })}
             onToggle={() => toggle(item)}
             onRemove={() => remove(item)}
-            onEdit={(name, amount) => edit(item, name, amount)}
+            onEdit={(input) => edit(item, input)}
             {...(item.directoryItemId ? { onReset: () => reset(item) } : {})}
             onPromote={() => promote(item, effective.name, effective.amountMinor)}
             {...(index > 0 ? { moveUp: () => move(-1) } : {})}

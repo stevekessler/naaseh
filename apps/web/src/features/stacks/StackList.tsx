@@ -77,7 +77,20 @@ export function StackList({
     if (resolved) void move(resolved.work, resolved.destinationPosition);
   };
   return (
-    <section className="stack-list-window" aria-label="Personal stack" data-virtualized="true">
+    <section
+      className="stack-list-window workload-detail-card"
+      aria-label="Personal stack"
+      data-virtualized="true"
+    >
+      <div className="workload-detail-header">
+        <div>
+          <p className="project-workload-kicker">Active queue</p>
+          <h2>Ranked work</h2>
+        </div>
+        <span>
+          {items.length} item{items.length === 1 ? '' : 's'}
+        </span>
+      </div>
       <p className="stack-window-status">
         Showing positions {startIndex + 1}–{endIndex} of {items.length}
       </p>
@@ -118,6 +131,7 @@ export function StackList({
               ariaPosition={startIndex + index + 1}
               ariaTotal={items.length}
               move={move}
+              compact
               {...(editTask ? { editTask } : {})}
             />
           ))}

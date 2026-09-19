@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CategoryRecord, Project } from '@naaseh/domain';
 
 export function ProjectForm({
@@ -7,19 +8,34 @@ export function ProjectForm({
 }: {
   categories: CategoryRecord[];
   initial?: Project;
-  save: (value: { categoryId: string; name: string; endDate?: string }) => void;
+  save: (value: { categoryId: string; name: string; endDate?: string }) => Promise<void> | void;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   return (
     <form
+      className="organization-form"
       onSubmit={(event) => {
         event.preventDefault();
-        const data = new FormData(event.currentTarget);
+        if (saving) return;
+        const form = event.currentTarget;
+        const data = new FormData(form);
         const endDate = String(data.get('endDate') ?? '');
-        save({
-          categoryId: String(data.get('categoryId')),
-          name: String(data.get('name')),
-          ...(endDate ? { endDate } : {}),
-        });
+        setSaving(true);
+        setError('');
+        void Promise.resolve()
+          .then(() =>
+            save({
+              categoryId: String(data.get('categoryId')),
+              name: String(data.get('name')).trim(),
+              ...(endDate ? { endDate } : {}),
+            }),
+          )
+          .then(() => {
+            if (!initial) form.reset();
+          })
+          .catch(() => setError('The project could not be saved. Please try again.'))
+          .finally(() => setSaving(false));
       }}
     >
       <label>
@@ -40,7 +56,10 @@ export function ProjectForm({
         End date
         <input name="endDate" type="date" defaultValue={initial?.endDate} />
       </label>
-      <button>{initial ? 'Save Project' : 'Create Project'}</button>
+      <button disabled={saving}>
+        {saving ? 'Saving…' : initial ? 'Save Project' : 'Create Project'}
+      </button>
+      {error && <p role="alert">{error}</p>}
     </form>
   );
 }

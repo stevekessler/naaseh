@@ -43,7 +43,7 @@ export function ListPage({
   csrfToken: string;
   changeList: (list: List, patch: Partial<List>) => Promise<void>;
   groups: { id: string; name: string }[];
-  editItem: (item: ListItem, name: string, amountMinor: number | null) => void;
+  editItem: (item: ListItem, input: NewListItem) => void;
   resetItem: (item: ListItem) => void;
   promoteItem: (item: ListItem, name: string, amountMinor: number | null) => void;
   reorderItems: (items: ListItem[]) => void;

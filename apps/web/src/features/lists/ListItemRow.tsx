@@ -2,6 +2,7 @@ import type { ListItem } from '@naaseh/domain';
 import { useEffect, useState } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
 import { ListItemValueEditor } from './ListItemValueEditor.js';
+import type { NewListItem } from './ListItems.js';
 export function ListItemRow({
   item,
   name,
@@ -20,7 +21,7 @@ export function ListItemRow({
   value?: string;
   onToggle: () => void;
   onRemove: () => void;
-  onEdit: (name: string, amountMinor: number | null) => void;
+  onEdit: (input: NewListItem) => void;
   onReset?: () => void;
   onPromote: () => void;
   moveUp?: () => void;
@@ -31,6 +32,8 @@ export function ListItemRow({
   const feedback = useCompletionFeedback();
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
+  const [draftDueDate, setDraftDueDate] = useState(item.dueDate ?? '');
+  const [draftMemo, setDraftMemo] = useState(item.memo ?? '');
   const [draftAmount, setDraftAmount] = useState<number | null>(
     item.valueOverride?.kind === 'amount'
       ? item.valueOverride.amountMinor
@@ -55,6 +58,12 @@ export function ListItemRow({
         <span className="completion-label">{name}</span>
         {value && <output>{value}</output>}
       </div>
+      {(item.dueDate || item.memo) && (
+        <div className="list-item-details">
+          {item.dueDate && <small>Due {item.dueDate}</small>}
+          {item.memo && <p>{item.memo}</p>}
+        </div>
+      )}
       <div className="list-item-actions" aria-label={`Actions for ${name}`}>
         <button
           className="quiet"
@@ -97,11 +106,32 @@ export function ListItemRow({
             save={setDraftAmount}
             {...(onReset ? { reset: onReset } : {})}
           />
+          <label>
+            Due date
+            <input
+              type="date"
+              value={draftDueDate}
+              onChange={(event) => setDraftDueDate(event.target.value)}
+            />
+          </label>
+          <label>
+            Memo
+            <textarea
+              maxLength={2000}
+              value={draftMemo}
+              onChange={(event) => setDraftMemo(event.target.value)}
+            />
+          </label>
           <button
             type="button"
             disabled={!draftName.trim()}
             onClick={() => {
-              onEdit(draftName.trim(), draftAmount);
+              onEdit({
+                name: draftName.trim(),
+                amountMinor: draftAmount,
+                ...(draftDueDate ? { dueDate: draftDueDate } : {}),
+                ...(draftMemo.trim() ? { memo: draftMemo.trim() } : {}),
+              });
               setEditing(false);
             }}
           >

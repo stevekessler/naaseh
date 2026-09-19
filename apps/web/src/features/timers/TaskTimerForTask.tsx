@@ -5,7 +5,15 @@ import { mutateLocalTaskTimer, readLocalTaskTimer } from '../../db/task-timer-re
 import { TaskTimer } from './TaskTimer.js';
 import { useTaskTimer } from './useTaskTimer.js';
 
-export function TaskTimerForTask({ ownerId, task }: { ownerId: string; task: Task }) {
+export function TaskTimerForTask({
+  ownerId,
+  task,
+  compact = false,
+}: {
+  ownerId: string;
+  task: Task;
+  compact?: boolean;
+}) {
   const timer = useLiveQuery(() => readLocalTaskTimer(ownerId), [ownerId]);
   const [pending, setPending] = useState(false);
   const { projected, announcement } = useTaskTimer(timer);
@@ -36,7 +44,7 @@ export function TaskTimerForTask({ ownerId, task }: { ownerId: string; task: Tas
           );
         }}
       >
-        {projected ? 'Switch timer' : 'Start 10 minute timer'}
+        {projected ? 'Switch timer' : compact ? 'Start 10 min' : 'Start 10 minute timer'}
       </button>
     );
   }

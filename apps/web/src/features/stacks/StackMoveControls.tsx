@@ -18,12 +18,14 @@ export function StackMoveControls({
   position,
   total,
   move,
+  compact = false,
 }: {
   work: WorkReference;
   label: string;
   position: number;
   total: number;
   move: StackMoveHandler;
+  compact?: boolean;
 }) {
   const [targetPosition, setTargetPosition] = useState(position);
   const [positionEditorOpen, setPositionEditorOpen] = useState(false);
@@ -43,7 +45,7 @@ export function StackMoveControls({
   };
 
   return (
-    <div className="stack-move-controls" aria-label={`Reorder ${label}`}>
+    <div className="stack-move-controls" role="group" aria-label={`Reorder ${label}`}>
       <button
         type="button"
         aria-label="Move up"
@@ -53,7 +55,7 @@ export function StackMoveControls({
         disabled={position <= 1}
         onClick={() => void requestMove(position - 1)}
       >
-        Move up
+        {compact ? '↑' : 'Move up'}
       </button>
       <button
         type="button"
@@ -64,7 +66,7 @@ export function StackMoveControls({
         disabled={position >= total}
         onClick={() => void requestMove(position + 1)}
       >
-        Move down
+        {compact ? '↓' : 'Move down'}
       </button>
       <button
         type="button"
@@ -72,7 +74,13 @@ export function StackMoveControls({
         data-touch-alternative="true"
         onClick={() => setPositionEditorOpen(true)}
       >
-        Move to position
+        {compact ? (
+          <>
+            <span className="visually-hidden">Move to </span>Position
+          </>
+        ) : (
+          'Move to position'
+        )}
       </button>
       <form
         className="stack-position-editor"

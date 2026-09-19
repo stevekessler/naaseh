@@ -72,7 +72,7 @@ export function createExportResources(
       S3SseAlgorithm: 'KMS',
       S3SseKmsKeyId: key.keyArn,
       ExportFormat: 'DYNAMODB_JSON',
-      ExportTime: sfn.JsonPath.numberAt('$.snapshotEpochSeconds'),
+      ExportTime: sfn.JsonPath.stringAt('$.snapshotTime'),
     },
     iamResources: [options.table.tableArn],
     resultPath: '$.export',

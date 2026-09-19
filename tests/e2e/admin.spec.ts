@@ -83,6 +83,15 @@ test('an administrator responsively lists, disables, and reactivates users witho
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
+  const usersTab = page.getByRole('tab', { name: 'Users' });
+  const categoriesTab = page.getByRole('tab', { name: 'Categories & Projects' });
+  await expect(categoriesTab).toHaveAttribute('aria-selected', 'false');
+  await usersTab.focus();
+  await usersTab.press('ArrowRight');
+  await expect(categoriesTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByText('Add category', { exact: true })).toBeVisible();
+  await categoriesTab.press('ArrowLeft');
+  await expect(usersTab).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByText(/Administration is online only/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Disable Steve' })).toBeDisabled();
   await page.getByLabel('Username').fill('new-admin');

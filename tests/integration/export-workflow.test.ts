@@ -8,7 +8,7 @@ describe('export workflow recovery', () => {
       new URL('../../apps/api/src/exports/result-service.ts', import.meta.url),
       'utf8',
     );
-    expect(infra).toContain("ExportTime: sfn.JsonPath.numberAt('$.snapshotEpochSeconds')");
+    expect(infra).toContain("ExportTime: sfn.JsonPath.stringAt('$.snapshotTime')");
     expect(infra).toContain('RetainResultUnderTwentyFourHours');
     expect(cleanup).toContain('ListObjectVersionsCommand');
     expect(cleanup).toContain('VersionId');

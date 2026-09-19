@@ -1,9 +1,14 @@
-import { normalizeUrgencySet, type Urgency } from '@naaseh/domain';
+import { normalizeUrgencySet, type Urgency, type WorkReference } from '@naaseh/domain';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { UrgencyBreakdown } from '../../components/UrgencyBreakdown.js';
 import { PriorityFilter } from '../../components/PriorityFilter.js';
 import type { ReturnTypeWorkloadTree } from './project-tree-types.js';
 import { ProjectStatus } from './ProjectStatus.js';
+import {
+  StackMoveControls,
+  stackRowFocusId,
+  type StackMoveHandler,
+} from '../stacks/StackMoveControls.js';
 
 interface ProjectDetailRow {
   id: string;
@@ -11,6 +16,7 @@ interface ProjectDetailRow {
   urgency: Urgency | string;
   overallRank: number;
   projectRank?: number;
+  reference?: WorkReference;
 }
 
 export interface ProjectTreeProps {
@@ -21,6 +27,8 @@ export interface ProjectTreeProps {
   detailScope?: 'category' | 'project' | 'unassigned';
   orderBy?: 'overallRank' | 'projectRank';
   changeOrder?: (order: 'overallRank' | 'projectRank') => void;
+  move?: StackMoveHandler;
+  announcement?: string;
   nextCursor?: string | null;
   loadMore?: () => void;
   cursorError?: 'invalid' | 'expired' | 'context_changed';
@@ -41,6 +49,8 @@ export function ProjectTree({
   detailScope,
   orderBy = 'overallRank',
   changeOrder,
+  move,
+  announcement = '',
   nextCursor,
   loadMore,
   cursorError,
@@ -189,9 +199,16 @@ export function ProjectTree({
           {!projectRankAvailable && orderBy === 'projectRank' ? (
             <p role="status">Project rank is available only within one Project.</p>
           ) : null}
+          <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+            {announcement}
+          </p>
           <ol className="workload-detail-list">
-            {sortedRows.map((row) => (
-              <li key={row.id}>
+            {sortedRows.map((row, index) => (
+              <li
+                key={row.id}
+                id={row.reference ? stackRowFocusId(row.reference) : undefined}
+                tabIndex={-1}
+              >
                 <span className="workload-rank" aria-hidden="true">
                   {effectiveOrder === 'projectRank' ? row.projectRank : row.overallRank}
                 </span>
@@ -203,6 +220,16 @@ export function ProjectTree({
                     ? ` · Project position ${row.projectRank}`
                     : ''}
                 </span>
+                {move && row.reference ? (
+                  <StackMoveControls
+                    work={row.reference}
+                    label={row.label}
+                    position={index + 1}
+                    total={sortedRows.length}
+                    move={move}
+                    compact
+                  />
+                ) : null}
               </li>
             ))}
           </ol>

@@ -22,7 +22,16 @@ export async function fetchDeletionPreview(target: DeletionTarget): Promise<Dele
     credentials: 'same-origin',
     cache: 'no-store',
   });
-  if (!response.ok) throw new Error('The deletion preview could not be loaded.');
+  if (!response.ok) {
+    if (response.status === 404)
+      throw new Error(
+        'This item is not on the server yet. Wait for synchronization, then try again.',
+      );
+    const body = (await response.json().catch(() => ({}))) as { message?: string };
+    throw new Error(
+      body.message ?? `The deletion preview could not be loaded (${response.status}).`,
+    );
+  }
   return response.json() as Promise<DeletionPreview>;
 }
 

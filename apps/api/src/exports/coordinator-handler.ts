@@ -31,7 +31,6 @@ async function beginExecution(job: { id: string; snapshotTime: string }) {
         input: JSON.stringify({
           jobId: job.id,
           snapshotTime: job.snapshotTime,
-          snapshotEpochSeconds: Math.floor(new Date(job.snapshotTime).getTime() / 1000),
         }),
       }),
     );

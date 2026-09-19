@@ -19,6 +19,12 @@ async function chooseUrgency(container: Locator, urgency: Urgency) {
   await container.getByLabel('Priority', { exact: true }).selectOption(urgency);
 }
 
+function taskRow(page: Page, label: string) {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByRole('heading', { name: label, exact: true }) });
+}
+
 async function createTask(page: Page, label: string, urgency: Urgency, parentLabel?: string) {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
@@ -29,10 +35,7 @@ async function createTask(page: Page, label: string, urgency: Urgency, parentLab
     await page.getByRole('option', { name: parentLabel, exact: true }).click();
   }
   await form.getByRole('button', { name: 'Add task' }).click();
-  const row = page
-    .locator('li')
-    .filter({ has: page.getByRole('heading', { name: label }) })
-    .first();
+  const row = taskRow(page, label);
   await expect(row.getByLabel(`Priority: ${urgencyLabels[urgency]}`)).toBeVisible();
   return row;
 }
@@ -122,18 +125,8 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
   await expect(page.getByText('Synced').first()).toBeAttached({ timeout: 15_000 });
 
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await expect(
-    page
-      .locator('li')
-      .filter({ has: page.getByRole('heading', { name: 'Online urgency seed' }) })
-      .getByLabel('Priority: Critical'),
-  ).toBeVisible();
-  await expect(
-    page
-      .locator('li')
-      .filter({ has: page.getByRole('heading', { name: 'Offline urgent child' }) })
-      .getByLabel('Priority: Low'),
-  ).toBeVisible();
+  await expect(taskRow(page, 'Online urgency seed').getByLabel('Priority: Critical')).toBeVisible();
+  await expect(taskRow(page, 'Offline urgent child').getByLabel('Priority: Low')).toBeVisible();
 });
 
 test('keeps urgency controls accessible to keyboard, touch, and screen readers at every viewport', async ({

@@ -9,17 +9,23 @@ export function GroupPage({
   online,
   create,
   join,
+  rename,
 }: {
   groups: GroupView[];
   online: boolean;
   create: (name: string, pin?: string) => Promise<void>;
   join: (group: GroupView, pin?: string) => Promise<void>;
+  rename: (group: GroupView, name: string) => Promise<void>;
 }) {
   const [members, setMembers] = useState<Record<string, string[]>>({});
   const [memberError, setMemberError] = useState('');
   const [loadingGroup, setLoadingGroup] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState<GroupView>();
+  const [editing, setEditing] = useState<GroupView>();
+  const [editName, setEditName] = useState('');
+  const [editError, setEditError] = useState('');
+  const [editBusy, setEditBusy] = useState(false);
   return (
     <section className="groups-page" aria-labelledby="groups-title">
       <div className="section-heading">
@@ -49,6 +55,19 @@ export function GroupPage({
               </div>
               {group.joined && (
                 <div>
+                  {group.role === 'owner' && (
+                    <button
+                      type="button"
+                      disabled={!online}
+                      onClick={() => {
+                        setEditing(group);
+                        setEditName(group.name);
+                        setEditError('');
+                      }}
+                    >
+                      Edit group
+                    </button>
+                  )}
                   <button
                     disabled={!online || loadingGroup === group.id}
                     onClick={() => {
@@ -102,6 +121,40 @@ export function GroupPage({
           join={(pin) => join(joining, pin)}
           close={() => setJoining(undefined)}
         />
+      )}
+      {editing && (
+        <dialog open aria-label={`Edit group: ${editing.name}`}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!editName.trim() || editBusy) return;
+              setEditBusy(true);
+              setEditError('');
+              void rename(editing, editName.trim())
+                .then(() => setEditing(undefined))
+                .catch((error: Error) => setEditError(error.message || 'Unable to edit group.'))
+                .finally(() => setEditBusy(false));
+            }}
+          >
+            <h2>Edit group</h2>
+            <label>
+              Group name
+              <input
+                required
+                maxLength={100}
+                value={editName}
+                onChange={(event) => setEditName(event.target.value)}
+              />
+            </label>
+            {editError && <p role="alert">{editError}</p>}
+            <div className="dialog-actions">
+              <button type="button" className="quiet" onClick={() => setEditing(undefined)}>
+                Cancel
+              </button>
+              <button disabled={editBusy}>{editBusy ? 'Saving…' : 'Save group'}</button>
+            </div>
+          </form>
+        </dialog>
       )}
     </section>
   );
