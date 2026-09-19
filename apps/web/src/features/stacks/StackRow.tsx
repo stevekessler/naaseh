@@ -30,6 +30,7 @@ export function StackRow({
   editTask,
   dragIndex,
   dragGroup,
+  compact = false,
 }: {
   item: StackDisplayItem;
   scope: LocalStackScope;
@@ -42,6 +43,7 @@ export function StackRow({
   editTask?: ((taskId: string) => void) | undefined;
   dragIndex?: number;
   dragGroup?: string;
+  compact?: boolean;
 }) {
   const selectedPosition =
     scope.scopeType === 'overall' ? item.overallPosition : item.projectPosition;
@@ -52,7 +54,7 @@ export function StackRow({
       item={item}
       scope={scope}
       selectedPosition={selectedPosition}
-      {...{ total, movePosition, moveTotal, ariaPosition, ariaTotal, move, editTask }}
+      {...{ total, movePosition, moveTotal, ariaPosition, ariaTotal, move, editTask, compact }}
     />
   ) : (
     <SortableStackRow
@@ -61,7 +63,7 @@ export function StackRow({
       selectedPosition={selectedPosition}
       dragIndex={dragIndex}
       dragGroup={dragGroup}
-      {...{ total, movePosition, moveTotal, ariaPosition, ariaTotal, move, editTask }}
+      {...{ total, movePosition, moveTotal, ariaPosition, ariaTotal, move, editTask, compact }}
     />
   );
 }
@@ -108,6 +110,7 @@ function StackRowContent({
   handleRef,
   dragging = false,
   dropTarget = false,
+  compact = false,
 }: RowContentProps) {
   return (
     <li
@@ -119,7 +122,39 @@ function StackRowContent({
       aria-setsize={ariaTotal ?? total}
       data-work-type={item.reference.workType}
     >
+      <span className="workload-rank" aria-hidden="true">
+        {selectedPosition}
+      </span>
       <div className="stack-row-summary">
+        <span className="stack-work-type">
+          {item.reference.workType === 'task' ? 'To-do' : 'List'}
+        </span>
+        <h2>{item.label}</h2>
+        {item.pending ? <p className="stack-pending">Pending synchronization</p> : null}
+      </div>
+      <UrgencyBadge urgency={item.urgency} mode="responsive" />
+      <p className="stack-ranks workload-positions">
+        {scope.scopeType === 'project' ? (
+          <>
+            <span>
+              Project position {selectedPosition}
+              {total === undefined ? null : ` of ${total}`}
+            </span>{' '}
+            <span>Overall position {item.overallPosition}</span>
+          </>
+        ) : (
+          <>
+            <span>
+              Overall position {selectedPosition}
+              {total === undefined ? null : ` of ${total}`}
+            </span>{' '}
+            {item.projectPosition === undefined ? null : (
+              <span>Project position {item.projectPosition}</span>
+            )}
+          </>
+        )}
+      </p>
+      <div className="stack-row-actions">
         {handleRef ? (
           <button
             ref={handleRef}
@@ -131,11 +166,6 @@ function StackRowContent({
             <span aria-hidden="true">⋮⋮</span>
           </button>
         ) : null}
-        <span className="stack-work-type">
-          {item.reference.workType === 'task' ? 'To-do' : 'List'}
-        </span>
-        <h2>{item.label}</h2>
-        <UrgencyBadge urgency={item.urgency} mode="compact" />
         {item.reference.workType === 'task' && editTask ? (
           <button
             id={`task-edit-trigger-stack-${item.reference.workId}`}
@@ -146,28 +176,6 @@ function StackRowContent({
             Edit {item.label}
           </button>
         ) : null}
-        <p className="stack-ranks">
-          {scope.scopeType === 'project' ? (
-            <>
-              <span>
-                Project position {selectedPosition}
-                {total === undefined ? null : ` of ${total}`}
-              </span>{' '}
-              <span>Overall position {item.overallPosition}</span>
-            </>
-          ) : (
-            <>
-              <span>
-                Overall position {selectedPosition}
-                {total === undefined ? null : ` of ${total}`}
-              </span>{' '}
-              {item.projectPosition === undefined ? null : (
-                <span>Project position {item.projectPosition}</span>
-              )}
-            </>
-          )}
-        </p>
-        {item.pending ? <p className="stack-pending">Pending synchronization</p> : null}
       </div>
       <StackMoveControls
         work={item.reference}
@@ -175,6 +183,7 @@ function StackRowContent({
         position={movePosition ?? selectedPosition}
         total={moveTotal ?? total ?? selectedPosition}
         move={move}
+        compact={compact}
       />
     </li>
   );

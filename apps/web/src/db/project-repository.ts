@@ -2,6 +2,7 @@ import {
   archiveProject,
   createProject,
   createUlid,
+  canonicalProjectName,
   restoreProject,
   updateProject,
   type Project,
@@ -31,6 +32,14 @@ export async function saveNewLocalProject(input: {
   name: string;
   endDate?: string;
 }) {
+  if (
+    (await listLocalProjects()).some(
+      (project) =>
+        project.categoryId === input.categoryId &&
+        canonicalProjectName(project.name) === canonicalProjectName(input.name),
+    )
+  )
+    throw new Error('A project with this name already exists in this category.');
   const project = createProject(input);
   const id = createUlid();
   await atomicEncryptedEntityAndMutation(await record(project), {
@@ -50,6 +59,15 @@ export async function updateLocalProject(
   current: Project,
   patch: Parameters<typeof updateProject>[1],
 ) {
+  if (
+    (await listLocalProjects()).some(
+      (project) =>
+        project.id !== current.id &&
+        project.categoryId === (patch.categoryId ?? current.categoryId) &&
+        canonicalProjectName(project.name) === canonicalProjectName(patch.name ?? current.name),
+    )
+  )
+    throw new Error('A project with this name already exists in this category.');
   const project = updateProject(current, patch);
   const id = createUlid();
   await atomicEncryptedEntityAndMutation(await record(project), {

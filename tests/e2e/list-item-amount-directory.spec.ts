@@ -16,6 +16,7 @@ test('creates a list item with an initial signed amount offline and keeps direct
   await expect(list.getByText('Global item directory')).toHaveCount(0);
   await context.setOffline(true);
   await list.getByLabel('Add an item').fill('Return bottles');
+  await list.getByText('Optional money and details').click();
   await list.getByLabel('Amount').fill('6.25');
   await list.getByLabel('Credit').check();
   await list.getByRole('button', { name: 'Add item' }).click();

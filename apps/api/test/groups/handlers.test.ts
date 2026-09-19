@@ -12,6 +12,7 @@ const repository = vi.hoisted(() => ({
   putMembership: vi.fn(),
   revokeMembership: vi.fn(),
   updateMembership: vi.fn(),
+  updateGroupRecord: vi.fn(),
 }));
 const password = vi.hoisted(() => ({
   loadPepper: vi.fn(async () => ({ value: 'pepper' })),
@@ -133,6 +134,41 @@ describe('group HTTP lifecycle', () => {
       status: 'active',
     });
     expect(repository.putMembership).not.toHaveBeenCalled();
+  });
+
+  it('lets an owner rename a group with a matching version', async () => {
+    const editableGroup = { ...group, id: '01ARZ3NDEKTSV4RRFFQ69G5FAV', ownerId: 'member' };
+    repository.getGroup.mockResolvedValue(editableGroup);
+    const response = await invoke({
+      ...event('PATCH', `/api/v1/groups/${editableGroup.id}`, {
+        body: { name: 'Renamed' },
+        pathParameters: { groupId: editableGroup.id },
+      }),
+      headers: {
+        origin: 'http://localhost:4173',
+        'x-csrf-token': 'csrf-token',
+        'if-match': '1',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body ?? '{}')).toMatchObject({ name: 'Renamed', version: 2 });
+    expect(repository.updateGroupRecord).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a group edit from a non-owner', async () => {
+    const response = await invoke({
+      ...event('PATCH', '/api/v1/groups/group-1', {
+        body: { name: 'Renamed' },
+        pathParameters: { groupId: group.id },
+      }),
+      headers: {
+        origin: 'http://localhost:4173',
+        'x-csrf-token': 'csrf-token',
+        'if-match': '1',
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(repository.updateGroupRecord).not.toHaveBeenCalled();
   });
 
   it('uses one generic 403 response for a revoked self-join', async () => {

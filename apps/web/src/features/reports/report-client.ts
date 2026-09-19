@@ -188,8 +188,15 @@ export async function downloadVerifiedCompletionExport(job: CompletionExportJob)
   const link = document.createElement('a');
   link.href = url;
   link.download = 'completed-tasks.csv';
+  link.style.display = 'none';
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  // iOS Safari starts the download after the click handler returns. Revoking
+  // immediately makes the verified file disappear before WebKit reads it.
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 60_000);
 }
 
 export async function runCompletionExport(

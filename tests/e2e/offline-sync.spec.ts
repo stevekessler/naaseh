@@ -41,7 +41,8 @@ test.describe('app update recovery', () => {
     await page.getByRole('button', { name: 'Add task' }).click();
     await expect(page.getByRole('heading', { name: 'Keep during update' })).toBeVisible();
     await page.evaluate(() => {
-      window.scrollTo(0, document.body.scrollHeight);
+      Object.defineProperty(window, 'scrollY', { configurable: true, value: 220 });
+      window.dispatchEvent(new Event('scroll'));
       let attempts = 0;
       window.dispatchEvent(
         new CustomEvent('naaseh:update-ready', {

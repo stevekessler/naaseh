@@ -1,30 +1,49 @@
-import { type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
 export function CategoryForm({
   save,
   initial,
   assignees = [],
 }: {
-  save: (value: { name: string; color: string; defaultAssigneeId?: string }) => void;
+  save: (value: {
+    name: string;
+    color: string;
+    defaultAssigneeId?: string;
+  }) => Promise<void> | void;
   initial?: { name: string; color: string; defaultAssigneeId?: string | undefined };
   assignees?: readonly AssigneeOption[];
 }) {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   return (
     <form
+      className="organization-form"
       onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        const data = new FormData(e.currentTarget);
+        if (saving) return;
+        const form = e.currentTarget;
+        const data = new FormData(form);
         const assignee = String(data.get('assignee') ?? '');
-        save({
-          name: String(data.get('name')),
-          color: String(data.get('color')),
-          ...(assignee ? { defaultAssigneeId: assignee } : {}),
-        });
+        setSaving(true);
+        setError('');
+        void Promise.resolve()
+          .then(() =>
+            save({
+              name: String(data.get('name')).trim(),
+              color: String(data.get('color')),
+              ...(assignee ? { defaultAssigneeId: assignee } : {}),
+            }),
+          )
+          .then(() => {
+            if (!initial) form.reset();
+          })
+          .catch(() => setError('The category could not be saved. Please try again.'))
+          .finally(() => setSaving(false));
       }}
     >
       <label>
         Name
-        <input name="name" required defaultValue={initial?.name} />
+        <input name="name" required maxLength={100} defaultValue={initial?.name} />
       </label>
       <label>
         Color
@@ -38,7 +57,8 @@ export function CategoryForm({
           {...(initial?.defaultAssigneeId ? { defaultValue: initial.defaultAssigneeId } : {})}
         />
       </label>
-      <button>Save category</button>
+      <button disabled={saving}>{saving ? 'Saving…' : 'Save category'}</button>
+      {error && <p role="alert">{error}</p>}
     </form>
   );
 }

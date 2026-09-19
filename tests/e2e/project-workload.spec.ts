@@ -8,10 +8,13 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await signIn(page);
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
+  await page.getByRole('tab', { name: 'Categories & Projects' }).click();
   const organization = page.getByRole('region', { name: 'Categories and Projects' });
+  await organization.getByText('Add category', { exact: true }).click();
   const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
   await categoryForm.getByLabel('Name').fill('PAAO');
   await categoryForm.getByRole('button', { name: 'Save category' }).click();
+  await organization.getByText('Add project', { exact: true }).click();
   const projectForm = organization.locator('form').filter({ hasText: 'Create Project' });
   await projectForm.getByLabel('Category').selectOption({ label: 'PAAO' });
   await projectForm.getByLabel('Project name').fill('API');
@@ -40,6 +43,11 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await expect(project).toContainText('overdue');
   await expect(project).toContainText('2 remaining');
   await expect(tree.getByText('Unassigned to a project', { exact: true })).toBeVisible();
+  const rankedWork = page.getByRole('region', { name: 'Workload report detail' });
+  const assignedWork = rankedWork.getByRole('listitem').filter({ hasText: 'Assigned work' });
+  await expect(assignedWork.getByRole('group', { name: 'Reorder Assigned work' })).toBeVisible();
+  await assignedWork.getByRole('button', { name: 'Move to position' }).click();
+  await expect(assignedWork.getByRole('spinbutton', { name: 'Position' })).toBeVisible();
   await context.setOffline(false);
 
   await page.setViewportSize({ width: 320, height: 740 });

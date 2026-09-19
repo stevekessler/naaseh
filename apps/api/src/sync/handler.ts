@@ -383,8 +383,21 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
                 : updateProject(current, mutation.payload as Parameters<typeof updateProject>[1]);
           if (next.id !== mutation.entityId || (!current && next.version !== 1))
             throw new Error('Project mutation identity or version is invalid.');
-          if (!(await getCategory(next.categoryId)))
-            throw new Error('Project category is unavailable.');
+          if (!(await getCategory(next.categoryId))) {
+            results.push({
+              mutationId: mutation.id,
+              status: 'conflict',
+              reason: 'project_unavailable',
+              problem: {
+                code: 'project_category_unavailable',
+                message:
+                  'The project category is not on the server. Review the category sync conflict first.',
+                reason: 'project_unavailable',
+                correlationId: event.requestContext.requestId,
+              },
+            });
+            continue;
+          }
           if (current) await updateProjectRecord(current, next);
           else await createProjectRecord(next);
           await saveOrganizationMutationReceipt(actorId, mutation.id, next);

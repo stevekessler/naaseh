@@ -41,6 +41,8 @@ test('plain form actions remain separated from their fields', async ({ page }) =
   );
 
   const organization = page.getByRole('region', { name: 'Categories and Projects' });
+  await page.getByRole('tab', { name: 'Categories & Projects' }).click();
+  await organization.getByText('Add category', { exact: true }).click();
   const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
   await expectVerticalGap(
     categoryForm.getByLabel('Default assignee'),

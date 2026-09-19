@@ -37,15 +37,24 @@ export const createCategoryHandler: APIGatewayProxyHandlerV2 = async (event) => 
           'Administrator access required.',
           event.requestContext.requestId,
         );
-      return json(
-        200,
-        await createDeletionPreview({
-          resourceType: 'category',
-          resourceId: id,
+      try {
+        return json(
+          200,
+          await createDeletionPreview({
+            resourceType: 'category',
+            resourceId: id,
+            actorId: auth.userId,
+            secret: await deletionConfirmationSecret(),
+          }),
+        );
+      } catch (error) {
+        return errorResponse(error, {
+          correlationId: event.requestContext.requestId,
+          operation: 'categories.deletionPreview',
           actorId: auth.userId,
-          secret: await deletionConfirmationSecret(),
-        }),
-      );
+          resourceId: id,
+        });
+      }
     }
     return json(200, await listCategories());
   }

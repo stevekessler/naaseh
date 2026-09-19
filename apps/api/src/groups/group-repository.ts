@@ -117,6 +117,27 @@ export function buildUpdateMembershipTransaction(
 
 export const putGroupWithOwner = (group: GroupRecord, owner: GroupMembership) =>
   dynamodb.send(new TransactWriteCommand(buildCreateGroupTransaction(group, owner)));
+export const updateGroupRecord = (current: GroupRecord, next: GroupRecord) =>
+  dynamodb.send(
+    new TransactWriteCommand({
+      TransactItems: [
+        {
+          Put: {
+            TableName: tableName,
+            Item: {
+              ...groupKey(next.id),
+              GSI1PK: 'GROUP#ACTIVE',
+              GSI1SK: `${next.name.toLocaleLowerCase()}#${next.id}`,
+              data: next,
+            },
+            ConditionExpression: '#data.#version=:expected',
+            ExpressionAttributeNames: { '#data': 'data', '#version': 'version' },
+            ExpressionAttributeValues: { ':expected': current.version },
+          },
+        },
+      ],
+    }),
+  );
 export const putMembership = (membership: GroupMembership) =>
   dynamodb.send(new TransactWriteCommand(buildJoinGroupTransaction(membership)));
 export async function revokeMembership(

@@ -19,19 +19,29 @@ export function TaskRow({
 }) {
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
+  const dueLabel = task.dueAt
+    ? new Date(task.dueAt).toLocaleString()
+    : task.dueDate
+      ? task.dueDate
+      : '';
   return (
-    <li className={task.status === 'completed' ? 'done' : ''}>
-      <button
-        className="check"
-        aria-label={`${task.status === 'completed' ? 'Reopen' : 'Complete'} ${task.label}`}
-        onClick={() => {
-          feedback.complete(task.label, task.status !== 'completed');
-          onToggle(task);
-        }}
-      >
-        {task.status === 'completed' ? '✓' : ''}
-      </button>
-      <div className="task-row-content">
+    <tr className={task.status === 'completed' ? 'done' : ''}>
+      <td className="task-status-cell">
+        <button
+          className="check"
+          aria-label={`${task.status === 'completed' ? 'Reopen' : 'Complete'} ${task.label}`}
+          onClick={() => {
+            feedback.complete(task.label, task.status !== 'completed');
+            onToggle(task);
+          }}
+        >
+          {task.status === 'completed' ? '✓' : ''}
+        </button>
+        <span className="visually-hidden" role="status" aria-live="polite">
+          {feedback.announcement}
+        </span>
+      </td>
+      <th className="task-name-cell" scope="row">
         <h2>
           <button
             id={`task-edit-trigger-${task.id}`}
@@ -41,32 +51,34 @@ export function TaskRow({
             {task.label}
           </button>
         </h2>
-        {!task.memoHidden &&
-          (task.memoDocument ? (
+        {task.visibility === 'private' && <span title="Private">🔒</span>}
+      </th>
+      <td className="task-memo-cell">
+        <div className="task-row-memo">
+          {task.memoHidden ? (
+            <span className="muted">Private memo</span>
+          ) : task.memoDocument ? (
             <MemoDocumentView document={task.memoDocument} />
+          ) : task.memo ? (
+            <p>{task.memo}</p>
           ) : (
-            task.memo && <p>{task.memo}</p>
-          ))}
-        <div className="task-row-meta">
-          {(task.dueAt || task.dueDate) && (
-            <small>
-              {task.dueAt
-                ? `Due ${new Date(task.dueAt).toLocaleString()}`
-                : task.dueDate
-                  ? `Due ${task.dueDate}`
-                  : ''}
-            </small>
+            <span aria-hidden="true">—</span>
           )}
-          <ReminderStatus task={task} />
-          <UrgencyBadge urgency={task.urgency} mode="full" />
-          <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
-          {task.visibility === 'private' && <span title="Private">🔒</span>}
         </div>
-      </div>
-      {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} /> : null}
-      <span className="visually-hidden" role="status" aria-live="polite">
-        {feedback.announcement}
-      </span>
-    </li>
+      </td>
+      <td className="task-due-cell">
+        {dueLabel ? <small>{dueLabel}</small> : <span aria-hidden="true">—</span>}
+        <ReminderStatus task={task} />
+      </td>
+      <td className="task-priority-cell">
+        <UrgencyBadge urgency={task.urgency} mode="responsive" />
+      </td>
+      <td className="task-assignee-cell">
+        <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
+      </td>
+      <td className="task-actions-cell">
+        {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} compact /> : null}
+      </td>
+    </tr>
   );
 }

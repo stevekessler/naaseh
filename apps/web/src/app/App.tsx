@@ -13,6 +13,7 @@ import {
   workReferenceIdentity,
   type ListItem,
   type Task,
+  type WorkReference,
 } from '@naaseh/domain';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database.js';
@@ -42,6 +43,7 @@ import { listLocalGroups } from '../db/group-repository.js';
 import {
   createRemoteGroup,
   joinRemoteGroup,
+  renameRemoteGroup,
   refreshGroups,
 } from '../features/groups/group-client.js';
 import { HiddenMemoTestHarness } from '../features/memos/HiddenMemoTestHarness.js';
@@ -253,6 +255,7 @@ export function App() {
   );
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [adminUsersCursor, setAdminUsersCursor] = useState<string>();
+  const [adminTab, setAdminTab] = useState<'users' | 'categories'>('users');
   const [taskTab, setTaskTab] = useState<'all' | 'filtered'>(() => {
     const params = new URLSearchParams(location.search);
     return params.get('taskTab') === 'filtered' ||
@@ -421,6 +424,18 @@ export function App() {
         eligibleStackWork,
       ],
     ) ?? [];
+  const overallRankedStackItems =
+    useLiveQuery(
+      () =>
+        session
+          ? selectLocalStackItems({
+              ownerId: session.userId,
+              eligibleWork: eligibleStackWork,
+              scope: { scopeType: 'overall' },
+            })
+          : Promise.resolve([]),
+      [session?.userId, eligibleStackWork],
+    ) ?? [];
   const rankedStackItems = useMemo(
     () =>
       allRankedStackItems.filter(({ work }) =>
@@ -580,22 +595,30 @@ export function App() {
   }, [filters, lists, listItems, directoryItems]);
   const projectDetailRows = useMemo(
     () =>
-      allRankedStackItems
-        .filter(({ work }) => matchesUrgencySet(work.urgency, filters.urgencies))
+      overallRankedStackItems
+        .filter(
+          ({ work }) =>
+            matchesUrgencySet(work.urgency, filters.urgencies) &&
+            (!filters.projectId ||
+              (filters.projectId === 'unassigned'
+                ? !work.projectId
+                : work.projectId === filters.projectId)),
+        )
         .map(({ work, rank }) => ({
           id: workReferenceIdentity(work.reference),
+          reference: work.reference,
           label: work.label,
           urgency: work.urgency,
           overallRank: rank.overallPosition,
           ...(rank.projectPosition === undefined ? {} : { projectRank: rank.projectPosition }),
         })),
-    [allRankedStackItems, filters.urgencies],
+    [overallRankedStackItems, filters.urgencies, filters.projectId],
   );
   const completionDetailRows = useMemo<CompletionDetailRow[]>(
     () =>
       completionEvents.map((event) => {
         const task = tasks.find((candidate) => candidate.id === event.taskId);
-        const rank = allRankedStackItems.find(
+        const rank = overallRankedStackItems.find(
           ({ work }) =>
             work.reference.workType === 'task' && work.reference.workId === event.taskId,
         )?.rank;
@@ -607,7 +630,7 @@ export function App() {
           ...(rank?.projectPosition === undefined ? {} : { projectRank: rank.projectPosition }),
         };
       }),
-    [completionEvents, tasks, allRankedStackItems],
+    [completionEvents, tasks, overallRankedStackItems],
   );
   useEffect(() => {
     void loadView().then(setView);
@@ -854,6 +877,86 @@ export function App() {
       session!.userId,
     );
   }
+  async function moveProjectWork(work: WorkReference, destinationPosition: number) {
+    const scope: LocalStackScope =
+      projectReportOrder === 'projectRank' &&
+      filters.projectId &&
+      filters.projectId !== 'unassigned'
+        ? { scopeType: 'project', scopeId: filters.projectId }
+        : { scopeType: 'overall' };
+    const ranked = await selectLocalStackItems({
+      ownerId: session!.userId,
+      eligibleWork: eligibleStackWork,
+      scope,
+    });
+    const fullScope = ranked.map((item) => item.work.reference);
+    const displayed = [...projectDetailRows]
+      .sort((left, right) => {
+        const leftRank =
+          scope.scopeType === 'project' ? (left.projectRank ?? Infinity) : left.overallRank;
+        const rightRank =
+          scope.scopeType === 'project' ? (right.projectRank ?? Infinity) : right.overallRank;
+        return leftRank - rightRank || left.id.localeCompare(right.id);
+      })
+      .map((item) => item.reference);
+    const currentPosition =
+      displayed.findIndex(
+        (reference) => workReferenceIdentity(reference) === workReferenceIdentity(work),
+      ) + 1;
+    if (currentPosition < 1 || currentPosition === destinationPosition) return;
+    const existing = await readLocalStack(session!.userId, scope);
+    const existingIdentities = new Set(existing?.work.map(workReferenceIdentity) ?? []);
+    const needsReconciliation =
+      !existing ||
+      fullScope.length !== existing.work.length ||
+      fullScope.some((reference) => !existingIdentities.has(workReferenceIdentity(reference)));
+    const current = needsReconciliation
+      ? await initializeLocalStack({
+          ownerId: session!.userId,
+          scope,
+          version: existing?.version ?? 0,
+          work: fullScope,
+        })
+      : existing;
+    const isFiltered = displayed.length !== fullScope.length;
+    const destinationIndex = Math.max(0, Math.min(displayed.length - 1, destinationPosition - 1));
+    const remaining = current.work.filter(
+      (reference) => workReferenceIdentity(reference) !== workReferenceIdentity(work),
+    );
+    const fullDestinationIndex = Math.max(0, Math.min(remaining.length, destinationPosition - 1));
+    const beforeWork = remaining[fullDestinationIndex - 1];
+    const afterWork = remaining[fullDestinationIndex];
+    await queuePersonalStackReorder({
+      ownerId: session!.userId,
+      scope,
+      baseVersion: current.version,
+      move: isFiltered
+        ? {
+            kind: 'filtered_permutation',
+            movedWork: work,
+            destinationIndex,
+            affectedWork: displayed,
+            filterBasis: {
+              ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
+              ...(filters.projectId ? { projectId: filters.projectId } : {}),
+              lifecycle: 'active',
+              contentType: 'all',
+            },
+          }
+        : {
+            kind: 'simple_move',
+            movedWork: work,
+            ...(beforeWork ? { beforeWork } : {}),
+            ...(afterWork ? { afterWork } : {}),
+          },
+    });
+    const moved = eligibleStackWork.find(
+      (item) => workReferenceIdentity(item.reference) === workReferenceIdentity(work),
+    );
+    setStackAnnouncement(
+      `Moved ${moved?.label ?? 'work'} to position ${destinationPosition} of ${displayed.length}.`,
+    );
+  }
 
   return (
     <UserDirectoryContext.Provider value={directoryUsers}>
@@ -925,17 +1028,17 @@ export function App() {
               </button>
               <button
                 className="quiet"
-                aria-current={section === 'projects' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'projects' })}
-              >
-                Projects
-              </button>
-              <button
-                className="quiet"
                 aria-current={section === 'archive' ? 'page' : undefined}
                 onClick={() => navigate({ section: 'archive' })}
               >
                 Archive
+              </button>
+              <button
+                className="quiet"
+                aria-current={section === 'projects' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'projects' })}
+              >
+                Projects
               </button>
               <button
                 className="quiet"
@@ -1125,6 +1228,44 @@ export function App() {
               </section>
             ) : (
               <>
+                <div
+                  className="admin-tabs"
+                  role="tablist"
+                  aria-label="Administration sections"
+                  onKeyDown={(event) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                    event.preventDefault();
+                    const next =
+                      event.key === 'ArrowLeft' || event.key === 'Home' ? 'users' : 'categories';
+                    setAdminTab(next);
+                    requestAnimationFrame(() =>
+                      document.getElementById(`admin-${next}-tab`)?.focus(),
+                    );
+                  }}
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    id="admin-users-tab"
+                    aria-controls="admin-users-panel"
+                    aria-selected={adminTab === 'users'}
+                    tabIndex={adminTab === 'users' ? 0 : -1}
+                    onClick={() => setAdminTab('users')}
+                  >
+                    Users
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    id="admin-categories-tab"
+                    aria-controls="admin-categories-panel"
+                    aria-selected={adminTab === 'categories'}
+                    tabIndex={adminTab === 'categories' ? 0 : -1}
+                    onClick={() => setAdminTab('categories')}
+                  >
+                    Categories &amp; Projects
+                  </button>
+                </div>
                 {adminLoadError && (
                   <div role="alert">
                     {adminLoadError}
@@ -1133,66 +1274,88 @@ export function App() {
                     </button>
                   </div>
                 )}
-                <UsersAdminPage
-                  users={adminUsers}
-                  currentUserId={session.userId}
-                  online={online}
-                  {...(adminUsersCursor
-                    ? {
-                        nextCursor: adminUsersCursor,
-                        loadMore: async () => {
-                          const page = await listAdminUsersPage(
-                            session.csrfToken,
-                            adminUsersCursor,
-                          );
-                          setAdminUsers((users) => [
-                            ...users,
-                            ...page.items.filter(
-                              (item) => !users.some((user) => user.id === item.id),
-                            ),
-                          ]);
-                          setAdminUsersCursor(page.nextCursor);
-                        },
-                      }
-                    : {})}
-                  create={async (input) => {
-                    const created = await createAdminUser(input, session.csrfToken);
-                    void refreshUsers().catch(() => undefined);
-                    setAdminUsers((users) => [
-                      ...users.filter((user) => user.id !== created.id),
-                      created,
-                    ]);
-                  }}
-                  toggle={async (userId, active, version) => {
-                    const updated = await changeAdminUserStatus(
-                      userId,
-                      active,
-                      session.csrfToken,
-                      version,
-                    );
-                    void refreshUsers().catch(() => undefined);
-                    setAdminUsers((users) =>
-                      users.map((user) => (user.id === userId ? updated : user)),
-                    );
-                  }}
-                />
-                <CategoriesAdminPage
-                  categories={categories}
-                  projects={projects}
-                  assignees={assignees}
-                  createCategory={(value) => void saveNewLocalCategory(value)}
-                  updateCategory={(category, patch) => void updateLocalCategory(category, patch)}
-                  createProject={(value) => void saveNewLocalProject(value)}
-                  updateProject={(project, patch) => void updateLocalProject(project, patch)}
-                  actorId={session.userId}
-                  csrfToken={session.csrfToken}
-                  changeCategoryLifecycle={(category, action, actorId) =>
-                    void changeLocalCategoryLifecycle(category, action, actorId)
-                  }
-                  changeProjectLifecycle={(project, action, actorId) =>
-                    void changeLocalProjectLifecycle(project, action, actorId)
-                  }
-                />
+                <div
+                  id="admin-users-panel"
+                  role="tabpanel"
+                  aria-labelledby="admin-users-tab"
+                  hidden={adminTab !== 'users'}
+                >
+                  <UsersAdminPage
+                    users={adminUsers}
+                    currentUserId={session.userId}
+                    online={online}
+                    {...(adminUsersCursor
+                      ? {
+                          nextCursor: adminUsersCursor,
+                          loadMore: async () => {
+                            const page = await listAdminUsersPage(
+                              session.csrfToken,
+                              adminUsersCursor,
+                            );
+                            setAdminUsers((users) => [
+                              ...users,
+                              ...page.items.filter(
+                                (item) => !users.some((user) => user.id === item.id),
+                              ),
+                            ]);
+                            setAdminUsersCursor(page.nextCursor);
+                          },
+                        }
+                      : {})}
+                    create={async (input) => {
+                      const created = await createAdminUser(input, session.csrfToken);
+                      void refreshUsers().catch(() => undefined);
+                      setAdminUsers((users) => [
+                        ...users.filter((user) => user.id !== created.id),
+                        created,
+                      ]);
+                    }}
+                    toggle={async (userId, active, version) => {
+                      const updated = await changeAdminUserStatus(
+                        userId,
+                        active,
+                        session.csrfToken,
+                        version,
+                      );
+                      void refreshUsers().catch(() => undefined);
+                      setAdminUsers((users) =>
+                        users.map((user) => (user.id === userId ? updated : user)),
+                      );
+                    }}
+                  />
+                </div>
+                <div
+                  id="admin-categories-panel"
+                  role="tabpanel"
+                  aria-labelledby="admin-categories-tab"
+                  hidden={adminTab !== 'categories'}
+                >
+                  <CategoriesAdminPage
+                    categories={categories}
+                    projects={projects}
+                    assignees={assignees}
+                    createCategory={async (value) => {
+                      await saveNewLocalCategory(value);
+                    }}
+                    updateCategory={async (category, patch) => {
+                      await updateLocalCategory(category, patch);
+                    }}
+                    createProject={async (value) => {
+                      await saveNewLocalProject(value);
+                    }}
+                    updateProject={async (project, patch) => {
+                      await updateLocalProject(project, patch);
+                    }}
+                    actorId={session.userId}
+                    csrfToken={session.csrfToken}
+                    changeCategoryLifecycle={(category, action, actorId) =>
+                      void changeLocalCategoryLifecycle(category, action, actorId)
+                    }
+                    changeProjectLifecycle={(project, action, actorId) =>
+                      void changeLocalProjectLifecycle(project, action, actorId)
+                    }
+                  />
+                </div>
               </>
             )
           ) : section === 'groups' ? (
@@ -1201,6 +1364,9 @@ export function App() {
               online={online}
               create={async (name, pin) => {
                 await createRemoteGroup(name, pin, session.csrfToken);
+              }}
+              rename={async (group, name) => {
+                await renameRemoteGroup(group, name, session.csrfToken);
               }}
               join={async (group, pin) => {
                 await joinRemoteGroup(group, pin, session.csrfToken);
@@ -1218,10 +1384,16 @@ export function App() {
               }
               detailRows={projectDetailRows}
               detailScope={
-                filters.projectId && filters.projectId !== 'unassigned' ? 'project' : 'category'
+                filters.projectId === 'unassigned'
+                  ? 'unassigned'
+                  : filters.projectId
+                    ? 'project'
+                    : 'category'
               }
               orderBy={projectReportOrder}
               changeOrder={setProjectReportOrder}
+              move={moveProjectWork}
+              announcement={stackAnnouncement}
             />
           ) : section === 'dashboard' ? (
             <CompletionDashboard
@@ -1292,8 +1464,8 @@ export function App() {
               changeList={async (list, patch) => {
                 await updateLocalList(list, patch);
               }}
-              editItem={(item, name, amountMinor) => {
-                void editLocalListItem(item, { name, amountMinor }, session.userId);
+              editItem={(item, input) => {
+                void editLocalListItem(item, input, session.userId);
               }}
               resetItem={(item) => {
                 void resetLocalListItemOverrides(item);

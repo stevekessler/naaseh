@@ -31,6 +31,14 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(form.getByLabel('Assignee')).toHaveValue('local-steve');
   await form.getByLabel('Private task').check();
   await form.getByRole('button', { name: 'Add task' }).click();
+  const taskTable = page.getByRole('table', { name: 'Tasks' });
+  await expect(taskTable).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Task' })).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Due' })).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Priority' })).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Assignee' })).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Timer' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();
@@ -83,6 +91,8 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
   await signIn(page);
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(navigation.getByRole('button').first()).toHaveText('Tasks');
+  const navigationLabels = await navigation.getByRole('button').allTextContents();
+  expect(navigationLabels.indexOf('Archive')).toBe(navigationLabels.indexOf('Completed Tasks') + 1);
   await expect(navigation.getByRole('button', { name: 'Tasks', exact: true })).toHaveAttribute(
     'aria-current',
     'page',

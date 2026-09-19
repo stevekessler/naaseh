@@ -89,7 +89,7 @@ export async function startCompletionExport(
       adminConfirmed: request.adminConfirmed,
       authorizedGroupIds: [...new Set(authorizedGroupIds)].sort(),
       status: 'pending',
-      snapshotTime: request.asOf,
+      snapshotTime: new Date(Math.min(Date.parse(request.asOf), now.getTime())).toISOString(),
       createdAt: timestamp,
       updatedAt: timestamp,
     }),

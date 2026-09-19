@@ -7,6 +7,7 @@ import {
   putMembership,
   revokeMembership,
   updateMembership,
+  updateGroupRecord,
 } from './group-repository.js';
 import { notifyStackAuthorizationChange } from '../ranking/stack-membership-lifecycle.js';
 export { assertAuthorizedGroupSelection } from './group-selection-authorization.js';
@@ -51,6 +52,25 @@ export async function createGroup(
   });
   await putGroupWithOwner(group, owner);
   return { group, owner };
+}
+
+export async function renameGroup(
+  group: GroupRecord,
+  actorId: string,
+  name: string,
+  expectedVersion: number,
+) {
+  if (group.ownerId !== actorId) throw new GroupPolicyError('forbidden_membership_change');
+  if (group.version !== expectedVersion)
+    throw new Error('Group version changed. Refresh and try again.');
+  const next = groupSchema.parse({
+    ...group,
+    name,
+    version: group.version + 1,
+    updatedAt: new Date().toISOString(),
+  });
+  await updateGroupRecord(group, next);
+  return next;
 }
 
 export async function verifyGroupPin(

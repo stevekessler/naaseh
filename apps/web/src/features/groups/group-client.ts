@@ -33,6 +33,16 @@ export async function createRemoteGroup(name: string, pin: string | undefined, c
   return group;
 }
 
+export async function renameRemoteGroup(group: GroupView, name: string, csrfToken: string) {
+  const updated = await request<GroupView>(`/groups/${encodeURIComponent(group.id)}`, csrfToken, {
+    method: 'PATCH',
+    headers: { 'if-match': String(group.version) },
+    body: JSON.stringify({ name }),
+  });
+  await saveLocalGroup(updated);
+  return updated;
+}
+
 export async function joinRemoteGroup(
   group: GroupView,
   pin: string | undefined,

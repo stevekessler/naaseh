@@ -1,6 +1,7 @@
 import {
   archiveCategory,
   categorySchema,
+  canonicalCategoryName,
   createUlid,
   restoreCategory,
   type CategoryRecord,
@@ -25,6 +26,12 @@ export async function listLocalCategories() {
 }
 
 export async function saveNewLocalCategory(input: { name: string; color: string }) {
+  if (
+    (await listLocalCategories()).some(
+      (category) => canonicalCategoryName(category.name) === canonicalCategoryName(input.name),
+    )
+  )
+    throw new Error('A category with this name already exists.');
   const now = new Date().toISOString();
   const category = categorySchema.parse({
     id: createUlid(),
@@ -50,6 +57,15 @@ export async function saveNewLocalCategory(input: { name: string; color: string 
 }
 
 export async function updateLocalCategory(current: CategoryRecord, patch: Partial<CategoryRecord>) {
+  if (
+    patch.name &&
+    (await listLocalCategories()).some(
+      (category) =>
+        category.id !== current.id &&
+        canonicalCategoryName(category.name) === canonicalCategoryName(patch.name!),
+    )
+  )
+    throw new Error('A category with this name already exists.');
   const now = new Date().toISOString();
   const category = categorySchema.parse({
     ...current,

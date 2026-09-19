@@ -59,7 +59,7 @@ export function attachCollaborationRoutes(
   });
   for (const [path, methods] of [
     ['/api/v1/groups', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST]],
-    ['/api/v1/groups/{groupId}', [apigwv2.HttpMethod.GET]],
+    ['/api/v1/groups/{groupId}', [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PATCH]],
     ['/api/v1/groups/{groupId}/join', [apigwv2.HttpMethod.POST]],
     ['/api/v1/groups/{groupId}/members/{userId}', [apigwv2.HttpMethod.DELETE]],
   ] as const)

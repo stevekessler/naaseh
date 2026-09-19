@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTask, signIn } from './enhanced-helpers.js';
+import { addTask, mockSuccessfulSync, signIn } from './enhanced-helpers.js';
 
 const job = {
   id: '01J00000000000000000000001',
@@ -20,6 +20,7 @@ const job = {
 test('warns, cancels, confirms, reports progress, and purges only after success', async ({
   page,
 }) => {
+  await mockSuccessfulSync(page);
   await page.addInitScript(
     ({ completedJob }) => {
       const originalFetch = window.fetch.bind(window);

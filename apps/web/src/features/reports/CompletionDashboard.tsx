@@ -103,6 +103,7 @@ export function CompletionDashboard({
   const initialUrgencies = normalizeUrgencySet(selectedUrgencies as Urgency[]);
   const browserTimeZone = useBrowserTimeZone();
   const [exportState, setExportState] = useState<'idle' | 'running' | 'failed'>('idle');
+  const [exportError, setExportError] = useState('');
   const [filters, setFilters] = useState<CompletionFilterValue>({
     period: 'day',
     categoryId: '',
@@ -187,16 +188,23 @@ export function CompletionDashboard({
           disabled={exportState === 'running'}
           onClick={() => {
             setExportState('running');
+            setExportError('');
             void Promise.resolve(exportCsv(filters))
               .then(() => setExportState('idle'))
-              .catch(() => setExportState('failed'));
+              .catch((error: Error) => {
+                setExportError(error.message);
+                setExportState('failed');
+              });
           }}
         >
           {exportState === 'running' ? 'Preparing export…' : 'Export CSV'}
         </button>
       ) : null}
       {exportState === 'failed' ? (
-        <p role="alert">The export could not be verified. Try again; no partial file was saved.</p>
+        <p role="alert">
+          Export failed: {exportError || 'The file could not be verified.'} Try again; no partial
+          file was saved.
+        </p>
       ) : null}
       {reportState?.offline && reportState.source === 'cache' ? (
         <p role="status">Offline · showing previously synchronized report</p>
