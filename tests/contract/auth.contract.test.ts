@@ -61,6 +61,13 @@ describe('authentication HTTP contract', () => {
       code: '123456',
     });
     expect(
+      tfaChallengeRequestSchema.parse({ method: 'totp', code: '123456', rememberDevice: true }),
+    ).toMatchObject({ rememberDevice: true });
+    expect(
+      tfaChallengeRequestSchema.safeParse({ method: 'totp', code: '123456', rememberDevice: 'yes' })
+        .success,
+    ).toBe(false);
+    expect(
       factorChangeProofSchema.safeParse({
         password: 'secret',
         method: 'totp',

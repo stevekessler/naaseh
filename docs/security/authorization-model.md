@@ -10,6 +10,14 @@ change takes effect creates a 30-day session. Logout, account disablement, sessi
 and security-epoch changes can end access sooner. Sensitive security changes still require
 password and factor verification where applicable.
 
+After a successful two-factor challenge, a user may remember that browser for a separate,
+fixed 30-day period. A fresh sign-in still requires the password. The browser receives a secure,
+HttpOnly, same-site opaque cookie; the server stores only its digest and accepts it only for the
+same active account, credential version, security epoch, and enrolled factor before expiry.
+Signing out revokes the application session but leaves the remembered-browser choice in place;
+declining that choice at the next factor challenge clears it. A password reset, factor change,
+security-epoch change, account disablement, expired cookie, or another browser requires TFA again.
+
 ## Content access
 
 Every active user may see every non-private task. Group membership supports collaboration but does not narrow public visibility. Private tasks, their revisions, search terms, counts, reminders, feed changes, and cached copies are owner-only. APIs query the public or owner index directly and return not-found for unauthorized object IDs. A visibility change emits an atomic tombstone to the old audience and an upsert to the new audience. Offline clients purge revoked records on their next successful synchronization; until then, a previously authorized device may retain encrypted cached data.

@@ -55,6 +55,13 @@ import { decryptTfaSecret, encryptTfaSecret, generateTfaSecret, verifyTotp } fro
 import { createPasswordResetService } from './password-reset-service.js';
 import { recordAuthSecurityEvent } from './telemetry.js';
 import { preAuthCookie, requestCookieHeader } from './session.js';
+import {
+  TRUSTED_DEVICE_COOKIE_NAME,
+  forgetTrustedDevice,
+  isTrustedDevice,
+  issueTrustedDevice,
+  trustedDeviceCookie,
+} from './trusted-device.js';
 
 const authCachePolicy = 'no-store';
 
@@ -91,6 +98,29 @@ function preAuthToken(cookieHeader: string | undefined) {
     .map((value) => value.trim())
     .find((value) => value.startsWith('__Host-naaseh-preauth='))
     ?.slice('__Host-naaseh-preauth='.length);
+}
+
+function trustedDeviceToken(cookieHeader: string | undefined) {
+  return cookieHeader
+    ?.split(';')
+    .map((value) => value.trim())
+    .find((value) => value.startsWith(`${TRUSTED_DEVICE_COOKIE_NAME}=`))
+    ?.slice(TRUSTED_DEVICE_COOKIE_NAME.length + 1);
+}
+
+async function trustedDeviceCookieAfterFactor(
+  rememberDevice: boolean | undefined,
+  user: NonNullable<Awaited<ReturnType<typeof userById>>>,
+  cookieHeader: string | undefined,
+  correlationId: string,
+) {
+  if (!rememberDevice) return forgetTrustedDevice(trustedDeviceToken(cookieHeader));
+  try {
+    return await issueTrustedDevice(user);
+  } catch {
+    recordAuthSecurityEvent('trusted_device_issue', 'failed', correlationId);
+    return trustedDeviceCookie('', 0);
+  }
 }
 
 const tfaService = createTfaService({
@@ -155,6 +185,15 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       return problem(401, 'authentication_failed', 'Unable to verify enrollment.', correlationId);
     }
     const recoveryCodes = await tfaService.enableFactor(user, secret);
+    const enabledUser = await userById(user.id);
+    if (!enabledUser || enabledUser.tfaStatus !== 'enabled')
+      throw new Error('TFA enrollment did not persist');
+    const trustCookie = await trustedDeviceCookieAfterFactor(
+      body.rememberDevice,
+      enabledUser,
+      cookieHeader,
+      correlationId,
+    );
     await consumeLoginTransaction(tokenDigest);
     const session = await issueSession(user.id, user.sessionEpoch + 1);
     return json(
@@ -171,8 +210,8 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       },
       {
         'cache-control': authCachePolicy,
-        'set-cookie': session.cookie,
       },
+      [session.cookie, preAuthCookie('', 0), trustCookie],
     );
   }
   if (path.endsWith('/tfa/challenge') && event.requestContext.http.method === 'POST') {
@@ -199,6 +238,12 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       recordAuthSecurityEvent('tfa_challenge', 'denied', correlationId);
       return problem(401, 'authentication_failed', 'Unable to verify the factor.', correlationId);
     }
+    const trustCookie = await trustedDeviceCookieAfterFactor(
+      body.rememberDevice,
+      user,
+      cookieHeader,
+      correlationId,
+    );
     await consumeLoginTransaction(tokenDigest);
     const session = await issueSession(user.id, user.sessionEpoch);
     recordAuthSecurityEvent('tfa_challenge', 'success', correlationId);
@@ -218,7 +263,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       },
       // HTTP API v2 emits one Set-Cookie header per entry. Combining these
       // applies the pre-auth deletion's Max-Age=0 to the new session.
-      [session.cookie, preAuthCookie('', 0)],
+      [session.cookie, preAuthCookie('', 0), trustCookie],
     );
   }
   if (path.endsWith('/password-reset') && event.requestContext.http.method === 'POST') {
@@ -472,6 +517,33 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   }
   await Promise.all([clearDurableFailures(accountKey), clearDurableFailures(ipKey)]);
   const next = requiredTfaNextStep(user);
+  let trusted = false;
+  if (next === 'tfa_challenge') {
+    try {
+      trusted = await isTrustedDevice(trustedDeviceToken(cookieHeader) ?? '', user);
+    } catch {
+      recordAuthSecurityEvent('trusted_device_lookup', 'failed', correlationId);
+    }
+  }
+  if (trusted) {
+    const session = await issueSession(user.id, user.sessionEpoch);
+    log('auth.login', { correlationId, actorId: user.id, outcome: 'success' });
+    recordAuthSecurityEvent('login', 'success', correlationId);
+    return json(
+      200,
+      {
+        user: {
+          id: user.id,
+          username: user.username,
+          displayName: user.displayName,
+          role: user.role,
+        },
+        csrfToken: session.record.csrfToken,
+      },
+      { 'cache-control': authCachePolicy },
+      [session.cookie, preAuthCookie('', 0)],
+    );
+  }
   if (next) {
     const challengeToken = randomBytes(32).toString('base64url');
     const tokenDigest = sessionTokenHash(challengeToken);
