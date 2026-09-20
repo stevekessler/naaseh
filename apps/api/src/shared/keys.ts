@@ -13,6 +13,7 @@ export const keys = {
   username: (name: string) => ({ PK: `USERNAME#${name}`, SK: 'USER' }),
   provisionRequest: (token: string) => ({ PK: `PROVISION#${token}`, SK: 'RESULT' }),
   session: (hash: string) => ({ PK: `SESSION#${hash}`, SK: 'SESSION' }),
+  trustedDevice: (hash: string) => ({ PK: `TRUSTEDDEVICE#${hash}`, SK: 'TFA' }),
   task: (id: string) => ({ PK: `TASK#${id}`, SK: 'CURRENT' }),
   taskTimer: (ownerId: string) => ({ PK: `USER#${ownerId}`, SK: 'TIMER#CURRENT' }),
   taskTimerRevision: (ownerId: string, version: number, runId: string) => ({

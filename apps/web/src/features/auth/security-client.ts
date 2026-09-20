@@ -16,25 +16,32 @@ async function noStoreRequest<T>(path: string, init: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export const submitTfaChallenge = (method: 'totp' | 'recovery_code', code: string) =>
+export const submitTfaChallenge = (
+  method: 'totp' | 'recovery_code',
+  code: string,
+  rememberDevice: boolean,
+) =>
   noStoreRequest<{
     user: { id: string; displayName: string; role: 'admin' | 'user' };
     csrfToken: string;
-  }>('/api/v1/auth/tfa/challenge', { method: 'POST', body: JSON.stringify({ method, code }) });
+  }>('/api/v1/auth/tfa/challenge', {
+    method: 'POST',
+    body: JSON.stringify({ method, code, rememberDevice }),
+  });
 
 export const startTfaEnrollment = () =>
   noStoreRequest<{ secret: string; otpauthUri: string }>('/api/v1/auth/tfa/enrollment', {
     method: 'POST',
   });
 
-export const confirmTfaEnrollment = (code: string) =>
+export const confirmTfaEnrollment = (code: string, rememberDevice: boolean) =>
   noStoreRequest<{
     user: { id: string; displayName: string; role: 'admin' | 'user' };
     csrfToken: string;
     recoveryCodes: string[];
   }>('/api/v1/auth/tfa/enrollment/confirm', {
     method: 'POST',
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ code, rememberDevice }),
   });
 
 export const resetPassword = (request: {

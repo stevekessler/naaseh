@@ -65,6 +65,7 @@ export const tfaChallengeRequestSchema = z
   .object({
     method: z.enum(['totp', 'recovery_code']),
     code: z.string().min(6).max(64),
+    rememberDevice: z.boolean().optional(),
   })
   .strict();
 export const tfaEnrollmentResponseSchema = z
@@ -74,7 +75,7 @@ export const tfaEnrollmentResponseSchema = z
   })
   .strict();
 export const tfaEnrollmentConfirmRequestSchema = z
-  .object({ code: z.string().regex(/^[0-9]{6}$/) })
+  .object({ code: z.string().regex(/^[0-9]{6}$/), rememberDevice: z.boolean().optional() })
   .strict();
 export const factorChangeProofSchema = z
   .object({
@@ -113,14 +114,17 @@ export const profileSecurityResponseSchema = z
   })
   .strict();
 export const taskCreateSchema = taskInputSchema;
-const taskHttpsUrlSchema = z
+const taskLinkUrlSchema = z
   .string()
   .url()
-  .refine((value) => new URL(value).protocol === 'https:', 'Task links must use HTTPS.');
+  .refine(
+    (value) => ['http:', 'https:'].includes(new URL(value).protocol),
+    'Task links must use HTTP or HTTPS.',
+  );
 export const taskPatchSchema = z
   .object({
     label: z.string().trim().min(1).max(300).optional(),
-    link: taskHttpsUrlSchema.or(z.literal('')).optional(),
+    link: taskLinkUrlSchema.or(z.literal('')).optional(),
     memo: z.string().max(20_000).optional(),
     memoDocument: memoDocumentSchema.optional(),
     memoHidden: z.boolean().optional(),

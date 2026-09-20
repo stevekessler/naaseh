@@ -14,6 +14,7 @@ export function TfaChallenge({
   onAuthenticated: (session: AuthenticatedSession) => void;
 }) {
   const [method, setMethod] = useState<'totp' | 'recovery_code'>('totp');
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [enrollment, setEnrollment] = useState<{ secret: string; otpauthUri: string }>();
@@ -36,7 +37,7 @@ export function TfaChallenge({
     const data = new FormData(event.currentTarget);
     try {
       if (enrollmentRequired) {
-        const result = await confirmTfaEnrollment(String(data.get('code') ?? ''));
+        const result = await confirmTfaEnrollment(String(data.get('code') ?? ''), rememberDevice);
         const session = {
           userId: result.user.id,
           displayName: result.user.displayName,
@@ -46,7 +47,11 @@ export function TfaChallenge({
         setRecoveryCodes(result.recoveryCodes);
         setCompletedSession(session);
       } else {
-        const result = await submitTfaChallenge(method, String(data.get('code') ?? ''));
+        const result = await submitTfaChallenge(
+          method,
+          String(data.get('code') ?? ''),
+          rememberDevice,
+        );
         onAuthenticated({
           userId: result.user.id,
           displayName: result.user.displayName,
@@ -103,7 +108,11 @@ export function TfaChallenge({
           <span>Authentication method</span>
           <select
             value={method}
-            onChange={(event) => setMethod(event.target.value as typeof method)}
+            onChange={(event) => {
+              const nextMethod = event.target.value as typeof method;
+              setMethod(nextMethod);
+              if (nextMethod === 'recovery_code') setRememberDevice(false);
+            }}
           >
             <option value="totp">Authenticator code</option>
             {!enrollmentRequired && <option value="recovery_code">Recovery code</option>}
@@ -120,6 +129,14 @@ export function TfaChallenge({
             required
             autoFocus
           />
+        </label>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={rememberDevice}
+            onChange={(event) => setRememberDevice(event.target.checked)}
+          />
+          Remember this browser for 30 days
         </label>
         {error && <p role="alert">{error}</p>}
         <button type="submit" disabled={busy}>
