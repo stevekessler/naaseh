@@ -226,7 +226,7 @@ export async function runCompletionExport(
   });
   for (
     let attempt = 0;
-    attempt < 240 && !['completed', 'failed'].includes(job.status);
+    attempt < 900 && !['completed', 'failed'].includes(job.status);
     attempt += 1
   ) {
     await new Promise((resolve) => window.setTimeout(resolve, 2_000));

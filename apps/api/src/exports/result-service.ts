@@ -33,7 +33,11 @@ export async function readyExportResult(job: ExportJob) {
   return {
     downloadUrl: await getSignedUrl(
       s3,
-      new GetObjectCommand({ Bucket: bucket, Key: job.resultKey }),
+      new GetObjectCommand({
+        Bucket: bucket,
+        Key: job.resultKey,
+        ResponseContentDisposition: 'attachment; filename="completed-tasks.csv"',
+      }),
       { expiresIn: 60 },
     ),
     manifest: job.manifest,

@@ -23,9 +23,6 @@ function EditorDialog({
     <dialog ref={dialog} className="organization-editor" aria-label={title} onClose={close}>
       <div className="organization-editor-heading">
         <h2>{title}</h2>
-        <button type="button" className="quiet" onClick={close}>
-          Cancel
-        </button>
       </div>
       {children}
     </dialog>
@@ -212,6 +209,7 @@ export function CategoriesAdminPage({
           <CategoryForm
             key={editingCategory.id}
             initial={editingCategory}
+            cancel={() => setEditingCategory(undefined)}
             assignees={assignees}
             save={async (value) => {
               await updateCategory(editingCategory, {
@@ -231,6 +229,7 @@ export function CategoriesAdminPage({
           <ProjectForm
             key={editingProject.id}
             initial={editingProject}
+            cancel={() => setEditingProject(undefined)}
             categories={categories}
             save={async (value) => {
               await updateProject(editingProject, value);

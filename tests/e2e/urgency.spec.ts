@@ -36,7 +36,7 @@ async function createTask(page: Page, label: string, urgency: Urgency, parentLab
   }
   await form.getByRole('button', { name: 'Add task' }).click();
   const row = taskRow(page, label);
-  await expect(row.getByLabel(`Priority: ${urgencyLabels[urgency]}`)).toBeVisible();
+  await expect(row.getByLabel(urgencyLabels[urgency])).toBeVisible();
   return row;
 }
 
@@ -54,7 +54,7 @@ async function createList(page: Page, name: string, urgency: Urgency) {
   await chooseUrgency(form, urgency);
   await form.getByRole('button', { name: 'Create list' }).click();
   const list = page.locator('.named-list').filter({ hasText: name });
-  await expect(list.getByLabel(`Priority: ${urgencyLabels[urgency]}`)).toBeVisible();
+  await expect(list.getByLabel(urgencyLabels[urgency])).toBeVisible();
   return list;
 }
 
@@ -89,14 +89,14 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
 
   const list = await createList(page, 'Urgent checklist', 'low');
   await chooseUrgency(list, 'critical');
-  await expect(list.getByLabel('Priority: Critical')).toBeVisible();
+  await expect(list.getByLabel('Critical')).toBeVisible();
   await list.getByRole('button', { name: 'Finish and archive list' }).click();
 
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   const archivedTask = page.locator('article').filter({ hasText: 'Urgent parent' });
   const archivedList = page.locator('article').filter({ hasText: 'Urgent checklist' });
-  await expect(archivedTask.getByLabel('Priority: Low')).toBeVisible();
-  await expect(archivedList.getByLabel('Priority: Critical')).toBeVisible();
+  await expect(archivedTask.getByLabel('Low')).toBeVisible();
+  await expect(archivedList.getByLabel('Critical')).toBeVisible();
 });
 
 test('preserves offline urgency creation and edits through reconnect synchronization', async ({
@@ -125,8 +125,8 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
   await expect(page.getByText('Synced').first()).toBeAttached({ timeout: 15_000 });
 
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await expect(taskRow(page, 'Online urgency seed').getByLabel('Priority: Critical')).toBeVisible();
-  await expect(taskRow(page, 'Offline urgent child').getByLabel('Priority: Low')).toBeVisible();
+  await expect(taskRow(page, 'Online urgency seed').getByLabel('Critical')).toBeVisible();
+  await expect(taskRow(page, 'Offline urgent child').getByLabel('Low')).toBeVisible();
 });
 
 test('keeps urgency controls accessible to keyboard, touch, and screen readers at every viewport', async ({

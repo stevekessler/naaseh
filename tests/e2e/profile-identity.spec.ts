@@ -22,9 +22,7 @@ test('ordinary users see identity, all assignees, readable priorities, and consi
   );
   await signIn(page);
   await expect(page.getByRole('button', { name: 'Signed in as Alex. Open profile' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Users and categories', exact: true })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole('button', { name: 'Users', exact: true })).toHaveCount(0);
   const form = page.locator('.task-form').first();
   await expandTaskDetails(form);
   await expect(form.getByRole('option', { name: 'Steve (@steve)', exact: true })).toHaveCount(1);
@@ -41,7 +39,7 @@ test('ordinary users see identity, all assignees, readable priorities, and consi
   await addTask(page, 'Shared design review');
   await page.setViewportSize({ width: 375, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
-  await expect(page.locator('.task-list .urgency-badge').first()).toHaveText('Priority: Medium');
+  await expect(page.locator('.task-list .urgency-badge').first()).toHaveText('Medium');
   await expectNoDocumentOverflow(page);
   await page.screenshot({ path: 'test-results/profile-identity-mobile.png', fullPage: true });
 });

@@ -44,11 +44,11 @@ export function UrgencyBadge({
     <span
       className={`urgency-badge urgency-badge--${mode}`}
       data-urgency={urgency}
-      aria-label={`Priority: ${label}`}
-      title={`Priority: ${label}`}
+      aria-label={label}
+      title={label}
     >
       <PriorityIcon urgency={urgency} />
-      {mode !== 'compact' && <span className="priority-text">Priority: {label}</span>}
+      {mode !== 'compact' && <span className="priority-text">{label}</span>}
     </span>
   );
 }

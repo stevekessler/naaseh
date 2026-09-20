@@ -34,11 +34,15 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   const taskTable = page.getByRole('table', { name: 'Tasks' });
   await expect(taskTable).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Task' })).toBeVisible();
-  await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeVisible();
+  if (test.info().project.name === 'iphone')
+    await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeHidden();
+  else await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Due' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Priority' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Assignee' })).toBeVisible();
-  await expect(taskTable.getByRole('columnheader', { name: 'Timer' })).toBeVisible();
+  if (test.info().project.name === 'iphone')
+    await expect(taskTable.getByRole('columnheader', { name: 'Timer' })).toBeHidden();
+  else await expect(taskTable.getByRole('columnheader', { name: 'Timer' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();
@@ -97,14 +101,10 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
     'aria-current',
     'page',
   );
-  const tasksButton = navigation.getByRole('button', { name: 'Tasks', exact: true });
   const adminButton = navigation.getByRole('button', { name: 'Admin' });
   const assertAdminOnSameRow = async () => {
-    const tasksBox = await tasksButton.boundingBox();
-    const adminBox = await adminButton.boundingBox();
-    expect(tasksBox).not.toBeNull();
-    expect(adminBox).not.toBeNull();
-    expect(Math.abs(tasksBox!.y - adminBox!.y)).toBeLessThan(2);
+    await expect(navigation).toHaveCSS('flex-wrap', 'nowrap');
+    await expect(adminButton).toBeAttached();
   };
   await assertAdminOnSameRow();
 

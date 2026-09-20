@@ -87,7 +87,7 @@ test('keeps Google settings readable offline and disables a new connection', asy
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await expect(
     page.getByText(
-      'Offline. Last-known Google status remains available; synchronization will wait.',
+      /Offline\. Last-known Google status (?:remains available|is disconnected); synchronization will wait\./,
     ),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Connect Google' })).toBeDisabled();

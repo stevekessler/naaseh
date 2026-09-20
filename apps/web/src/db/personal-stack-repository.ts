@@ -499,20 +499,25 @@ export async function resolveLocalStackConflict(
     await db.secureStackConflicts.delete(conflictId);
     return;
   }
+  if (
+    ['authorization_changed', 'lifecycle_changed', 'project_changed', 'hard_deleted'].includes(
+      conflict.reason,
+    )
+  )
+    throw new Error(
+      'This change cannot be reapplied because the work is no longer available. Discard it after reviewing the stack.',
+    );
   const current = await readLocalStack(conflict.ownerId, conflict.scope);
   if (!current) throw new Error('Personal stack is unavailable.');
-  if (current.version !== conflict.currentVersion)
-    await db.secureStackScopes.put(
-      await scopeRecord({
-        ...current,
-        version: conflict.currentVersion,
-        updatedAt: conflict.createdAt,
-      }),
-    );
+  // Rebase onto the server's reported version without ever rolling a newer
+  // local scope backward. Retain the current work order and membership.
+  const baseVersion = Math.max(current.version, conflict.currentVersion);
+  if (baseVersion !== current.version)
+    await db.secureStackScopes.put(await scopeRecord({ ...current, version: baseVersion }));
   const pending = await reorderLocalStack({
     ownerId: conflict.ownerId,
     scope: conflict.scope,
-    baseVersion: conflict.currentVersion,
+    baseVersion,
     sourceClientId: conflict.sourceClientId,
     move: conflict.move,
   });

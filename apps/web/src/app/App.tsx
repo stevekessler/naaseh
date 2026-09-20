@@ -209,13 +209,36 @@ export function App() {
     const value = sessionStorage.getItem('naaseh-session-view');
     return value ? JSON.parse(value) : null;
   });
+  const [checkingSavedSession, setCheckingSavedSession] = useState(
+    () => !sessionStorage.getItem('naaseh-session-view'),
+  );
+  useEffect(() => {
+    if (!checkingSavedSession) return;
+    let active = true;
+    void validateBrowserSession()
+      .then((result) => {
+        if (active && result.valid) {
+          saveSessionView(result.session);
+          setSession(result.session);
+        }
+      })
+      .catch(() => {
+        // Do not unlock local data without a validated server session.
+      })
+      .finally(() => {
+        if (active) setCheckingSavedSession(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [checkingSavedSession]);
   const [view, setView] = useState<'list' | 'postit'>('list');
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const headerExpandTimer = useRef<number | undefined>(undefined);
   const [online, setOnline] = useState(() => navigator.onLine);
-  const [sessionValidation, setSessionValidation] = useState<'valid' | 'locked' | 'retry'>(() =>
-    sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid',
-  );
+  const [sessionValidation, setSessionValidation] = useState<
+    'valid' | 'locked' | 'retry' | 'wrong_account'
+  >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
@@ -229,6 +252,7 @@ export function App() {
     | 'google'
     | 'profile'
     | 'admin'
+    | 'admin-categories'
     | 'journal'
   >(initialRoute.section);
   const [stackScope, setStackScope] = useState<LocalStackScope>({ scopeType: 'overall' });
@@ -255,7 +279,6 @@ export function App() {
   );
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [adminUsersCursor, setAdminUsersCursor] = useState<string>();
-  const [adminTab, setAdminTab] = useState<'users' | 'categories'>('users');
   const [taskTab, setTaskTab] = useState<'all' | 'filtered'>(() => {
     const params = new URLSearchParams(location.search);
     return params.get('taskTab') === 'filtered' ||
@@ -509,6 +532,7 @@ export function App() {
   const [signingOut, setSigningOut] = useState(false);
   const signingOutRef = useRef(false);
   const syncing = useRef(false);
+  const validatingSession = useRef(false);
   const syncRetryTimer = useRef<number | undefined>(undefined);
   const visible = useMemo(
     () => filterTasks(tasks, section === 'tasks' && taskTab === 'all' ? emptyFilters : filters),
@@ -708,7 +732,13 @@ export function App() {
     history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
   }, [filters, taskTab, section]);
   const synchronize = useCallback(async () => {
-    if (!session || !navigator.onLine || document.visibilityState === 'hidden' || syncing.current)
+    if (
+      !session ||
+      sessionValidation !== 'valid' ||
+      !navigator.onLine ||
+      document.visibilityState === 'hidden' ||
+      syncing.current
+    )
       return;
     if (syncRetryTimer.current !== undefined) {
       window.clearTimeout(syncRetryTimer.current);
@@ -740,35 +770,42 @@ export function App() {
     } finally {
       syncing.current = false;
     }
-  }, [session]);
+  }, [session, sessionValidation]);
 
   useEffect(() => {
     if (session) void synchronize();
   }, [session, synchronize]);
 
   const revalidateSession = useCallback(async () => {
-    if (!session) return;
+    if (!session || validatingSession.current) return;
     if (session.userId === 'local-steve') {
       setSessionValidation('valid');
       return;
     }
-    const result = await revalidateProtectedSession({
-      lock: () => setSessionValidation('locked'),
-      validate: validateBrowserSession,
-      purge: purgeAllAuthorizedData,
-      unlock: () => setSessionValidation('valid'),
-      cancelled: () => signingOutRef.current,
-    });
-    if (result.status === 'valid' && result.session) {
-      saveSessionView(result.session);
-      setSession(result.session);
-    } else if (result.status === 'revoked') setSession(null);
-    else if (result.status === 'offline_locked' || result.status === 'purge_failed')
-      setSessionValidation('retry');
+    validatingSession.current = true;
+    try {
+      const result = await revalidateProtectedSession({
+        lock: () => setSessionValidation('locked'),
+        expectedUserId: session.userId,
+        validate: validateBrowserSession,
+        purge: purgeAllAuthorizedData,
+        unlock: () => setSessionValidation('valid'),
+        cancelled: () => signingOutRef.current,
+      });
+      if (result.status === 'valid' && result.session) {
+        saveSessionView(result.session);
+        setSession(result.session);
+      } else if (result.status === 'revoked') setSession(null);
+      else if (result.status === 'account_mismatch') setSessionValidation('wrong_account');
+      else if (result.status === 'offline_locked' || result.status === 'purge_failed')
+        setSessionValidation('retry');
+    } finally {
+      validatingSession.current = false;
+    }
   }, [session]);
 
   useEffect(() => {
-    if (session && sessionValidation !== 'valid') void revalidateSession();
+    if (session && sessionValidation === 'locked') void revalidateSession();
   }, [session, sessionValidation, revalidateSession]);
 
   useEffect(() => {
@@ -794,23 +831,25 @@ export function App() {
     // navigator.onLine settles. Defer one turn so the guard sees the new state.
     const online = () =>
       window.setTimeout(() => {
-        void revalidateSession();
-        void synchronize();
+        if (session?.userId === 'local-steve') void synchronize();
+        else void revalidateSession();
         if (section === 'dashboard') setCompletionReportAttempt((value) => value + 1);
       }, 0);
     window.addEventListener('online', online);
     return () => window.removeEventListener('online', online);
-  }, [synchronize, revalidateSession, section]);
+  }, [session?.userId, synchronize, revalidateSession, section]);
   useEffect(() => {
     const visible = () => {
-      if (document.visibilityState === 'visible') void synchronize();
+      if (document.visibilityState !== 'visible') return;
+      if (session?.userId === 'local-steve') void synchronize();
+      else void revalidateSession();
     };
     document.addEventListener('visibilitychange', visible);
     return () => {
       document.removeEventListener('visibilitychange', visible);
       if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
     };
-  }, [synchronize]);
+  }, [session?.userId, synchronize, revalidateSession]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -837,6 +876,15 @@ export function App() {
     };
   }, []);
 
+  if (checkingSavedSession && !session)
+    return (
+      <main className="login-page">
+        <section className="login-card" role="status">
+          Checking your saved session…
+        </section>
+      </main>
+    );
+
   if (!session)
     return (
       <Login
@@ -856,9 +904,11 @@ export function App() {
           <p>
             {sessionValidation === 'locked'
               ? 'Validating your session before unlocking cached tasks…'
-              : 'Your session could not be validated or cleared. Cached tasks remain locked.'}
+              : sessionValidation === 'wrong_account'
+                ? `This browser is signed in as another account. Sign in as ${session.displayName} to sync saved changes. Cached tasks remain locked.`
+                : 'Your session could not be validated or cleared. Cached tasks remain locked.'}
           </p>
-          {sessionValidation === 'retry' && (
+          {(sessionValidation === 'retry' || sessionValidation === 'wrong_account') && (
             <button type="button" onClick={() => void revalidateSession()}>
               Retry validation
             </button>
@@ -1207,10 +1257,12 @@ export function App() {
               reapplyConflicts={async () => {
                 for (const conflict of stackConflicts)
                   await resolveLocalStackConflict(conflict.id, 'reapply');
+                setRemoteStackItems(undefined);
               }}
               discardConflicts={async () => {
                 for (const conflict of stackConflicts)
                   await resolveLocalStackConflict(conflict.id, 'discard');
+                setStackReadAttempt((value) => value + 1);
               }}
             />
           ) : section === 'profile' ? (
@@ -1220,52 +1272,14 @@ export function App() {
               userId={session.userId}
               refreshUsers={refreshUsers}
             />
-          ) : section === 'admin' ? (
+          ) : section === 'admin' || section === 'admin-categories' ? (
             session.role !== 'admin' ? (
               <section role="alert" className="panel">
                 <h1>Administrator access required</h1>
                 <p>Your account cannot open system administration.</p>
               </section>
-            ) : (
+            ) : section === 'admin' ? (
               <>
-                <div
-                  className="admin-tabs"
-                  role="tablist"
-                  aria-label="Administration sections"
-                  onKeyDown={(event) => {
-                    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-                    event.preventDefault();
-                    const next =
-                      event.key === 'ArrowLeft' || event.key === 'Home' ? 'users' : 'categories';
-                    setAdminTab(next);
-                    requestAnimationFrame(() =>
-                      document.getElementById(`admin-${next}-tab`)?.focus(),
-                    );
-                  }}
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    id="admin-users-tab"
-                    aria-controls="admin-users-panel"
-                    aria-selected={adminTab === 'users'}
-                    tabIndex={adminTab === 'users' ? 0 : -1}
-                    onClick={() => setAdminTab('users')}
-                  >
-                    Users
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    id="admin-categories-tab"
-                    aria-controls="admin-categories-panel"
-                    aria-selected={adminTab === 'categories'}
-                    tabIndex={adminTab === 'categories' ? 0 : -1}
-                    onClick={() => setAdminTab('categories')}
-                  >
-                    Categories &amp; Projects
-                  </button>
-                </div>
                 {adminLoadError && (
                   <div role="alert">
                     {adminLoadError}
@@ -1274,89 +1288,76 @@ export function App() {
                     </button>
                   </div>
                 )}
-                <div
-                  id="admin-users-panel"
-                  role="tabpanel"
-                  aria-labelledby="admin-users-tab"
-                  hidden={adminTab !== 'users'}
-                >
-                  <UsersAdminPage
-                    users={adminUsers}
-                    currentUserId={session.userId}
-                    online={online}
-                    {...(adminUsersCursor
-                      ? {
-                          nextCursor: adminUsersCursor,
-                          loadMore: async () => {
-                            const page = await listAdminUsersPage(
-                              session.csrfToken,
-                              adminUsersCursor,
-                            );
-                            setAdminUsers((users) => [
-                              ...users,
-                              ...page.items.filter(
-                                (item) => !users.some((user) => user.id === item.id),
-                              ),
-                            ]);
-                            setAdminUsersCursor(page.nextCursor);
-                          },
-                        }
-                      : {})}
-                    create={async (input) => {
-                      const created = await createAdminUser(input, session.csrfToken);
-                      void refreshUsers().catch(() => undefined);
-                      setAdminUsers((users) => [
-                        ...users.filter((user) => user.id !== created.id),
-                        created,
-                      ]);
-                    }}
-                    toggle={async (userId, active, version) => {
-                      const updated = await changeAdminUserStatus(
-                        userId,
-                        active,
-                        session.csrfToken,
-                        version,
-                      );
-                      void refreshUsers().catch(() => undefined);
-                      setAdminUsers((users) =>
-                        users.map((user) => (user.id === userId ? updated : user)),
-                      );
-                    }}
-                  />
-                </div>
-                <div
-                  id="admin-categories-panel"
-                  role="tabpanel"
-                  aria-labelledby="admin-categories-tab"
-                  hidden={adminTab !== 'categories'}
-                >
-                  <CategoriesAdminPage
-                    categories={categories}
-                    projects={projects}
-                    assignees={assignees}
-                    createCategory={async (value) => {
-                      await saveNewLocalCategory(value);
-                    }}
-                    updateCategory={async (category, patch) => {
-                      await updateLocalCategory(category, patch);
-                    }}
-                    createProject={async (value) => {
-                      await saveNewLocalProject(value);
-                    }}
-                    updateProject={async (project, patch) => {
-                      await updateLocalProject(project, patch);
-                    }}
-                    actorId={session.userId}
-                    csrfToken={session.csrfToken}
-                    changeCategoryLifecycle={(category, action, actorId) =>
-                      void changeLocalCategoryLifecycle(category, action, actorId)
-                    }
-                    changeProjectLifecycle={(project, action, actorId) =>
-                      void changeLocalProjectLifecycle(project, action, actorId)
-                    }
-                  />
-                </div>
+                <UsersAdminPage
+                  users={adminUsers}
+                  currentUserId={session.userId}
+                  online={online}
+                  {...(adminUsersCursor
+                    ? {
+                        nextCursor: adminUsersCursor,
+                        loadMore: async () => {
+                          const page = await listAdminUsersPage(
+                            session.csrfToken,
+                            adminUsersCursor,
+                          );
+                          setAdminUsers((users) => [
+                            ...users,
+                            ...page.items.filter(
+                              (item) => !users.some((user) => user.id === item.id),
+                            ),
+                          ]);
+                          setAdminUsersCursor(page.nextCursor);
+                        },
+                      }
+                    : {})}
+                  create={async (input) => {
+                    const created = await createAdminUser(input, session.csrfToken);
+                    void refreshUsers().catch(() => undefined);
+                    setAdminUsers((users) => [
+                      ...users.filter((user) => user.id !== created.id),
+                      created,
+                    ]);
+                  }}
+                  toggle={async (userId, active, version) => {
+                    const updated = await changeAdminUserStatus(
+                      userId,
+                      active,
+                      session.csrfToken,
+                      version,
+                    );
+                    void refreshUsers().catch(() => undefined);
+                    setAdminUsers((users) =>
+                      users.map((user) => (user.id === userId ? updated : user)),
+                    );
+                  }}
+                />
               </>
+            ) : (
+              <CategoriesAdminPage
+                categories={categories}
+                projects={projects}
+                assignees={assignees}
+                createCategory={async (value) => {
+                  await saveNewLocalCategory(value);
+                }}
+                updateCategory={async (category, patch) => {
+                  await updateLocalCategory(category, patch);
+                }}
+                createProject={async (value) => {
+                  await saveNewLocalProject(value);
+                }}
+                updateProject={async (project, patch) => {
+                  await updateLocalProject(project, patch);
+                }}
+                actorId={session.userId}
+                csrfToken={session.csrfToken}
+                changeCategoryLifecycle={(category, action, actorId) =>
+                  void changeLocalCategoryLifecycle(category, action, actorId)
+                }
+                changeProjectLifecycle={(project, action, actorId) =>
+                  void changeLocalProjectLifecycle(project, action, actorId)
+                }
+              />
             )
           ) : section === 'groups' ? (
             <GroupPage

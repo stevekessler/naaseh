@@ -43,6 +43,30 @@ describe('protected session revalidation', () => {
     ).resolves.toEqual({ status: 'valid', retryable: false, session });
   });
 
+  it('keeps local data locked when the browser cookie belongs to another user', async () => {
+    const unlock = vi.fn();
+    const purge = vi.fn();
+    await expect(
+      revalidateProtectedSession({
+        expectedUserId: 'original-user',
+        lock: vi.fn(),
+        validate: vi.fn(async () => ({
+          valid: true as const,
+          session: {
+            userId: 'other-user',
+            displayName: 'Other',
+            csrfToken: 'csrf',
+            role: 'user' as const,
+          },
+        })),
+        purge,
+        unlock,
+      }),
+    ).resolves.toEqual({ status: 'account_mismatch', retryable: false });
+    expect(unlock).not.toHaveBeenCalled();
+    expect(purge).not.toHaveBeenCalled();
+  });
+
   it('does not restore a session when sign-out begins during revalidation', async () => {
     let finishValidation!: (value: {
       valid: true;

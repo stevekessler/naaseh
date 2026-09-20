@@ -50,6 +50,7 @@ const database = vi.hoisted(() => {
         equals: (expected: unknown) => ({
           first: async () => [...records.values()].find((row) => row[field] === expected),
           toArray: async () => [...records.values()].filter((row) => row[field] === expected),
+          count: async () => [...records.values()].filter((row) => row[field] === expected).length,
           sortBy: async (sortField: string) =>
             [...records.values()]
               .filter((row) => row[field] === expected)
@@ -128,6 +129,9 @@ import {
   updateLocalList,
 } from '../../src/db/list-repository.js';
 import { drainOutbox, listConflicts } from '../../src/sync/sync-engine.js';
+import { saveNewLocalCategory } from '../../src/db/category-repository.js';
+import { saveNewLocalProject } from '../../src/db/project-repository.js';
+import { listReviewConflicts, resolveReviewedConflict } from '../../src/sync/conflict-review.js';
 
 const urgencyOf = (value: unknown) => (value as { urgency?: Urgency }).urgency;
 
@@ -150,6 +154,95 @@ beforeEach(() => {
       );
     }),
   );
+});
+
+describe('organization sync recovery', () => {
+  it('moves a rejected project into review without deleting the local project', async () => {
+    const category = await saveNewLocalCategory({ name: 'Work', color: '#336699' });
+    await drainOutbox('csrf');
+    const project = await saveNewLocalProject({ categoryId: category.id, name: 'Plan' });
+    vi.mocked(fetch).mockImplementationOnce(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { mutations: Array<{ id: string }> };
+      return new Response(
+        JSON.stringify({
+          results: body.mutations.map((mutation) => ({
+            mutationId: mutation.id,
+            status: 'rejected',
+            reason: 'validation_failed',
+            problem: { message: 'The project name is already used.' },
+          })),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+
+    await drainOutbox('csrf');
+
+    expect(state.outbox.size).toBe(0);
+    expect(state.projects.has(project.id)).toBe(true);
+    const [conflict] = await listReviewConflicts();
+    expect(conflict).toMatchObject({
+      reason: 'validation_failed',
+      message: 'The project name is already used.',
+    });
+    await expect(resolveReviewedConflict(conflict!, 'local', undefined)).rejects.toThrow(
+      'needs an edit or server review',
+    );
+    expect(state.conflicts.size).toBe(1);
+  });
+
+  it('waits for a pending category before sending its project', async () => {
+    const category = await saveNewLocalCategory({ name: 'Work', color: '#336699' });
+    await saveNewLocalProject({ categoryId: category.id, name: 'Plan' });
+    for (const mutation of state.outbox.values()) {
+      mutation.createdAt = mutation.entityType === 'project' ? '2020-01-01' : '2030-01-01';
+    }
+    const pushed: string[] = [];
+    vi.mocked(fetch).mockImplementation(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as {
+        mutations: Array<{ id: string; entityType: string }>;
+      };
+      pushed.push(body.mutations[0]!.entityType);
+      return new Response(
+        JSON.stringify({
+          results: body.mutations.map((mutation) => ({
+            mutationId: mutation.id,
+            status: 'applied',
+          })),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+
+    await drainOutbox('csrf');
+    expect(pushed).toEqual(['category']);
+    await drainOutbox('csrf');
+    expect(pushed).toEqual(['category', 'project']);
+  });
+
+  it('keeps a project queued while its category has a review conflict', async () => {
+    const category = await saveNewLocalCategory({ name: 'Work', color: '#336699' });
+    await saveNewLocalProject({ categoryId: category.id, name: 'Plan' });
+    vi.mocked(fetch).mockImplementationOnce(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { mutations: Array<{ id: string }> };
+      return new Response(
+        JSON.stringify({
+          results: body.mutations.map((mutation) => ({
+            mutationId: mutation.id,
+            status: 'rejected',
+            reason: 'validation_failed',
+          })),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+
+    await drainOutbox('csrf');
+
+    expect(state.conflicts.size).toBe(1);
+    expect([...state.outbox.values()].map((item) => item.entityType)).toEqual(['project']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('offline Task/List urgency persistence', () => {

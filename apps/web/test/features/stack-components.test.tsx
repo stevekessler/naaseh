@@ -59,6 +59,8 @@ describe('personal stack component primitives', () => {
       <StackList items={items} scope={{ scopeType: 'overall' }} move={vi.fn()} windowSize={500} />,
     );
     expect(maximumRenderedStackRows).toBe(100);
+    expect(html).toContain('<table class="stack-list"');
+    expect(html).toContain('<th scope="col">Task</th>');
     expect(html.match(/class="stack-row"/g)).toHaveLength(100);
     expect(html).toContain('Showing positions 1–100 of 125');
     expect(html).toContain('data-work-type="task"');

@@ -68,7 +68,16 @@ export function UserAvatar({
           )}
         </svg>
       )}
-      {showName && <span>{name}</span>}
+      {showName && (
+        <span className="user-full-name" title={name}>
+          {name}
+        </span>
+      )}
+      {showName && (
+        <span className="user-first-name" title={name}>
+          {name.split(/\s+/u)[0]}
+        </span>
+      )}
     </span>
   );
 }

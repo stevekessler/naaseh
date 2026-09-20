@@ -2,11 +2,24 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { createTask, transitionTask } from '@naaseh/domain';
 import { PostItBoard } from '../../src/features/postit/PostItBoard.js';
+import { PostItNote } from '../../src/features/postit/PostItNote.js';
 import { ViewSwitcher } from '../../src/features/tasks/ViewSwitcher.js';
 import { rememberTaskView, restoreTaskView } from '../../src/features/tasks/task-view-state.js';
 import { readFileSync } from 'node:fs';
 
 describe('post-it task view', () => {
+  it('places overdue time near the title and marks private notes', () => {
+    const task = createTask(
+      { label: 'Follow up', dueAt: '2020-01-01T12:30:00.000Z', dueTimeZone: 'UTC' },
+      'steve',
+    );
+    const html = renderToStaticMarkup(
+      <PostItNote task={{ ...task, memoHidden: true }} complete={() => undefined} />,
+    );
+    expect(html.indexOf('postit-due')).toBeLessThan(html.indexOf('postit-meta'));
+    expect(html).toContain('overdue-label');
+    expect(html).toContain('🔒 Private notes');
+  });
   it('renders readable category colors and the completion animation state', () => {
     const open = createTask({ label: 'Open task', categoryId: 'calls' }, 'steve');
     const completed = transitionTask(open, 'completed', 'steve');

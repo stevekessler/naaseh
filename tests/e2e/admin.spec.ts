@@ -81,17 +81,13 @@ test('an administrator responsively lists, disables, and reactivates users witho
   await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
-  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
+  await page.getByRole('button', { name: 'Users', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
-  const usersTab = page.getByRole('tab', { name: 'Users' });
-  const categoriesTab = page.getByRole('tab', { name: 'Categories & Projects' });
-  await expect(categoriesTab).toHaveAttribute('aria-selected', 'false');
-  await usersTab.focus();
-  await usersTab.press('ArrowRight');
-  await expect(categoriesTab).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Categories & Projects', exact: true }).click();
   await expect(page.getByText('Add category', { exact: true })).toBeVisible();
-  await categoriesTab.press('ArrowLeft');
-  await expect(usersTab).toHaveAttribute('aria-selected', 'true');
+  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Users', exact: true }).click();
   await expect(page.getByText(/Administration is online only/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Disable Steve' })).toBeDisabled();
   await page.getByLabel('Username').fill('new-admin');
@@ -136,7 +132,10 @@ test('a regular user has no administration surface and cannot see another user p
   await page.getByLabel('Password', { exact: true }).fill('local-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Users and categories' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Users', exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Categories & Projects', exact: true }),
+  ).toHaveCount(0);
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await expect(page.getByText('other-user-private-task')).toHaveCount(0);
 });

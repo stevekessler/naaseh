@@ -4,6 +4,7 @@ export function CategoryForm({
   save,
   initial,
   assignees = [],
+  cancel,
 }: {
   save: (value: {
     name: string;
@@ -12,6 +13,7 @@ export function CategoryForm({
   }) => Promise<void> | void;
   initial?: { name: string; color: string; defaultAssigneeId?: string | undefined };
   assignees?: readonly AssigneeOption[];
+  cancel?: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -57,7 +59,14 @@ export function CategoryForm({
           {...(initial?.defaultAssigneeId ? { defaultValue: initial.defaultAssigneeId } : {})}
         />
       </label>
-      <button disabled={saving}>{saving ? 'Saving…' : 'Save category'}</button>
+      <div className="dialog-actions">
+        <button disabled={saving}>{saving ? 'Saving…' : 'Save category'}</button>
+        {cancel && (
+          <button type="button" className="quiet" onClick={cancel}>
+            Cancel
+          </button>
+        )}
+      </div>
       {error && <p role="alert">{error}</p>}
     </form>
   );

@@ -79,6 +79,7 @@ export function TaskForm({
   offline = false,
   defaultAssigneeId,
   submitLabel = task ? 'Save changes' : 'Add task',
+  cancel,
 }: {
   save: (task: TaskInput) => Promise<void>;
   task?: Task;
@@ -90,6 +91,7 @@ export function TaskForm({
   offline?: boolean;
   defaultAssigneeId?: string;
   submitLabel?: string;
+  cancel?: () => void;
 }) {
   const [urgency, setUrgency] = useState<Urgency>(task?.urgency ?? defaultUrgency);
   const initialCategoryId =
@@ -169,7 +171,7 @@ export function TaskForm({
       </label>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
         <summary>Task details</summary>
-        <label>Memo</label>
+        <label>{task?.memoHidden ? '🔒 Private notes' : 'Memo'}</label>
         {typeof document === 'undefined' ? (
           <div className="memo-editor" aria-label="Memo">
             {memoDocumentText(memoDocument)}
@@ -345,7 +347,16 @@ export function TaskForm({
           </fieldset>
         )}
       </details>
-      <button>{submitLabel}</button>
+      {cancel ? (
+        <div className="dialog-actions">
+          <button>{submitLabel}</button>
+          <button type="button" className="quiet" onClick={cancel}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button>{submitLabel}</button>
+      )}
     </form>
   );
 }

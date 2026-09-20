@@ -16,9 +16,9 @@ test('representative responsive pages have no serious or critical axe findings',
     'Groups',
     'Archive',
     'Projects',
-    'Users and categories',
+    'Users',
   ]) {
-    if (['Global Items', 'Groups', 'Users and categories'].includes(pageName))
+    if (['Global Items', 'Groups', 'Users'].includes(pageName))
       await page.getByRole('button', { name: 'Admin', exact: true }).click();
     await page
       .getByRole('button', {

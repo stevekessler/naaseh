@@ -36,7 +36,7 @@ test('discovers personal settings on Profile and renders a responsive administra
 
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
 
-  await page.getByRole('button', { name: 'Users and categories', exact: true }).click();
+  await page.getByRole('button', { name: 'Users', exact: true }).click();
   const table = page.getByRole('table', { name: 'System user accounts' });
   await expect(table).toBeVisible();
   await expect(table.getByRole('row', { name: /Steve.*enabled.*team/ })).toBeVisible();
@@ -69,6 +69,10 @@ test('keeps system administration unavailable to an ordinary user', async ({ pag
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Administrator access required' })).toBeVisible();
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Users and categories' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Users', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Admin', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
 });

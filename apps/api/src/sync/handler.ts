@@ -61,6 +61,7 @@ import { applyCrisisPlanSyncMutation } from '../journal/crisis-plan-handler.js';
 import { journalMutationSchema } from '@naaseh/domain';
 import { DynamoJournalRepository } from '../journal/journal-repository.js';
 import { JournalService } from '../journal/journal-service.js';
+import { recordSyncMutationOutcome } from './sync-telemetry.js';
 const MAX_BODY_BYTES = 1_000_000;
 const journalRepository = new DynamoJournalRepository();
 const journalService = new JournalService(journalRepository);
@@ -208,6 +209,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   );
   if (includesPersonalStackOperation || includesTaskTimer) pushRequestSchema.parse(parsed);
   const results = [];
+  const serverRecordPresence = new Map<number, boolean>();
   const backlogDepth = Number(body.backlog?.depth);
   const oldestAgeSeconds = Number(body.backlog?.oldestAgeSeconds);
   if (
@@ -221,7 +223,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     metric('SyncBacklogDepth', backlogDepth);
     metric('SyncOldestPendingAge', oldestAgeSeconds, 'Seconds');
   }
-  for (const mutation of body.mutations) {
+  for (const [mutationIndex, mutation] of body.mutations.entries()) {
     if (
       (mutation as { entityType?: string }).entityType === 'journalEntry' ||
       (mutation as { entityType?: string }).entityType === 'journalProfile'
@@ -325,17 +327,37 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     }
     if (mutation.entityType === 'category' || mutation.entityType === 'project') {
       if (actor.role !== 'admin') {
-        results.push({ mutationId: mutation.id, status: 'rejected' });
+        results.push({
+          mutationId: mutation.id,
+          status: 'conflict',
+          reason: 'authorization_changed',
+          problem: {
+            code: 'administrator_access_required',
+            message: 'Administrator access is required to synchronize categories and projects.',
+            reason: 'authorization_changed',
+            correlationId: event.requestContext.requestId,
+          },
+        });
         continue;
       }
       try {
         if (mutation.entityType === 'category') {
           const current = await getCategory(mutation.entityId);
+          serverRecordPresence.set(mutationIndex, Boolean(current));
           if (mutation.baseVersion !== (current?.version ?? 0)) {
             results.push({
               mutationId: mutation.id,
-              status: current ? 'conflict' : 'rejected',
+              status: 'conflict',
+              reason: 'version_mismatch',
               entityVersion: current?.version,
+              problem: {
+                code: 'organization_version_mismatch',
+                message: current
+                  ? 'The category changed on the server. Review the saved change.'
+                  : 'The category is missing on the server. Review its earlier saved changes.',
+                reason: 'version_mismatch',
+                correlationId: event.requestContext.requestId,
+              },
               ...(current ? { current } : {}),
             });
             continue;
@@ -365,11 +387,21 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           });
         } else {
           const current = await getProject(mutation.entityId);
+          serverRecordPresence.set(mutationIndex, Boolean(current));
           if (mutation.baseVersion !== (current?.version ?? 0)) {
             results.push({
               mutationId: mutation.id,
-              status: current ? 'conflict' : 'rejected',
+              status: 'conflict',
+              reason: 'version_mismatch',
               entityVersion: current?.version,
+              problem: {
+                code: 'organization_version_mismatch',
+                message: current
+                  ? 'The project changed on the server. Review the saved change.'
+                  : 'The project is missing on the server. Review its earlier saved changes.',
+                reason: 'version_mismatch',
+                correlationId: event.requestContext.requestId,
+              },
               ...(current ? { current } : {}),
             });
             continue;
@@ -423,9 +455,19 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
               : classified.retryable
                 ? 'retry'
                 : 'rejected',
+          ...(classified.classification === 'authorization'
+            ? { reason: 'authorization_changed' }
+            : classified.classification === 'validation'
+              ? { reason: 'validation_failed' }
+              : {}),
           problem: {
             code: classified.code,
             message: classified.safeMessage,
+            ...(classified.classification === 'authorization'
+              ? { reason: 'authorization_changed' }
+              : classified.classification === 'validation'
+                ? { reason: 'validation_failed' }
+                : {}),
             correlationId: event.requestContext.requestId,
           },
         });
@@ -434,6 +476,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     }
     if (mutation.entityType === 'list') {
       const current = await findList(mutation.entityId);
+      serverRecordPresence.set(mutationIndex, Boolean(current));
       try {
         const payload = mutation.payload as Record<string, unknown>;
         const next = applySharedWorkSyncPayload(
@@ -472,6 +515,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     }
     if (mutation.entityType === 'listItem') {
       const current = await findListItem(mutation.entityId);
+      serverRecordPresence.set(mutationIndex, Boolean(current));
       try {
         const payload = mutation.payload as Record<string, unknown>;
         const next = listItemSchema.parse(
@@ -526,6 +570,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     }
     if (mutation.entityType === 'directoryItem') {
       const current = await findDirectoryItem(mutation.entityId);
+      serverRecordPresence.set(mutationIndex, Boolean(current));
       try {
         const payload = mutation.payload as Record<string, unknown>;
         const next = directoryItemSchema.parse(
@@ -564,6 +609,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       continue;
     }
     const current = await findTask(mutation.entityId);
+    serverRecordPresence.set(mutationIndex, Boolean(current));
     const outcome = applyTaskMutation(current, mutation);
     if (outcome.status !== 'applied') {
       results.push(outcome);
@@ -602,6 +648,21 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   }
   const conflicts = results.filter((result) => result.status === 'conflict').length;
   const retries = results.filter((result) => result.status === 'retry').length;
+  for (const [index, result] of results.entries()) {
+    if (result.status !== 'conflict' && result.status !== 'rejected' && result.status !== 'retry')
+      continue;
+    const mutation = body.mutations[index];
+    if (!mutation) continue;
+    recordSyncMutationOutcome({
+      mutation,
+      result,
+      actorRole: actor.role,
+      correlationId: event.requestContext.requestId,
+      ...(serverRecordPresence.has(index)
+        ? { serverRecordPresent: serverRecordPresence.get(index)! }
+        : {}),
+    });
+  }
   metric('SyncMutationBatchSize', results.length);
   if (conflicts) metric('SyncConflicts', conflicts);
   if (retries) metric('SyncRetryableFailures', retries);

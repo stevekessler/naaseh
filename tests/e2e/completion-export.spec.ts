@@ -40,7 +40,12 @@ test('uses the browser zone silently and downloads only a verified completed-tas
     }),
   );
   await page.route('**/mock-completed-tasks.csv', (route) =>
-    route.fulfill({ status: 200, contentType: 'text/csv; charset=utf-8', body: csv }),
+    route.fulfill({
+      status: 200,
+      contentType: 'text/csv; charset=utf-8',
+      headers: { 'content-disposition': 'attachment; filename="completed-tasks.csv"' },
+      body: csv,
+    }),
   );
 
   await signIn(page);

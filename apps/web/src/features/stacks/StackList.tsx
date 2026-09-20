@@ -117,25 +117,36 @@ export function StackList({
         }}
         onDragEnd={finishDrag}
       >
-        <ol className="stack-list" start={startIndex + 1} data-window-size={size}>
-          {window.map((item, index) => (
-            <StackRow
-              key={stackDragId(item.reference)}
-              item={item}
-              scope={scope}
-              dragIndex={index}
-              dragGroup={dragGroup}
-              {...(hasCompleteDenseScope ? { total: items.length } : {})}
-              movePosition={startIndex + index + 1}
-              moveTotal={items.length}
-              ariaPosition={startIndex + index + 1}
-              ariaTotal={items.length}
-              move={move}
-              compact
-              {...(editTask ? { editTask } : {})}
-            />
-          ))}
-        </ol>
+        <table className="stack-list" aria-label="Ranked personal stack" data-window-size={size}>
+          <thead>
+            <tr>
+              <th scope="col">Rank</th>
+              <th scope="col">Task</th>
+              <th scope="col">Level</th>
+              <th scope="col">Positions</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {window.map((item, index) => (
+              <StackRow
+                key={stackDragId(item.reference)}
+                item={item}
+                scope={scope}
+                dragIndex={index}
+                dragGroup={dragGroup}
+                {...(hasCompleteDenseScope ? { total: items.length } : {})}
+                movePosition={startIndex + index + 1}
+                moveTotal={items.length}
+                ariaPosition={startIndex + index + 1}
+                ariaTotal={items.length}
+                move={move}
+                compact
+                {...(editTask ? { editTask } : {})}
+              />
+            ))}
+          </tbody>
+        </table>
       </DragDropProvider>
       <button
         type="button"

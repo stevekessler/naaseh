@@ -73,9 +73,6 @@ export function TaskEditDialog({
       <div onInput={() => setDirty(true)}>
         <header>
           <h2 id="task-edit-title">Edit task</h2>
-          <button type="button" className="quiet" onClick={requestClose}>
-            Cancel
-          </button>
         </header>
         {error && <p role="alert">{error}</p>}
         <fieldset disabled={busy}>
@@ -86,6 +83,7 @@ export function TaskEditDialog({
             assignees={assignees}
             parentTasks={parentTasks}
             submitLabel={busy ? 'Saving…' : 'Save changes'}
+            cancel={requestClose}
             save={async (input: TaskInput) => {
               setBusy(true);
               setError('');
