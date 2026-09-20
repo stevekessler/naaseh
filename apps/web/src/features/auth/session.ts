@@ -35,6 +35,7 @@ export async function validateBrowserSession(): Promise<
 
 export async function revalidateProtectedSession(options: {
   lock: () => void;
+  expectedUserId?: string;
   validate: () => Promise<
     { valid: true; session?: BrowserSession } | { valid: false; reason: 'revoked' | 'expired' }
   >;
@@ -52,6 +53,8 @@ export async function revalidateProtectedSession(options: {
   }
   if (options.cancelled?.()) return { status: 'cancelled' as const, retryable: false as const };
   if (validation.valid) {
+    if (options.expectedUserId && validation.session?.userId !== options.expectedUserId)
+      return { status: 'account_mismatch' as const, retryable: false as const };
     options.unlock();
     return {
       status: 'valid' as const,

@@ -54,7 +54,7 @@ describe('stack drag and compact priority accessibility', () => {
       .map(({ urgency }) => renderToStaticMarkup(<UrgencyBadge urgency={urgency} mode="compact" />))
       .join('');
     for (const label of ['Low', 'Medium', 'High', 'Critical'])
-      expect(html).toContain(`aria-label="Priority: ${label}"`);
+      expect(html).toContain(`aria-label="${label}"`);
     for (const priority of ['low', 'medium', 'high', 'critical'])
       expect(html).toContain(`data-priority-icon="${priority}"`);
     for (const color of ['#5674b9', '#80ad3c', '#ee8d2f', '#d51116']) expect(html).toContain(color);

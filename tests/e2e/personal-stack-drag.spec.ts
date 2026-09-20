@@ -13,7 +13,7 @@ async function createTask(page: Page, label: string, urgency: string) {
   await form.getByRole('button', { name: 'Add task' }).click();
 }
 
-const row = (page: Page, label: string) => page.getByRole('listitem').filter({ hasText: label });
+const row = (page: Page, label: string) => page.getByRole('row').filter({ hasText: label });
 
 test('keeps pointer/touch drag and keyboard ranking equivalent with compact priority marks', async ({
   page,
@@ -25,11 +25,11 @@ test('keeps pointer/touch drag and keyboard ranking equivalent with compact prio
 
   const first = row(page, 'Drag first');
   const second = row(page, 'Drag second');
-  await expect(first.getByLabel('Priority: Critical').locator('svg')).toHaveAttribute(
+  await expect(first.getByLabel('Critical').locator('svg')).toHaveAttribute(
     'data-priority-icon',
     'critical',
   );
-  await expect(second.getByLabel('Priority: Low').locator('svg')).toHaveAttribute(
+  await expect(second.getByLabel('Low').locator('svg')).toHaveAttribute(
     'data-priority-icon',
     'low',
   );

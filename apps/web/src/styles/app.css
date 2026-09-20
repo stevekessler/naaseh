@@ -748,27 +748,47 @@ main {
   border-radius: 0 0 14px 14px;
 }
 .stack-list {
-  list-style: none;
-  display: grid;
-  gap: 0;
+  width: 100%;
+  border-collapse: collapse;
   margin: 1rem 0 0;
-  padding: 0;
+}
+.stack-list thead {
+  background: #eef3ef;
+  color: #4a5f53;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.stack-list th,
+.stack-list td {
+  padding: 0.75rem;
+  border-top: 1px solid #e8eeea;
+  text-align: start;
+  vertical-align: middle;
+}
+.stack-list thead th {
+  border-top: 0;
 }
 .stack-row {
-  display: grid;
-  grid-template-columns: 2rem minmax(9rem, 1fr) auto minmax(9rem, auto) auto auto;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-  padding: 0.75rem;
-  border: 0;
-  border-top: 1px solid #e8eeea;
-  border-radius: 0;
   background: white;
 }
+.stack-row-controls {
+  min-width: 18rem;
+}
+.stack-row-controls .stack-row-actions,
+.stack-row-controls .stack-move-controls {
+  display: inline-flex;
+  vertical-align: middle;
+}
+.stack-row-controls .stack-move-controls {
+  display: inline-grid;
+}
+.stack-list-window .stack-list {
+  margin-top: 0;
+}
 .stack-row-summary {
-  display: grid;
-  gap: 0.15rem;
+  display: table-cell;
   min-width: 0;
 }
 .stack-row-summary h2 {
@@ -829,6 +849,20 @@ main {
 }
 .personal-stack-page .stack-conflict p {
   margin-top: 0;
+}
+.personal-stack-page .stack-conflict button + button {
+  margin-inline-start: 0.5rem;
+}
+.overdue-label {
+  color: #b4232d;
+  font-weight: 800;
+}
+.user-first-name {
+  display: none;
+}
+.postit-due {
+  order: -1;
+  margin-top: 0.2rem;
 }
 .stack-list-window > .stack-window-status {
   margin: 0.85rem 0 0;
@@ -1268,6 +1302,12 @@ dialog input {
   }
 }
 @media (max-width: 900px) {
+  .task-list .user-full-name {
+    display: none;
+  }
+  .task-list .user-first-name {
+    display: inline;
+  }
   .topbar {
     grid-template-columns: 1fr;
     gap: 0.75rem;
@@ -1357,6 +1397,86 @@ dialog input {
   }
 }
 @media (max-width: 480px) {
+  .task-list {
+    min-width: 0;
+  }
+  .task-list colgroup {
+    display: none;
+  }
+  .task-list thead,
+  .stack-list thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .task-list,
+  .task-list tbody {
+    display: block;
+    width: 100%;
+  }
+  .task-list tbody tr {
+    display: grid;
+    grid-template-columns: 2.8rem minmax(0, 1fr) 5.7rem;
+    align-items: start;
+    border-bottom: 1px solid var(--line);
+  }
+  .task-list tbody tr:last-child {
+    border-bottom: 0;
+  }
+  .task-list .task-status-cell {
+    grid-column: 1;
+    grid-row: 1 / 3;
+  }
+  .task-list .task-name-cell {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .task-list .task-due-cell {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .task-list .task-priority-cell {
+    grid-column: 3;
+    grid-row: 2;
+  }
+  .task-list .task-assignee-cell {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .task-list .task-actions-cell {
+    grid-column: 2 / 4;
+    grid-row: 3;
+  }
+  .task-list .task-memo-column,
+  .task-list .task-memo-cell,
+  .task-list thead th:nth-child(3),
+  .task-list .task-timer-column,
+  .task-list thead th:nth-child(7) {
+    display: none;
+  }
+  .task-list th,
+  .task-list td {
+    padding: 0.45rem 0.25rem;
+    border-bottom: 0;
+  }
+  .task-name-cell .task-link {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .task-list .user-full-name {
+    display: none;
+  }
+  .task-list .user-first-name {
+    display: inline;
+  }
+  .task-list .urgency-badge .priority-text {
+    display: none;
+  }
+  .task-list .task-due-cell small {
+    overflow-wrap: anywhere;
+  }
   main {
     padding-inline: max(1rem, var(--safe-left)) max(1rem, var(--safe-right));
     padding-bottom: calc(1rem + var(--safe-bottom));
@@ -1381,17 +1501,42 @@ dialog input {
   .priority-options {
     width: 100%;
   }
-  .stack-row {
-    grid-template-columns: 2rem minmax(0, 1fr);
+  .stack-list,
+  .stack-list tbody {
+    display: block;
+    width: 100%;
   }
-  .stack-row > :not(.workload-rank) {
+  .stack-list .stack-row {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr);
+    gap: 0.25rem 0.65rem;
+    border-top: 1px solid #e8eeea;
+  }
+  .stack-list .stack-row > * {
+    display: block;
+    border: 0;
+    padding: 0.3rem;
+    min-width: 0;
+  }
+  .stack-list .stack-row > :not(.workload-rank) {
     grid-column: 2;
   }
-  .stack-row .urgency-badge,
-  .stack-row .workload-positions,
-  .stack-row-actions,
+  .stack-list .stack-row > .workload-rank {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .stack-list .stack-row > .stack-row-summary {
+    grid-row: 1;
+  }
   .stack-row .stack-move-controls {
-    justify-self: stretch;
+    justify-self: start;
+  }
+  .stack-row-controls .stack-row-actions {
+    display: flex;
+  }
+  .stack-row-controls .stack-move-controls {
+    display: grid;
+    width: 100%;
   }
   .stack-move-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1404,13 +1549,11 @@ dialog input {
   .stack-position-editor {
     grid-template-columns: minmax(0, 1fr);
   }
-  .dialog-actions,
   .composer-actions,
   .update-prompt {
     align-items: stretch;
     flex-direction: column;
   }
-  .dialog-actions > button,
   .composer-actions > button,
   .update-prompt > button {
     width: 100%;
@@ -1896,6 +2039,8 @@ details:not([open]) > summary.project-workload-heading::after {
   display: flex;
   gap: var(--button-gap);
   flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: center;
 }
 .modal-backdrop {
   position: fixed;
@@ -2324,6 +2469,9 @@ details:not([open]) > summary.project-workload-heading::after {
 }
 .priority-icon {
   display: none;
+}
+.urgency-badge--compact .priority-icon {
+  display: inline;
 }
 @media (max-width: 640px) {
   .urgency-badge--responsive .priority-icon {

@@ -27,8 +27,7 @@ async function openPersonalStack(page: Page) {
   await expect(page.getByRole('heading', { name: 'Personal Stack' })).toBeVisible();
 }
 
-const stackRow = (page: Page, label: string) =>
-  page.getByRole('listitem').filter({ hasText: label });
+const stackRow = (page: Page, label: string) => page.getByRole('row').filter({ hasText: label });
 
 test('keeps urgency-independent overall and Project orders private and durable', async ({
   page,

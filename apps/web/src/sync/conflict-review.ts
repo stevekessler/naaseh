@@ -11,6 +11,8 @@ export interface ReviewConflict {
   createdAt?: string | undefined;
   mutation?: Mutation | undefined;
   reason: string;
+  message?: string;
+  code?: string;
 }
 
 export async function listReviewConflicts(): Promise<ReviewConflict[]> {
@@ -19,13 +21,18 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
       try {
         const saved = await decryptLocalValue<{
           mutation?: Mutation;
-          result?: { reason?: string; problem?: { reason?: string } };
+          result?: {
+            reason?: string;
+            problem?: { reason?: string; message?: string; code?: string };
+          };
         }>('conflict', record.id, record.value);
         return {
           id: record.id,
           createdAt: record.updatedAt,
           mutation: saved.mutation,
           reason: saved.result?.reason ?? saved.result?.problem?.reason ?? 'version_mismatch',
+          ...(saved.result?.problem?.message ? { message: saved.result.problem.message } : {}),
+          ...(saved.result?.problem?.code ? { code: saved.result.problem.code } : {}),
         };
       } catch {
         // Timer and legacy access-revocation records use other encryption namespaces.
@@ -63,7 +70,29 @@ export async function resolveReviewedConflict(
   const action = async () => {
     const mutation = conflict.mutation;
     if (mutation?.entityType !== 'task') {
-      if (choice === 'local') throw new Error('This change cannot be reapplied here.');
+      if (choice === 'local') {
+        if (
+          !mutation ||
+          !['category', 'project'].includes(mutation.entityType) ||
+          !['project_unavailable'].includes(conflict.reason)
+        )
+          throw new Error('This change needs an edit or server review before it can be retried.');
+        const retry = {
+          ...mutation,
+          attempts: 0,
+          createdAt: new Date().toISOString(),
+          payload: await encryptLocalValue('mutation', mutation.id, mutation.payload),
+        };
+        await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
+          if (!(await db.secureConflicts.get(conflict.id)))
+            throw new Error('This conflict was already resolved.');
+          if (await db.outbox.where('entityId').equals(mutation.entityId).count())
+            throw new Error('This item has newer pending changes. Let them sync first.');
+          await db.outbox.add(retry);
+          await db.secureConflicts.delete(conflict.id);
+        });
+        return;
+      }
       // Never leave a failed local Category/Project visible as if it had synced.
       // Preserve it when related work still depends on it so the user can review first.
       await db.transaction(

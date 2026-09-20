@@ -40,7 +40,9 @@ export function StackMoveControls({
     try {
       await move(work, bounded);
     } finally {
-      document.getElementById(focusId)?.focus();
+      // The sortable row is replaced after a local reorder. Restore focus
+      // after React commits the new table row, not on the outgoing element.
+      requestAnimationFrame(() => document.getElementById(focusId)?.focus());
     }
   };
 

@@ -38,7 +38,9 @@ export function TaskList({
             <th scope="col">Task</th>
             <th scope="col">Memo</th>
             <th scope="col">Due</th>
-            <th scope="col">Priority</th>
+            <th scope="col">
+              <span className="visually-hidden">Priority</span>
+            </th>
             <th scope="col">Assignee</th>
             <th scope="col">Timer</th>
           </tr>

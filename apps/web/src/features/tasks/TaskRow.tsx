@@ -20,7 +20,13 @@ export function TaskRow({
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
   const dueLabel = task.dueAt
-    ? new Date(task.dueAt).toLocaleString()
+    ? new Date(task.dueAt).toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
     : task.dueDate
       ? task.dueDate
       : '';
@@ -56,7 +62,7 @@ export function TaskRow({
       <td className="task-memo-cell">
         <div className="task-row-memo">
           {task.memoHidden ? (
-            <span className="muted">Private memo</span>
+            <span className="muted">🔒 Private memo</span>
           ) : task.memoDocument ? (
             <MemoDocumentView document={task.memoDocument} />
           ) : task.memo ? (

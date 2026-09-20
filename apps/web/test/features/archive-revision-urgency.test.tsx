@@ -29,8 +29,8 @@ describe('archived and revised urgency display', () => {
     );
 
     expect(html).toContain('data-urgency="critical"');
-    expect(html).toContain('aria-label="Priority: Critical"');
-    expect(html).toContain('Priority: Critical');
+    expect(html).toContain('aria-label="Critical"');
+    expect(html).not.toContain('Priority: Critical');
   });
 
   it('combines offline archive urgency with Project, assignee, Category, date, and content type', () => {

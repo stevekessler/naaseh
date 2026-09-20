@@ -137,6 +137,7 @@ export function ArchivePage({
               <li key={`${entry.kind}:${value.id}`}>
                 <article>
                   <h2>{entry.task?.label ?? entry.list?.name}</h2>
+                  {entry.task?.memoHidden && <span title="Private notes">🔒 Private notes</span>}
                   <p>
                     {entry.kind === 'task' ? 'To-do' : 'List'}
                     {entry.pending ? ' · Sync pending' : ''}

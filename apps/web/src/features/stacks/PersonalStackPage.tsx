@@ -46,7 +46,6 @@ export function formatStackSyncTime(
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-    second: '2-digit',
     timeZone,
     timeZoneName: 'short',
   }).format(new Date(value));
@@ -87,6 +86,21 @@ export function PersonalStackPage({
 }: PersonalStackPageProps) {
   const pendingCount = pendingOperationIds.length;
   const [editingId, setEditingId] = useState<string>();
+  const [resolutionError, setResolutionError] = useState('');
+  const [resolving, setResolving] = useState(false);
+  const resolve = async (action: () => void | Promise<void>) => {
+    setResolving(true);
+    setResolutionError('');
+    try {
+      await action();
+    } catch (error) {
+      setResolutionError(
+        error instanceof Error ? error.message : 'Unable to resolve the stack change.',
+      );
+    } finally {
+      setResolving(false);
+    }
+  };
   const editing = parentTasks.find((task) => task.id === editingId);
   return (
     <section className="personal-stack-page projects-page">
@@ -147,15 +161,24 @@ export function PersonalStackPage({
             {conflictCount} stack conflict{conflictCount === 1 ? '' : 's'} need your attention.
           </p>
           {reapplyConflicts ? (
-            <button type="button" onClick={() => void reapplyConflicts()}>
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={() => void resolve(reapplyConflicts)}
+            >
               Reapply
             </button>
           ) : null}
           {discardConflicts ? (
-            <button type="button" onClick={() => void discardConflicts()}>
+            <button
+              type="button"
+              disabled={resolving}
+              onClick={() => void resolve(discardConflicts)}
+            >
               Discard
             </button>
           ) : null}
+          {resolutionError && <p role="alert">{resolutionError}</p>}
         </div>
       ) : null}
 

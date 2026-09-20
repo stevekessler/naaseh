@@ -113,7 +113,7 @@ function StackRowContent({
   compact = false,
 }: RowContentProps) {
   return (
-    <li
+    <tr
       ref={rowRef}
       id={stackRowFocusId(item.reference)}
       className={`stack-row${dragging ? ' stack-row--dragging' : ''}${dropTarget ? ' stack-row--drop-target' : ''}`}
@@ -122,18 +122,18 @@ function StackRowContent({
       aria-setsize={ariaTotal ?? total}
       data-work-type={item.reference.workType}
     >
-      <span className="workload-rank" aria-hidden="true">
-        {selectedPosition}
-      </span>
-      <div className="stack-row-summary">
+      <td className="workload-rank">{selectedPosition}</td>
+      <th scope="row" className="stack-row-summary">
         <span className="stack-work-type">
           {item.reference.workType === 'task' ? 'To-do' : 'List'}
         </span>
         <h2>{item.label}</h2>
         {item.pending ? <p className="stack-pending">Pending synchronization</p> : null}
-      </div>
-      <UrgencyBadge urgency={item.urgency} mode="responsive" />
-      <p className="stack-ranks workload-positions">
+      </th>
+      <td className="stack-level">
+        <UrgencyBadge urgency={item.urgency} mode="responsive" />
+      </td>
+      <td className="stack-ranks workload-positions">
         {scope.scopeType === 'project' ? (
           <>
             <span>
@@ -153,38 +153,40 @@ function StackRowContent({
             )}
           </>
         )}
-      </p>
-      <div className="stack-row-actions">
-        {handleRef ? (
-          <button
-            ref={handleRef}
-            type="button"
-            className="stack-drag-handle"
-            aria-label={`Drag ${item.label}`}
-            aria-describedby="stack-drag-instructions"
-          >
-            <span aria-hidden="true">⋮⋮</span>
-          </button>
-        ) : null}
-        {item.reference.workType === 'task' && editTask ? (
-          <button
-            id={`task-edit-trigger-stack-${item.reference.workId}`}
-            type="button"
-            className="quiet"
-            onClick={() => editTask(item.reference.workId)}
-          >
-            Edit {item.label}
-          </button>
-        ) : null}
-      </div>
-      <StackMoveControls
-        work={item.reference}
-        label={item.label}
-        position={movePosition ?? selectedPosition}
-        total={moveTotal ?? total ?? selectedPosition}
-        move={move}
-        compact={compact}
-      />
-    </li>
+      </td>
+      <td className="stack-row-controls">
+        <div className="stack-row-actions">
+          {handleRef ? (
+            <button
+              ref={handleRef}
+              type="button"
+              className="stack-drag-handle"
+              aria-label={`Drag ${item.label}`}
+              aria-describedby="stack-drag-instructions"
+            >
+              <span aria-hidden="true">⋮⋮</span>
+            </button>
+          ) : null}
+          {item.reference.workType === 'task' && editTask ? (
+            <button
+              id={`task-edit-trigger-stack-${item.reference.workId}`}
+              type="button"
+              className="quiet"
+              onClick={() => editTask(item.reference.workId)}
+            >
+              Edit {item.label}
+            </button>
+          ) : null}
+        </div>
+        <StackMoveControls
+          work={item.reference}
+          label={item.label}
+          position={movePosition ?? selectedPosition}
+          total={moveTotal ?? total ?? selectedPosition}
+          move={move}
+          compact={compact}
+        />
+      </td>
+    </tr>
   );
 }

@@ -5,10 +5,12 @@ export function ProjectForm({
   categories,
   initial,
   save,
+  cancel,
 }: {
   categories: CategoryRecord[];
   initial?: Project;
   save: (value: { categoryId: string; name: string; endDate?: string }) => Promise<void> | void;
+  cancel?: () => void;
 }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -56,9 +58,16 @@ export function ProjectForm({
         End date
         <input name="endDate" type="date" defaultValue={initial?.endDate} />
       </label>
-      <button disabled={saving}>
-        {saving ? 'Saving…' : initial ? 'Save Project' : 'Create Project'}
-      </button>
+      <div className="dialog-actions">
+        <button disabled={saving}>
+          {saving ? 'Saving…' : initial ? 'Save Project' : 'Create Project'}
+        </button>
+        {cancel && (
+          <button type="button" className="quiet" onClick={cancel}>
+            Cancel
+          </button>
+        )}
+      </div>
       {error && <p role="alert">{error}</p>}
     </form>
   );

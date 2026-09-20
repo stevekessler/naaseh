@@ -160,7 +160,8 @@ describe('personal stack accessibility contract', () => {
     const formatted = formatStackSyncTime('2026-08-10T20:15:30.000Z', 'America/Denver');
 
     expect(formatted).toContain('Aug 10, 2026');
-    expect(formatted).toContain('2:15:30');
+    expect(formatted).toContain('2:15 PM');
+    expect(formatted).not.toContain(':30');
     expect(formatted).toMatch(/MDT|GMT-6/);
   });
 });

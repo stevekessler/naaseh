@@ -12,6 +12,7 @@ export type AppRoute =
   | { section: 'google' }
   | { section: 'profile' }
   | { section: 'admin' }
+  | { section: 'admin-categories' }
   | {
       section: 'journal';
       entryId?: string;
@@ -54,6 +55,7 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (/^\/google\/?$/.test(pathname)) return { section: 'profile' };
   if (/^\/profile\/?$/.test(pathname)) return { section: 'profile' };
   if (/^\/admin\/?$/.test(pathname)) return { section: 'admin' };
+  if (/^\/admin\/categories\/?$/.test(pathname)) return { section: 'admin-categories' };
   return { section: 'tasks' };
 }
 
@@ -72,6 +74,7 @@ export function routePath(route: AppRoute): string {
           : route.entryId
             ? `/journal/${encodeURIComponent(route.entryId)}`
             : '/journal';
+  if (route.section === 'admin-categories') return '/admin/categories';
   return `/${route.section}`;
 }
 

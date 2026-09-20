@@ -33,6 +33,7 @@ import {
   readLocalTaskSnapshot,
 } from '../db/task-repository.js';
 import { getClientId } from '../db/client-id.js';
+import { listReviewConflicts } from './conflict-review.js';
 import { listLocalLists } from '../db/list-repository.js';
 import { refreshGoogleSyncCache } from '../features/google-sync/google-sync-client.js';
 import {
@@ -251,11 +252,37 @@ async function pushMutation(
 export async function drainOutbox(csrfToken: string): Promise<void> {
   if (!navigator.onLine) return;
   const stored = await db.outbox.orderBy('createdAt').toArray();
+  const blockedCategoryIds = new Set(
+    (await listReviewConflicts())
+      .filter((conflict) => conflict.mutation?.entityType === 'category')
+      .map((conflict) => conflict.mutation!.entityId),
+  );
   let firstError: unknown;
   for (const queue of groupSequentialMutations(stored)) {
     for (const item of queue) {
       try {
         const mutation = await decryptMutation(item);
+        if (item.entityType === 'project') {
+          const payload = mutation.payload as { categoryId?: string };
+          const localProject = await db.secureProjects.get(item.entityId);
+          const categoryId =
+            payload.categoryId ??
+            (localProject
+              ? (
+                  await decryptLocalValue<{ categoryId: string }>(
+                    'project',
+                    localProject.id,
+                    localProject.value,
+                  )
+                ).categoryId
+              : undefined);
+          if (
+            categoryId &&
+            (blockedCategoryIds.has(categoryId) ||
+              (await db.outbox.where('entityId').equals(categoryId).count()))
+          )
+            continue; // The parent category must be accepted first.
+        }
         const result = await pushMutation(csrfToken, mutation, await durableBacklogSnapshot());
         if (!result) throw new Error('Synchronization returned no mutation result.');
         const isStackMutation = (item.entityType as string) === 'personalStackOperation';
@@ -273,7 +300,11 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
           }
           continue;
         }
-        if (result.status === 'conflict') {
+        if (
+          result.status === 'conflict' ||
+          (result.status === 'rejected' && ['category', 'project'].includes(item.entityType))
+        ) {
+          if (item.entityType === 'category') blockedCategoryIds.add(item.entityId);
           if (isStackMutation) {
             await conflictLocalStackOperation({
               mutationId: item.id,
@@ -295,7 +326,13 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
               command: mutation.payload as import('@naaseh/domain').TaskTimerCommand,
             });
           } else {
-            const value = await encryptLocalValue('conflict', item.id, { mutation, result });
+            const value = await encryptLocalValue('conflict', item.id, {
+              mutation,
+              result:
+                result.status === 'rejected'
+                  ? { ...result, reason: result.reason ?? 'validation_failed' }
+                  : result,
+            });
             await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
               await db.secureConflicts.put({
                 id: item.id,
