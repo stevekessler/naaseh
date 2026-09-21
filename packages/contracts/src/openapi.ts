@@ -113,6 +113,9 @@ export const profileSecurityResponseSchema = z
     recoveryCodesRemaining: z.number().int().min(0).max(10),
   })
   .strict();
+export const rememberedBrowserRenameRequestSchema = z
+  .object({ label: z.string().trim().min(1).max(80) })
+  .strict();
 export const taskCreateSchema = taskInputSchema;
 const taskLinkUrlSchema = z
   .string()

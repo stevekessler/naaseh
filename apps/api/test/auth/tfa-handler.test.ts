@@ -14,10 +14,16 @@ const mocks = vi.hoisted(() => ({
   encryptTfaSecret: vi.fn(),
   verifyTotp: vi.fn(),
   issueSession: vi.fn(),
+  authenticateSession: vi.fn(),
+  findSession: vi.fn(),
   sessionTokenHash: vi.fn((token: string) => `digest-${token}`),
   issueTrustedDevice: vi.fn(),
   isTrustedDevice: vi.fn(),
   forgetTrustedDevice: vi.fn(),
+  listRememberedBrowsers: vi.fn(),
+  revokeRememberedBrowser: vi.fn(),
+  renameRememberedBrowser: vi.fn(),
+  isCurrentRememberedBrowser: vi.fn(),
   userByUsername: vi.fn(),
   loadPepper: vi.fn(),
   verifyOrDummy: vi.fn(),
@@ -29,6 +35,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../src/auth/login-transaction-repository.js', () => mocks);
 vi.mock('../../src/auth/user-repository.js', () => mocks);
 vi.mock('../../src/auth/session-service.js', () => mocks);
+vi.mock('../../src/auth/session-repository.js', () => mocks);
 vi.mock('../../src/auth/tfa-service.js', () => ({
   createTfaService: () => mocks,
   requiredTfaNextStep: (user: { tfaStatus: string }) =>
@@ -39,6 +46,10 @@ vi.mock('../../src/auth/trusted-device.js', () => ({
   issueTrustedDevice: mocks.issueTrustedDevice,
   isTrustedDevice: mocks.isTrustedDevice,
   forgetTrustedDevice: mocks.forgetTrustedDevice,
+  listRememberedBrowsers: mocks.listRememberedBrowsers,
+  revokeRememberedBrowser: mocks.revokeRememberedBrowser,
+  renameRememberedBrowser: mocks.renameRememberedBrowser,
+  isCurrentRememberedBrowser: mocks.isCurrentRememberedBrowser,
   trustedDeviceCookie: (token: string, maxAge = 2_592_000) =>
     `__Host-naaseh-trusted-device=${token}; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=${maxAge}`,
 }));
@@ -84,6 +95,23 @@ const invokeEnrollmentConfirmation = async () =>
       cookies: ['__Host-naaseh-preauth=pending'],
       body: JSON.stringify({ code: '123456', rememberDevice: true }),
       requestContext: { requestId: 'test-enroll', http: { method: 'POST' } },
+    } as never,
+    {} as never,
+    vi.fn(),
+  )) as APIGatewayProxyStructuredResultV2;
+
+const invokeTrustedDeviceSettings = async (
+  method: 'GET' | 'PATCH' | 'DELETE',
+  id?: string,
+  csrf = 'csrf',
+) =>
+  (await handler(
+    {
+      rawPath: `/api/v1/profile/security/trusted-devices${id ? `/${id}` : ''}`,
+      headers: { origin: 'http://localhost:4173', 'x-csrf-token': csrf },
+      cookies: ['__Host-naaseh=session', '__Host-naaseh-trusted-device=known-device'],
+      ...(method === 'PATCH' ? { body: JSON.stringify({ label: 'Steve’s MacBook Pro' }) } : {}),
+      requestContext: { requestId: 'test-settings', http: { method } },
     } as never,
     {} as never,
     vi.fn(),
@@ -136,6 +164,12 @@ beforeEach(() => {
     cookie: sessionCookie('new-session'),
     record: { csrfToken: 'csrf' },
   });
+  mocks.findSession.mockResolvedValue({ userId: 'admin', csrfToken: 'csrf' });
+  mocks.authenticateSession.mockResolvedValue({ userId: 'admin', csrfToken: 'csrf' });
+  mocks.listRememberedBrowsers.mockResolvedValue([]);
+  mocks.revokeRememberedBrowser.mockResolvedValue(true);
+  mocks.renameRememberedBrowser.mockResolvedValue(true);
+  mocks.isCurrentRememberedBrowser.mockReturnValue(false);
 });
 
 describe('TFA HTTP session cookies', () => {
@@ -211,6 +245,8 @@ describe('remembered browser sign-in', () => {
     expect(mocks.isTrustedDevice).toHaveBeenCalledWith(
       'known-device',
       expect.objectContaining({ id: 'admin' }),
+      expect.any(Date),
+      undefined,
     );
     expect(mocks.putLoginTransaction).not.toHaveBeenCalled();
   });
@@ -235,5 +271,44 @@ describe('remembered browser sign-in', () => {
     expect(response.statusCode).toBe(401);
     expect(mocks.isTrustedDevice).not.toHaveBeenCalled();
     expect(mocks.issueSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('remembered browser settings', () => {
+  const id = 'a'.repeat(64);
+
+  it('lists only devices belonging to the authenticated account', async () => {
+    const response = await invokeTrustedDeviceSettings('GET');
+    expect(response.statusCode).toBe(200);
+    expect(mocks.listRememberedBrowsers).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'admin' }),
+      'known-device',
+      expect.any(Date),
+      undefined,
+    );
+  });
+
+  it('requires CSRF protection to forget a remote browser', async () => {
+    const denied = await invokeTrustedDeviceSettings('DELETE', id, 'wrong');
+    expect(denied.statusCode).toBe(403);
+    expect(mocks.revokeRememberedBrowser).not.toHaveBeenCalled();
+    const response = await invokeTrustedDeviceSettings('DELETE', id);
+    expect(response.statusCode).toBe(200);
+    expect(mocks.revokeRememberedBrowser).toHaveBeenCalledWith('admin', id);
+    expect(response.cookies).toBeUndefined();
+  });
+
+  it('clears only this browser’s trust cookie when forgetting it', async () => {
+    mocks.isCurrentRememberedBrowser.mockReturnValue(true);
+    const response = await invokeTrustedDeviceSettings('DELETE', id);
+    expect(response.cookies?.[0]).toContain('Max-Age=0');
+  });
+
+  it('renames a known browser but rejects one not owned by the user', async () => {
+    const response = await invokeTrustedDeviceSettings('PATCH', id);
+    expect(response.statusCode).toBe(200);
+    expect(mocks.renameRememberedBrowser).toHaveBeenCalledWith('admin', id, 'Steve’s MacBook Pro');
+    mocks.renameRememberedBrowser.mockResolvedValue(false);
+    expect((await invokeTrustedDeviceSettings('PATCH', id)).statusCode).toBe(404);
   });
 });
