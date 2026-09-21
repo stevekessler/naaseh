@@ -11,6 +11,7 @@ import {
   passwordProofSchema,
   passwordChangeRequestSchema,
   passwordResetRequestSchema,
+  rememberedBrowserRenameRequestSchema,
   tfaChallengeRequestSchema,
   tfaEnrollmentConfirmRequestSchema,
 } from '@naaseh/contracts';
@@ -60,6 +61,10 @@ import {
   forgetTrustedDevice,
   isTrustedDevice,
   issueTrustedDevice,
+  isCurrentRememberedBrowser,
+  listRememberedBrowsers,
+  renameRememberedBrowser,
+  revokeRememberedBrowser,
   trustedDeviceCookie,
 } from './trusted-device.js';
 
@@ -113,10 +118,11 @@ async function trustedDeviceCookieAfterFactor(
   user: NonNullable<Awaited<ReturnType<typeof userById>>>,
   cookieHeader: string | undefined,
   correlationId: string,
+  userAgent?: string,
 ) {
   if (!rememberDevice) return forgetTrustedDevice(trustedDeviceToken(cookieHeader));
   try {
-    return await issueTrustedDevice(user);
+    return await issueTrustedDevice(user, new Date(), userAgent);
   } catch {
     recordAuthSecurityEvent('trusted_device_issue', 'failed', correlationId);
     return trustedDeviceCookie('', 0);
@@ -193,6 +199,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       enabledUser,
       cookieHeader,
       correlationId,
+      event.headers['user-agent'],
     );
     await consumeLoginTransaction(tokenDigest);
     const session = await issueSession(user.id, user.sessionEpoch + 1);
@@ -243,6 +250,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       user,
       cookieHeader,
       correlationId,
+      event.headers['user-agent'],
     );
     await consumeLoginTransaction(tokenDigest);
     const session = await issueSession(user.id, user.sessionEpoch);
@@ -331,6 +339,54 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       },
       { 'cache-control': authCachePolicy },
     );
+  }
+  if (
+    path.endsWith('/profile/security/trusted-devices') &&
+    event.requestContext.http.method === 'GET'
+  ) {
+    const authenticated = await authenticatedRequest(event);
+    if (!authenticated)
+      return problem(401, 'unauthorized', 'Authentication required.', correlationId);
+    return json(
+      200,
+      {
+        devices: await listRememberedBrowsers(
+          authenticated.user,
+          trustedDeviceToken(cookieHeader),
+          new Date(),
+          event.headers['user-agent'],
+        ),
+      },
+      { 'cache-control': authCachePolicy },
+    );
+  }
+  const trustedDevicePath = path.match(/\/profile\/security\/trusted-devices\/([^/]+)$/);
+  if (trustedDevicePath && ['DELETE', 'PATCH'].includes(event.requestContext.http.method)) {
+    const authenticated = await authenticatedRequest(event);
+    if (!authenticated || !mutationAuthorized(event, authenticated.record.csrfToken))
+      return problem(403, 'forbidden', 'Request rejected.', correlationId);
+    const id = trustedDevicePath[1] ?? '';
+    if (event.requestContext.http.method === 'DELETE') {
+      const forgotten = await revokeRememberedBrowser(authenticated.user.id, id);
+      if (!forgotten) return problem(404, 'not_found', 'Browser not found.', correlationId);
+      log('auth.trusted_device.revoke', {
+        correlationId,
+        actorId: authenticated.user.id,
+        outcome: 'success',
+      });
+      return json(
+        200,
+        { forgotten: true },
+        { 'cache-control': authCachePolicy },
+        isCurrentRememberedBrowser(trustedDeviceToken(cookieHeader), id)
+          ? [trustedDeviceCookie('', 0)]
+          : [],
+      );
+    }
+    const body = rememberedBrowserRenameRequestSchema.parse(JSON.parse(event.body ?? '{}'));
+    const renamed = await renameRememberedBrowser(authenticated.user.id, id, body.label);
+    if (!renamed) return problem(404, 'not_found', 'Browser not found.', correlationId);
+    return json(200, { label: body.label }, { 'cache-control': authCachePolicy });
   }
   if (
     path.endsWith('/profile/security/recovery-codes') &&
@@ -520,7 +576,12 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   let trusted = false;
   if (next === 'tfa_challenge') {
     try {
-      trusted = await isTrustedDevice(trustedDeviceToken(cookieHeader) ?? '', user);
+      trusted = await isTrustedDevice(
+        trustedDeviceToken(cookieHeader) ?? '',
+        user,
+        new Date(),
+        event.headers['user-agent'],
+      );
     } catch {
       recordAuthSecurityEvent('trusted_device_lookup', 'failed', correlationId);
     }

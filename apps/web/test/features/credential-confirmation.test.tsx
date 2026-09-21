@@ -91,6 +91,7 @@ const security = vi.hoisted(() => ({
   resetPassword: vi.fn(),
   changePassword: vi.fn(),
   readProfileSecurity: vi.fn(),
+  readRememberedBrowsers: vi.fn().mockResolvedValue({ devices: [] }),
   disableTfa: vi.fn(),
   requestTfaEnrollment: vi.fn(),
   rotateRecoveryCodes: vi.fn(),

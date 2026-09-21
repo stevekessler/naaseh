@@ -441,6 +441,18 @@ export function createApplicationApi(
   );
   route('ProfileSecurityIntegration', '/api/v1/profile/security', [apigwv2.HttpMethod.GET], auth);
   route(
+    'ProfileTrustedDevicesIntegration',
+    '/api/v1/profile/security/trusted-devices',
+    [apigwv2.HttpMethod.GET],
+    auth,
+  );
+  route(
+    'ProfileTrustedDeviceIntegration',
+    '/api/v1/profile/security/trusted-devices/{deviceId}',
+    [apigwv2.HttpMethod.PATCH, apigwv2.HttpMethod.DELETE],
+    auth,
+  );
+  route(
     'ProfileSecurityTfaIntegration',
     '/api/v1/profile/security/tfa',
     [apigwv2.HttpMethod.DELETE],

@@ -6,6 +6,7 @@ import {
   requestTfaEnrollment,
   rotateRecoveryCodes,
 } from '../auth/security-client.js';
+import { RememberedBrowsers } from './RememberedBrowsers.js';
 
 export function SecuritySettings({
   csrfToken,
@@ -124,6 +125,7 @@ export function SecuritySettings({
       )}
       {tfaEnabled && (
         <>
+          <RememberedBrowsers csrfToken={csrfToken} />
           <form onSubmit={rotate}>
             <h3>Replace recovery codes</h3>
             <FactorProofFields />

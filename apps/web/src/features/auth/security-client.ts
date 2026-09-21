@@ -65,6 +65,34 @@ export const readProfileSecurity = (csrfToken: string) =>
     headers: { 'x-csrf-token': csrfToken },
   });
 
+export type RememberedBrowser = {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  current: boolean;
+};
+
+export const readRememberedBrowsers = (csrfToken: string) =>
+  noStoreRequest<{ devices: RememberedBrowser[] }>('/api/v1/profile/security/trusted-devices', {
+    method: 'GET',
+    headers: { 'x-csrf-token': csrfToken },
+  });
+
+export const forgetRememberedBrowser = (csrfToken: string, id: string) =>
+  noStoreRequest<{ forgotten: true }>(`/api/v1/profile/security/trusted-devices/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-csrf-token': csrfToken },
+  });
+
+export const renameRememberedBrowser = (csrfToken: string, id: string, label: string) =>
+  noStoreRequest<{ label: string }>(`/api/v1/profile/security/trusted-devices/${id}`, {
+    method: 'PATCH',
+    headers: { 'x-csrf-token': csrfToken },
+    body: JSON.stringify({ label }),
+  });
+
 export type FactorProof = {
   password: string;
   method: 'totp' | 'recovery_code';
