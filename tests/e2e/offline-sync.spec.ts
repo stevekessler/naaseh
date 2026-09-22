@@ -1,12 +1,6 @@
 import type { Task } from '@naaseh/domain';
-import { expect, test, type Page } from '@playwright/test';
-async function signIn(page: Page) {
-  await page.goto('/');
-  await page.getByLabel('Username').fill('steve');
-  await page.getByLabel('Password').fill('local');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
-}
+import { expect, test } from '@playwright/test';
+import { signIn } from './enhanced-helpers.js';
 test('preserves offline work in the live tab and across a validated Chromium app-shell reload', async ({
   page,
   context,

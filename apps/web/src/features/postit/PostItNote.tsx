@@ -1,5 +1,6 @@
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { UserAvatar } from '../profile/user-directory.js';
+import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 import type { Task } from '@naaseh/domain';
 import { resolvePostItPalette } from '../../styles/category-color.js';
 import { useBrowserTimeZone } from '../tasks/due-value.js';
@@ -10,12 +11,14 @@ export function PostItNote({
   task,
   color = '#fff2a8',
   animating = false,
+  assigneeName,
   complete,
   edit,
 }: {
   task: Task;
   color?: string;
   animating?: boolean;
+  assigneeName?: string | undefined;
   complete: () => void;
   edit?: () => void;
 }) {
@@ -37,7 +40,18 @@ export function PostItNote({
         {completed ? '✓' : ''}
       </button>
       <h2>
-        {task.label}
+        {edit ? (
+          <button
+            id={`task-edit-trigger-postit-${task.id}`}
+            type="button"
+            className="postit-title"
+            onClick={edit}
+          >
+            {task.label}
+          </button>
+        ) : (
+          task.label
+        )}
         {task.visibility === 'private' && <span title="Private task"> 🔒</span>}
       </h2>
       {(task.dueAt || task.dueDate) && (
@@ -59,17 +73,16 @@ export function PostItNote({
         </small>
       )}
       <div className="postit-meta">
+        <ProgressIndicator percent={task.percentComplete} label={task.label} />
         <UrgencyBadge urgency={task.urgency} mode="compact" />
-        <UserAvatar userId={task.assigneeId ?? task.ownerId} />
+        <UserAvatar
+          userId={task.assigneeId ?? task.ownerId}
+          {...(assigneeName ? { displayName: assigneeName } : {})}
+          showName
+        />
       </div>
       {edit ? (
-        <button
-          id={`task-edit-trigger-postit-${task.id}`}
-          type="button"
-          className="quiet"
-          aria-label={`Edit ${task.label}`}
-          onClick={edit}
-        >
+        <button type="button" className="quiet" aria-label={`Edit ${task.label}`} onClick={edit}>
           Edit
         </button>
       ) : null}

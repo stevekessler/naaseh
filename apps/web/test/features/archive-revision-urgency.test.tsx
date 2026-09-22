@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
-import { createTask, type TaskRevision } from '@naaseh/domain';
+import { createProject, createTask, type CategoryRecord, type TaskRevision } from '@naaseh/domain';
 
 vi.mock('../../src/features/archive/PermanentDeleteDialog.js', () => ({
   PermanentDeleteDialog: () => <button type="button">Delete permanently</button>,
@@ -31,6 +31,50 @@ describe('archived and revised urgency display', () => {
     expect(html).toContain('data-urgency="critical"');
     expect(html).toContain('aria-label="Critical"');
     expect(html).not.toContain('Priority: Critical');
+  });
+
+  it('renders archived work as a compact table with deletion and organization details', () => {
+    const category: CategoryRecord = {
+      id: '01J00000000000000000000008',
+      name: 'Operations',
+      color: '#336699',
+      archived: false,
+      lifecycle: 'active',
+      version: 1,
+    };
+    const project = createProject({ categoryId: category.id, name: 'Fall launch' }, now);
+    const task = {
+      ...createTask(
+        {
+          label: 'Archive details',
+          urgency: 'medium',
+          categoryId: category.id,
+          projectId: project.id,
+        },
+        'owner',
+        now,
+      ),
+      status: 'archived' as const,
+      lifecycle: 'archived' as const,
+      archivedAt: now.toISOString(),
+      archivedBy: 'owner',
+    };
+    const html = renderToStaticMarkup(
+      <ArchivePage
+        entries={[{ kind: 'task', task, pending: false, conflicted: false }]}
+        restore={vi.fn()}
+        csrfToken="csrf"
+        categories={[category]}
+        projects={[project]}
+      />,
+    );
+
+    expect(html).toContain('<table class="archive-table">');
+    expect(html).toContain('<th scope="col">Deleted</th>');
+    expect(html).toContain('dateTime="2026-08-05T12:00:00.000Z"');
+    expect(html).toContain('Aug 5, 2026');
+    expect(html).toContain('Operations');
+    expect(html).toContain('Fall launch');
   });
 
   it('combines offline archive urgency with Project, assignee, Category, date, and content type', () => {

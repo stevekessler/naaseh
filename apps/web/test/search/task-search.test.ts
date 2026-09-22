@@ -41,6 +41,25 @@ describe('authorized task search', () => {
     expect(searchTaskIds([hidden], 'classified').has(hidden.id)).toBe(false);
     expect(searchTaskIds([], 'visible').has(hidden.id)).toBe(false);
   });
+  it('filters tasks by progress without treating a saved percentage as completion history', () => {
+    const untouched = task('Untouched');
+    const underway = task('Underway', { label: 'Underway', percentComplete: 45 });
+    const done = task('Done', { label: 'Done', percentComplete: 100 });
+    const base = {
+      query: '',
+      from: '',
+      to: '',
+      assigneeId: '',
+      categoryId: '',
+      urgencies: [],
+    };
+    expect(filterTasks([untouched, underway, done], { ...base, progress: 'in-progress' })).toEqual([
+      underway,
+    ]);
+    expect(filterTasks([untouched, underway, done], { ...base, progress: 'complete' })).toEqual([
+      done,
+    ]);
+  });
   it('never serializes query or memo terms into navigation state', () =>
     expect(
       safeSearchState('classified memo', {

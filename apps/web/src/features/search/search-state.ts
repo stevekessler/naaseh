@@ -8,6 +8,7 @@ const allowed = [
   'projectId',
   'contentType',
   'lifecycle',
+  'progress',
 ] as const;
 export function safeSearchState(_query: string, filters: Filters) {
   const params = new URLSearchParams();
@@ -25,6 +26,12 @@ export function filtersFromSearch(search: string): Filters {
     assigneeId: params.get('assigneeId') ?? '',
     categoryId: params.get('categoryId') ?? '',
     projectId: params.get('projectId') ?? '',
+    progress:
+      params.get('progress') === 'not-started' ||
+      params.get('progress') === 'in-progress' ||
+      params.get('progress') === 'complete'
+        ? (params.get('progress') as 'not-started' | 'in-progress' | 'complete')
+        : 'all',
     lifecycle:
       params.get('lifecycle') === 'archive'
         ? 'archive'

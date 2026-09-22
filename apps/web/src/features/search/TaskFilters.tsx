@@ -28,6 +28,22 @@ export function TaskFilters({
     ['categoryId', value.categoryId],
     ['projectId', value.projectId ?? ''],
   ] as const;
+  const filterLabels: Record<(typeof active)[number][0], string> = {
+    from: 'From',
+    to: 'To',
+    assigneeId: 'Assignee',
+    categoryId: 'Category',
+    projectId: 'Project',
+  };
+  const displayFilterValue = (key: (typeof active)[number][0], current: string) => {
+    if (key === 'assigneeId')
+      return assignees.find((assignee) => assignee.id === current)?.displayName ?? current;
+    if (key === 'categoryId')
+      return categories.find((category) => category.id === current)?.name ?? current;
+    if (key === 'projectId')
+      return projects.find((project) => project.id === current)?.name ?? current;
+    return current;
+  };
 
   return (
     <fieldset className="filter-fields">
@@ -69,6 +85,23 @@ export function TaskFilters({
           <option value="all">All</option>
           <option value="lists">Lists</option>
           <option value="todos">To-do lists</option>
+        </select>
+      </label>
+      <label>
+        <span>Progress</span>
+        <select
+          value={value.progress ?? 'all'}
+          onChange={(event) =>
+            change({
+              ...value,
+              progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
+            })
+          }
+        >
+          <option value="all">Any progress</option>
+          <option value="not-started">Not started</option>
+          <option value="in-progress">In progress</option>
+          <option value="complete">100% complete</option>
         </select>
       </label>
       <label>
@@ -127,7 +160,7 @@ export function TaskFilters({
               onClick={() => change({ ...value, [key]: '' })}
               aria-label={`Remove ${key} filter`}
             >
-              {key}: {current} ×
+              {filterLabels[key]}: {displayFilterValue(key, current)} ×
             </button>
           ))}
       </div>

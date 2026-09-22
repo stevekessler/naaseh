@@ -1,5 +1,6 @@
 import type { JournalDashboardMetric, JournalEntryProjection } from '@naaseh/domain';
 import { useEffect, useRef } from 'react';
+import { journalMetricLabel } from './journal-metric-labels.js';
 
 export function JournalMetricDialog({
   metric,
@@ -21,7 +22,7 @@ export function JournalMetricDialog({
   const contributing = entries.filter((entry) => metric.contributingEntryIds.includes(entry.id));
   return (
     <dialog ref={dialog} aria-labelledby="journal-metric-title" onClose={close}>
-      <h2 id="journal-metric-title">{metric.metric} contributing entries</h2>
+      <h2 id="journal-metric-title">{journalMetricLabel(metric.metric)} contributing entries</h2>
       {contributing.length ? (
         <ul>
           {contributing.map((entry) => (

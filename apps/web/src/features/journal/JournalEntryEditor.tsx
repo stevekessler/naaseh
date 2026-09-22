@@ -162,7 +162,7 @@ export function JournalEntryEditor({
               key={field.key}
               id={field.key}
               label={field.label}
-              minimum={1}
+              minimum={0}
               maximum={field.maximum}
               step={'step' in field ? field.step : 1}
               value={draft.projection[field.key]}
@@ -178,15 +178,6 @@ export function JournalEntryEditor({
             />
           ),
         )}
-      <label>
-        Other target behavior
-        <textarea
-          aria-label="Other target behavior"
-          value={draft.projection.otherTargetBehavior ?? ''}
-          maxLength={10000}
-          onChange={(event) => patch('otherTargetBehavior', event.target.value || null)}
-        />
-      </label>
       <fieldset className="journal-emotions">
         <legend>Emotions</legend>
         {emotions.map((emotion) => (
@@ -194,7 +185,7 @@ export function JournalEntryEditor({
             key={emotion}
             id={emotion}
             label={emotion[0]!.toUpperCase() + emotion.slice(1)}
-            minimum={1}
+            minimum={0}
             maximum={100}
             step={1}
             value={draft.projection.emotions[emotion]}

@@ -19,6 +19,7 @@ test('@enhanced-lists pointer and keyboard completion survives blocked audio wit
   await list.getByRole('button', { name: 'Complete Pointer item' }).click();
   await expect(list.getByText('Pointer item completed.')).toBeAttached();
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
+  await page.locator('summary').filter({ hasText: 'Reminders and sounds' }).click();
   await page.getByLabel('Completion sounds').uncheck();
   await page.getByRole('button', { name: 'Lists' }).click();
   await list.getByRole('button', { name: 'Reopen Pointer item' }).click();

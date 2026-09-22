@@ -126,28 +126,116 @@ export function shouldBootstrapTaskSnapshot(
   return taskCount === 0 && (!bootstrapComplete || pendingCount > 0);
 }
 
-async function recoverMissingTaskSnapshot(): Promise<void> {
-  const [snapshot, bootstrapState, pendingCount] = await Promise.all([
-    readLocalTaskSnapshot(),
-    db.settings.get('task-snapshot-bootstrapped'),
-    db.outbox.count(),
-  ]);
-  if (
+export const shouldBootstrapOrganizationSnapshot = (
+  lastHydratedAt: string | undefined,
+  now = Date.now(),
+  refreshAfterMs = 60_000,
+) => {
+  const hydratedAt = Date.parse(lastHydratedAt ?? '');
+  return !Number.isFinite(hydratedAt) || now - hydratedAt >= refreshAfterMs;
+};
+export const shouldBootstrapListSnapshot = (bootstrapComplete: boolean) => !bootstrapComplete;
+
+async function recoverMissingSnapshots(): Promise<void> {
+  const [snapshot, bootstrapState, organizationBootstrapState, listBootstrapState, pendingCount] =
+    await Promise.all([
+      readLocalTaskSnapshot(),
+      db.settings.get('task-snapshot-bootstrapped'),
+      db.settings.get('organization-snapshot-bootstrapped-v1'),
+      db.settings.get('list-snapshot-bootstrapped-v1'),
+      db.outbox.count(),
+    ]);
+  const shouldRecoverTasks =
     snapshot.unreadable.length ||
     shouldBootstrapTaskSnapshot(
       snapshot.tasks.length,
       pendingCount,
       bootstrapState?.value === 'true',
-    )
-  ) {
+    );
+  const shouldRecoverOrganization = shouldBootstrapOrganizationSnapshot(
+    organizationBootstrapState?.value,
+  );
+  const shouldRecoverLists = shouldBootstrapListSnapshot(listBootstrapState?.value === 'true');
+  if (shouldRecoverTasks || shouldRecoverOrganization || shouldRecoverLists) {
     const response = await fetch('/api/v1/sync/bootstrap', {
       credentials: 'include',
     });
     if (!response.ok) throw syncHttpError('Synchronization bootstrap', response.status);
-    const body = (await response.json()) as { tasks?: unknown[]; taskTimer?: unknown };
-    const records = await Promise.all(
-      (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
-    );
+    const body = (await response.json()) as {
+      tasks?: unknown[];
+      taskTimer?: unknown;
+      categories?: unknown[];
+      projects?: unknown[];
+      lists?: unknown[];
+      listItems?: unknown[];
+    };
+    const records = shouldRecoverTasks
+      ? await Promise.all(
+          (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
+        )
+      : [];
+    const organizationSnapshotAvailable =
+      Array.isArray(body.categories) && Array.isArray(body.projects);
+    const categoryRecords =
+      shouldRecoverOrganization && organizationSnapshotAvailable
+        ? await Promise.all(
+            body.categories!.map(async (value) => {
+              const category = categorySchema.parse(value);
+              return {
+                id: category.id,
+                lifecycle: category.lifecycle ?? (category.archived ? 'archived' : 'active'),
+                updatedAt: category.updatedAt ?? String(category.version),
+                value: await encryptLocalValue('category', category.id, category),
+              };
+            }),
+          )
+        : [];
+    const projectRecords =
+      shouldRecoverOrganization && organizationSnapshotAvailable
+        ? await Promise.all(
+            body.projects!.map(async (value) => {
+              const project = projectSchema.parse(value);
+              return {
+                id: project.id,
+                categoryId: project.categoryId,
+                lifecycle: project.lifecycle,
+                updatedAt: project.updatedAt,
+                value: await encryptLocalValue('project', project.id, project),
+              };
+            }),
+          )
+        : [];
+    const listSnapshotAvailable = Array.isArray(body.lists) && Array.isArray(body.listItems);
+    const listRecords =
+      shouldRecoverLists && listSnapshotAvailable
+        ? await Promise.all(
+            body.lists!.map(async (value) => {
+              const list = listSchema.parse(value);
+              return {
+                id: list.id,
+                ...(list.projectId ? { projectId: list.projectId } : {}),
+                lifecycle: list.lifecycle ?? list.status,
+                urgency: list.urgency,
+                updatedAt: list.updatedAt,
+                value: await encryptLocalValue('list', list.id, list),
+              };
+            }),
+          )
+        : [];
+    const listItemRecords =
+      shouldRecoverLists && listSnapshotAvailable
+        ? await Promise.all(
+            body.listItems!.map(async (value) => {
+              const item = listItemSchema.parse(value);
+              return {
+                id: item.id,
+                taskId: item.listId,
+                updatedAt: item.updatedAt,
+                value: await encryptLocalValue('listItem', item.id, item),
+              };
+            }),
+          )
+        : [];
     const timer = body.taskTimer ? taskTimerSchema.parse(body.taskTimer) : undefined;
     const timerRecord = timer
       ? {
@@ -160,14 +248,32 @@ async function recoverMissingTaskSnapshot(): Promise<void> {
       : undefined;
     await db.transaction(
       'rw',
-      db.secureTasks,
-      db.secureTaskTimers,
-      db.outbox,
-      db.settings,
+      [
+        db.secureTasks,
+        db.secureTaskTimers,
+        db.secureCategories,
+        db.secureProjects,
+        db.secureLists,
+        db.secureListItems,
+        db.outbox,
+        db.settings,
+      ],
       async () => {
         const pending = await db.outbox.toArray();
         const protectedTasks = new Set(
           pending.filter((item) => item.entityType === 'task').map((item) => item.entityId),
+        );
+        const protectedCategories = new Set(
+          pending.filter((item) => item.entityType === 'category').map((item) => item.entityId),
+        );
+        const protectedProjects = new Set(
+          pending.filter((item) => item.entityType === 'project').map((item) => item.entityId),
+        );
+        const protectedLists = new Set(
+          pending.filter((item) => item.entityType === 'list').map((item) => item.entityId),
+        );
+        const protectedListItems = new Set(
+          pending.filter((item) => item.entityType === 'listItem').map((item) => item.entityId),
         );
         const unreadable = new Map(snapshot.unreadable.map((record) => [record.id, record]));
         for (const record of records) {
@@ -189,6 +295,18 @@ async function recoverMissingTaskSnapshot(): Promise<void> {
           }
           await db.secureTasks.put(record);
         }
+        for (const record of categoryRecords) {
+          if (!protectedCategories.has(record.id)) await db.secureCategories.put(record);
+        }
+        for (const record of projectRecords) {
+          if (!protectedProjects.has(record.id)) await db.secureProjects.put(record);
+        }
+        for (const record of listRecords) {
+          if (!protectedLists.has(record.id)) await db.secureLists.put(record);
+        }
+        for (const record of listItemRecords) {
+          if (!protectedListItems.has(record.id)) await db.secureListItems.put(record);
+        }
         if (
           timerRecord &&
           !pending.some((item) => item.entityType === 'taskTimer') &&
@@ -197,6 +315,13 @@ async function recoverMissingTaskSnapshot(): Promise<void> {
           await db.secureTaskTimers.put(timerRecord);
         if (!protectedTasks.size)
           await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+        if (shouldRecoverOrganization && organizationSnapshotAvailable)
+          await db.settings.put({
+            key: 'organization-snapshot-bootstrapped-v1',
+            value: new Date().toISOString(),
+          });
+        if (shouldRecoverLists && listSnapshotAvailable)
+          await db.settings.put({ key: 'list-snapshot-bootstrapped-v1', value: 'true' });
       },
     );
   }
@@ -557,7 +682,7 @@ export async function pullChanges(): Promise<void> {
 async function performSync(csrfToken: string) {
   let recoveryError: unknown;
   try {
-    await recoverMissingTaskSnapshot();
+    await recoverMissingSnapshots();
   } catch (error) {
     recoveryError = error;
   }

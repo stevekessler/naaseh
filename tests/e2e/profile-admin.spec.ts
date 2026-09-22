@@ -30,8 +30,12 @@ test('discovers personal settings on Profile and renders a responsive administra
   await signIn(page);
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
   await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Reminders and sounds' }).click();
   await expect(page.getByText('Completion sounds')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();
+  await expect(
+    page.locator('summary').filter({ hasText: 'Google Tasks synchronization' }),
+  ).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Account security' }).click();
   await expect(page.getByText(/password reset/i).first()).toBeVisible();
 
   await page.getByRole('button', { name: 'Admin', exact: true }).click();

@@ -52,6 +52,22 @@ describe('journal domain', () => {
     expect(
       journalEntryProjectionSchema.safeParse({ ...baseProjection, suicidalThoughts: 11 }).success,
     ).toBe(false);
+    expect(
+      journalEntryProjectionSchema.safeParse({
+        ...baseProjection,
+        suicidalThoughts: 0,
+        selfHarmThoughts: 0,
+        alcoholicDrinks: 0,
+        hoursOfSleep: 0,
+        urgeToAvoidCommitments: 0,
+        emotions: Object.fromEntries(
+          Object.keys(baseProjection.emotions).map((emotion) => [emotion, 0]),
+        ),
+      }).success,
+    ).toBe(true);
+    expect(
+      journalEntryProjectionSchema.safeParse({ ...baseProjection, suicidalThoughts: -1 }).success,
+    ).toBe(false);
   });
 
   it('accepts only the specified DBT values and unique selections', () => {

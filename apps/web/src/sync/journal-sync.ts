@@ -3,11 +3,28 @@ import { db } from '../db/database.js';
 import { acknowledgeJournalMutation } from '../db/journal-repository.js';
 
 type JournalMutation = ReturnType<typeof journalMutationRequestSchema.parse>;
+
+export function prepareJournalMutationForSync(value: unknown): JournalMutation {
+  const mutation = journalMutationRequestSchema.parse(value);
+  if (
+    mutation.entityType !== 'journalEntry' ||
+    mutation.dateToken ||
+    !('dateToken' in mutation.payload)
+  )
+    return mutation;
+  return journalMutationRequestSchema.parse({
+    ...mutation,
+    dateToken: mutation.payload.dateToken,
+  });
+}
+
 export async function drainJournalOutbox(ownerId: string, csrfToken: string) {
   if (!navigator.onLine) return;
   const pending = await db.secureJournalOutbox.where('ownerId').equals(ownerId).sortBy('updatedAt');
   for (const row of pending) {
-    const mutation = row.value as JournalMutation;
+    // Early clients stored the entry token only inside the encrypted payload. Repair those
+    // pending mutations at the network boundary so Retry can safely drain their outboxes.
+    const mutation = prepareJournalMutationForSync(row.value);
     const response = await fetch('/api/v1/sync/push', {
       method: 'POST',
       credentials: 'include',

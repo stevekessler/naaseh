@@ -93,10 +93,10 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
   await list.getByRole('button', { name: 'Finish and archive list' }).click();
 
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
-  const archivedTask = page.locator('article').filter({ hasText: 'Urgent parent' });
-  const archivedList = page.locator('article').filter({ hasText: 'Urgent checklist' });
-  await expect(archivedTask.getByLabel('Low')).toBeVisible();
-  await expect(archivedList.getByLabel('Critical')).toBeVisible();
+  const archivedTask = taskRow(page, 'Urgent parent');
+  const archivedList = taskRow(page, 'Urgent checklist');
+  await expect(archivedTask.getByRole('cell', { name: 'Low', exact: true })).toBeVisible();
+  await expect(archivedList.getByRole('cell', { name: 'Critical', exact: true })).toBeVisible();
 });
 
 test('preserves offline urgency creation and edits through reconnect synchronization', async ({

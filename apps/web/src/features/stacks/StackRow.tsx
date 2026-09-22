@@ -3,6 +3,7 @@ import { useSortable } from '@dnd-kit/react/sortable';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import type { LocalStackScope } from '../../db/personal-stack-repository.js';
 import { StackMoveControls, stackRowFocusId, type StackMoveHandler } from './StackMoveControls.js';
+import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 
 export { stackRowFocusId } from './StackMoveControls.js';
 
@@ -13,6 +14,7 @@ export interface StackDisplayItem {
   overallPosition: number;
   projectPosition?: number;
   pending?: boolean;
+  percentComplete?: number;
 }
 
 export const stackDragId = (reference: WorkReference) =>
@@ -128,6 +130,9 @@ function StackRowContent({
           {item.reference.workType === 'task' ? 'To-do' : 'List'}
         </span>
         <h2>{item.label}</h2>
+        {item.reference.workType === 'task' ? (
+          <ProgressIndicator percent={item.percentComplete} label={item.label} />
+        ) : null}
         {item.pending ? <p className="stack-pending">Pending synchronization</p> : null}
       </th>
       <td className="stack-level">
@@ -172,9 +177,10 @@ function StackRowContent({
               id={`task-edit-trigger-stack-${item.reference.workId}`}
               type="button"
               className="quiet"
+              aria-label={`Edit ${item.label}`}
               onClick={() => editTask(item.reference.workId)}
             >
-              Edit {item.label}
+              {compact ? 'Edit' : `Edit ${item.label}`}
             </button>
           ) : null}
         </div>

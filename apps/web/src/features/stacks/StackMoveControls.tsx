@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { WorkReference } from '@naaseh/domain';
 
 export const stackRowFocusId = (work: WorkReference) =>
@@ -29,14 +29,21 @@ export function StackMoveControls({
 }) {
   const [targetPosition, setTargetPosition] = useState(position);
   const [positionEditorOpen, setPositionEditorOpen] = useState(false);
+  const positionInputRef = useRef<HTMLInputElement>(null);
   const focusId = stackRowFocusId(work);
   const positionInputId = `${focusId}-position`;
 
   useEffect(() => setTargetPosition(position), [position]);
+  useEffect(() => {
+    if (!positionEditorOpen) return;
+    positionInputRef.current?.focus();
+    positionInputRef.current?.select();
+  }, [positionEditorOpen]);
 
   const requestMove = async (destination: number) => {
     const bounded = boundedPosition(destination, total);
     setTargetPosition(bounded);
+    setPositionEditorOpen(false);
     try {
       await move(work, bounded);
     } finally {
@@ -72,17 +79,14 @@ export function StackMoveControls({
       </button>
       <button
         type="button"
+        className="stack-position-toggle"
+        aria-label="Move to position"
         aria-controls={positionInputId}
+        aria-expanded={positionEditorOpen}
         data-touch-alternative="true"
-        onClick={() => setPositionEditorOpen(true)}
+        onClick={() => setPositionEditorOpen((open) => !open)}
       >
-        {compact ? (
-          <>
-            <span className="visually-hidden">Move to </span>Position
-          </>
-        ) : (
-          'Move to position'
-        )}
+        {compact ? 'Move to…' : 'Move to position…'}
       </button>
       <form
         className="stack-position-editor"
@@ -93,8 +97,11 @@ export function StackMoveControls({
         }}
       >
         <label>
-          <span>New position</span>
+          <span>
+            New position <small>(1–{total})</small>
+          </span>
           <input
+            ref={positionInputRef}
             id={positionInputId}
             type="number"
             inputMode="numeric"
@@ -111,7 +118,10 @@ export function StackMoveControls({
           data-focus-return={focusId}
           data-touch-alternative="true"
         >
-          Apply position
+          Move
+        </button>
+        <button type="button" className="quiet" onClick={() => setPositionEditorOpen(false)}>
+          Cancel
         </button>
       </form>
     </div>

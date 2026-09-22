@@ -59,6 +59,7 @@ export const personalStackFilterBasisSchema = z
     projectId: z.union([ulidSchema, z.literal('unassigned')]).optional(),
     lifecycle: z.literal('active').default('active'),
     contentType: z.enum(['all', 'todos', 'lists']).default('all'),
+    progress: z.enum(['not-started', 'in-progress', 'complete']).optional(),
     searchBasisHash: sha256Schema.optional(),
   })
   .strict()

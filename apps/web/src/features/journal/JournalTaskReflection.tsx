@@ -1,6 +1,7 @@
 import type { JournalDocument, Task } from '@naaseh/domain';
 import { useCombobox } from 'downshift';
 import { JournalRichTextEditor } from './JournalRichTextEditor.js';
+import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 
 export function JournalTaskReflection({
   tasks,
@@ -39,6 +40,7 @@ export function JournalTaskReflection({
             tasks.map((task, index) => (
               <li key={task.id} {...combo.getItemProps({ item: task, index })}>
                 {task.label}
+                <ProgressIndicator percent={task.percentComplete} label={task.label} />
               </li>
             ))}
         </ul>

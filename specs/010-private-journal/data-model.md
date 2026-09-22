@@ -73,19 +73,19 @@ Compact decrypted record used for list ordering, date filtering, dashboard calcu
 | `id` | UUID | Stable through date changes and edits; must match envelope/AAD |
 | `ownerId` | user ID | Must match active owner |
 | `date` | local date `YYYY-MM-DD` | Required; no future conversion through UTC |
-| `suicidalThoughts` | integer or null | 1–10 |
+| `suicidalThoughts` | integer or null | 0–10 |
 | `suicidalBehaviors` | boolean or null | Optional yes/no |
-| `selfHarmThoughts` | integer or null | 1–10 |
+| `selfHarmThoughts` | integer or null | 0–10 |
 | `selfHarmBehaviors` | boolean or null | Optional yes/no |
-| `alcoholicDrinks` | integer or null | 1–10 |
+| `alcoholicDrinks` | integer or null | 0–10 |
 | `otherDrugs` | boolean or null | Optional yes/no |
 | `medicationsAsPrescribed` | boolean or null | Optional yes/no |
-| `hoursOfSleep` | number or null | 1–24 in 0.5 increments |
-| `urgeToAvoidCommitments` | integer or null | 1–100 |
+| `hoursOfSleep` | number or null | 0–24 in 0.5 increments |
+| `urgeToAvoidCommitments` | integer or null | 0–100 |
 | `conflictWithOthers` | boolean or null | Optional yes/no |
 | `balancedEating` | boolean or null | Optional yes/no |
 | `selfCare` | boolean or null | Optional yes/no |
-| `emotions` | object | Each of anger, fear, anxiety, pain, sadness, shame, guilt, loneliness, joy, contentment is integer 1–100 or null |
+| `emotions` | object | Each of anger, fear, anxiety, pain, sadness, shame, guilt, loneliness, joy, contentment is integer 0–100 or null |
 | `dbt` | DbtSkillsResponse or null | Entire group optional |
 | `createdAt`, `updatedAt` | UTC timestamps | Encrypted content; used for owner display/conflict context only |
 

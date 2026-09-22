@@ -8,6 +8,7 @@ import {
   startExport,
 } from './export-service.js';
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
+import { DescribeContinuousBackupsCommand, DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { log, metric } from '@naaseh/observability';
 import { errorResponse, json, problem } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
@@ -15,6 +16,7 @@ import { recordCompletionExport } from '../reporting/telemetry.js';
 import { sessionAuthorizerContext } from '../shared/authorizer-context.js';
 import { completionExportReadAccess } from './completion-export-service.js';
 const sfn = new SFNClient({});
+const dynamodb = new DynamoDBClient({});
 type Request = {
   version: 'naaseh.export-todos/v1';
   action: 'start' | 'status' | 'acknowledge';
@@ -39,6 +41,16 @@ async function beginExecution(job: { id: string; snapshotTime: string }) {
   }
 }
 
+async function latestRestorableSnapshot() {
+  const response = await dynamodb.send(
+    new DescribeContinuousBackupsCommand({ TableName: process.env.NAASEH_TABLE }),
+  );
+  const snapshot =
+    response.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.LatestRestorableDateTime;
+  if (!snapshot) throw new Error('No restorable export snapshot is currently available.');
+  return snapshot;
+}
+
 async function httpHandler(event: APIGatewayProxyEventV2) {
   const correlationId = event.requestContext.requestId;
   const actor = sessionAuthorizerContext(event);
@@ -53,11 +65,14 @@ async function httpHandler(event: APIGatewayProxyEventV2) {
         actor.csrfToken ?? '',
         event.headers['x-csrf-token'],
       );
+      const now = new Date();
       const job = await startCompletionExport(
         JSON.parse(event.body ?? '{}'),
         actor.userId,
         actor.role === 'admin',
         actor.groupIds?.split(',').filter(Boolean) ?? [],
+        now,
+        await latestRestorableSnapshot(),
       );
       await beginExecution(job);
       if (job.scope === 'all_users')

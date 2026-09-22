@@ -184,6 +184,7 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
   const id = createUlid();
   const sourceClientId = await getClientId();
   const changedFields = [...new Set([...Object.keys(input), 'urgency'])];
+  const revisionChangedFields = changedFields.filter((field) => field !== 'percentComplete');
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -193,8 +194,8 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
     version: 1,
     changedAt: task.createdAt,
     operation: 'create',
-    changedFields,
-    after: localRevisionValues(task, changedFields),
+    changedFields: revisionChangedFields,
+    after: localRevisionValues(task, revisionChangedFields),
     syncOutcome: 'local-pending',
   };
   const [storedTask, payload, storedRevision] = await Promise.all([
@@ -310,6 +311,7 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
     ]),
   ];
   const sourceClientId = await getClientId();
+  const revisionChangedFields = changedFields.filter((field) => field !== 'percentComplete');
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -319,9 +321,9 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
     version: next.version,
     changedAt: next.updatedAt,
     operation,
-    changedFields,
-    before: localRevisionValues(task, changedFields),
-    after: localRevisionValues(next, changedFields),
+    changedFields: revisionChangedFields,
+    before: localRevisionValues(task, revisionChangedFields),
+    after: localRevisionValues(next, revisionChangedFields),
     syncOutcome: 'local-pending',
   };
   const [storedTask, payload, storedRevision, storedEvent] = await Promise.all([

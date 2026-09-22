@@ -40,7 +40,7 @@ export const MAX_EXPORT_ATTACHMENTS = 500_000;
 export const handler: Handler<{
   jobId: string;
   exportPrefix?: string;
-  action?: 'transform' | 'expire';
+  action?: 'transform' | 'expire' | 'fail';
 }> = async (event) => {
   const startedAt = Date.now();
   let job = await findExportJob(event.jobId);
@@ -51,6 +51,17 @@ export const handler: Handler<{
     if (job.stagingPrefix) await deleteExportPrefix(job.stagingPrefix);
     job = await updateExport(job, 'expired', { failureCode: 'expired' });
     metric('ExportCleanups', 1);
+    return { jobId: job.id, status: job.status };
+  }
+  if (event.action === 'fail') {
+    if (['pending', 'exporting', 'transforming'].includes(job.status))
+      job = await updateExport(job, 'failed', { failureCode: 'snapshot' });
+    recordCompletionExport({
+      phase: 'snapshot',
+      outcome: 'failure',
+      scope: job.scope ?? 'self',
+      durationMs: Date.now() - startedAt,
+    });
     return { jobId: job.id, status: job.status };
   }
   if (!event.exportPrefix) throw new Error('Export staging prefix is missing.');

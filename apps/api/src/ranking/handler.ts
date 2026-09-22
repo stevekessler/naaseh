@@ -92,6 +92,7 @@ export function createPersonalStackHandler(input: {
           ...(query.urgencies ? { urgencies: query.urgencies.split(',') as Urgency[] } : {}),
           lifecycle: 'active' as const,
           contentType: query.contentType,
+          ...(query.progress ? { progress: query.progress } : {}),
         };
         type HandlerCandidate = FilteredStackCandidate & {
           work: (typeof result.items)[number];

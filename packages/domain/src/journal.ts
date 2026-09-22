@@ -122,16 +122,16 @@ const nullableInt = (minimum: number, maximum: number) =>
 const nullableBoolean = z.boolean().nullable();
 const emotionSchema = z
   .object({
-    anger: nullableInt(1, 100),
-    fear: nullableInt(1, 100),
-    anxiety: nullableInt(1, 100),
-    pain: nullableInt(1, 100),
-    sadness: nullableInt(1, 100),
-    shame: nullableInt(1, 100),
-    guilt: nullableInt(1, 100),
-    loneliness: nullableInt(1, 100),
-    joy: nullableInt(1, 100),
-    contentment: nullableInt(1, 100),
+    anger: nullableInt(0, 100),
+    fear: nullableInt(0, 100),
+    anxiety: nullableInt(0, 100),
+    pain: nullableInt(0, 100),
+    sadness: nullableInt(0, 100),
+    shame: nullableInt(0, 100),
+    guilt: nullableInt(0, 100),
+    loneliness: nullableInt(0, 100),
+    joy: nullableInt(0, 100),
+    contentment: nullableInt(0, 100),
   })
   .strict();
 
@@ -141,23 +141,24 @@ export const journalEntryProjectionSchema = z
     id: z.string().uuid(),
     ownerId: z.string().min(1),
     date: journalLocalDateSchema,
-    suicidalThoughts: nullableInt(1, 10),
+    suicidalThoughts: nullableInt(0, 10),
     suicidalBehaviors: nullableBoolean,
-    selfHarmThoughts: nullableInt(1, 10),
+    selfHarmThoughts: nullableInt(0, 10),
     selfHarmBehaviors: nullableBoolean,
-    alcoholicDrinks: nullableInt(1, 10),
+    alcoholicDrinks: nullableInt(0, 10),
     otherDrugs: nullableBoolean,
     medicationsAsPrescribed: nullableBoolean,
     hoursOfSleep: z
       .number()
-      .min(1)
+      .min(0)
       .max(24)
       .refine((value) => value * 2 === Math.round(value * 2))
       .nullable(),
-    urgeToAvoidCommitments: nullableInt(1, 100),
+    urgeToAvoidCommitments: nullableInt(0, 100),
     conflictWithOthers: nullableBoolean,
     balancedEating: nullableBoolean,
     selfCare: nullableBoolean,
+    // Accepted only so entries saved by earlier clients remain readable.
     otherTargetBehavior: z.string().max(10_000).nullable().optional(),
     emotions: emotionSchema,
     dbt: dbtSkillsResponseSchema.nullable(),
@@ -189,9 +190,9 @@ export const journalProfileSchema = z
   .strict();
 export type JournalProfile = z.infer<typeof journalProfileSchema>;
 export const journalFieldDefinitions = Object.freeze({
-  suicidalThoughts: { minimum: 1, maximum: 10, step: 1 },
-  selfHarmThoughts: { minimum: 1, maximum: 10, step: 1 },
-  alcoholicDrinks: { minimum: 1, maximum: 10, step: 1 },
-  hoursOfSleep: { minimum: 1, maximum: 24, step: 0.5 },
-  urgeToAvoidCommitments: { minimum: 1, maximum: 100, step: 1 },
+  suicidalThoughts: { minimum: 0, maximum: 10, step: 1 },
+  selfHarmThoughts: { minimum: 0, maximum: 10, step: 1 },
+  alcoholicDrinks: { minimum: 0, maximum: 10, step: 1 },
+  hoursOfSleep: { minimum: 0, maximum: 24, step: 0.5 },
+  urgeToAvoidCommitments: { minimum: 0, maximum: 100, step: 1 },
 });

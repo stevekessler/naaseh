@@ -19,7 +19,12 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database.js';
 import { readLocalTaskSnapshot, saveNewTask } from '../db/task-repository.js';
 import { listCategories, listRevisions } from '../db/reminder-repository.js';
-import { filterTasks, normalizeSearch, type Filters } from '../search/task-search.js';
+import {
+  filterTasks,
+  matchesProgressFilter,
+  normalizeSearch,
+  type Filters,
+} from '../search/task-search.js';
 import { Login } from '../features/auth/Login.js';
 import { TaskForm } from '../features/tasks/TaskForm.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
@@ -28,6 +33,8 @@ import { SyncStatus } from '../features/sync/SyncStatus.js';
 import { drainSequentially } from '../sync/sync-engine.js';
 import { drainJournalOutbox } from '../sync/journal-sync.js';
 import { drainJournalDataInDependencyOrder } from '../sync/crisis-plan-sync.js';
+import { zeroizeJournalKey } from '../crypto/journal-crypto.js';
+import { useJournalRelock } from '../features/journal/useJournalRelock.js';
 import { filtersFromSearch, safeSearchState } from '../features/search/search-state.js';
 import { TaskSearchBar } from '../features/search/TaskSearchBar.js';
 import { TaskFilters } from '../features/search/TaskFilters.js';
@@ -188,6 +195,7 @@ const emptyFilters: Filters = {
   contentType: 'all',
   lifecycle: 'active',
   urgencies: [],
+  progress: 'all',
 };
 
 async function searchBasisHash(query: string) {
@@ -255,6 +263,23 @@ export function App() {
     | 'admin-categories'
     | 'journal'
   >(initialRoute.section);
+  const [journalKey, setJournalKey] = useState<Uint8Array>();
+  const lockJournal = useCallback(() => {
+    setJournalKey((current) => {
+      if (current) zeroizeJournalKey(current);
+      return undefined;
+    });
+  }, []);
+  const changeJournalKey = useCallback((next: Uint8Array | undefined) => {
+    setJournalKey((current) => {
+      if (current && current !== next) zeroizeJournalKey(current);
+      return next;
+    });
+  }, []);
+  useJournalRelock(Boolean(journalKey), section === 'journal', lockJournal);
+  useEffect(() => {
+    if (!session) lockJournal();
+  }, [lockJournal, session]);
   const [stackScope, setStackScope] = useState<LocalStackScope>({ scopeType: 'overall' });
   const [stackAnnouncement, setStackAnnouncement] = useState('');
   const [remoteStackItems, setRemoteStackItems] = useState<StackDisplayItem[]>();
@@ -405,6 +430,7 @@ export function App() {
           },
           label: task.label,
           urgency: task.urgency,
+          percentComplete: task.percentComplete,
           ...(task.projectId ? { projectId: task.projectId } : {}),
           ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
           ...(task.categoryId ? { categoryId: task.categoryId } : {}),
@@ -477,6 +503,9 @@ export function App() {
             (filters.contentType === 'all' ||
               filters.contentType === undefined ||
               work.contentType === filters.contentType) &&
+            (work.contentType !== 'todos' ||
+              matchesProgressFilter(work.percentComplete, filters.progress)) &&
+            (!filters.progress || filters.progress === 'all' || work.contentType === 'todos') &&
             filters.lifecycle !== 'archive',
         ),
       ),
@@ -583,7 +612,11 @@ export function App() {
     };
   }, [section, session, completionFilters, completionReportAttempt, pending]);
   const matchingLists = useMemo(() => {
-    if (filters.contentType === 'todos') return [];
+    if (
+      filters.contentType === 'todos' ||
+      (filters.progress !== undefined && filters.progress !== 'all')
+    )
+      return [];
     const query = filters.query.normalize('NFKC').trim().toLocaleLowerCase();
     const scopedLists = lists.filter(
       (list) =>
@@ -623,6 +656,9 @@ export function App() {
         .filter(
           ({ work }) =>
             matchesUrgencySet(work.urgency, filters.urgencies) &&
+            (work.contentType !== 'todos' ||
+              matchesProgressFilter(work.percentComplete, filters.progress)) &&
+            (!filters.progress || filters.progress === 'all' || work.contentType === 'todos') &&
             (!filters.projectId ||
               (filters.projectId === 'unassigned'
                 ? !work.projectId
@@ -633,10 +669,11 @@ export function App() {
           reference: work.reference,
           label: work.label,
           urgency: work.urgency,
+          ...(work.contentType === 'todos' ? { percentComplete: work.percentComplete } : {}),
           overallRank: rank.overallPosition,
           ...(rank.projectPosition === undefined ? {} : { projectRank: rank.projectPosition }),
         })),
-    [overallRankedStackItems, filters.urgencies, filters.projectId],
+    [overallRankedStackItems, filters.urgencies, filters.projectId, filters.progress],
   );
   const completionDetailRows = useMemo<CompletionDetailRow[]>(
     () =>
@@ -989,6 +1026,9 @@ export function App() {
             filterBasis: {
               ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
               ...(filters.projectId ? { projectId: filters.projectId } : {}),
+              ...(filters.progress && filters.progress !== 'all'
+                ? { progress: filters.progress }
+                : {}),
               lifecycle: 'active',
               contentType: 'all',
             },
@@ -1135,7 +1175,13 @@ export function App() {
         </header>
         <main>
           {section === 'journal' ? (
-            <JournalPage ownerId={session.userId} csrfToken={session.csrfToken} tasks={tasks} />
+            <JournalPage
+              ownerId={session.userId}
+              csrfToken={session.csrfToken}
+              tasks={tasks}
+              unlockedKey={journalKey}
+              onUnlockedKeyChange={changeJournalKey}
+            />
           ) : section === 'stack' ? (
             <PersonalStackPage
               scope={stackScope}
@@ -1231,6 +1277,9 @@ export function App() {
                           ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
                           ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
                           ...(filters.projectId ? { projectId: filters.projectId } : {}),
+                          ...(filters.progress && filters.progress !== 'all'
+                            ? { progress: filters.progress }
+                            : {}),
                           lifecycle: 'active',
                           contentType: filters.contentType ?? 'all',
                           ...(queryHash ? { searchBasisHash: queryHash } : {}),
@@ -1548,7 +1597,8 @@ export function App() {
                       filters.to ||
                       filters.assigneeId ||
                       filters.categoryId ||
-                      filters.projectId) && (
+                      filters.projectId ||
+                      (filters.progress && filters.progress !== 'all')) && (
                       <button className="quiet" onClick={() => setFilters(emptyFilters)}>
                         Clear filters
                       </button>
@@ -1597,6 +1647,7 @@ export function App() {
               ) : (
                 <PostItBoard
                   tasks={visible}
+                  parentTasks={tasks}
                   categories={categories}
                   projects={projects}
                   assignees={assignees}

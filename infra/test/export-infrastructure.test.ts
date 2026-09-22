@@ -37,6 +37,9 @@ describe('export infrastructure', () => {
     });
     template.resourceCountIs('AWS::KMS::Key', 1);
     template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
-    expect(JSON.stringify(template.toJSON())).toContain('ExportTime');
+    const synthesized = JSON.stringify(template.toJSON());
+    expect(synthesized).toContain('ExportTime');
+    expect(synthesized).toContain('MarkSnapshotFailed');
+    expect(synthesized).toContain('\\"action\\":\\"fail\\"');
   });
 });

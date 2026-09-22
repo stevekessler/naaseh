@@ -10,6 +10,7 @@ import { getRecord, listOwnerTasks, listPublicTasks, putRecord } from '../shared
 import { findTask } from '../tasks/task-repository.js';
 import {
   directoryItemSchema,
+  listSchema,
   listItemSchema,
   archiveCategory,
   archiveProject,
@@ -35,17 +36,26 @@ import { keys } from '../shared/keys.js';
 import { loadPublicKeyRegistry } from '../crypto-recovery/public-key-registry.js';
 import { metric } from '@naaseh/observability';
 import { listUserMemberships } from '../groups/group-repository.js';
-import { findList, findListItem, saveList, saveListItem } from '../lists/list-repository.js';
+import {
+  findList,
+  findListItem,
+  listItemsForList,
+  listOwnerLists,
+  saveList,
+  saveListItem,
+} from '../lists/list-repository.js';
 import { findDirectoryItem, saveDirectoryItemRecord } from '../directory/directory-repository.js';
 import { defaultPersonalStackService, dispatchStackCompaction } from '../ranking/runtime.js';
 import {
   createCategoryRecord,
   getCategory,
+  listCategories,
   updateCategoryRecord,
 } from '../categories/category-repository.js';
 import {
   createProjectRecord,
   getProject,
+  listProjects,
   updateProjectRecord,
 } from '../projects/project-repository.js';
 import { canReadTaskAs } from '@naaseh/domain';
@@ -113,14 +123,22 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       event.requestContext.requestId,
     );
   if (event.rawPath.endsWith('/bootstrap')) {
-    const [shared, owned, taskTimer] = await Promise.all([
+    const [shared, owned, taskTimer, categories, projects, lists] = await Promise.all([
       listPublicTasks(),
       listOwnerTasks(actorId),
       getTaskTimer(actorId),
+      listCategories(),
+      listProjects(),
+      listOwnerLists(actorId),
     ]);
+    const listItems = (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat();
     const keyRegistry = await loadPublicKeyRegistry();
     return json(200, {
       tasks: [...shared, ...owned].map((task) => taskSchema.parse(task)),
+      categories: categories.map((category) => categorySchema.parse(category)),
+      projects: projects.map((project) => projectSchema.parse(project)),
+      lists: lists.map((list) => listSchema.parse(list)),
+      listItems: listItems.map((item) => listItemSchema.parse(item)),
       ...(taskTimer ? { taskTimer } : {}),
       keyRegistry,
       cursor: { public: 0, owner: 0 },

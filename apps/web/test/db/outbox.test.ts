@@ -7,7 +7,11 @@ import {
 } from '../../src/db/outbox.js';
 import { supportedLocalSchema } from '../../src/db/sync-cursor.js';
 import { assertStorageCapacity } from '../../src/db/storage-health.js';
-import { shouldBootstrapTaskSnapshot } from '../../src/sync/sync-engine.js';
+import {
+  shouldBootstrapListSnapshot,
+  shouldBootstrapOrganizationSnapshot,
+  shouldBootstrapTaskSnapshot,
+} from '../../src/sync/sync-engine.js';
 describe('durable local outbox rules', () => {
   it('keeps each entity sequential while allowing independent entity queues', () => {
     const grouped = groupSequentialMutations([
@@ -45,5 +49,16 @@ describe('durable local outbox rules', () => {
     expect(shouldBootstrapTaskSnapshot(0, 1, false)).toBe(true);
     expect(shouldBootstrapTaskSnapshot(0, 0, true)).toBe(false);
     expect(shouldBootstrapTaskSnapshot(0, 1, true)).toBe(true);
+  });
+  it('refreshes organization options after the cache interval', () => {
+    const now = Date.parse('2026-09-22T12:01:00.000Z');
+    expect(shouldBootstrapOrganizationSnapshot(undefined, now)).toBe(true);
+    expect(shouldBootstrapOrganizationSnapshot('true', now)).toBe(true);
+    expect(shouldBootstrapOrganizationSnapshot('2026-09-22T12:00:30.000Z', now)).toBe(false);
+    expect(shouldBootstrapOrganizationSnapshot('2026-09-22T12:00:00.000Z', now)).toBe(true);
+  });
+  it('hydrates existing owned lists once for established accounts', () => {
+    expect(shouldBootstrapListSnapshot(false)).toBe(true);
+    expect(shouldBootstrapListSnapshot(true)).toBe(false);
   });
 });

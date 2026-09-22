@@ -10,6 +10,7 @@ export function PostItBoard({
   categories = [],
   projects = [],
   assignees = [],
+  parentTasks = tasks,
   onToggle,
   onUpdate,
 }: {
@@ -17,6 +18,7 @@ export function PostItBoard({
   categories?: CategoryRecord[];
   projects?: Project[];
   assignees?: AssigneeOption[];
+  parentTasks?: Task[];
   onToggle: (task: Task) => Promise<void>;
   onUpdate?: (task: Task, patch: Partial<Task>) => Promise<void>;
 }) {
@@ -38,6 +40,10 @@ export function PostItBoard({
               ? { color: colors.get(task.categoryId)! }
               : {})}
             animating={completing === task.id}
+            assigneeName={
+              assignees.find((assignee) => assignee.id === (task.assigneeId ?? task.ownerId))
+                ?.displayName
+            }
             complete={() => void complete(task)}
             {...(onUpdate ? { edit: () => setEditingId(task.id) } : {})}
           />
@@ -49,7 +55,7 @@ export function PostItBoard({
           categories={categories}
           projects={projects}
           assignees={assignees}
-          parentTasks={tasks}
+          parentTasks={parentTasks}
           save={(patch) => onUpdate(editing, patch)}
           close={() => setEditingId(undefined)}
         />

@@ -6,6 +6,7 @@ import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { useBrowserTimeZone } from './due-value.js';
 import { MemoDocumentView } from '../memos/MemoDocumentView.js';
 import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
+import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 export function TaskRow({
   task,
   onToggle,
@@ -58,6 +59,7 @@ export function TaskRow({
           </button>
         </h2>
         {task.visibility === 'private' && <span title="Private">🔒</span>}
+        <ProgressIndicator percent={task.percentComplete} label={task.label} />
       </th>
       <td className="task-memo-cell">
         <div className="task-row-memo">

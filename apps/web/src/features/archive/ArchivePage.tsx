@@ -13,6 +13,17 @@ import {
 import { TaskFilters } from '../search/TaskFilters.js';
 import type { Filters } from '../../search/task-search.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
+import { ProgressIndicator } from '../../components/ProgressIndicator.js';
+import { matchesProgressFilter } from '../../search/task-search.js';
+
+const archiveDate = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+
+const formatArchiveDate = (value: string | undefined) =>
+  value ? archiveDate.format(new Date(value)) : '—';
 
 export function matchesArchiveFilters(
   entry: LocalArchiveEntry,
@@ -44,6 +55,9 @@ export function matchesArchiveFilters(
   if (filters.categoryId && task?.categoryId !== filters.categoryId) return false;
   if (filters.from && (!task?.dueAt || task.dueAt < filters.from)) return false;
   if (filters.to && (!task?.dueAt || task.dueAt > `${filters.to}T23:59:59.999Z`)) return false;
+  if (filters.progress && filters.progress !== 'all') {
+    if (!task || !matchesProgressFilter(task.percentComplete, filters.progress)) return false;
+  }
   return true;
 }
 
@@ -77,12 +91,14 @@ export function ArchivePage({
   const [query, setQuery] = useState('');
   const archiveFilters = filters ? { ...filters, lifecycle: 'archive' as const } : undefined;
   const visible = entries.filter((entry) => matchesArchiveFilters(entry, archiveFilters, query));
+  const projectsById = new Map(projects.map((project) => [project.id, project]));
+  const categoriesById = new Map(categories.map((category) => [category.id, category]));
   const calculatedUrgencyCounts = visible.reduce((counts, entry) => {
     counts[(entry.task ?? entry.list!).urgency] += 1;
     return counts;
   }, zeroUrgencyCounts());
   return (
-    <section aria-labelledby="archive-heading">
+    <section className="archive-page" aria-labelledby="archive-heading">
       <header className="welcome">
         <div>
           <p className="eyebrow">Finished and saved</p>
@@ -101,7 +117,7 @@ export function ArchivePage({
           />
         </section>
       ) : null}
-      <label>
+      <label className="archive-search">
         Search archive
         <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
       </label>
@@ -130,47 +146,86 @@ export function ArchivePage({
       {visible.length === 0 ? (
         <p role="status">No archived work matches this search.</p>
       ) : (
-        <ul className="archive-results">
-          {visible.map((entry) => {
-            const value = entry.task ?? entry.list!;
-            return (
-              <li key={`${entry.kind}:${value.id}`}>
-                <article>
-                  <h2>{entry.task?.label ?? entry.list?.name}</h2>
-                  {entry.task?.memoHidden && <span title="Private notes">🔒 Private notes</span>}
-                  <p>
-                    {entry.kind === 'task' ? 'To-do' : 'List'}
-                    {entry.pending ? ' · Sync pending' : ''}
-                    {entry.conflicted ? ' · Needs attention' : ''}
-                  </p>
-                  <p>
-                    <UrgencyBadge urgency={value.urgency} />
-                  </p>
-                  {entry.items && (
-                    <ul>
-                      {entry.items.map((item) => (
-                        <li key={item.id}>{item.directorySnapshot.name}</li>
-                      ))}
-                    </ul>
-                  )}
-                  <button type="button" onClick={() => void restore(entry)}>
-                    Restore
-                  </button>
-                  <PermanentDeleteDialog
-                    target={{
-                      resourceType: entry.kind,
-                      resourceId: value.id,
-                      version: value.version,
-                    }}
-                    label={entry.task?.label ?? entry.list?.name ?? 'work'}
-                    csrfToken={csrfToken}
-                    disabled={value.lifecycle === 'deleting'}
-                  />
-                </article>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="archive-table-wrap" tabIndex={0}>
+          <table className="archive-table">
+            <caption className="visually-hidden">Archived tasks and lists</caption>
+            <thead>
+              <tr>
+                <th scope="col">Work</th>
+                <th scope="col">Priority</th>
+                <th scope="col">Deleted</th>
+                <th scope="col">Category</th>
+                <th scope="col">Project</th>
+                <th scope="col">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visible.map((entry) => {
+                const value = entry.task ?? entry.list!;
+                const project = value.projectId ? projectsById.get(value.projectId) : undefined;
+                const categoryId = entry.task?.categoryId ?? project?.categoryId;
+                const category = categoryId ? categoriesById.get(categoryId) : undefined;
+                const archivedAt = value.archivedAt;
+                const label = entry.task?.label ?? entry.list?.name ?? 'work';
+                return (
+                  <tr key={`${entry.kind}:${value.id}`}>
+                    <th className="archive-work-cell" scope="row">
+                      <h2>{label}</h2>
+                      <span className="archive-kind">
+                        {entry.kind === 'task' ? 'To-do' : 'List'}
+                        {entry.task?.memoHidden ? ' · Private notes' : ''}
+                        {entry.pending ? ' · Sync pending' : ''}
+                        {entry.conflicted ? ' · Needs attention' : ''}
+                      </span>
+                      {entry.task ? (
+                        <ProgressIndicator
+                          percent={entry.task.percentComplete}
+                          label={entry.task.label}
+                        />
+                      ) : null}
+                      {entry.items?.length ? (
+                        <span className="archive-list-items">
+                          {entry.items.map((item) => item.directorySnapshot.name).join(', ')}
+                        </span>
+                      ) : null}
+                    </th>
+                    <td>
+                      <UrgencyBadge urgency={value.urgency} />
+                    </td>
+                    <td>
+                      {archivedAt ? (
+                        <time dateTime={archivedAt} title={new Date(archivedAt).toLocaleString()}>
+                          {formatArchiveDate(archivedAt)}
+                        </time>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td>{category?.name ?? '—'}</td>
+                    <td>{project?.name ?? '—'}</td>
+                    <td>
+                      <div className="archive-actions">
+                        <button type="button" onClick={() => void restore(entry)}>
+                          Restore
+                        </button>
+                        <PermanentDeleteDialog
+                          target={{
+                            resourceType: entry.kind,
+                            resourceId: value.id,
+                            version: value.version,
+                          }}
+                          label={label}
+                          csrfToken={csrfToken}
+                          disabled={value.lifecycle === 'deleting'}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

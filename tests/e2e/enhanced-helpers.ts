@@ -8,10 +8,28 @@ export async function expandTaskDetails(form: Locator) {
 }
 
 export async function signIn(page: Page) {
+  await page.route('**/api/v1/sync/bootstrap', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        tasks: [],
+        categories: [],
+        projects: [],
+        lists: [],
+        listItems: [],
+        cursor: { public: 0, owner: 0 },
+      }),
+    }),
+  );
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
   await page.getByLabel('Password').fill('local');
+  const bootstrapResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === '/api/v1/sync/bootstrap',
+  );
   await page.getByRole('button', { name: 'Sign in' }).click();
+  await bootstrapResponse;
   await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
 }
 

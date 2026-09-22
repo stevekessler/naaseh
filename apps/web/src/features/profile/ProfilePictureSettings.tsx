@@ -4,10 +4,12 @@ export function ProfilePictureSettings({
   userId,
   csrfToken,
   refresh,
+  showHeading = true,
 }: {
   userId: string;
   csrfToken: string;
   refresh: () => Promise<void>;
+  showHeading?: boolean;
 }) {
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
@@ -47,8 +49,8 @@ export function ProfilePictureSettings({
     }
   }
   return (
-    <section className="panel">
-      <h2>Profile photo</h2>
+    <section className="panel" aria-label={showHeading ? undefined : 'Profile photo'}>
+      {showHeading ? <h2>Profile photo</h2> : null}
       <UserAvatar userId={userId} showName />
       <p>Your photo is visible to signed-in users in groups and shared content.</p>
       <label>

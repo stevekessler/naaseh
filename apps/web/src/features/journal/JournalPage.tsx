@@ -46,13 +46,18 @@ export function JournalPage({
   ownerId,
   csrfToken,
   tasks = [],
+  unlockedKey,
+  onUnlockedKeyChange,
 }: {
   ownerId: string;
   csrfToken: string;
   tasks?: Task[];
+  unlockedKey: Uint8Array | undefined;
+  onUnlockedKeyChange: (key: Uint8Array | undefined) => void;
 }) {
   const localOnlyEnrollment = import.meta.env.DEV || import.meta.env.MODE === 'test';
-  const [jmk, setJmk] = useState<Uint8Array>();
+  const jmk = unlockedKey;
+  const setJmk = onUnlockedKeyChange;
   const [profile, setProfile] = useState<JournalProfile>({
     schemaVersion: 1,
     ownerId,
@@ -110,23 +115,6 @@ export function JournalPage({
       active = false;
     };
   }, [enrollmentLookupAttempt, localOnlyEnrollment, ownerId, ownerWrap]);
-  useEffect(() => {
-    if (!jmk) return;
-    const lock = () => {
-      zeroizeJournalKey(jmk);
-      setJmk(undefined);
-    };
-    const hidden = () => {
-      if (document.hidden) lock();
-    };
-    const timer = window.setTimeout(lock, 5 * 60_000);
-    document.addEventListener('visibilitychange', hidden);
-    return () => {
-      window.clearTimeout(timer);
-      document.removeEventListener('visibilitychange', hidden);
-      zeroizeJournalKey(jmk);
-    };
-  }, [jmk]);
   useEffect(() => {
     if (!jmk) {
       setProjections([]);
@@ -289,6 +277,10 @@ export function JournalPage({
         entityType: 'journalEntry',
         operation: 'upsert',
         baseVersion: current?.version ?? 0,
+        dateToken,
+        ...(current?.dateToken && current.dateToken !== dateToken
+          ? { priorDateToken: current.dateToken }
+          : {}),
         payload: { entryId: entry.projection.id, dateToken, projection, body },
         createdAt: new Date().toISOString(),
       },

@@ -92,7 +92,7 @@ export function StackList({
         </span>
       </div>
       <p className="stack-window-status">
-        Showing positions {startIndex + 1}–{endIndex} of {items.length}
+        Positions {startIndex + 1}–{endIndex} of {items.length}
       </p>
       <button
         type="button"

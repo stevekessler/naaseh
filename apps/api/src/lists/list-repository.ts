@@ -26,6 +26,17 @@ export async function findList(id: string) {
 export async function findListItem(id: string) {
   return (await getRecord<{ data: ListItem }>(`LISTITEM#${id}`, 'CURRENT'))?.data;
 }
+export async function listOwnerLists(ownerId: string) {
+  const result = await dynamodb.send(
+    new QueryCommand({
+      TableName: tableName,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK=:pk',
+      ExpressionAttributeValues: { ':pk': `LIST#OWNER#${ownerId}` },
+    }),
+  );
+  return (result.Items ?? []).map((item) => item.data as List);
+}
 export async function listItemsForList(listId: string) {
   const result = await dynamodb.send(
     new QueryCommand({

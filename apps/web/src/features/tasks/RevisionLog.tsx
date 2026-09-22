@@ -32,9 +32,10 @@ function UrgencyRevision({ revision }: { revision: TaskRevision }) {
 }
 
 export function RevisionLog({ revisions }: { revisions: TaskRevision[] }) {
+  const visible = revisions.filter((revision) => revision.changedFields.length > 0);
   return (
     <ol>
-      {revisions.map((item) => (
+      {visible.map((item) => (
         <li key={item.id}>
           {item.operation} by {item.actorId} at{' '}
           <time>{new Date(item.changedAt).toLocaleString()}</time> — {item.changedFields.join(', ')}

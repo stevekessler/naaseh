@@ -107,10 +107,21 @@ export function createExportResources(
     }),
     outputPath: '$.Payload',
   });
+  const markSnapshotFailed = new tasks.LambdaInvoke(scope, 'MarkSnapshotFailed', {
+    lambdaFunction: worker,
+    payload: sfn.TaskInput.fromObject({
+      jobId: sfn.JsonPath.stringAt('$.jobId'),
+      action: 'fail',
+    }),
+    resultPath: '$.failure',
+  });
   transform.next(retainResult).next(expireResult);
   const failed = new sfn.Fail(scope, 'SnapshotFailed', {
     cause: 'DynamoDB snapshot export failed',
   });
+  markSnapshotFailed.next(failed);
+  exportTask.addCatch(markSnapshotFailed, { resultPath: '$.workflowError' });
+  describe.addCatch(markSnapshotFailed, { resultPath: '$.workflowError' });
   const choice = new sfn.Choice(scope, 'SnapshotReady')
     .when(
       sfn.Condition.stringEquals('$.description.ExportDescription.ExportStatus', 'COMPLETED'),
@@ -118,7 +129,7 @@ export function createExportResources(
     )
     .when(
       sfn.Condition.stringEquals('$.description.ExportDescription.ExportStatus', 'FAILED'),
-      failed,
+      markSnapshotFailed,
     )
     .otherwise(wait);
   wait.next(describe).next(choice);
