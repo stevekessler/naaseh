@@ -1,13 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails } from './enhanced-helpers.js';
-
-async function signIn(page: Page) {
-  await page.goto('/');
-  await page.getByLabel('Username').fill('steve');
-  await page.getByLabel('Password').fill('local');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
-}
+import { expect, test } from '@playwright/test';
+import { expandTaskDetails, signIn } from './enhanced-helpers.js';
 
 test('creates, edits, completes, and inspects a responsive task with revisions and reminders', async ({
   page,
@@ -21,7 +13,7 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await form.getByLabel('Task label').fill('Call the contractor');
   await expect(form.locator('.task-form-details')).not.toHaveAttribute('open', '');
   await expandTaskDetails(form);
-  await form.getByLabel('Link', { exact: true }).fill('https://example.com/project');
+  await form.getByLabel('Link', { exact: true }).fill('http://example.com/project');
   await form
     .getByRole('textbox', { name: 'Memo', exact: true })
     .fill('Ask for an updated estimate');
@@ -49,6 +41,9 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(page).toHaveURL(/\/tasks\//);
   const detail = page.getByLabel('Task details');
   const dialog = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(dialog.getByLabel('Link', { exact: true })).toHaveValue(
+    'http://example.com/project',
+  );
   await expect(detail.getByRole('heading', { name: 'Revision history' })).toBeVisible();
   await expect(detail.getByText(/create by local-steve/)).toBeVisible();
   await dialog.getByLabel('Task label').fill('Call the contractor today');
@@ -81,6 +76,10 @@ test('shows nested subtasks in task details', async ({ page }) => {
     .click();
   await form.getByLabel('Task label').fill('Child task');
   await expandTaskDetails(form);
+  await expect(form.getByRole('combobox', { name: 'Parent task' })).toHaveAttribute(
+    'placeholder',
+    'Search parent tasks',
+  );
   await form.getByRole('combobox', { name: 'Parent task' }).fill('Parent task');
   await page.getByRole('option', { name: 'Parent task', exact: true }).click();
   await form.getByRole('button', { name: 'Add task' }).click();

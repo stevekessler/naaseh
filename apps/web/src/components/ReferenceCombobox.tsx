@@ -10,6 +10,7 @@ export function ReferenceCombobox({
   onChange,
   offline = false,
   clearLabel = 'No selection',
+  placeholder,
 }: {
   label: string;
   name: string;
@@ -18,6 +19,7 @@ export function ReferenceCombobox({
   onChange: (id: string) => void;
   offline?: boolean;
   clearLabel?: string;
+  placeholder?: string;
 }) {
   const selected = options.find((option) => option.id === value) ?? null;
   const [query, setQuery] = useState(selected?.label ?? '');
@@ -40,7 +42,7 @@ export function ReferenceCombobox({
   return (
     <div className="reference-combobox">
       <label {...getLabelProps()}>{label}</label>
-      <input {...getInputProps({ name, autoComplete: 'off' })} />
+      <input {...getInputProps({ name, autoComplete: 'off', placeholder })} />
       <input type="hidden" name={`${name}Id`} value={value ?? ''} />
       <ul {...getMenuProps()} className={isOpen ? 'combobox-menu' : 'combobox-menu hidden'}>
         {isOpen &&

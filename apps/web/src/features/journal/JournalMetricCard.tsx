@@ -1,4 +1,11 @@
 import type { JournalDashboardMetric } from '@naaseh/domain';
+import { journalMetricKindLabel, journalMetricLabel } from './journal-metric-labels.js';
+
+export function formatJournalMetricValue(metric: JournalDashboardMetric) {
+  if (metric.value === 'noData') return 'No data';
+  const precision = metric.metric === 'hoursOfSleep' ? 1 : 0;
+  return metric.value.toFixed(precision).replace(/\.0$/u, '');
+}
 
 export function JournalMetricCard({
   metric,
@@ -15,18 +22,19 @@ export function JournalMetricCard({
         : metric.trend === 'unchanged'
           ? 'Unchanged'
           : 'Not comparable';
-  const value =
-    metric.value === 'noData' ? 'No data' : metric.value.toFixed(metric.kind === 'average' ? 1 : 0);
+  const value = formatJournalMetricValue(metric);
+  const label = journalMetricLabel(metric.metric);
+  const kind = journalMetricKindLabel(metric.kind);
   return (
     <button
       type="button"
       className={`journal-metric journal-metric-${metric.kind}`}
-      aria-label={`${metric.metric}: ${value}; ${trend}`}
+      aria-label={`${label}: ${value}; ${kind}; ${trend}`}
       onClick={onOpen}
     >
-      <strong>{metric.metric}</strong>
+      <strong>{label}</strong>
       <span>{value}</span>
-      <small>{metric.kind}</small>
+      <small>{kind}</small>
       <span>{trend}</span>
     </button>
   );

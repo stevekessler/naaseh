@@ -10,6 +10,22 @@ test('task editing opens in a modal and restores context', async ({ page }) => {
   const dialog = page.getByRole('dialog', { name: 'Edit task' });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByLabel('Task label')).toHaveValue('Modal task');
+  const actions = dialog.locator('.task-detail-actions');
+  for (const width of [1024, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(
+      true,
+    );
+    const complete = await actions
+      .getByRole('button', { name: 'Complete and archive' })
+      .boundingBox();
+    const archive = await actions
+      .getByRole('button', { name: 'Archive without completing' })
+      .boundingBox();
+    expect(complete).not.toBeNull();
+    expect(archive).not.toBeNull();
+    expect(archive!.y - (complete!.y + complete!.height)).toBeGreaterThanOrEqual(8);
+  }
   await dialog.getByLabel('Task label').fill('Changed but cancelled');
   page.once('dialog', (confirmation) => confirmation.accept());
   await dialog.getByRole('button', { name: 'Cancel' }).click();

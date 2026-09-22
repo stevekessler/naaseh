@@ -12,6 +12,8 @@ export interface JournalMutation {
   entityType: 'journalEntry' | 'journalProfile';
   operation: 'upsert';
   baseVersion: number;
+  dateToken?: string;
+  priorDateToken?: string;
   payload: JournalEntryCiphertext | CiphertextEnvelope;
   createdAt: string;
 }

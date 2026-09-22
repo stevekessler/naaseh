@@ -39,6 +39,7 @@ describe('journal dashboard calculations', () => {
       trend: 'unchanged',
       contributingEntryIds: ['a', 'b'],
     });
+    expect(metrics.some((metric) => String(metric.metric) === 'otherTargetBehavior')).toBe(false);
   });
 
   it('distinguishes no data and hides sensitive cards', () => {

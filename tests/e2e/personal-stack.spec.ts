@@ -41,8 +41,10 @@ test('keeps urgency-independent overall and Project orders private and durable',
   await expect(page.getByLabel('Stack scope')).toHaveValue('overall');
   const lowPriority = stackRow(page, 'Low priority task');
   await lowPriority.getByRole('button', { name: 'Move to position' }).click();
-  await lowPriority.getByLabel('Position').fill('1');
-  await lowPriority.getByRole('button', { name: 'Apply position' }).click();
+  const position = lowPriority.getByRole('spinbutton', { name: 'Position' });
+  await expect(position).toBeFocused();
+  await position.fill('1');
+  await lowPriority.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(lowPriority).toContainText('Overall position 1');
   await expect(lowPriority).toContainText('Low');
   await expect(stackRow(page, 'Critical task')).toContainText('Overall position 2');
@@ -118,7 +120,7 @@ test('supports keyboard and touch reordering with announced positions at every v
   );
   expect(overflow).toBeLessThanOrEqual(1);
 
-  if ((page.viewportSize()?.width ?? 1000) <= 480) {
+  if ((page.viewportSize()?.width ?? 1000) <= 640) {
     const moveDown = second.getByRole('button', { name: 'Move down' });
     const moveTo = second.getByRole('button', { name: 'Move to position' });
     const [upBox, downBox, toBox, controlsBox] = await Promise.all([
@@ -129,7 +131,11 @@ test('supports keyboard and touch reordering with announced positions at every v
     ]);
     expect(upBox?.width).toBeCloseTo(downBox?.width ?? 0, 0);
     expect((downBox?.x ?? 0) - ((upBox?.x ?? 0) + (upBox?.width ?? 0))).toBeGreaterThan(0);
-    expect(toBox?.y).toBeGreaterThan((upBox?.y ?? 0) + (upBox?.height ?? 0));
-    expect(toBox?.width).toBeCloseTo(controlsBox?.width ?? 0, 0);
+    const sharedVerticalSpace =
+      Math.min((upBox?.y ?? 0) + (upBox?.height ?? 0), (toBox?.y ?? 0) + (toBox?.height ?? 0)) -
+      Math.max(upBox?.y ?? 0, toBox?.y ?? 0);
+    expect(sharedVerticalSpace).toBeGreaterThan(0);
+    expect(Math.abs((toBox?.width ?? 0) - (upBox?.width ?? 0))).toBeLessThan(2);
+    expect(controlsBox?.width).toBeGreaterThan((toBox?.width ?? 0) * 3);
   }
 });

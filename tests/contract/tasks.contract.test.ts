@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { taskCreateSchema } from '@naaseh/contracts';
+import { taskCreateSchema, taskPatchSchema } from '@naaseh/contracts';
 const contract = readFileSync('specs/001-naaseh-v1-baseline/contracts/openapi.yaml', 'utf8');
 describe('task HTTP contract', () => {
   it('declares CRUD, completion, and revision routes with mutation and concurrency controls', () => {
@@ -18,6 +18,10 @@ describe('task HTTP contract', () => {
     expect(taskCreateSchema.safeParse({ memo: 'x' }).success).toBe(false);
     expect(taskCreateSchema.safeParse({ label: 'x', unknown: true }).success).toBe(false);
     expect(taskCreateSchema.safeParse({ label: 'x', link: 'http://example.com' }).success).toBe(
+      true,
+    );
+    expect(taskPatchSchema.safeParse({ link: 'http://example.com' }).success).toBe(true);
+    expect(taskCreateSchema.safeParse({ label: 'x', link: 'javascript:alert(1)' }).success).toBe(
       false,
     );
     expect(

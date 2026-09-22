@@ -10,6 +10,20 @@ export interface Filters {
   contentType?: 'all' | 'lists' | 'todos';
   lifecycle?: 'active' | 'archive' | 'all';
   urgencies: Urgency[];
+  progress?: 'all' | 'not-started' | 'in-progress' | 'complete';
+}
+export function matchesProgressFilter(
+  percentComplete: number | undefined,
+  progress: Filters['progress'],
+) {
+  const percent = percentComplete ?? 0;
+  return (
+    !progress ||
+    progress === 'all' ||
+    (progress === 'not-started' && percent === 0) ||
+    (progress === 'in-progress' && percent > 0 && percent < 100) ||
+    (progress === 'complete' && percent === 100)
+  );
 }
 export const normalizeSearch = (value: string) =>
   value.normalize('NFKC').trim().toLocaleLowerCase();
@@ -49,6 +63,7 @@ export function filterTasks(tasks: Task[], filters: Filters): Task[] {
           : task.projectId === filters.projectId)) &&
       (!filters.from || Boolean(task.dueAt && task.dueAt >= filters.from)) &&
       (!filters.to || Boolean(task.dueAt && task.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
+      matchesProgressFilter(task.percentComplete, filters.progress) &&
       matchesUrgencySet(task.urgency, filters.urgencies),
   );
 }

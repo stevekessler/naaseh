@@ -11,7 +11,7 @@ export function ListIndexPage({
   open: (list: List) => void;
 }) {
   const active = lists.filter((list) => list.status === 'active');
-  if (!active.length) return <p>No authorized lists are available.</p>;
+  if (!active.length) return null;
   return (
     <nav aria-label="Authorized lists">
       <ul>

@@ -37,6 +37,13 @@ test('administrator manages a two-level tree with parent-scoped Project names of
   await projectForm.getByRole('button', { name: 'Create Project' }).click();
   await expect(organization.getByText('API', { exact: true })).toHaveCount(2);
   await expect(organization.locator('.organization-tree')).toBeVisible();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  const taskForm = page.locator('.task-form').first();
+  await taskForm.getByText('Task details', { exact: true }).click();
+  await expect(
+    taskForm.getByLabel('Category').getByRole('option', { name: 'PAAO' }),
+  ).toBeAttached();
+  await expect(taskForm.getByLabel('Project').getByRole('option', { name: 'API' })).toHaveCount(2);
 });
 
 test('work forms expose explicit Category and Project assignments', async ({ page }) => {

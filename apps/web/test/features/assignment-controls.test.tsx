@@ -13,6 +13,7 @@ import {
 } from '../../src/features/tasks/TaskForm.js';
 import { TaskFilters } from '../../src/features/search/TaskFilters.js';
 import { PersonalStackPage } from '../../src/features/stacks/PersonalStackPage.js';
+import { ListForm } from '../../src/features/lists/ListForm.js';
 
 const category = {
   id: 'category-home',
@@ -104,6 +105,21 @@ describe('shared assignment controls', () => {
       expect(markup).toContain('Home');
       expect(markup).toContain('Yard');
     }
+  });
+
+  it('shows projects in list creation, including while a category is still hydrating', () => {
+    const assigned = renderToStaticMarkup(
+      <ListForm save={vi.fn()} categories={[category]} projects={[project]} />,
+    );
+    const projectBeforeCategory = renderToStaticMarkup(
+      <ListForm save={vi.fn()} categories={[]} projects={[project]} />,
+    );
+
+    for (const markup of [assigned, projectBeforeCategory]) {
+      expect(markup).toContain('name="projectId"');
+      expect(markup).toContain('<option value="project-yard">Yard</option>');
+    }
+    expect(projectBeforeCategory).toContain('<optgroup label="Projects">');
   });
 
   it('defaults new tasks to the logged-in assignee and offers only open parent tasks', () => {

@@ -9,6 +9,7 @@ import {
   stackRowFocusId,
   type StackMoveHandler,
 } from '../stacks/StackMoveControls.js';
+import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 
 interface ProjectDetailRow {
   id: string;
@@ -17,6 +18,7 @@ interface ProjectDetailRow {
   overallRank: number;
   projectRank?: number;
   reference?: WorkReference;
+  percentComplete?: number;
 }
 
 export interface ProjectTreeProps {
@@ -213,6 +215,9 @@ export function ProjectTree({
                   {effectiveOrder === 'projectRank' ? row.projectRank : row.overallRank}
                 </span>
                 <strong>{row.label}</strong>
+                {row.reference?.workType === 'task' ? (
+                  <ProgressIndicator percent={row.percentComplete} label={row.label} />
+                ) : null}
                 <UrgencyBadge urgency={row.urgency as Urgency} />
                 <span className="workload-positions">
                   Overall position {row.overallRank}

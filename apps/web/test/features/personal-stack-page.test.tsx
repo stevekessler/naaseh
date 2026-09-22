@@ -91,11 +91,13 @@ describe('personal stack accessibility contract', () => {
     expect(html).toContain(`aria-label="Reorder ${task.label}"`);
     expect(html).toContain('aria-label="Move up"');
     expect(html).toContain('aria-label="Move down"');
+    expect(html).toContain('aria-label="Move to position"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-label="Position"');
     expect(html).toContain('type="number"');
     expect(html).toContain('min="1"');
     expect(html).toContain('max="3"');
-    expect(html).toContain('>Apply position</button>');
+    expect(html).toContain('>Move</button>');
     expect(html).toContain('type="button"');
     expect(html).toContain('data-touch-alternative="true"');
   });

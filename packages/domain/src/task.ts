@@ -15,23 +15,23 @@ export const visibilitySchema = z.enum(['public', 'private']);
 export const taskStatusSchema = z.enum(['open', 'completed', 'archived']);
 export const postItColorSchema = z.enum(['yellow', 'pink', 'blue', 'green', 'purple', 'orange']);
 export type PostItColor = z.infer<typeof postItColorSchema>;
-const httpsUrlSchema = z
+const taskLinkSchema = z
   .string()
   .url()
   .refine((value) => {
     try {
-      return new URL(value).protocol === 'https:';
+      return ['http:', 'https:'].includes(new URL(value).protocol);
     } catch {
       return false;
     }
-  }, 'Task links must use HTTPS.');
+  }, 'Task links must use HTTP or HTTPS.');
 
 const taskObjectSchema = z
   .object({
     id: ulidSchema,
     ownerId: z.string().min(1),
     label: z.string().trim().min(1).max(300),
-    link: httpsUrlSchema.optional().or(z.literal('')),
+    link: taskLinkSchema.optional().or(z.literal('')),
     memo: z.string().max(20_000).default(''),
     memoDocument: memoDocumentSchema.optional(),
     memoHidden: z.boolean().default(false),
@@ -50,6 +50,7 @@ const taskObjectSchema = z
     visibility: visibilitySchema.default('public'),
     urgency: urgencySchema.default(defaultUrgency),
     postItColor: postItColorSchema.optional(),
+    percentComplete: z.number().int().min(0).max(100).default(0),
     status: taskStatusSchema.default('open'),
     lifecycle: z.enum(['active', 'archived', 'deleting']).optional(),
     completionState: z.enum(['open', 'completed']).optional(),
@@ -219,6 +220,7 @@ export function transitionTask(
     version: task.version + 1,
     ...(status === 'completed'
       ? {
+          percentComplete: 100,
           lifecycle: 'active',
           completionState: 'completed',
           completedAt: timestamp,
@@ -227,6 +229,7 @@ export function transitionTask(
       : status === 'archived'
         ? { lifecycle: 'archived', completionState: 'open', archiveReason: 'manual' }
         : {
+            percentComplete: 0,
             lifecycle: 'active',
             completionState: 'open',
             completedAt: undefined,
@@ -296,6 +299,7 @@ export function completeAndArchiveTask(
       completedAt: timestamp,
       completedBy: actorId,
       currentCompletionEventId: event.id,
+      percentComplete: 100,
       updatedAt: timestamp,
       version: task.version + 1,
     }),
@@ -330,6 +334,7 @@ export function restoreArchivedTask(
       completedAt: undefined,
       completedBy: undefined,
       currentCompletionEventId: undefined,
+      percentComplete: 0,
       updatedAt: timestamp,
       version: task.version + 1,
     }),

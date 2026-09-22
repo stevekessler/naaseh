@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { createTask } from '@naaseh/domain';
+import { createList, createListItem, createTask } from '@naaseh/domain';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -42,8 +42,35 @@ for (const brokenCache of [false, true]) {
     page,
   }) => {
     let serverTasks: ReturnType<typeof createTask>[] = [];
+    let organizationSnapshotAvailable = false;
+    let listSnapshotAvailable = false;
+    let serverLists: ReturnType<typeof createList>[] = [];
+    let serverListItems: ReturnType<typeof createListItem>[] = [];
+    const category = {
+      id: '01J00000000000000000000010',
+      name: 'Recovered category',
+      color: '#336699',
+      archived: false,
+      lifecycle: 'active' as const,
+      version: 1,
+    };
+    const project = {
+      id: '01J00000000000000000000011',
+      categoryId: category.id,
+      name: 'Recovered project',
+      lifecycle: 'active' as const,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      version: 1,
+    };
     await page.route('**/api/v1/sync/bootstrap', (route) =>
-      route.fulfill({ json: { tasks: serverTasks } }),
+      route.fulfill({
+        json: {
+          tasks: serverTasks,
+          ...(organizationSnapshotAvailable ? { categories: [category], projects: [project] } : {}),
+          ...(listSnapshotAvailable ? { lists: serverLists, listItems: serverListItems } : {}),
+        },
+      }),
     );
     await page.route('**/api/v1/sync/pull', (route) =>
       route.fulfill({
@@ -79,7 +106,13 @@ for (const brokenCache of [false, true]) {
     );
     const serverTask = createTask({ label: 'Recovered server task' }, ownerId);
     const pendingTask = createTask({ label: 'Unsent local wording' }, ownerId);
+    const serverList = createList({ name: 'Recovered owned list' }, ownerId);
+    const serverListItem = createListItem(serverList.id, { name: 'Recovered list item' }, ownerId);
     serverTasks = [serverTask, { ...pendingTask, label: 'Older server wording' }];
+    serverLists = [serverList];
+    serverListItems = [serverListItem];
+    organizationSnapshotAvailable = true;
+    listSnapshotAvailable = true;
     await page.evaluate(
       async ({ serverTask, pendingTask, brokenCache }) => {
         const database = await new Promise<IDBDatabase>((resolve) => {
@@ -121,6 +154,10 @@ for (const brokenCache of [false, true]) {
           const tx = database.transaction(['secureTasks', 'outbox', 'settings'], 'readwrite');
           tx.objectStore('secureTasks').clear();
           tx.objectStore('settings').put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+          tx.objectStore('settings').put({
+            key: 'organization-snapshot-bootstrapped-v1',
+            value: 'true',
+          });
           tx.objectStore('outbox').put({
             id: 'independent-change',
             entityId: 'independent-category',
@@ -165,6 +202,28 @@ for (const brokenCache of [false, true]) {
     const before = await readRecoveryState(page);
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Recovered server task' })).toBeVisible();
+    await page.getByRole('button', { name: 'Lists', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Recovered owned list' })).toBeVisible();
+    await page.getByRole('button', { name: 'Recovered owned list' }).click();
+    await expect(page.getByText('Recovered list item', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Personal Stack' }).click();
+    const filters = page.getByRole('region', { name: 'Search and filters' });
+    const categoryFilter = filters.getByRole('combobox', { name: 'Category', exact: true });
+    const projectFilter = filters.getByRole('combobox', { name: 'Project', exact: true });
+    await expect(categoryFilter).toContainText(category.name);
+    await categoryFilter.selectOption(category.id);
+    await expect(categoryFilter).toHaveValue(category.id);
+    await expect(projectFilter).toContainText(project.name);
+    await projectFilter.selectOption(project.id);
+    await expect(projectFilter).toHaveValue(project.id);
+    await categoryFilter.selectOption('');
+    await projectFilter.selectOption('');
+    await page.getByRole('button', { name: 'Lists', exact: true }).click();
+    const listProject = page.locator('.task-form').first().getByLabel('Project');
+    await expect(listProject).toContainText(project.name);
+    await listProject.selectOption(project.id);
+    await expect(listProject).toHaveValue(project.id);
+    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
     await expect(page.getByText("Na'aseh hit a problem")).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Review conflicts (1)' })).toBeVisible();
     if (brokenCache) {

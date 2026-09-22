@@ -132,6 +132,7 @@ export async function saveTaskMutation(
   dependencies: TaskMutationDependencies = defaultDependencies,
   sourceClientId?: string,
 ) {
+  const revisionChangedFields = changedFields.filter((field) => field !== 'percentComplete');
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -140,10 +141,10 @@ export async function saveTaskMutation(
     version: task.version,
     changedAt: task.updatedAt,
     operation,
-    changedFields,
+    changedFields: revisionChangedFields,
     ...(sourceClientId ? { sourceClientId } : {}),
-    ...(previous ? { before: safeRevisionValues(previous, changedFields) } : {}),
-    after: safeRevisionValues(task, changedFields) ?? {},
+    ...(previous ? { before: safeRevisionValues(previous, revisionChangedFields) } : {}),
+    after: safeRevisionValues(task, revisionChangedFields) ?? {},
     syncOutcome: 'applied',
   };
   let lastError: unknown;

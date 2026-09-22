@@ -135,10 +135,18 @@ export async function acknowledgeJournalMutation(
   const pending = await db.secureJournalOutbox.get(mutationId);
   if (!pending || pending.ownerId !== ownerId) return;
   const mutation = pending.value as JournalMutation;
-  await db.transaction('rw', db.secureJournalEntries, db.secureJournalOutbox, async () => {
-    await db.secureJournalEntries.update(mutation.entityId, { version });
-    await db.secureJournalOutbox.delete(mutationId);
-  });
+  await db.transaction(
+    'rw',
+    db.secureJournalEntries,
+    db.secureJournalProfiles,
+    db.secureJournalOutbox,
+    async () => {
+      if (mutation.entityType === 'journalProfile')
+        await db.secureJournalProfiles.update(`journal-profile:${ownerId}`, { version });
+      else await db.secureJournalEntries.update(mutation.entityId, { version });
+      await db.secureJournalOutbox.delete(mutationId);
+    },
+  );
 }
 export async function purgeJournalOwner(ownerId: string) {
   await db.transaction(

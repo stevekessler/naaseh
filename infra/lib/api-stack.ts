@@ -364,6 +364,12 @@ export function createApplicationApi(
   options.exportBucket.grantReadWrite(exportCoordinator, 'exports/*');
   options.exportKey.grantEncryptDecrypt(exportCoordinator);
   options.exportStateMachine.grantStartExecution(exportCoordinator);
+  exportCoordinator.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['dynamodb:DescribeContinuousBackups'],
+      resources: [options.table.tableArn],
+    }),
+  );
   new events.Rule(scope, 'AttachmentScanResults', {
     eventPattern: {
       source: ['aws.guardduty'],

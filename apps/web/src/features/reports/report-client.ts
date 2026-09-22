@@ -139,7 +139,16 @@ async function completionExportRequest(
   path: string,
   init?: RequestInit,
 ): Promise<CompletionExportJob> {
-  const response = await fetch(path, { credentials: 'include', ...init });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 15_000);
+  let response: Response;
+  try {
+    response = await fetch(path, { credentials: 'include', ...init, signal: controller.signal });
+  } catch {
+    throw new Error('Completion export request timed out.');
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error(`Completion export failed (${response.status}).`);
   return completionExportJobResponseSchema.parse(await response.json());
 }
@@ -226,13 +235,18 @@ export async function runCompletionExport(
   });
   for (
     let attempt = 0;
-    attempt < 900 && !['completed', 'failed'].includes(job.status);
+    attempt < 150 && !['completed', 'failed'].includes(job.status);
     attempt += 1
   ) {
     await new Promise((resolve) => window.setTimeout(resolve, 2_000));
     job = await completionExportRequest(`/api/v1/reporting/completion-export/${job.id}`);
   }
-  if (job.status !== 'completed') throw new Error('Completion export did not complete.');
+  if (job.status !== 'completed')
+    throw new Error(
+      job.status === 'failed'
+        ? `Completion export failed${job.errorClass ? ` during ${job.errorClass}` : ''}.`
+        : 'Completion export timed out. Try again.',
+    );
   await downloadVerifiedCompletionExport(job);
   return job;
 }

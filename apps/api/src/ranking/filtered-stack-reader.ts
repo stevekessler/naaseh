@@ -27,6 +27,7 @@ export interface FilteredStackCandidate {
   assigneeId?: string | undefined;
   dueDate?: string | undefined;
   contentType?: 'todos' | 'lists' | undefined;
+  percentComplete?: number | undefined;
   [key: string]: unknown;
 }
 
@@ -42,6 +43,7 @@ export interface FilteredStackReadContext extends PaginationCursorContext {
     projectId?: string | undefined;
     lifecycle?: 'active' | 'archived' | undefined;
     contentType?: 'all' | 'todos' | 'lists' | undefined;
+    progress?: 'not-started' | 'in-progress' | 'complete' | undefined;
   };
 }
 
@@ -83,6 +85,13 @@ function matchesFilters(candidate: FilteredStackCandidate, context: FilteredStac
     (candidate.dueDate === undefined || candidate.dueDate < filters.from)
   )
     return false;
+  if (filters.progress !== undefined) {
+    if (candidate.contentType !== 'todos') return false;
+    const percent = candidate.percentComplete ?? 0;
+    if (filters.progress === 'not-started' && percent !== 0) return false;
+    if (filters.progress === 'in-progress' && (percent <= 0 || percent >= 100)) return false;
+    if (filters.progress === 'complete' && percent !== 100) return false;
+  }
   if (
     filters.to !== undefined &&
     (candidate.dueDate === undefined || candidate.dueDate > filters.to)
@@ -131,6 +140,7 @@ function normalizeContext(context: FilteredStackReadContext): FilteredStackReadC
         ? { lifecycle: filters.lifecycle ?? defaultLifecycle }
         : {}),
       contentType: filters.contentType ?? 'all',
+      ...(filters.progress ? { progress: filters.progress } : {}),
     },
   };
 }

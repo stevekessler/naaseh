@@ -52,12 +52,22 @@ const stableRequest = (request: CompletionExportRequest) =>
     },
   });
 
+export const boundedCompletionExportSnapshotTime = (
+  requestedAsOf: string,
+  now: Date,
+  latestRestorableAt: Date,
+) =>
+  new Date(
+    Math.min(Date.parse(requestedAsOf), now.getTime(), latestRestorableAt.getTime()),
+  ).toISOString();
+
 export async function startCompletionExport(
   input: unknown,
   principal: string,
   administrator: boolean,
   authorizedGroupIds: readonly string[] = [],
   now = new Date(),
+  latestRestorableAt = now,
 ) {
   const request = completionExportRequestSchema.parse(input);
   if (request.scope === 'all_users' && (!administrator || !request.adminConfirmed))
@@ -89,7 +99,7 @@ export async function startCompletionExport(
       adminConfirmed: request.adminConfirmed,
       authorizedGroupIds: [...new Set(authorizedGroupIds)].sort(),
       status: 'pending',
-      snapshotTime: new Date(Math.min(Date.parse(request.asOf), now.getTime())).toISOString(),
+      snapshotTime: boundedCompletionExportSnapshotTime(request.asOf, now, latestRestorableAt),
       createdAt: timestamp,
       updatedAt: timestamp,
     }),

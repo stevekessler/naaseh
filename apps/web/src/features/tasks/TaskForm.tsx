@@ -1,4 +1,4 @@
-import { lazy, Suspense, type CSSProperties, type FormEvent, useState } from 'react';
+import { lazy, Suspense, type CSSProperties, type FormEvent, useId, useState } from 'react';
 import {
   defaultUrgency,
   instantToLocalDue,
@@ -119,6 +119,8 @@ export function TaskForm({
   const [parentId, setParentId] = useState(task?.parentId ?? '');
   const [groupId, setGroupId] = useState(task?.groupId ?? '');
   const [postItColor, setPostItColor] = useState<PostItColor | ''>(task?.postItColor ?? '');
+  const [percentComplete, setPercentComplete] = useState(task?.percentComplete ?? 0);
+  const progressId = useId();
   const openParentTasks = eligibleParentTasks(task, parentTasks);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -145,6 +147,7 @@ export function TaskForm({
       visibility: data.get('private') ? 'private' : 'public',
       urgency,
       ...(postItColor ? { postItColor } : {}),
+      percentComplete,
     });
     if (!task) {
       form.reset();
@@ -160,6 +163,7 @@ export function TaskForm({
       setParentId('');
       setGroupId('');
       setPostItColor('');
+      setPercentComplete(0);
       form.querySelector<HTMLDetailsElement>('.task-form-details')?.removeAttribute('open');
     }
   }
@@ -183,9 +187,25 @@ export function TaskForm({
         )}
         <label>
           Link
-          <input name="link" type="url" pattern="https://.*" defaultValue={task?.link} />
+          <input name="link" type="url" defaultValue={task?.link} />
         </label>
         <div className="form-grid">
+          <label className="progress-field">
+            Progress
+            <span>
+              <input
+                id={progressId}
+                name="percentComplete"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={percentComplete}
+                onChange={(event) => setPercentComplete(event.currentTarget.valueAsNumber)}
+              />
+              <output htmlFor={progressId}>{percentComplete}%</output>
+            </span>
+          </label>
           <label>
             Priority
             <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
@@ -240,6 +260,7 @@ export function TaskForm({
             Category
             <CategoryPicker
               categories={categories}
+              includeArchived={Boolean(task)}
               value={categoryId}
               onChange={(nextCategoryId) => {
                 setCategoryId(nextCategoryId);
@@ -259,6 +280,7 @@ export function TaskForm({
           <ProjectPicker
             categories={categories}
             projects={projects}
+            includeArchived={Boolean(task)}
             categoryId={categoryId}
             value={projectId}
             onChange={(nextProjectId) => {
@@ -300,6 +322,7 @@ export function TaskForm({
             onChange={setParentId}
             offline={offline}
             clearLabel="No parent task"
+            placeholder="Search parent tasks"
           />
         </div>
         <label className="checkbox">

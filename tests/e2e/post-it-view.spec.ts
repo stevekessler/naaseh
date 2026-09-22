@@ -1,11 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails } from './enhanced-helpers.js';
+import { expandTaskDetails, signIn } from './enhanced-helpers.js';
 
 async function signInAndAddTask(page: Page) {
-  await page.goto('/');
-  await page.getByLabel('Username').fill('steve');
-  await page.getByLabel('Password').fill('local');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await signIn(page);
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Cedar post-it');
   await expandTaskDetails(form);
@@ -21,6 +18,8 @@ test('preserves filtered state and preference across responsive list and post-it
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const filters = page.getByRole('region', { name: 'Search and filters' });
   await filters.getByLabel('Search').fill('cedar');
+  await filters.getByLabel('Assignee').selectOption({ label: 'Steve' });
+  await expect(filters.locator('.filter-chips')).toContainText('Assignee: Steve');
 
   await page.setViewportSize({ width: 1024, height: 600 });
   await page.getByRole('button', { name: 'Post-its' }).click();
@@ -57,7 +56,25 @@ test('uses a non-motion completion treatment when reduced motion is requested', 
   await expect(note).toHaveCount(0);
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
-  await expect(
-    page.locator('.archive-results').getByRole('heading', { name: 'Cedar post-it' }),
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
+test('opens note details from its title and shows the due date below it', async ({ page }) => {
+  await signInAndAddTask(page);
+  await page.getByRole('button', { name: 'Cedar post-it', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit task' });
+  await dialog.getByLabel('Due').selectOption('date');
+  await dialog.getByLabel('Due date', { exact: true }).fill('2026-12-31');
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
+  await page.getByRole('button', { name: 'Post-its' }).click();
+  const note = page.locator('.postit', { hasText: 'Cedar post-it' });
+  const title = note.getByRole('button', { name: 'Cedar post-it', exact: true });
+  const due = note.locator('.postit-due');
+  await expect(due).toHaveText('2026-12-31');
+  await expect(note.locator('.user-full-name')).toHaveText('Steve');
+  expect((await title.boundingBox())!.y).toBeLessThan((await due.boundingBox())!.y);
+  await title.click();
+  await expect(page.getByRole('dialog', { name: 'Edit task' })).toBeVisible();
 });

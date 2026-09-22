@@ -11,9 +11,11 @@ import { RememberedBrowsers } from './RememberedBrowsers.js';
 export function SecuritySettings({
   csrfToken,
   role,
+  showHeading = true,
 }: {
   csrfToken: string;
   role: 'admin' | 'user';
+  showHeading?: boolean;
 }) {
   const [status, setStatus] = useState('Loading account security…');
   const [tfaEnabled, setTfaEnabled] = useState<boolean>();
@@ -109,8 +111,11 @@ export function SecuritySettings({
     }
   }
   return (
-    <section aria-labelledby="security-title">
-      <h2 id="security-title">Account security</h2>
+    <section
+      aria-labelledby={showHeading ? 'security-title' : undefined}
+      aria-label={showHeading ? undefined : 'Account security'}
+    >
+      {showHeading ? <h2 id="security-title">Account security</h2> : null}
       <p role="status">{status}</p>
       <p>Password reset requires the account PIN and is available from the sign-in page.</p>
       {tfaEnabled === false && (

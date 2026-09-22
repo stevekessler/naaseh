@@ -31,7 +31,13 @@ type Preview = z.infer<typeof googleSyncPreviewSchema>;
 type DisconnectPreview = z.infer<typeof googleDisconnectPreviewSchema>;
 type Quarantine = z.infer<typeof googleQuarantineListSchema>;
 
-export function GoogleSyncPage({ csrfToken }: { csrfToken: string }) {
+export function GoogleSyncPage({
+  csrfToken,
+  showHeading = true,
+}: {
+  csrfToken: string;
+  showHeading?: boolean;
+}) {
   const [status, setStatus] = useState<Status>();
   const [taskLists, setTaskLists] = useState<TaskListChoice[]>([]);
   const [preview, setPreview] = useState<Preview>();
@@ -82,8 +88,11 @@ export function GoogleSyncPage({ csrfToken }: { csrfToken: string }) {
   }, [status?.state]);
 
   return (
-    <section className="panel google-sync-page">
-      <h1>Google Tasks synchronization</h1>
+    <section
+      className="panel google-sync-page"
+      aria-label={showHeading ? undefined : 'Google Tasks synchronization'}
+    >
+      {showHeading ? <h1>Google Tasks synchronization</h1> : null}
       <p role="status" aria-live="polite">
         {message}
       </p>

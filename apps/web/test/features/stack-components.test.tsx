@@ -62,7 +62,7 @@ describe('personal stack component primitives', () => {
     expect(html).toContain('<table class="stack-list"');
     expect(html).toContain('<th scope="col">Task</th>');
     expect(html.match(/class="stack-row"/g)).toHaveLength(100);
-    expect(html).toContain('Showing positions 1–100 of 125');
+    expect(html).toContain('Positions 1–100 of 125');
     expect(html).toContain('data-work-type="task"');
     expect(html).toContain('data-work-type="list"');
   });
@@ -107,8 +107,12 @@ describe('personal stack component primitives', () => {
     expect(html).toContain(`aria-label="Reorder ${item.label}"`);
     expect(html).toContain('aria-label="Move up"');
     expect(html).toContain('aria-label="Move down"');
+    expect(html).toContain('aria-label="Move to position"');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).toContain('aria-label="Position"');
-    expect(html).toContain('>Apply position</button>');
+    expect(html).toContain('New position <small>(1–3)</small>');
+    expect(html).toContain('>Move</button>');
+    expect(html).toContain('>Cancel</button>');
     expect(html).toContain(`aria-controls="${focusId}"`);
     expect(html).toContain('data-touch-alternative="true"');
     expect(html).toContain('class="stack-move-controls"');

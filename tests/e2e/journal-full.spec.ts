@@ -33,7 +33,7 @@ test('journal list filters and dashboard reflow across supported browsers and de
   await page.getByRole('button', { name: 'Dashboard' }).click();
   await page.getByLabel('Start date').fill('2026-08-28');
   await page.getByLabel('End date').fill('2026-08-28');
-  await expect(page.getByRole('button', { name: /hoursOfSleep: 7.5/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Hours of sleep: 7.5/u })).toBeVisible();
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
 });
 

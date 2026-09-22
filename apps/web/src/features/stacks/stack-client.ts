@@ -29,6 +29,7 @@ type WireStackItem = {
     label?: string;
     name?: string;
     urgency: Urgency;
+    percentComplete?: number;
   };
   rank: { overallPosition: number; projectPosition?: number };
 };
@@ -50,6 +51,7 @@ const pathFor = (scope: LocalStackScope) =>
 function queryFor(filters: Filters, cursor?: string) {
   const query = new URLSearchParams({ limit: '50', contentType: filters.contentType ?? 'all' });
   if (filters.urgencies.length) query.set('urgencies', filters.urgencies.join(','));
+  if (filters.progress && filters.progress !== 'all') query.set('progress', filters.progress);
   if (cursor) query.set('cursor', cursor);
   return query;
 }
@@ -103,6 +105,9 @@ export async function readFilteredStack(
           localLabels.get(`${reference.workType}:${workId}`) ??
           (reference.workType === 'task' ? 'To-do' : 'List'),
         urgency: item.work.urgency,
+        ...(item.work.workType === 'task'
+          ? { percentComplete: item.work.percentComplete ?? 0 }
+          : {}),
         overallPosition: item.rank.overallPosition,
         ...(item.rank.projectPosition === undefined
           ? {}

@@ -27,6 +27,14 @@ export function ProjectPicker({
   const visibleCategories = categoryId
     ? categories.filter((category) => category.id === categoryId)
     : categories;
+  const knownCategoryIds = new Set(categories.map((category) => category.id));
+  const projectsAwaitingCategory = categoryId
+    ? []
+    : projects.filter(
+        (project) =>
+          !knownCategoryIds.has(project.categoryId) &&
+          (includeArchived || project.lifecycle === 'active'),
+      );
   return (
     <label>
       Project
@@ -55,6 +63,18 @@ export function ProjectPicker({
             </optgroup>
           ) : null;
         })}
+        {projectsAwaitingCategory.length ? (
+          <optgroup label="Projects">
+            {[...projectsAwaitingCategory]
+              .sort((left, right) => left.name.localeCompare(right.name))
+              .map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                  {project.lifecycle === 'archived' ? ' (archived)' : ''}
+                </option>
+              ))}
+          </optgroup>
+        ) : null}
       </select>
     </label>
   );

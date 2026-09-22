@@ -10,7 +10,7 @@ describe('journal entry controls', () => {
         id="sleep"
         label="Hours of sleep"
         value={null}
-        minimum={1}
+        minimum={0}
         maximum={24}
         step={0.5}
         onChange={() => undefined}
@@ -19,6 +19,7 @@ describe('journal entry controls', () => {
     expect(numeric).toContain('type="range"');
     expect(numeric).toContain('type="number"');
     expect(numeric).toContain('step="0.5"');
+    expect(numeric).toContain('min="0"');
     const yesNo = renderToStaticMarkup(
       <JournalYesNoField
         id="self-care"

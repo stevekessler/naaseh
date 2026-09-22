@@ -256,6 +256,7 @@ export async function listEligibleStackWork(
       categoryId: work.categoryId,
       assigneeId: work.assigneeId,
       dueDate: work.dueAt?.slice(0, 10),
+      percentComplete: work.percentComplete,
       lifecycle: work.lifecycle ?? (work.status === 'open' ? 'active' : work.status),
       active: true,
       authorized: true,

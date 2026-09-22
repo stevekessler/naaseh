@@ -50,6 +50,7 @@ test('names and forgets this browser and another remembered browser in profile s
 
   await signIn(page);
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
+  await page.getByText('Account security', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Remembered browsers' })).toBeVisible();
   const mac = page.locator('.remembered-browsers li').filter({ hasText: 'Chrome on Mac' });
   await expect(mac).toContainText('this browser');

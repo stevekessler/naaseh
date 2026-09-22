@@ -20,6 +20,7 @@ export interface EligibleStackWork extends WorkReference {
   categoryId?: string | undefined;
   assigneeId?: string | undefined;
   dueDate?: string | undefined;
+  percentComplete?: number | undefined;
   lifecycle?: string | undefined;
   active?: boolean | undefined;
   authorized?: boolean | undefined;
@@ -180,6 +181,13 @@ function matchesFilter(work: EligibleStackWork, basis: PersonalStackFilterBasis)
   if (basis.assigneeId !== undefined && work.assigneeId !== basis.assigneeId) return false;
   if (basis.contentType === 'todos' && work.workType !== 'task') return false;
   if (basis.contentType === 'lists' && work.workType !== 'list') return false;
+  if (basis.progress !== undefined) {
+    if (work.workType !== 'task') return false;
+    const percent = work.percentComplete ?? 0;
+    if (basis.progress === 'not-started' && percent !== 0) return false;
+    if (basis.progress === 'in-progress' && (percent <= 0 || percent >= 100)) return false;
+    if (basis.progress === 'complete' && percent !== 100) return false;
+  }
   if (basis.from !== undefined && (work.dueDate === undefined || work.dueDate < basis.from))
     return false;
   if (basis.to !== undefined && (work.dueDate === undefined || work.dueDate > basis.to))

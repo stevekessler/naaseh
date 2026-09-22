@@ -1,8 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { exportJobSchema, transitionExportJob } from '@naaseh/domain';
+import { boundedCompletionExportSnapshotTime } from '../../apps/api/src/exports/export-service.js';
 
 describe('completion export workflow', () => {
+  it('uses the latest DynamoDB-restorable instant instead of a too-new browser timestamp', () => {
+    expect(
+      boundedCompletionExportSnapshotTime(
+        '2026-09-21T20:30:00.000Z',
+        new Date('2026-09-21T20:30:01.000Z'),
+        new Date('2026-09-21T20:25:00.000Z'),
+      ),
+    ).toBe('2026-09-21T20:25:00.000Z');
+  });
+
   it('keeps snapshot, integrity, private storage, and resumable idempotency gates explicit', () => {
     const workflow = readFileSync('apps/api/src/exports/workflow-handler.ts', 'utf8');
     const result = readFileSync('apps/api/src/exports/result-service.ts', 'utf8');

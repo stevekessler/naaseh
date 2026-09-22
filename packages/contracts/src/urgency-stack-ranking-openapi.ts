@@ -67,6 +67,7 @@ export const stackPageQuerySchema = z
     limit: z.coerce.number().int().min(1).max(200).default(100),
     urgencies: urgencyQuerySchema.optional(),
     contentType: contentTypeSchema.default('all'),
+    progress: z.enum(['not-started', 'in-progress', 'complete']).optional(),
   })
   .strict();
 

@@ -39,6 +39,7 @@ const mutableTaskFields = new Set<keyof Task>([
   'visibility',
   'urgency',
   'postItColor',
+  'percentComplete',
   'status',
 ]);
 

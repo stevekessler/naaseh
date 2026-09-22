@@ -49,7 +49,7 @@ test('shows responsive Google settings, preview, date disclosure, status, and co
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page);
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
-  await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Google Tasks synchronization' }).click();
   await expect(page.locator('.google-sync-page [role="status"]')).toContainText('preview');
   await page.getByRole('button', { name: 'Preview Naaseh' }).click();
   await expect(
@@ -82,7 +82,7 @@ test('keeps Google settings readable offline and disables a new connection', asy
   );
   await signIn(page);
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
-  await expect(page.getByRole('heading', { name: 'Google Tasks synchronization' })).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Google Tasks synchronization' }).click();
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   await expect(
@@ -150,6 +150,7 @@ test('keeps encrypted conflict choices available offline and resolves an edited 
   );
   await signIn(page);
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
+  await page.locator('summary').filter({ hasText: 'Google Tasks synchronization' }).click();
   await expect(page.getByText('Naaseh title')).toBeVisible();
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
