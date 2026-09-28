@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expandTaskDetails, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test('shows exact Category/Project/Unassigned counts and date state online and offline', async ({
   page,
@@ -20,7 +20,7 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await projectForm.getByLabel('End date').fill('2020-01-01');
   await projectForm.getByRole('button', { name: 'Create Project' }).click();
 
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   const taskForm = page.locator('.task-form').first();
   await taskForm.getByLabel('Task label').fill('Assigned work');
   await expandTaskDetails(taskForm);

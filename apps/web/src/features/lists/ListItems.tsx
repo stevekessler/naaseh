@@ -1,32 +1,18 @@
 import { useState, type FormEvent } from 'react';
-import {
-  effectiveDirectoryFields,
-  formatMinor,
-  parseSignedMinor,
-  type GlobalDirectoryItem,
-  type ListItem,
-} from '@naaseh/domain';
+import { effectiveDirectoryFields, type GlobalDirectoryItem, type ListItem } from '@naaseh/domain';
 import { ListItemRow } from './ListItemRow.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 
 export type NewListItem = {
   name: string;
-  amountMinor: number | null;
   dueDate?: string;
   memo?: string;
 };
 
-export function parseInitialListItem(name: string, amount: string, positive: boolean): NewListItem {
-  return {
-    name: name.trim(),
-    amountMinor: amount.trim() ? parseSignedMinor(amount, positive ? 'credit' : 'cost') : null,
-  };
-}
+export const parseInitialListItem = (name: string): NewListItem => ({ name: name.trim() });
 
 export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promise<void> }) {
   const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [positive, setPositive] = useState(false);
   const [dueDate, setDueDate] = useState('');
   const [memo, setMemo] = useState('');
   const [error, setError] = useState('');
@@ -39,7 +25,7 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
     let input: NewListItem;
     try {
       input = {
-        ...parseInitialListItem(name, amount, positive),
+        ...parseInitialListItem(name),
         ...(dueDate ? { dueDate } : {}),
         ...(memo.trim() ? { memo: memo.trim() } : {}),
       };
@@ -52,8 +38,6 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
     try {
       await add(input);
       setName('');
-      setAmount('');
-      setPositive(false);
       setDueDate('');
       setMemo('');
     } catch {
@@ -70,26 +54,8 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
         <input required value={name} onChange={(event) => setName(event.target.value)} />
       </label>
       <details className="list-item-options">
-        <summary>Optional money and details</summary>
+        <summary>Optional details</summary>
         <div className="list-item-option-fields">
-          <label>
-            Amount (optional)
-            <input
-              inputMode="decimal"
-              placeholder="12.34"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-              aria-describedby={error ? 'list-item-amount-error' : undefined}
-            />
-          </label>
-          <label className="inline-choice">
-            <input
-              type="checkbox"
-              checked={positive}
-              onChange={(event) => setPositive(event.target.checked)}
-            />
-            Credit
-          </label>
           <label>
             Due date (optional)
             <input
@@ -134,7 +100,7 @@ export function ListItems({
   remove: (item: ListItem) => void;
   edit: (item: ListItem, input: NewListItem) => void;
   reset: (item: ListItem) => void;
-  promote: (item: ListItem, name: string, amountMinor: number | null) => void;
+  promote: (item: ListItem, name: string) => void;
   reorder: (items: ListItem[]) => void;
   csrfToken: string;
   directory: GlobalDirectoryItem[];
@@ -166,14 +132,11 @@ export function ListItems({
             key={item.id}
             item={item}
             name={effective.name}
-            {...(effective.amountMinor === null
-              ? {}
-              : { value: formatMinor(effective.amountMinor, current?.currency ?? 'USD') })}
             onToggle={() => toggle(item)}
             onRemove={() => remove(item)}
             onEdit={(input) => edit(item, input)}
             {...(item.directoryItemId ? { onReset: () => reset(item) } : {})}
-            onPromote={() => promote(item, effective.name, effective.amountMinor)}
+            onPromote={() => promote(item, effective.name)}
             {...(index > 0 ? { moveUp: () => move(-1) } : {})}
             {...(index < items.length - 1 ? { moveDown: () => move(1) } : {})}
             attachments={

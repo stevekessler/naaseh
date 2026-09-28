@@ -85,9 +85,22 @@ export async function addTask(page: Page, label: string) {
 }
 
 export async function openCompletedTasks(page: Page) {
-  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page).toHaveURL(/\/dashboard(?:\?|$)/);
   await expect(page.getByRole('heading', { name: 'Completed Tasks', exact: true })).toBeVisible();
+}
+
+export async function openTaskSection(
+  page: Page,
+  section: 'My Tasks' | 'Personal Stack' | 'Completed Tasks' | 'Archive',
+) {
+  const trigger = page.getByRole('button', { name: 'Tasks', exact: true });
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+  const link = page
+    .locator('#tasks-navigation-links')
+    .getByRole('button', { name: section, exact: true });
+  await link.focus();
+  await link.press('Enter');
 }
 
 export async function setOffline(page: Page, offline = true) {

@@ -79,11 +79,15 @@ export function CategoriesAdminPage({
     <section className="organization-page" aria-labelledby="organization-heading">
       <header className="organization-heading">
         <h1 id="organization-heading">Categories and Projects</h1>
-        <p>Projects live inside categories. Open a category below to see its projects.</p>
+        <p>
+          Categories can be created and used without a project. Projects are optional and, when
+          used, live inside a category.
+        </p>
       </header>
       <div className="organization-create-actions">
         <details className="organization-create">
           <summary>Add category</summary>
+          <p className="muted">Create a category by itself—no project is required.</p>
           <CategoryForm assignees={assignees} save={createCategory} />
         </details>
         {categories.some((category) => category.lifecycle !== 'archived' && !category.archived) && (

@@ -1,5 +1,6 @@
 import { useTaskCompletionUndo } from '../features/tasks/useTaskCompletionUndo.js';
 import { AdminNavigation } from '../components/AdminNavigation.js';
+import { TasksNavigation } from '../components/TasksNavigation.js';
 import {
   UserAvatar,
   UserDirectoryContext,
@@ -1088,40 +1089,13 @@ export function App() {
               />
             </div>
             <nav aria-label="Main navigation">
-              <button
-                className="quiet"
-                aria-current={section === 'tasks' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'tasks' })}
-              >
-                Tasks
-              </button>
+              <TasksNavigation section={section} navigate={(next) => navigate({ section: next })} />
               <button
                 className="quiet"
                 aria-current={section === 'journal' ? 'page' : undefined}
                 onClick={() => navigate({ section: 'journal' })}
               >
                 Journal
-              </button>
-              <button
-                className="quiet"
-                aria-current={section === 'stack' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'stack' })}
-              >
-                Personal Stack
-              </button>
-              <button
-                className="quiet"
-                aria-current={section === 'dashboard' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'dashboard' })}
-              >
-                Completed Tasks
-              </button>
-              <button
-                className="quiet"
-                aria-current={section === 'archive' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'archive' })}
-              >
-                Archive
               </button>
               <button
                 className="quiet"
@@ -1487,12 +1461,7 @@ export function App() {
               actorId={session.userId}
               lists={lists.filter((list) => list.lifecycle !== 'archived')}
               addToList={async (listId, item) => {
-                await addLocalListItem(
-                  listId,
-                  { name: item.name, amountMinor: item.amountMinor },
-                  session.userId,
-                  item,
-                );
+                await addLocalListItem(listId, { name: item.name }, session.userId, item);
               }}
             />
           ) : section === 'lists' ? (
@@ -1520,9 +1489,9 @@ export function App() {
               resetItem={(item) => {
                 void resetLocalListItemOverrides(item);
               }}
-              promoteItem={(item, name, amountMinor) => {
-                void saveDirectoryItem({ name, amountMinor }, session.userId).then((directory) =>
-                  linkLocalListItemToDirectory(item, directory, session.userId),
+              promoteItem={(item, name) => {
+                void saveDirectoryItem({ name, amountMinor: null }, session.userId).then(
+                  (directory) => linkLocalListItemToDirectory(item, directory, session.userId),
                 );
               }}
               reorderItems={(ordered) => {
@@ -1547,7 +1516,7 @@ export function App() {
               <section className="welcome">
                 <div>
                   <p className="eyebrow">My tasks</p>
-                  <h1>Ready when you are, {session.displayName}.</h1>
+                  <h1>Ready when you are, {session.displayName.trim().split(/\s+/u)[0]}.</h1>
                 </div>
                 <ViewSwitcher
                   view={view}

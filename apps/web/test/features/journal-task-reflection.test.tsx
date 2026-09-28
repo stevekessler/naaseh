@@ -1,10 +1,26 @@
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { JournalTaskReflection } from '../../src/features/journal/JournalTaskReflection.js';
 import {
   eligibleJournalTasks,
   resolveJournalTaskLabel,
 } from '../../src/features/journal/journal-task-options.js';
 
 describe('journal task reflection eligibility', () => {
+  it('uses a searchable long-list combobox for related tasks', () => {
+    const html = renderToStaticMarkup(
+      <JournalTaskReflection
+        tasks={[{ id: 'task-1', label: 'A long-list task', percentComplete: 40 }] as never}
+        taskId={null}
+        notes={null}
+        onChange={() => undefined}
+      />,
+    );
+    expect(html).toContain('class="reference-combobox"');
+    expect(html).toContain('placeholder="Search tasks"');
+    expect(html).not.toContain('<select');
+  });
+
   it('keeps authorized open and recently completed tasks only', () => {
     const tasks = [
       {

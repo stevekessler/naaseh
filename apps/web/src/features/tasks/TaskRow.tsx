@@ -11,11 +11,13 @@ export function TaskRow({
   task,
   onToggle,
   onSelect,
+  onProgressChange,
   currentUserId,
 }: {
   task: Task;
   onToggle: (task: Task) => void;
   onSelect: (task: Task) => void;
+  onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
 }) {
   const feedback = useCompletionFeedback();
@@ -59,7 +61,11 @@ export function TaskRow({
           </button>
         </h2>
         {task.visibility === 'private' && <span title="Private">🔒</span>}
-        <ProgressIndicator percent={task.percentComplete} label={task.label} />
+        <ProgressIndicator
+          percent={task.percentComplete}
+          label={task.label}
+          onChange={(percent) => onProgressChange(task, percent)}
+        />
       </th>
       <td className="task-memo-cell">
         <div className="task-row-memo">
@@ -85,6 +91,9 @@ export function TaskRow({
         <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
       </td>
       <td className="task-actions-cell">
+        <button type="button" className="quiet task-edit-button" onClick={() => onSelect(task)}>
+          Edit
+        </button>
         {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} compact /> : null}
       </td>
     </tr>

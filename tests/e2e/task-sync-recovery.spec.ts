@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createList, createListItem, createTask } from '@naaseh/domain';
+import { openTaskSection } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -206,7 +207,7 @@ for (const brokenCache of [false, true]) {
     await expect(page.getByRole('button', { name: 'Recovered owned list' })).toBeVisible();
     await page.getByRole('button', { name: 'Recovered owned list' }).click();
     await expect(page.getByText('Recovered list item', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Personal Stack' }).click();
+    await openTaskSection(page, 'Personal Stack');
     const filters = page.getByRole('region', { name: 'Search and filters' });
     const categoryFilter = filters.getByRole('combobox', { name: 'Category', exact: true });
     const projectFilter = filters.getByRole('combobox', { name: 'Project', exact: true });
@@ -223,7 +224,7 @@ for (const brokenCache of [false, true]) {
     await expect(listProject).toContainText(project.name);
     await listProject.selectOption(project.id);
     await expect(listProject).toHaveValue(project.id);
-    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+    await openTaskSection(page, 'My Tasks');
     await expect(page.getByText("Na'aseh hit a problem")).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Review conflicts (1)' })).toBeVisible();
     if (brokenCache) {

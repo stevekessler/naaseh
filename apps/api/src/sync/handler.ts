@@ -19,6 +19,7 @@ import {
   restoreCategory,
   restoreProject,
   updateProject,
+  transitionListItem,
   taskSchema,
   type ContentActor,
   type Mutation,
@@ -536,14 +537,29 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       serverRecordPresence.set(mutationIndex, Boolean(current));
       try {
         const payload = mutation.payload as Record<string, unknown>;
+        const now = new Date();
+        const status = payload.status as import('@naaseh/domain').ListItem['status'] | undefined;
         const next = listItemSchema.parse(
           current
-            ? {
-                ...current,
-                ...payload,
-                version: current.version + 1,
-                updatedAt: new Date().toISOString(),
-              }
+            ? status && status !== current.status
+              ? {
+                  ...transitionListItem(
+                    current,
+                    status,
+                    actorId,
+                    now,
+                    typeof payload.orderKey === 'string' ? payload.orderKey : current.orderKey,
+                  ),
+                  ...Object.fromEntries(
+                    Object.entries(payload).filter(([key]) => key !== 'status'),
+                  ),
+                }
+              : {
+                  ...current,
+                  ...payload,
+                  version: current.version + 1,
+                  updatedAt: now.toISOString(),
+                }
             : payload,
         );
         const parent = await findList(next.listId);

@@ -4,11 +4,13 @@ export function TaskList({
   tasks,
   onToggle,
   onSelect = () => {},
+  onProgressChange,
   currentUserId,
 }: {
   tasks: Task[];
   onToggle: (task: Task) => void;
   onSelect?: (task: Task) => void;
+  onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
 }) {
   if (!tasks.length)
@@ -28,7 +30,7 @@ export function TaskList({
           <col className="task-due-column" />
           <col className="task-priority-column" />
           <col className="task-assignee-column" />
-          <col className="task-timer-column" />
+          <col className="task-actions-column" />
         </colgroup>
         <thead>
           <tr>
@@ -42,7 +44,7 @@ export function TaskList({
               <span className="visually-hidden">Priority</span>
             </th>
             <th scope="col">Assignee</th>
-            <th scope="col">Timer</th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -52,6 +54,7 @@ export function TaskList({
               task={task}
               onToggle={onToggle}
               onSelect={onSelect}
+              onProgressChange={onProgressChange}
               {...(currentUserId ? { currentUserId } : {})}
             />
           ))}

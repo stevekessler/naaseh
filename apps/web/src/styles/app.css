@@ -552,7 +552,8 @@ form > label {
   grid-row: 2;
 }
 .topbar nav > button,
-.topbar nav > .admin-navigation {
+.topbar nav > .admin-navigation,
+.topbar nav > .tasks-navigation {
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -563,6 +564,7 @@ form > label {
 .admin-navigation {
   position: relative;
 }
+.tasks-navigation > [data-active],
 .admin-navigation > [data-active] {
   text-decoration: underline;
   text-underline-offset: 0.3rem;
@@ -580,6 +582,21 @@ form > label {
   border-radius: 12px;
   background: var(--surface);
   box-shadow: 0 8px 24px #22382b20;
+}
+.tasks-navigation-links {
+  position: fixed;
+  z-index: 20;
+  display: grid;
+  gap: var(--button-gap);
+  min-width: 13rem;
+  padding: 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 36px rgb(16 43 73 / 18%);
+}
+.tasks-navigation-links button {
+  text-align: left;
 }
 .admin-navigation-links button {
   text-align: left;
@@ -1092,8 +1109,8 @@ main {
 .task-list .task-assignee-column {
   width: 15%;
 }
-.task-list .task-timer-column {
-  width: 7.5rem;
+.task-list .task-actions-column {
+  width: 10.5rem;
 }
 .task-list th,
 .task-list td {
@@ -1182,6 +1199,11 @@ main {
 .task-actions-cell .task-timer-trigger {
   padding: 0.35rem 0.55rem;
   white-space: nowrap;
+}
+.task-actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 .task-actions-cell .task-timer {
   min-width: 15rem;
@@ -1345,15 +1367,10 @@ main {
   box-shadow:
     inset 0 0 0 2px white,
     0 1px 2px rgb(20 50 40 / 18%);
-}
-.progress-indicator-button::after {
-  content: '✦';
-  position: absolute;
-  top: -0.15rem;
-  right: -0.08rem;
-  color: #db7d37;
-  font-size: 0.7rem;
-  line-height: 1;
+  color: #173e33;
+  font-size: 0.8rem;
+  font-weight: 900;
+  line-height: 1rem;
 }
 .progress-indicator-button:focus-visible {
   transform: rotate(-7deg) scale(1.08);
@@ -1374,14 +1391,30 @@ main {
   font-weight: 700;
   line-height: 1.2;
   pointer-events: none;
+  visibility: hidden;
   opacity: 0;
   transform: translate(-50%, 0.2rem);
   transition:
     opacity 120ms ease,
     transform 120ms ease;
 }
+.progress-indicator-editor {
+  display: grid;
+  width: 13rem;
+  gap: 0.45rem;
+  pointer-events: auto;
+}
+.progress-indicator-editor label {
+  display: grid;
+  gap: 0.3rem;
+}
+.progress-indicator-editor button {
+  min-height: 2rem;
+  padding: 0.25rem 0.6rem;
+}
 .progress-indicator-button:focus-visible + .progress-indicator-tooltip,
 .progress-indicator.is-open .progress-indicator-tooltip {
+  visibility: visible;
   opacity: 1;
   transform: translate(-50%, 0);
 }
@@ -1390,7 +1423,8 @@ main {
     transform: rotate(-7deg) scale(1.08);
     background: transparent;
   }
-  .progress-indicator:hover .progress-indicator-tooltip {
+  .progress-indicator:not(.is-editable):hover .progress-indicator-tooltip {
+    visibility: visible;
     opacity: 1;
     transform: translate(-50%, 0);
   }
@@ -1657,7 +1691,7 @@ dialog input {
   .task-list .task-memo-column,
   .task-list .task-memo-cell,
   .task-list thead th:nth-child(3),
-  .task-list .task-timer-column,
+  .task-list .task-actions-column,
   .task-list thead th:nth-child(7) {
     display: none;
   }

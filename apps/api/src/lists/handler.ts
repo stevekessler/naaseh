@@ -1,5 +1,5 @@
 import type { APIGatewayProxyHandlerV2 } from 'aws-lambda';
-import { createUlid, type Urgency } from '@naaseh/domain';
+import { createUlid, orderKeyAfter, type Urgency } from '@naaseh/domain';
 import {
   completionRequestSchema,
   listCreateSchema,
@@ -137,7 +137,12 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         return problem(404, 'not_found', 'List item not found.', correlationId);
       const body = JSON.parse(event.body ?? '{}');
       const patch: Partial<typeof item> = event.rawPath.endsWith('/completion')
-        ? { status: completionRequestSchema.parse(body).completed ? 'completed' : 'open' }
+        ? completionRequestSchema.parse(body).completed
+          ? {
+              status: 'completed',
+              orderKey: orderKeyAfter((await listItemsForList(current.id)).at(-1)?.orderKey),
+            }
+          : { status: 'open' }
         : event.rawPath.endsWith('/reset-to-global')
           ? { nameOverride: undefined, valueOverride: undefined }
           : method === 'DELETE'

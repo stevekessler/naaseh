@@ -132,11 +132,13 @@ export function transitionListItem(
   status: ListItem['status'],
   actorId: string,
   now = new Date(),
+  orderKey = item.orderKey,
 ): ListItem {
   const timestamp = now.toISOString();
   return listItemSchema.parse({
     ...item,
     status,
+    orderKey,
     updatedAt: timestamp,
     version: item.version + 1,
     ...(status === 'completed'

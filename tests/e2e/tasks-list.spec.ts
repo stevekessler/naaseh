@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expandTaskDetails, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test('creates, edits, completes, and inspects a responsive task with revisions and reminders', async ({
   page,
@@ -33,9 +33,10 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(taskTable.getByRole('columnheader', { name: 'Priority' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Assignee' })).toBeVisible();
   if (test.info().project.name === 'iphone')
-    await expect(taskTable.getByRole('columnheader', { name: 'Timer' })).toBeHidden();
-  else await expect(taskTable.getByRole('columnheader', { name: 'Timer' })).toBeVisible();
+    await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeHidden();
+  else await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
+  await expect(taskTable.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();
   await expect(page).toHaveURL(/\/tasks\//);
@@ -60,7 +61,7 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
     page.getByRole('button', { name: 'Undo completion of Call the contractor today' }),
   ).toBeHidden();
   await page.getByRole('button', { name: 'Complete Call the contractor today' }).click();
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
 });
 
@@ -93,9 +94,12 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
   await page.setViewportSize({ width: 390, height: 740 });
   await signIn(page);
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });
-  await expect(navigation.getByRole('button').first()).toHaveText('Tasks');
-  const navigationLabels = await navigation.getByRole('button').allTextContents();
-  expect(navigationLabels.indexOf('Archive')).toBe(navigationLabels.indexOf('Completed Tasks') + 1);
+  await expect(navigation.getByRole('button').first()).toContainText('Tasks');
+  await navigation.getByRole('button', { name: 'Tasks', exact: true }).click();
+  const taskMenu = page.locator('#tasks-navigation-links');
+  const navigationLabels = await taskMenu.getByRole('button').allTextContents();
+  expect(navigationLabels).toEqual(['My Tasks', 'Personal Stack', 'Completed Tasks', 'Archive']);
+  await navigation.getByRole('button', { name: 'Tasks', exact: true }).click();
   await expect(navigation.getByRole('button', { name: 'Tasks', exact: true })).toHaveAttribute(
     'aria-current',
     'page',

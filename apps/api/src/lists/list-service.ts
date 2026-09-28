@@ -57,7 +57,16 @@ export function updateOwnedListItem(
   if (list.ownerId !== actorId || current.listId !== list.id)
     throw new Error('Only the owner may change this list.');
   if (patch.status && patch.status !== current.status)
-    return transitionListItem(current, patch.status, actorId, now);
+    return listItemSchema.parse({
+      ...transitionListItem(
+        current,
+        patch.status,
+        actorId,
+        now,
+        patch.orderKey ?? current.orderKey,
+      ),
+      ...Object.fromEntries(Object.entries(patch).filter(([key]) => key !== 'status')),
+    });
   return listItemSchema.parse({
     ...current,
     ...patch,

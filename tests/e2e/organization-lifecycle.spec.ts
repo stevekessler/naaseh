@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { openTaskSection, signIn } from './enhanced-helpers.js';
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -59,7 +59,7 @@ test('archives, restores, edits, blocks assignment, and warns before permanent d
   await context.setOffline(true);
   await region.getByRole('button', { name: 'Archive Project' }).click();
   await expect(region).toContainText('Archived');
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   await expect(page.getByLabel('Project').getByRole('option', { name: 'API' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByRole('button', { name: 'Categories & Projects', exact: true }).click();

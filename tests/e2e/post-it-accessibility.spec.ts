@@ -22,10 +22,14 @@ test('supports keyboard operation, visible focus, announcements, and WCAG checks
   await page.keyboard.press('Space');
   await expect(page.locator('.postit', { hasText: 'Accessible note' })).toBeHidden();
 
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   for (const [name, control] of [
     ['Tasks', page.getByRole('button', { name: 'Tasks', exact: true })],
     ['Post-its', page.getByRole('button', { name: 'Post-its' })],
-    ['Archive', page.getByRole('button', { name: 'Archive', exact: true })],
+    [
+      'Archive',
+      page.locator('#tasks-navigation-links').getByRole('button', { name: 'Archive', exact: true }),
+    ],
   ]) {
     const box = await control.boundingBox();
     expect(box?.height, `${name} touch height`).toBeGreaterThanOrEqual(44);

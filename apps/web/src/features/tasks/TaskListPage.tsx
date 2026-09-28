@@ -54,6 +54,7 @@ export function TaskListPage({
         tasks={tasks}
         onToggle={onToggle}
         onSelect={onSelect}
+        onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
         {...(currentUserId ? { currentUserId } : {})}
       />
       {selected && (

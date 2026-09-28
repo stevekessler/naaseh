@@ -229,6 +229,7 @@ export function createApplicationApi(
     environment: contentEnvironment,
     table: options.table,
     media: options.media,
+    dataKey: options.dataKey,
     logGroup: options.logGroups.task,
     alerts: options.alerts,
   });
