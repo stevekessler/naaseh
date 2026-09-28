@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { expandTaskDetails, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -36,7 +36,7 @@ async function createOrganization(page: Page) {
   await projectForm.getByLabel('Project name').fill('Urgency E2E Project');
   await projectForm.getByRole('button', { name: 'Create Project' }).click();
 
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   const projectOption = page
     .locator('.task-form')
     .first()
@@ -148,24 +148,24 @@ test('preserves overall and Project stack order and archive filtering from a war
     dueAt: '2030-01-16T09:00',
   });
 
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await expect(page.getByRole('heading', { name: 'Personal Stack' })).toBeVisible();
   await page.getByLabel('Stack scope').selectOption('overall');
   const before = await page.locator('.stack-row h2').allTextContents();
   await page.getByLabel('Stack scope').selectOption(`project:${organization.projectId}`);
   await expect(page.locator('.stack-row')).toHaveCount(2);
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
 
   await context.setOffline(true);
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await page.getByLabel('Stack scope').selectOption('overall');
   await selectUrgencies(page, ['Critical', 'Low']);
   await expect(page.locator('.stack-row h2')).toHaveText(before);
   await page.getByLabel('Stack scope').selectOption(`project:${organization.projectId}`);
   await expect(page.locator('.stack-row h2')).toHaveText(before);
 
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   await selectUrgencies(page, ['Critical']);
   await expect(page.getByText(/No archived work matches this search/i)).toBeVisible();
   await context.setOffline(false);
@@ -229,7 +229,7 @@ test('continues through authorized short and empty filtered pages without skippi
     });
   });
 
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await selectUrgencies(page, ['Critical']);
   await expect(page.getByRole('heading', { name: 'First sparse match' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Match after empty page' })).toBeVisible();
@@ -283,7 +283,7 @@ for (const failure of readFailures) {
           })
         : route.fulfill({ status: 200, json: emptyStackPage }),
     );
-    await page.getByRole('button', { name: 'Personal Stack' }).click();
+    await openTaskSection(page, 'Personal Stack');
     await selectUrgencies(page, ['High']);
     const actionName =
       failure.action.source === 'retry' ? 'Retry filtered read' : 'Restart filtered read';
@@ -302,7 +302,7 @@ test('offers a retry when a filtered read times out', async ({ page }) => {
       ? route.abort('timedout')
       : route.fulfill({ status: 200, json: emptyStackPage }),
   );
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await selectUrgencies(page, ['Medium']);
   const alert = page.getByRole('alert').filter({ hasText: /timed out|timeout/i });
   await expect(alert).toContainText(/timed out|timeout/i);

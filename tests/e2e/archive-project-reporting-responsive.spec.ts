@@ -5,7 +5,12 @@ test('dashboard and organization navigation remain keyboard-operable without ove
   page,
 }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).focus();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await page
+    .locator('#tasks-navigation-links')
+    .getByRole('button', { name: 'Completed Tasks', exact: true })
+    .focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'Completed Tasks' })).toBeVisible();
   const dimensions = await page.evaluate(() => ({

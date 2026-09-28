@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openTaskSection } from './enhanced-helpers.js';
 
 async function signIn(page: Page) {
   await page.goto('/');
@@ -88,7 +89,7 @@ test.describe('mocked group API', () => {
     await expect(page.getByText('Active owner')).toBeVisible();
 
     await context.setOffline(true);
-    await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+    await openTaskSection(page, 'My Tasks');
     await page.getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByText(/Offline: showing saved group status/)).toBeVisible();

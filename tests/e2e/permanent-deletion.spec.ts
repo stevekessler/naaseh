@@ -68,7 +68,8 @@ test('warns, cancels, confirms, reports progress, and purges only after success'
   await page.getByRole('button', { name: 'Delete permanently' }).click();
   const dialog = page.getByRole('dialog', { name: /Permanently delete/ });
   await expect(dialog).toContainText('cannot be undone');
-  await expect(dialog).toContainText('3 dependent records');
+  await expect(dialog).toContainText('1 attached or contained item');
+  await expect(dialog).not.toContainText('dependent records');
   await dialog.getByRole('button', { name: 'Cancel' }).click();
   await expect(dialog).toBeHidden();
   await page.getByRole('button', { name: 'Delete permanently' }).click();

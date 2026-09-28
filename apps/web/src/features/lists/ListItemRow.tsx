@@ -1,12 +1,10 @@
 import type { ListItem } from '@naaseh/domain';
 import { useEffect, useState } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
-import { ListItemValueEditor } from './ListItemValueEditor.js';
 import type { NewListItem } from './ListItems.js';
 export function ListItemRow({
   item,
   name,
-  value,
   onToggle,
   onRemove,
   onEdit,
@@ -18,7 +16,6 @@ export function ListItemRow({
 }: {
   item: ListItem;
   name: string;
-  value?: string;
   onToggle: () => void;
   onRemove: () => void;
   onEdit: (input: NewListItem) => void;
@@ -34,13 +31,6 @@ export function ListItemRow({
   const [draftName, setDraftName] = useState(name);
   const [draftDueDate, setDraftDueDate] = useState(item.dueDate ?? '');
   const [draftMemo, setDraftMemo] = useState(item.memo ?? '');
-  const [draftAmount, setDraftAmount] = useState<number | null>(
-    item.valueOverride?.kind === 'amount'
-      ? item.valueOverride.amountMinor
-      : item.valueOverride?.kind === 'none'
-        ? null
-        : item.directorySnapshot.amountMinor,
-  );
   useEffect(() => setDraftName(name), [name]);
   return (
     <li className={`list-item ${done ? 'completed' : ''}`}>
@@ -56,7 +46,6 @@ export function ListItemRow({
           {done ? '✓' : ''}
         </button>
         <span className="completion-label">{name}</span>
-        {value && <output>{value}</output>}
       </div>
       {(item.dueDate || item.memo) && (
         <div className="list-item-details">
@@ -101,11 +90,11 @@ export function ListItemRow({
             Item name
             <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
           </label>
-          <ListItemValueEditor
-            value={draftAmount}
-            save={setDraftAmount}
-            {...(onReset ? { reset: onReset } : {})}
-          />
+          {onReset && (
+            <button type="button" className="quiet" onClick={onReset}>
+              Reset to global item name
+            </button>
+          )}
           <label>
             Due date
             <input
@@ -128,7 +117,6 @@ export function ListItemRow({
             onClick={() => {
               onEdit({
                 name: draftName.trim(),
-                amountMinor: draftAmount,
                 ...(draftDueDate ? { dueDate: draftDueDate } : {}),
                 ...(draftMemo.trim() ? { memo: draftMemo.trim() } : {}),
               });

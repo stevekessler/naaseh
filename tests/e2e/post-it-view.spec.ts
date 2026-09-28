@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
 
 async function signInAndAddTask(page: Page) {
   await signIn(page);
@@ -39,7 +39,7 @@ test('preserves filtered state and preference across responsive list and post-it
     'true',
   );
   await expect(page.locator('.postit', { hasText: 'Cedar post-it' })).toBeHidden();
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible();
 });
 
@@ -54,7 +54,7 @@ test('uses a non-motion completion treatment when reduced motion is requested', 
   await note.getByRole('button', { name: 'Complete Cedar post-it' }).click();
   await expect(note).toBeHidden();
   await expect(note).toHaveCount(0);
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Archive', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Cedar post-it' })).toBeVisible({
     timeout: 15_000,

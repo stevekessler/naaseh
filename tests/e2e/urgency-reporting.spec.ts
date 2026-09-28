@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expandTaskDetails, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -26,7 +26,7 @@ test('keeps report filters keyboard/touch operable and exposes live report state
   page,
 }, testInfo) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Completed Tasks' }).click();
+  await openTaskSection(page, 'Completed Tasks');
   const filters = page.getByRole('group', { name: 'Completion urgency filters' });
   const high = filters.getByRole('checkbox', { name: 'High' });
   await high.focus();
@@ -44,7 +44,7 @@ test('keeps report filters keyboard/touch operable and exposes live report state
 
 test('shows all five completion urgency buckets and historical semantics', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Completed Tasks' }).click();
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page.getByRole('heading', { name: 'Priority at completion' })).toBeVisible();
   for (const label of ['Low', 'Medium', 'High', 'Critical'])
     await expect(page.getByText(label, { exact: true })).toBeVisible();
@@ -73,7 +73,7 @@ test('filters report detail and orders eligible rows by viewer-only ranks', asyn
 
 test('offers the verified completed-task export after priority reporting', async ({ page }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Completed Tasks' }).click();
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page.getByRole('button', { name: /export csv/i })).toBeVisible();
 });
 
@@ -82,11 +82,11 @@ test('reads a warmed cached report offline and refreshes pending urgency after r
   context,
 }) => {
   await signIn(page);
-  await page.getByRole('button', { name: 'Completed Tasks' }).click();
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page.getByText(/Critical.*1/)).toBeVisible();
   await context.setOffline(true);
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await page.getByRole('button', { name: 'Completed Tasks' }).click();
+  await openTaskSection(page, 'My Tasks');
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page.getByText('Offline · showing previously synchronized report')).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText(/Last synchronized/i)).toBeVisible({ timeout: 15_000 });
@@ -106,7 +106,7 @@ for (const failure of [
       }),
     );
     await signIn(page);
-    await page.getByRole('button', { name: 'Completed Tasks' }).click();
+    await openTaskSection(page, 'Completed Tasks');
     const alert = page
       .getByRole('alert')
       .filter({ has: page.getByRole('button', { name: failure.action }) });

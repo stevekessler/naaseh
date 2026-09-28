@@ -1,12 +1,18 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails, mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
+import {
+  expandTaskDetails,
+  mockSuccessfulSync,
+  openLists,
+  openTaskSection,
+  signIn,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
 test.beforeEach(async ({ page }) => mockSuccessfulSync(page));
 
 async function createTask(page: Page, label: string, urgency: string) {
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
   await expandTaskDetails(form);
@@ -23,7 +29,7 @@ async function createList(page: Page, name: string, urgency: string) {
 }
 
 async function openPersonalStack(page: Page) {
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await expect(page.getByRole('heading', { name: 'Personal Stack' })).toBeVisible();
 }
 
@@ -77,8 +83,7 @@ test('replays an offline reorder and exposes an actionable conflict without losi
   await expect(second).toContainText('Overall position 1');
   await expect(second).toBeFocused();
 
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await expect(stackRow(page, 'Offline second')).toContainText('Overall position 1');
   await context.setOffline(false);
   await expect(page.locator('.stack-sync-state')).toContainText(/synced|applied/i, {

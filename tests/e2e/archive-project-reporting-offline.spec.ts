@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTask, signIn } from './enhanced-helpers.js';
+import { addTask, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test('persists archive/report state across an offline restart and keeps deletion online-only', async ({
   page,
@@ -9,7 +9,7 @@ test('persists archive/report state across an offline restart and keeps deletion
   await addTask(page, 'Offline integrated');
   await context.setOffline(true);
   await page.getByRole('button', { name: 'Complete Offline integrated' }).click();
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   // The app shell is served by the network in this dev-server matrix. Briefly reconnect for
   // navigation and lazy-route loading, then verify persisted state after returning offline.
   await context.setOffline(false);
@@ -18,14 +18,14 @@ test('persists archive/report state across an offline restart and keeps deletion
   await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page.getByLabel('1 completed to-dos')).toBeVisible();
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible();
   await context.setOffline(true);
   await expect(page.getByRole('heading', { name: 'Offline integrated' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
-  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await openTaskSection(page, 'Completed Tasks');
   await expect(page.getByLabel('1 completed to-dos')).toBeVisible();
   await context.setOffline(false);
 });

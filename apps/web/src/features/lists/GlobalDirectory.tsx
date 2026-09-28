@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { formatMinor, parseSignedMinor, type GlobalDirectoryItem, type List } from '@naaseh/domain';
+import type { GlobalDirectoryItem, List } from '@naaseh/domain';
 import { listLocalDirectoryItems, saveDirectoryItem } from '../../db/directory-repository.js';
 
 export function GlobalDirectory({
@@ -14,7 +14,6 @@ export function GlobalDirectory({
 }) {
   const items = useLiveQuery(() => listLocalDirectoryItems(), []) ?? [];
   const [name, setName] = useState('');
-  const [value, setValue] = useState('');
   const [selected, setSelected] = useState(lists[0]?.id ?? '');
   useEffect(() => {
     if (!lists.some((list) => list.id === selected)) setSelected(lists[0]?.id ?? '');
@@ -27,27 +26,14 @@ export function GlobalDirectory({
         className="list-add"
         onSubmit={(event) => {
           event.preventDefault();
-          void saveDirectoryItem(
-            { name, amountMinor: value ? parseSignedMinor(value, 'cost') : null },
-            actorId,
-          ).then(() => {
+          void saveDirectoryItem({ name, amountMinor: null }, actorId).then(() => {
             setName('');
-            setValue('');
           });
         }}
       >
         <label>
           Item name
           <input required value={name} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <label>
-          Cost or credit
-          <input
-            inputMode="decimal"
-            placeholder="12.34 or +5.00"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-          />
         </label>
         <button>Add global item</button>
       </form>
@@ -68,10 +54,7 @@ export function GlobalDirectory({
           .filter((item) => item.status === 'active')
           .map((item) => (
             <li key={item.id}>
-              <span>
-                {item.name}{' '}
-                {item.amountMinor === null ? '—' : formatMinor(item.amountMinor, item.currency)}
-              </span>
+              <span>{item.name}</span>
               <button disabled={!selected} onClick={() => void addToList(selected, item)}>
                 Add to list
               </button>
@@ -80,14 +63,10 @@ export function GlobalDirectory({
                 onClick={() => {
                   const nextName = prompt('New name', item.name)?.trim();
                   if (!nextName) return;
-                  const currentAmount =
-                    item.amountMinor === null ? '' : String(item.amountMinor / 100);
-                  const nextAmount = prompt('Cost or credit (use + for a credit)', currentAmount);
-                  if (nextAmount === null) return;
                   void saveDirectoryItem(
                     {
                       name: nextName,
-                      amountMinor: nextAmount.trim() ? parseSignedMinor(nextAmount, 'cost') : null,
+                      amountMinor: null,
                       currency: item.currency,
                     },
                     actorId,

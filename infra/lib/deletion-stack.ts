@@ -4,6 +4,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -19,6 +20,7 @@ export function createDeletionResources(
     environment: Record<string, string>;
     table: dynamodb.ITable;
     media: s3.IBucket;
+    dataKey: kms.IKey;
     logGroup: logs.ILogGroup;
     alerts: sns.ITopic;
   },
@@ -76,6 +78,11 @@ export function createDeletionResources(
   });
   options.table.grantReadWriteData(worker);
   options.table.grantReadWriteData(apiHandler);
+  // These functions are created outside the main API grant loop. Grant the
+  // customer-managed key explicitly so a deletion cannot stall at its first
+  // DynamoDB/S3 operation when implicit grants differ between imported resources.
+  options.dataKey.grantEncryptDecrypt(worker);
+  options.dataKey.grantEncryptDecrypt(apiHandler);
   options.media.grantDelete(worker, 'attachments/*');
   secret.grantRead(apiHandler);
   stateMachine.grantStartExecution(apiHandler);

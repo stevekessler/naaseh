@@ -120,35 +120,47 @@ export function TaskForm({
   const [groupId, setGroupId] = useState(task?.groupId ?? '');
   const [postItColor, setPostItColor] = useState<PostItColor | ''>(task?.postItColor ?? '');
   const [percentComplete, setPercentComplete] = useState(task?.percentComplete ?? 0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const progressId = useId();
   const openParentTasks = eligibleParentTasks(task, parentTasks);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (saving) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
     const submittedProjectId = value('projectId');
     const submittedCategoryId =
       projects.find((item) => item.id === submittedProjectId)?.categoryId || value('categoryId');
-    await save({
-      label: value('label'),
-      memo: memoDocumentText(memoDocument),
-      memoDocument,
-      link: value('link'),
-      ...(dueKind === 'date' && dueDate ? { dueKind, dueDate } : {}),
-      ...(dueKind === 'timed' && dueDate && dueTime
-        ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
-        : {}),
-      assigneeId: canonicalAssigneeId(assignees, assigneeId) || undefined,
-      ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
-      ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
-      ...(groupId ? { groupId } : {}),
-      ...(parentId ? { parentId } : {}),
-      visibility: data.get('private') ? 'private' : 'public',
-      urgency,
-      ...(postItColor ? { postItColor } : {}),
-      percentComplete,
-    });
+    setSaving(true);
+    setSaveError('');
+    try {
+      await save({
+        label: value('label'),
+        memo: memoDocumentText(memoDocument),
+        memoDocument,
+        link: value('link'),
+        ...(dueKind === 'date' && dueDate ? { dueKind, dueDate } : {}),
+        ...(dueKind === 'timed' && dueDate && dueTime
+          ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
+          : {}),
+        assigneeId: canonicalAssigneeId(assignees, assigneeId) || undefined,
+        ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
+        ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
+        ...(groupId ? { groupId } : {}),
+        ...(parentId ? { parentId } : {}),
+        visibility: data.get('private') ? 'private' : 'public',
+        urgency,
+        ...(postItColor ? { postItColor } : {}),
+        percentComplete,
+      });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'The task could not be saved.');
+      return;
+    } finally {
+      setSaving(false);
+    }
     if (!task) {
       form.reset();
       setUrgency(defaultUrgency);
@@ -372,14 +384,15 @@ export function TaskForm({
       </details>
       {cancel ? (
         <div className="dialog-actions">
-          <button>{submitLabel}</button>
+          <button disabled={saving}>{saving ? 'Saving…' : submitLabel}</button>
           <button type="button" className="quiet" onClick={cancel}>
             Cancel
           </button>
         </div>
       ) : (
-        <button>{submitLabel}</button>
+        <button disabled={saving}>{saving ? 'Saving…' : submitLabel}</button>
       )}
+      {saveError && <p role="alert">{saveError}</p>}
     </form>
   );
 }

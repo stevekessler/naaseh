@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createListWithItem, signIn } from './enhanced-helpers.js';
 
-test('@enhanced-lists global values can be signed, overridden, reset, and totaled', async ({
+test('@enhanced-lists global names can be added, overridden, and reset without money fields', async ({
   page,
 }) => {
   await signIn(page);
@@ -9,20 +9,18 @@ test('@enhanced-lists global values can be signed, overridden, reset, and totale
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByRole('button', { name: 'Global Items', exact: true }).click();
   await page.getByLabel('Item name').fill('Refund');
-  await page.getByLabel('Cost or credit').fill('+5.00');
   await page.getByRole('button', { name: 'Add global item' }).click();
-  await expect(page.getByText('Refund $5.00')).toBeVisible();
+  await expect(page.getByText('Refund', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Cost or credit')).toHaveCount(0);
   await page.getByRole('button', { name: 'Add to list' }).press('Enter');
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
-  await expect(list.getByLabel('List total')).toContainText('$5.00');
   const refund = list.locator('.list-item').filter({ hasText: 'Refund' });
   await refund.getByRole('button', { name: 'Edit', exact: true }).click();
-  await refund.getByRole('textbox', { name: 'Amount' }).fill('2');
-  await refund.getByLabel('Positive credit').uncheck();
-  await refund.getByRole('button', { name: 'Save amount' }).click();
+  await refund.getByLabel('Item name').fill('Refund receipt');
   await refund.getByRole('button', { name: 'Save item' }).click();
-  await expect(list.getByLabel('List total')).toContainText('-$2.00');
+  await expect(refund.getByText('Refund receipt', { exact: true })).toBeVisible();
   await refund.getByRole('button', { name: 'Edit', exact: true }).click();
-  await refund.getByLabel('Reset name and amount to global values').click();
-  await expect(list.getByLabel('List total')).toContainText('$5.00');
+  await refund.getByRole('button', { name: 'Reset to global item name' }).click();
+  await expect(refund.getByText('Refund', { exact: true })).toBeVisible();
+  await expect(list.getByLabel('List total')).toHaveCount(0);
 });

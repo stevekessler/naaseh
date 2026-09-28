@@ -34,10 +34,9 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   const editor = item.locator('.list-item-editor');
   await expect(editor).toBeVisible();
   await expectContained(editor.getByLabel('Item name'), editor);
-  await expectContained(editor.getByLabel('Amount'), editor);
-  await expectNoIntersection(editor.getByLabel('Item name'), editor.locator('.value-editor'));
+  await expect(editor.getByLabel('Amount')).toHaveCount(0);
   await expectNoIntersection(
-    editor.locator('.value-editor'),
+    editor.getByLabel('Item name'),
     editor.getByRole('button', { name: 'Save item' }),
   );
 
@@ -45,5 +44,5 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await expect(page.getByText('Milk completed.')).toBeAttached();
   await context.setOffline(true);
   await expect(page.getByText('Milk', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('List total')).toContainText('$0.00');
+  await expect(page.getByLabel('List total')).toHaveCount(0);
 });

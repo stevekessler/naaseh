@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTask, signIn } from './enhanced-helpers.js';
+import { addTask, openCompletedTasks, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test('shows personal completion totals with period and organization filters offline', async ({
   page,
@@ -8,11 +8,11 @@ test('shows personal completion totals with period and organization filters offl
   await signIn(page);
   await addTask(page, 'Dashboard completion');
   await page.getByRole('button', { name: 'Complete Dashboard completion' }).click();
-  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await openCompletedTasks(page);
   await expect(page.getByRole('heading', { name: 'Completed Tasks' })).toBeVisible();
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   await context.setOffline(true);
-  await page.getByRole('button', { name: 'Completed Tasks', exact: true }).click();
+  await openCompletedTasks(page);
   await expect(page).toHaveURL(/\/dashboard(?:\?|$)/);
   await expect(page.getByRole('heading', { name: 'Completed Tasks' })).toBeVisible();
   await expect(page.getByLabel('1 completed to-dos')).toBeVisible();

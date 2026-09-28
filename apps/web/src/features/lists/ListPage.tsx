@@ -1,8 +1,7 @@
-import { effectiveDirectoryFields, type List, type ListItem } from '@naaseh/domain';
+import type { List, ListItem } from '@naaseh/domain';
 import { ListIndexPage } from './ListIndexPage.js';
 import { ListForm } from './ListForm.js';
 import { ListItemCreateForm, ListItems, type NewListItem } from './ListItems.js';
-import { ListTotal } from './ListTotal.js';
 import { ListVisibilityControl } from './ListVisibilityControl.js';
 import { CopyListAction } from './CopyListAction.js';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -45,7 +44,7 @@ export function ListPage({
   groups: { id: string; name: string }[];
   editItem: (item: ListItem, input: NewListItem) => void;
   resetItem: (item: ListItem) => void;
-  promoteItem: (item: ListItem, name: string, amountMinor: number | null) => void;
+  promoteItem: (item: ListItem, name: string) => void;
   reorderItems: (items: ListItem[]) => void;
   copyReady: (id: string) => void;
   selectedId?: string;
@@ -127,21 +126,6 @@ export function ListPage({
                 reorder={reorderItems}
                 csrfToken={csrfToken}
                 directory={directory}
-              />
-              <ListTotal
-                values={(items.get(list.id) ?? []).map(
-                  (item) =>
-                    effectiveDirectoryFields(
-                      {
-                        directorySnapshot: item.directorySnapshot,
-                        ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
-                        ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
-                      },
-                      item.directoryItemId
-                        ? directory.find((entry) => entry.id === item.directoryItemId)
-                        : undefined,
-                    ).amountMinor,
-                )}
               />
             </article>
           ))

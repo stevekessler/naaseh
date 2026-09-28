@@ -32,7 +32,7 @@ export async function completeUpload(
     new HeadObjectCommand({
       Bucket: bucket,
       Key: `attachments/${attachment.blobId}`,
-      VersionId: objectVersionId,
+      ...(objectVersionId && objectVersionId !== 'unknown' ? { VersionId: objectVersionId } : {}),
       ChecksumMode: 'ENABLED',
     }),
   );
@@ -50,7 +50,7 @@ export async function completeUpload(
       blobId: attachment.blobId,
       attachmentId: attachment.id,
       objectKey: `attachments/${attachment.blobId}`,
-      objectVersionId,
+      objectVersionId: head.VersionId ?? objectVersionId,
       sizeBytes: attachment.sizeBytes,
       checksumSha256: attachment.checksumSha256,
       encryptionKeyArn: head.SSEKMSKeyId ?? process.env.NAASEH_ATTACHMENT_KMS_KEY_ARN ?? 'unknown',

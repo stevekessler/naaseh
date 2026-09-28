@@ -1,11 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails, mockSuccessfulSync, signIn } from './enhanced-helpers.js';
+import {
+  expandTaskDetails,
+  mockSuccessfulSync,
+  openTaskSection,
+  signIn,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 test.beforeEach(async ({ page }) => mockSuccessfulSync(page));
 
 async function createTask(page: Page, label: string, urgency: string) {
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill(label);
   await expandTaskDetails(form);
@@ -21,7 +26,7 @@ test('keeps pointer/touch drag and keyboard ranking equivalent with compact prio
   await signIn(page);
   await createTask(page, 'Drag first', 'critical');
   await createTask(page, 'Drag second', 'low');
-  await page.getByRole('button', { name: 'Personal Stack' }).click();
+  await openTaskSection(page, 'Personal Stack');
 
   const first = row(page, 'Drag first');
   const second = row(page, 'Drag second');

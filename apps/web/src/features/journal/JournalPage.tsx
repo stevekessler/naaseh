@@ -41,6 +41,7 @@ import {
   createDurableJournalEnrollment,
   restoreDurableJournalEnrollment,
 } from './journal-enrollment.js';
+import { db } from '../../db/database.js';
 
 export function JournalPage({
   ownerId,
@@ -87,6 +88,16 @@ export function JournalPage({
   const encryptedEntries =
     useLiveQuery(() => listEncryptedJournalEntries(ownerId), [ownerId]) ?? [];
   const encryptedProfile = useLiveQuery(() => readEncryptedJournalProfile(ownerId), [ownerId]);
+  const pendingProfile =
+    useLiveQuery(
+      async () =>
+        (await db.secureJournalOutbox.where('ownerId').equals(ownerId).toArray()).some(
+          (row) =>
+            (row.value as import('../../db/journal-types.js').JournalMutation).entityType ===
+            'journalProfile',
+        ),
+      [ownerId],
+    ) ?? false;
   const encryptedCrisisPlan = useLiveQuery(() => readLocalCrisisPlan(ownerId), [ownerId]);
   const draft = useMemo(() => emptyJournalEntry(ownerId), [ownerId]);
   useEffect(() => {
@@ -376,6 +387,7 @@ export function JournalPage({
       ) : section === 'settings' ? (
         <JournalSettings
           profile={profile}
+          pending={pendingProfile}
           onChange={changeProfile}
           onChangePin={async (oldPin, newPin) => {
             if (!ownerWrap) throw new Error('Journal is not enrolled');

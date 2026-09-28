@@ -1,6 +1,12 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { expandTaskDetails, mockSuccessfulSync, openLists, signIn } from './enhanced-helpers.js';
+import {
+  expandTaskDetails,
+  mockSuccessfulSync,
+  openLists,
+  openTaskSection,
+  signIn,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -92,7 +98,7 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
   await expect(list.getByLabel('Critical')).toBeVisible();
   await list.getByRole('button', { name: 'Finish and archive list' }).click();
 
-  await page.getByRole('button', { name: 'Archive', exact: true }).click();
+  await openTaskSection(page, 'Archive');
   const archivedTask = taskRow(page, 'Urgent parent');
   const archivedList = taskRow(page, 'Urgent checklist');
   await expect(archivedTask.getByRole('cell', { name: 'Low', exact: true })).toBeVisible();
@@ -124,7 +130,7 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
   await expect(page.locator('html')).toHaveAttribute('data-online', 'true');
   await expect(page.getByText('Synced').first()).toBeAttached({ timeout: 15_000 });
 
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   await expect(taskRow(page, 'Online urgency seed').getByLabel('Critical')).toBeVisible();
   await expect(taskRow(page, 'Offline urgent child').getByLabel('Low')).toBeVisible();
 });

@@ -8,6 +8,8 @@ import {
   restoreList,
   transitionListItem,
   listSchema,
+  listItemSchema,
+  orderKeyAfter,
   type List,
   type ListItem,
   type Urgency,
@@ -153,7 +155,7 @@ export async function updateLocalList(current: List, patch: Partial<List>): Prom
 }
 export async function addLocalListItem(
   listId: string,
-  input: { name: string; amountMinor: number | null; dueDate?: string; memo?: string },
+  input: { name: string; dueDate?: string; memo?: string },
   actorId: string,
   directory?: { id: string; amountMinor: number | null; version: number },
 ): Promise<ListItem> {
@@ -162,7 +164,7 @@ export async function addLocalListItem(
     listId,
     {
       name: input.name,
-      amountMinor: input.amountMinor,
+      amountMinor: null,
       ...(input.dueDate ? { dueDate: input.dueDate } : {}),
       ...(input.memo ? { memo: input.memo } : {}),
       ...(directory
@@ -192,10 +194,25 @@ export async function updateLocalListItem(
   actorId: string,
 ): Promise<ListItem> {
   const now = new Date();
-  const next =
-    patch.status && patch.status !== item.status
-      ? transitionListItem(item, patch.status, actorId, now)
-      : { ...item, ...patch, updatedAt: now.toISOString(), version: item.version + 1 };
+  let effectivePatch = patch;
+  if (patch.status === 'completed' && patch.orderKey === undefined) {
+    const siblings = await listLocalListItems(item.listId);
+    effectivePatch = { ...patch, orderKey: orderKeyAfter(siblings.at(-1)?.orderKey) };
+  }
+  const next = listItemSchema.parse(
+    effectivePatch.status && effectivePatch.status !== item.status
+      ? {
+          ...transitionListItem(
+            item,
+            effectivePatch.status,
+            actorId,
+            now,
+            effectivePatch.orderKey ?? item.orderKey,
+          ),
+          ...Object.fromEntries(Object.entries(effectivePatch).filter(([key]) => key !== 'status')),
+        }
+      : { ...item, ...patch, updatedAt: now.toISOString(), version: item.version + 1 },
+  );
   const operation =
     patch.status === 'completed'
       ? 'complete'
@@ -221,7 +238,7 @@ export async function updateLocalListItem(
 
 export async function editLocalListItem(
   item: ListItem,
-  input: { name: string; amountMinor: number | null; dueDate?: string; memo?: string },
+  input: { name: string; dueDate?: string; memo?: string },
   actorId: string,
 ): Promise<ListItem> {
   return updateLocalListItem(
@@ -230,16 +247,13 @@ export async function editLocalListItem(
       ...(item.directoryItemId
         ? {
             nameOverride: input.name,
-            valueOverride:
-              input.amountMinor === null
-                ? { kind: 'none' as const }
-                : { kind: 'amount' as const, amountMinor: input.amountMinor },
+            valueOverride: undefined,
           }
         : {
             directorySnapshot: {
               ...item.directorySnapshot,
               name: input.name,
-              amountMinor: input.amountMinor,
+              amountMinor: null,
             },
           }),
       dueDate: input.dueDate || undefined,

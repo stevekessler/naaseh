@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { openCompletedTasks, signIn } from './enhanced-helpers.js';
 import {
   expectContained,
   expectMinimumTarget,
@@ -20,7 +20,7 @@ for (const width of [320, 375, 390]) {
     await expectContained(form.getByRole('button', { name: 'Add task' }), form);
     await expectMinimumTarget(form.getByRole('button', { name: 'Add task' }));
 
-    await page.getByRole('button', { name: 'Completed Tasks' }).click();
+    await openCompletedTasks(page);
     const filters = page.locator('.completion-filters');
     await expect(filters).toBeVisible();
     await expectNoDocumentOverflow(page);

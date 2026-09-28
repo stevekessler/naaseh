@@ -1,7 +1,6 @@
 import type { JournalDocument, Task } from '@naaseh/domain';
-import { useCombobox } from 'downshift';
+import { ReferenceCombobox } from '../../components/ReferenceCombobox.js';
 import { JournalRichTextEditor } from './JournalRichTextEditor.js';
-import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 
 export function JournalTaskReflection({
   tasks,
@@ -14,14 +13,6 @@ export function JournalTaskReflection({
   notes: JournalDocument | null;
   onChange: (value: { taskId: string | null; notes: JournalDocument | null }) => void;
 }) {
-  const selected = tasks.find((task) => task.id === taskId) ?? null;
-  const combo = useCombobox({
-    items: tasks,
-    itemToString: (item) => item?.label ?? '',
-    selectedItem: selected,
-    onSelectedItemChange: ({ selectedItem }) =>
-      onChange({ taskId: selectedItem?.id ?? null, notes }),
-  });
   const clear = () => {
     if (notes && !window.confirm('Clear the task reference and its reflection?')) return;
     onChange({ taskId: null, notes: null });
@@ -29,22 +20,19 @@ export function JournalTaskReflection({
   return (
     <section className="journal-task-reflection">
       <h3>Task Reflection</h3>
-      <div>
-        <label {...combo.getLabelProps()}>Related task</label>
-        <input {...combo.getInputProps()} />
-        <button type="button" {...combo.getToggleButtonProps()}>
-          Choose task
-        </button>
-        <ul {...combo.getMenuProps()}>
-          {combo.isOpen &&
-            tasks.map((task, index) => (
-              <li key={task.id} {...combo.getItemProps({ item: task, index })}>
-                {task.label}
-                <ProgressIndicator percent={task.percentComplete} label={task.label} />
-              </li>
-            ))}
-        </ul>
-      </div>
+      <ReferenceCombobox
+        label="Related task"
+        name="relatedTask"
+        options={tasks.map((task) => ({
+          id: task.id,
+          label: task.label,
+          context: `${task.percentComplete ?? 0}% complete`,
+        }))}
+        value={taskId ?? ''}
+        clearLabel="No related task"
+        placeholder="Search tasks"
+        onChange={(nextTaskId) => onChange({ taskId: nextTaskId || null, notes })}
+      />
       {taskId && (
         <>
           <JournalRichTextEditor

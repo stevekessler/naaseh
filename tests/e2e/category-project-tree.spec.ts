@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { openTaskSection, signIn } from './enhanced-helpers.js';
 
 test('administrator manages a two-level tree with parent-scoped Project names offline', async ({
   page,
@@ -8,6 +8,9 @@ test('administrator manages a two-level tree with parent-scoped Project names of
   await signIn(page);
   await page.getByRole('button', { name: 'Admin', exact: true }).click();
   await page.getByRole('button', { name: 'Categories & Projects', exact: true }).click();
+  await expect(
+    page.getByText('Categories can be created and used without a project.', { exact: false }),
+  ).toBeVisible();
   const organization = page.getByRole('region', { name: 'Categories and Projects' });
   await organization.getByText('Add category', { exact: true }).click();
   const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
@@ -37,7 +40,7 @@ test('administrator manages a two-level tree with parent-scoped Project names of
   await projectForm.getByRole('button', { name: 'Create Project' }).click();
   await expect(organization.getByText('API', { exact: true })).toHaveCount(2);
   await expect(organization.locator('.organization-tree')).toBeVisible();
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   const taskForm = page.locator('.task-form').first();
   await taskForm.getByText('Task details', { exact: true }).click();
   await expect(

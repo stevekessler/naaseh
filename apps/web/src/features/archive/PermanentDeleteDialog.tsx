@@ -34,6 +34,9 @@ export function PermanentDeleteDialog({
       [target.resourceId],
     ) ?? 0;
   const cancel = useRef<HTMLButtonElement>(null);
+  const relatedContentCount = preview
+    ? (preview.dependentCounts.listItems ?? 0) + (preview.dependentCounts.attachments ?? 0)
+    : 0;
   useEffect(() => {
     if (open) cancel.current?.focus();
   }, [open, preview]);
@@ -81,12 +84,11 @@ export function PermanentDeleteDialog({
           <section role="dialog" aria-modal="true" aria-labelledby={`delete-${target.resourceId}`}>
             <h2 id={`delete-${target.resourceId}`}>Permanently delete {label}?</h2>
             <p>This cannot be undone. There is no recycle bin, and the item cannot be restored.</p>
-            {preview && (
+            {preview && relatedContentCount > 0 && (
               <>
                 <p>
-                  This will also remove{' '}
-                  {Object.values(preview.dependentCounts).reduce((sum, value) => sum + value, 0)}{' '}
-                  dependent records.
+                  This also removes {relatedContentCount} attached or contained{' '}
+                  {relatedContentCount === 1 ? 'item' : 'items'}.
                 </p>
                 {preview.blockers.length > 0 && (
                   <div role="alert">

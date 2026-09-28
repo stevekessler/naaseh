@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTask, createListWithItem, signIn } from './enhanced-helpers.js';
+import { addTask, createListWithItem, openTaskSection, signIn } from './enhanced-helpers.js';
 
 test('@enhanced-lists All, Lists, and To-do lists search works online and offline without query disclosure', async ({
   page,
@@ -7,7 +7,7 @@ test('@enhanced-lists All, Lists, and To-do lists search works online and offlin
 }) => {
   await signIn(page);
   await createListWithItem(page, 'Saffron shopping', 'Saffron');
-  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await openTaskSection(page, 'My Tasks');
   await addTask(page, 'Saffron call');
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const filters = page.getByRole('region', { name: 'Search and filters' });

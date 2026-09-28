@@ -14,5 +14,6 @@ test('@enhanced-lists primary keyboard and touch journeys have no horizontal ove
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(1);
-  await expect(page.getByLabel('List total')).toBeVisible();
+  await expect(page.getByLabel('List total')).toHaveCount(0);
+  await expect(page.getByText(/\$0\.00/)).toHaveCount(0);
 });

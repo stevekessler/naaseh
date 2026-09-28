@@ -61,12 +61,18 @@ export async function saveEncryptedJournalProfile(
 ) {
   const now = new Date().toISOString();
   const mutationId = crypto.randomUUID();
+  const pendingProfiles = (
+    await db.secureJournalOutbox.where('ownerId').equals(ownerId).toArray()
+  ).filter((row) => (row.value as JournalMutation).entityType === 'journalProfile');
+  const effectiveBaseVersion = pendingProfiles.length
+    ? (pendingProfiles[0]!.value as JournalMutation).baseVersion
+    : baseVersion;
   await db.transaction('rw', db.secureJournalProfiles, db.secureJournalOutbox, async () => {
     await db.secureJournalProfiles.put({
       id: `journal-profile:${ownerId}`,
       ownerId,
       entityType: 'journalProfile',
-      version: baseVersion,
+      version: effectiveBaseVersion,
       updatedAt: now,
       value: envelope,
     });
@@ -81,11 +87,12 @@ export async function saveEncryptedJournalProfile(
         entityType: 'journalProfile',
         operation: 'upsert',
         entityId: 'journal-profile',
-        baseVersion,
+        baseVersion: effectiveBaseVersion,
         payload: envelope,
         createdAt: now,
       },
     });
+    await db.secureJournalOutbox.bulkDelete(pendingProfiles.map((row) => row.id));
   });
 }
 

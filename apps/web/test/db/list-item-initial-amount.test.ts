@@ -53,16 +53,16 @@ beforeEach(() => {
   state.failOnce = false;
 });
 
-describe('initial list-item amount', () => {
-  it('persists name and signed amount in the same item and outbox mutation', async () => {
+describe('list-item creation without money', () => {
+  it('discards legacy amount input and stores a name-only item', async () => {
     const item = await addLocalListItem(
       '01J00000000000000000000001',
       { name: 'Refund', amountMinor: 525 },
       'owner',
     );
-    expect(item.directorySnapshot).toMatchObject({ name: 'Refund', amountMinor: 525 });
+    expect(item.directorySnapshot).toMatchObject({ name: 'Refund', amountMinor: null });
     expect([...state.outbox.values()][0].payload).toMatchObject({
-      directorySnapshot: { name: 'Refund', amountMinor: 525 },
+      directorySnapshot: { name: 'Refund', amountMinor: null },
     });
   });
 
