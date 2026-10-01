@@ -210,7 +210,10 @@ export function CompletionDashboard({
         <p role="status">Offline · showing previously synchronized report</p>
       ) : null}
       {reportState?.lastSyncedAt ? (
-        <p>Last synchronized {new Date(reportState.lastSyncedAt).toLocaleString()}</p>
+        <p>
+          Last synchronized{' '}
+          {new Date(reportState.lastSyncedAt).toLocaleString('en-US', { hour12: true })}
+        </p>
       ) : null}
       {reportState?.pendingUrgencyChanges ? (
         <p role="status">

@@ -193,7 +193,6 @@ export function TaskForm({
           <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
         </label>
         <DueDateField
-          task={task}
           nestedDialog={nestedDialogs}
           dueKind={dueKind}
           dueDate={dueDate}

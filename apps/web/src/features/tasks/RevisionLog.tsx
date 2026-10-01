@@ -38,8 +38,8 @@ export function RevisionLog({ revisions }: { revisions: TaskRevision[] }) {
       {visible.map((item) => (
         <li key={item.id}>
           {item.operation} by {item.actorId} at{' '}
-          <time>{new Date(item.changedAt).toLocaleString()}</time> — {item.changedFields.join(', ')}
-          . Sync: {item.syncOutcome}
+          <time>{new Date(item.changedAt).toLocaleString('en-US', { hour12: true })}</time> —{' '}
+          {item.changedFields.join(', ')}. Sync: {item.syncOutcome}
           {item.sourceClientId ? `; client ${item.sourceClientId}` : ''}
           <UrgencyRevision revision={item} />
           {item.before ? (

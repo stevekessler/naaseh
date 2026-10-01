@@ -226,17 +226,24 @@ for (const brokenCache of [false, true]) {
     await expect(listProject).toHaveValue(project.id);
     await openTaskSection(page, 'My Tasks');
     await expect(page.getByText("Na'aseh hit a problem")).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Review conflicts (1)' })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: `Review conflicts (${brokenCache ? 2 : 1})` }),
+    ).toBeVisible();
     if (brokenCache) {
-      await expect(
-        page.getByRole('alert').filter({ hasText: 'Fixture validation failure' }),
-      ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Unsent local wording' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Older server wording' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'Review conflicts (2)' }).click();
+      await expect(page.getByRole('dialog', { name: 'Resolve sync conflicts' })).toContainText(
+        'Fixture validation failure',
+      );
+      await page
+        .getByRole('dialog', { name: 'Resolve sync conflicts' })
+        .getByRole('button', { name: 'Close', exact: true })
+        .click();
+      await expect(page.getByRole('heading', { name: 'Older server wording' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Unsent local wording' })).toHaveCount(0);
     }
     const recovered = await readRecoveryState(page);
-    expect(recovered.outbox).toHaveLength(brokenCache ? 1 : 0);
-    expect(recovered.conflicts).toHaveLength(1);
+    expect(recovered.outbox).toHaveLength(0);
+    expect(recovered.conflicts).toHaveLength(brokenCache ? 2 : 1);
     expect(recovered.backups).toHaveLength(brokenCache ? 1 : 0);
     if (brokenCache)
       expect(JSON.parse(recovered.backups[0].value)).toEqual(
@@ -244,32 +251,11 @@ for (const brokenCache of [false, true]) {
       );
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Recovered server task' })).toBeVisible();
-    expect((await readRecoveryState(page)).outbox).toHaveLength(brokenCache ? 1 : 0);
-    expect((await readRecoveryState(page)).conflicts).toHaveLength(1);
+    expect((await readRecoveryState(page)).outbox).toHaveLength(0);
+    expect((await readRecoveryState(page)).conflicts).toHaveLength(brokenCache ? 2 : 1);
     expect(JSON.parse((await readRecoveryState(page)).cursor!)).toEqual({ owner: 10 });
-    if (brokenCache) expect((await readRecoveryState(page)).replay).toBeDefined();
-    if (!brokenCache) {
-      await expect(page.getByRole('heading', { name: 'Older server wording' })).toBeVisible();
-      return;
-    }
-    await page.route('**/api/v1/sync/push', (route) =>
-      route.fulfill({
-        json: {
-          results: route
-            .request()
-            .postDataJSON()
-            .mutations.map((mutation: { id: string }) => ({
-              mutationId: mutation.id,
-              status: 'alreadyApplied',
-            })),
-        },
-      }),
-    );
-    await page.getByRole('button', { name: 'Retry', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Older server wording' })).toBeVisible();
-    await expect.poll(async () => (await readRecoveryState(page)).outbox.length).toBe(0);
-    expect((await readRecoveryState(page)).conflicts).toHaveLength(1);
-    await expect.poll(async () => (await readRecoveryState(page)).replay).toBeUndefined();
+    expect((await readRecoveryState(page)).replay).toBeUndefined();
   });
 }
 

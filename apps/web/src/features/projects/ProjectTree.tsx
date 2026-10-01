@@ -73,7 +73,9 @@ export function ProjectTree({
     <section className="projects-page" aria-labelledby="projects-heading">
       <header className="welcome projects-header">
         <div>
-          <p className="eyebrow">Workload as of {new Date(tree.asOf).toLocaleString()}</p>
+          <p className="eyebrow">
+            Workload as of {new Date(tree.asOf).toLocaleString('en-US', { hour12: true })}
+          </p>
           <h1 id="projects-heading">Categories and Projects</h1>
           <p className="projects-intro">
             See where active work is concentrated and what comes next.

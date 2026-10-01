@@ -104,6 +104,7 @@ export async function resolveReviewedConflict(
           db.secureProjects,
           db.secureTasks,
           db.secureLists,
+          db.secureListItems,
           db.outbox,
         ],
         async () => {
@@ -130,6 +131,8 @@ export async function resolveReviewedConflict(
               );
             await db.secureProjects.delete(mutation.entityId);
           }
+          if (mutation?.entityType === 'listItem' && conflict.reason === 'hard_deleted')
+            await db.secureListItems.delete(mutation.entityId);
           await db.settings.put({ key: 'pending-sync-replay-cursor', value: '{}' });
           await db.secureConflicts.delete(conflict.id);
         },
