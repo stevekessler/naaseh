@@ -55,6 +55,8 @@ export function TaskListPage({
         onToggle={onToggle}
         onSelect={onSelect}
         onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
+        categories={categories}
+        projects={projects}
         {...(currentUserId ? { currentUserId } : {})}
       />
       {selected && (
@@ -67,6 +69,13 @@ export function TaskListPage({
             parentTasks={parentTasks}
             save={(patch) => onUpdate(selected, patch)}
             close={onClose}
+            primaryContent={
+              <AttachmentPanelForParent
+                parentType="task"
+                parentId={selected.id}
+                csrfToken={csrfToken}
+              />
+            }
             secondaryContent={
               <section
                 className="task-detail-actions"
@@ -83,11 +92,6 @@ export function TaskListPage({
                 <SubtaskTree parentId={selected.id} tasks={tasks} edit={onSelect} />
                 <h3>Revision history</h3>
                 <RevisionLog revisions={revisions} />
-                <AttachmentPanelForParent
-                  parentType="task"
-                  parentId={selected.id}
-                  csrfToken={csrfToken}
-                />
               </section>
             }
           />

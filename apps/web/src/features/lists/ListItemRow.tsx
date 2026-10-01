@@ -2,6 +2,7 @@ import type { ListItem } from '@naaseh/domain';
 import { useEffect, useState } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
 import type { NewListItem } from './ListItems.js';
+import { formatCalendarDate } from '../tasks/due-value.js';
 export function ListItemRow({
   item,
   name,
@@ -49,7 +50,7 @@ export function ListItemRow({
       </div>
       {(item.dueDate || item.memo) && (
         <div className="list-item-details">
-          {item.dueDate && <small>Due {item.dueDate}</small>}
+          {item.dueDate && <small>Due {formatCalendarDate(item.dueDate)}</small>}
           {item.memo && <p>{item.memo}</p>}
         </div>
       )}

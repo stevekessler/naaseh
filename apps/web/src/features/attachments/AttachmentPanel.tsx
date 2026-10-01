@@ -13,12 +13,14 @@ export function AttachmentPanel({
   parentId,
   items,
   csrfToken,
+  awaitingParentSync = false,
   changed,
 }: {
   parentType: 'task' | 'listItem';
   parentId: string;
   items: Attachment[];
   csrfToken: string;
+  awaitingParentSync?: boolean;
   changed: () => void;
 }) {
   const [progress, setProgress] = useState<number>();
@@ -63,7 +65,7 @@ export function AttachmentPanel({
         <input
           type="file"
           accept="application/pdf,image/jpeg,image/png,text/plain,text/csv"
-          disabled={!online || active.length >= 10}
+          disabled={!online || awaitingParentSync || active.length >= 10}
           onChange={(event) => {
             const input = event.currentTarget;
             const file = event.target.files?.[0];
@@ -85,6 +87,9 @@ export function AttachmentPanel({
         />
       </label>
       {!online && <p>Connect to the internet to attach or download files.</p>}
+      {awaitingParentSync && (
+        <p role="status">Syncing this new task before its files can be uploaded…</p>
+      )}
       {progress !== undefined && (
         <progress max={100} value={progress}>
           Uploading {progress}%

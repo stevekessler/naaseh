@@ -14,6 +14,23 @@ export function timeOptionsForTask(dueAt?: string) {
   return values.includes(legacy) ? values : [legacy, ...values];
 }
 
+export function formatCalendarDate(value: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${Number(match[2])}/${Number(match[3])}/${match[1]}` : value;
+}
+
+export function formatDueValue(dueAt?: string, dueDate?: string) {
+  if (dueAt)
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(dueAt));
+  return dueDate ? formatCalendarDate(dueDate) : '';
+}
+
 export { instantToLocalDue, localDueToInstant };
 
 export function useBrowserTimeZone() {

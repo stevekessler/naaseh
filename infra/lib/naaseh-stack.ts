@@ -57,12 +57,17 @@ export class NaasehStack extends Stack {
       primaryKey: dataKey,
       allowedOrigin: `https://${props.domainName}`,
     });
+    const exportResources = createExportResources(this, {
+      table,
+      allowedOrigin: `https://${props.domainName}`,
+    });
     const { distribution, responseHeadersPolicy } = createWebResources(this, {
       certificateArn: props.certificateArn,
       domainName: props.domainName,
       webAclArn: props.webAclArn,
       webAssetPath: props.webAssetPath,
       mediaOrigin: `https://${media.bucketRegionalDomainName}`,
+      exportOrigin: `https://${exportResources.bucket.bucketRegionalDomainName}`,
     });
     const zone = route53.HostedZone.fromHostedZoneAttributes(this, 'HostedZone', {
       hostedZoneId: props.hostedZoneId,
@@ -80,10 +85,6 @@ export class NaasehStack extends Stack {
       if (recordType === 'A') new route53.ARecord(this, id, common);
       else new route53.AaaaRecord(this, id, common);
     }
-    const exportResources = createExportResources(this, {
-      table,
-      allowedOrigin: `https://${props.domainName}`,
-    });
     const commonEnvironment = {
       NODE_ENV: 'production',
       NAASEH_TABLE: table.tableName,

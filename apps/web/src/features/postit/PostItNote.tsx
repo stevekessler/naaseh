@@ -3,15 +3,19 @@ import { UserAvatar } from '../profile/user-directory.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 import type { Task } from '@naaseh/domain';
 import { resolvePostItPalette } from '../../styles/category-color.js';
-import { useBrowserTimeZone } from '../tasks/due-value.js';
-import { MemoDocumentView } from '../memos/MemoDocumentView.js';
+import { formatDueValue, useBrowserTimeZone } from '../tasks/due-value.js';
+import { LinkifiedText, MemoDocumentView } from '../memos/MemoDocumentView.js';
 import { overdue } from '../../notifications/local-reminders.js';
+import { CompactLink } from '../../components/CompactLink.js';
+import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 
 export function PostItNote({
   task,
   color = '#fff2a8',
   animating = false,
   assigneeName,
+  categoryName,
+  currentUserId,
   complete,
   edit,
 }: {
@@ -19,6 +23,8 @@ export function PostItNote({
   color?: string;
   animating?: boolean;
   assigneeName?: string | undefined;
+  categoryName?: string | undefined;
+  currentUserId?: string | undefined;
   complete: () => void;
   edit?: () => void;
 }) {
@@ -56,14 +62,7 @@ export function PostItNote({
       </h2>
       {(task.dueAt || task.dueDate) && (
         <small className="postit-due">
-          {task.dueAt
-            ? new Date(task.dueAt).toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'numeric',
-                day: 'numeric',
-                ...(overdue(task) ? { hour: 'numeric', minute: '2-digit' } : {}),
-              })
-            : task.dueDate}
+          {formatDueValue(task.dueAt, task.dueDate)}
           {overdue(task) && (
             <>
               {' '}
@@ -81,6 +80,9 @@ export function PostItNote({
           showName
         />
       </div>
+      {categoryName ? <span className="postit-category">{categoryName}</span> : null}
+      {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} compact /> : null}
+      {task.link ? <CompactLink className="postit-link" href={task.link} /> : null}
       {edit ? (
         <button type="button" className="quiet" aria-label={`Edit ${task.label}`} onClick={edit}>
           Edit
@@ -91,7 +93,11 @@ export function PostItNote({
         (task.memoDocument ? (
           <MemoDocumentView document={task.memoDocument} />
         ) : (
-          task.memo && <p>{task.memo}</p>
+          task.memo && (
+            <p>
+              <LinkifiedText text={task.memo} />
+            </p>
+          )
         ))}
     </article>
   );

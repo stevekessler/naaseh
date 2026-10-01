@@ -128,6 +128,7 @@ import type {
   CompletionReportState,
 } from '../features/reports/CompletionDashboard.js';
 import { mergeAssigneeOptions, type AssigneeOption } from '../components/AssigneePicker.js';
+import { orderTasksForList } from '../features/tasks/task-view-state.js';
 
 const ArchivePage = lazy(() =>
   import('../features/archive/ArchivePage.js').then(({ ArchivePage }) => ({
@@ -198,6 +199,10 @@ const emptyFilters: Filters = {
   urgencies: [],
   progress: 'all',
 };
+
+export const protectedSessionRevalidationAfterMs = 15 * 60 * 1_000;
+export const shouldRevalidateProtectedSession = (hiddenAt: number | undefined, now = Date.now()) =>
+  hiddenAt !== undefined && now - hiddenAt >= protectedSessionRevalidationAfterMs;
 
 async function searchBasisHash(query: string) {
   const normalized = normalizeSearch(query);
@@ -486,6 +491,13 @@ export function App() {
           : Promise.resolve([]),
       [session?.userId, eligibleStackWork],
     ) ?? [];
+  const overallStackState = useLiveQuery(
+    () =>
+      session
+        ? readLocalStack(session.userId, { scopeType: 'overall' })
+        : Promise.resolve(undefined),
+    [session?.userId, overallRankedStackItems],
+  );
   const rankedStackItems = useMemo(
     () =>
       allRankedStackItems.filter(({ work }) =>
@@ -563,11 +575,25 @@ export function App() {
   const signingOutRef = useRef(false);
   const syncing = useRef(false);
   const validatingSession = useRef(false);
+  const hiddenAt = useRef<number | undefined>(undefined);
   const syncRetryTimer = useRef<number | undefined>(undefined);
-  const visible = useMemo(
-    () => filterTasks(tasks, section === 'tasks' && taskTab === 'all' ? emptyFilters : filters),
-    [tasks, filters, section, taskTab],
-  );
+  const visible = useMemo(() => {
+    const filtered = filterTasks(
+      tasks,
+      section === 'tasks' && taskTab === 'all' ? emptyFilters : filters,
+    );
+    const storedTaskIds = new Set(
+      (overallStackState?.work ?? [])
+        .filter((reference) => reference.workType === 'task')
+        .map((reference) => reference.workId),
+    );
+    const ranks = new Map(
+      overallRankedStackItems
+        .filter(({ work }) => work.reference.workType === 'task')
+        .map(({ work, rank }) => [work.reference.workId, rank.overallPosition]),
+    );
+    return orderTasksForList(filtered, storedTaskIds, ranks);
+  }, [tasks, filters, section, taskTab, overallStackState, overallRankedStackItems]);
   useEffect(() => {
     if (section !== 'dashboard' || !session) return;
     let active = true;
@@ -698,14 +724,7 @@ export function App() {
     void loadView().then(setView);
   }, []);
   useEffect(() => {
-    const mobile = window.matchMedia('(max-width: 900px)');
     const updateHeader = () => {
-      if (!mobile.matches) {
-        if (headerExpandTimer.current !== undefined) window.clearTimeout(headerExpandTimer.current);
-        headerExpandTimer.current = undefined;
-        setHeaderCollapsed(false);
-        return;
-      }
       setHeaderCollapsed((collapsed) => {
         if (!collapsed) return window.scrollY > 96;
         if (window.scrollY > 16) {
@@ -726,10 +745,8 @@ export function App() {
     };
     updateHeader();
     window.addEventListener('scroll', updateHeader, { passive: true });
-    mobile.addEventListener('change', updateHeader);
     return () => {
       window.removeEventListener('scroll', updateHeader);
-      mobile.removeEventListener('change', updateHeader);
       if (headerExpandTimer.current !== undefined) window.clearTimeout(headerExpandTimer.current);
     };
   }, []);
@@ -878,9 +895,14 @@ export function App() {
   }, [session?.userId, synchronize, revalidateSession, section]);
   useEffect(() => {
     const visible = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt.current = Date.now();
+        return;
+      }
       if (document.visibilityState !== 'visible') return;
       if (session?.userId === 'local-steve') void synchronize();
-      else void revalidateSession();
+      else if (shouldRevalidateProtectedSession(hiddenAt.current)) void revalidateSession();
+      hiddenAt.current = undefined;
     };
     document.addEventListener('visibilitychange', visible);
     return () => {
@@ -1620,6 +1642,8 @@ export function App() {
                   categories={categories}
                   projects={projects}
                   assignees={assignees}
+                  currentUserId={session.userId}
+                  csrfToken={session.csrfToken}
                   onToggle={toggle}
                   onUpdate={async (task, patch) => {
                     await completionUndo.save(task, patch, session.userId);

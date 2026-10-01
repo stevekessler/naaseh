@@ -22,8 +22,8 @@ import {
 } from '../../components/AssigneePicker.js';
 import { CategoryPicker } from '../../components/CategoryPicker.js';
 import { ReferenceCombobox } from '../../components/ReferenceCombobox.js';
-import { timeOptionsForTask } from './due-value.js';
 import { postItPalette } from '../../styles/category-color.js';
+import { DueDateField } from './DueDateField.js';
 
 const MemoEditor = lazy(() =>
   import('../memos/MemoEditor.js').then(({ MemoEditor }) => ({ default: MemoEditor })),
@@ -80,6 +80,7 @@ export function TaskForm({
   defaultAssigneeId,
   submitLabel = task ? 'Save changes' : 'Add task',
   cancel,
+  nestedDialogs = false,
 }: {
   save: (task: TaskInput) => Promise<void>;
   task?: Task;
@@ -92,6 +93,7 @@ export function TaskForm({
   defaultAssigneeId?: string;
   submitLabel?: string;
   cancel?: () => void;
+  nestedDialogs?: boolean;
 }) {
   const [urgency, setUrgency] = useState<Urgency>(task?.urgency ?? defaultUrgency);
   const initialCategoryId =
@@ -185,6 +187,64 @@ export function TaskForm({
         Task label
         <input name="label" required maxLength={300} defaultValue={task?.label} />
       </label>
+      <div className="task-quick-fields">
+        <label>
+          Priority
+          <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
+        </label>
+        <DueDateField
+          task={task}
+          nestedDialog={nestedDialogs}
+          dueKind={dueKind}
+          dueDate={dueDate}
+          dueTime={dueTime}
+          onChange={(next) => {
+            setDueKind(next.dueKind);
+            setDueDate(next.dueDate);
+            setDueTime(next.dueTime);
+          }}
+        />
+        <label>
+          Category
+          <CategoryPicker
+            categories={categories}
+            includeArchived={Boolean(task)}
+            value={categoryId}
+            onChange={(nextCategoryId) => {
+              setCategoryId(nextCategoryId);
+              if (!task && !assigneeTouched)
+                setAssigneeId(
+                  categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
+                );
+              if (
+                projectId &&
+                projects.find((project) => project.id === projectId)?.categoryId !== nextCategoryId
+              )
+                setProjectId('');
+            }}
+          />
+        </label>
+        <ProjectPicker
+          categories={categories}
+          projects={projects}
+          includeArchived={Boolean(task)}
+          categoryId={categoryId}
+          value={projectId}
+          onChange={(nextProjectId) => {
+            setProjectId(nextProjectId);
+            const nextCategoryId = projects.find(
+              (project) => project.id === nextProjectId,
+            )?.categoryId;
+            if (nextCategoryId) {
+              setCategoryId(nextCategoryId);
+              if (!task && !assigneeTouched)
+                setAssigneeId(
+                  categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
+                );
+            }
+          }}
+        />
+      </div>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
         <summary>Task details</summary>
         <label>{task?.memoHidden ? '🔒 Private notes' : 'Memo'}</label>
@@ -219,44 +279,6 @@ export function TaskForm({
             </span>
           </label>
           <label>
-            Priority
-            <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
-          </label>
-          <label>
-            Due
-            <select
-              value={dueKind}
-              onChange={(event) => setDueKind(event.target.value as typeof dueKind)}
-            >
-              <option value="none">No due date</option>
-              <option value="date">Date only</option>
-              <option value="timed">Date and time</option>
-            </select>
-          </label>
-          {dueKind !== 'none' && (
-            <label>
-              Due date
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-                required
-              />
-            </label>
-          )}
-          {dueKind === 'timed' && (
-            <label>
-              Due time
-              <select value={dueTime} onChange={(event) => setDueTime(event.target.value)}>
-                {timeOptionsForTask(task?.dueAt).map((time) => (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          <label>
             Task assignee
             <AssigneePicker
               assignees={assignees}
@@ -268,47 +290,6 @@ export function TaskForm({
               }}
             />
           </label>
-          <label>
-            Category
-            <CategoryPicker
-              categories={categories}
-              includeArchived={Boolean(task)}
-              value={categoryId}
-              onChange={(nextCategoryId) => {
-                setCategoryId(nextCategoryId);
-                if (!task && !assigneeTouched)
-                  setAssigneeId(
-                    categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
-                  );
-                if (
-                  projectId &&
-                  projects.find((project) => project.id === projectId)?.categoryId !==
-                    nextCategoryId
-                )
-                  setProjectId('');
-              }}
-            />
-          </label>
-          <ProjectPicker
-            categories={categories}
-            projects={projects}
-            includeArchived={Boolean(task)}
-            categoryId={categoryId}
-            value={projectId}
-            onChange={(nextProjectId) => {
-              setProjectId(nextProjectId);
-              const nextCategoryId = projects.find(
-                (project) => project.id === nextProjectId,
-              )?.categoryId;
-              if (nextCategoryId) {
-                setCategoryId(nextCategoryId);
-                if (!task && !assigneeTouched)
-                  setAssigneeId(
-                    categoryDefaultAssignee(nextCategoryId, categories, defaultAssigneeId),
-                  );
-              }
-            }}
-          />
           <ReferenceCombobox
             label="Group"
             name="group"

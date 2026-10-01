@@ -1,4 +1,4 @@
-import type { Task } from '@naaseh/domain';
+import type { CategoryRecord, Project, Task } from '@naaseh/domain';
 import { TaskRow } from './TaskRow.js';
 export function TaskList({
   tasks,
@@ -6,12 +6,16 @@ export function TaskList({
   onSelect = () => {},
   onProgressChange,
   currentUserId,
+  categories = [],
+  projects = [],
 }: {
   tasks: Task[];
   onToggle: (task: Task) => void;
   onSelect?: (task: Task) => void;
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
+  categories?: readonly CategoryRecord[];
+  projects?: readonly Project[];
 }) {
   if (!tasks.length)
     return (
@@ -26,7 +30,10 @@ export function TaskList({
         <colgroup>
           <col className="task-status-column" />
           <col className="task-name-column" />
+          <col className="task-project-column" />
+          <col className="task-category-column" />
           <col className="task-memo-column" />
+          <col className="task-link-column" />
           <col className="task-due-column" />
           <col className="task-priority-column" />
           <col className="task-assignee-column" />
@@ -38,7 +45,10 @@ export function TaskList({
               <span className="visually-hidden">Status</span>
             </th>
             <th scope="col">Task</th>
+            <th scope="col">Project</th>
+            <th scope="col">Category</th>
             <th scope="col">Memo</th>
+            <th scope="col">Link</th>
             <th scope="col">Due</th>
             <th scope="col">
               <span className="visually-hidden">Priority</span>
@@ -48,16 +58,22 @@ export function TaskList({
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task) => (
-            <TaskRow
-              key={task.id}
-              task={task}
-              onToggle={onToggle}
-              onSelect={onSelect}
-              onProgressChange={onProgressChange}
-              {...(currentUserId ? { currentUserId } : {})}
-            />
-          ))}
+          {tasks.map((task) => {
+            const project = projects.find((candidate) => candidate.id === task.projectId);
+            const categoryId = task.categoryId ?? project?.categoryId;
+            return (
+              <TaskRow
+                key={task.id}
+                task={task}
+                onToggle={onToggle}
+                onSelect={onSelect}
+                onProgressChange={onProgressChange}
+                categoryName={categories.find((category) => category.id === categoryId)?.name}
+                projectName={project?.name}
+                {...(currentUserId ? { currentUserId } : {})}
+              />
+            );
+          })}
         </tbody>
       </table>
     </div>

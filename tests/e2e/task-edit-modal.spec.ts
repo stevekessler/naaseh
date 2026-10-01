@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTask, expandTaskDetails, signIn } from './enhanced-helpers.js';
+import { addTask, expandTaskDetails, setTaskDueDate, signIn } from './enhanced-helpers.js';
 
 test('task editing opens in a modal and restores context', async ({ page }) => {
   await signIn(page);
@@ -39,15 +39,11 @@ test('edits rich memo and five-minute due time atomically', async ({ page }) => 
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Timed task');
   await expandTaskDetails(form);
-  await form.getByLabel('Due').selectOption('timed');
-  await form.getByLabel('Due date', { exact: true }).fill('2026-08-15');
-  await form.getByRole('combobox', { name: 'Due time', exact: true }).selectOption('10:05');
+  await setTaskDueDate(form, '2026-08-15', '10:05');
   await form.getByRole('button', { name: 'Add task' }).click();
   await page.getByRole('button', { name: 'Timed task', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit task' });
-  await expect(dialog.getByRole('combobox', { name: 'Due time', exact: true })).toHaveValue(
-    '10:05',
-  );
+  await expect(dialog.getByRole('button', { name: /Change due date/ })).toContainText('10:05 AM');
   await dialog.getByRole('textbox', { name: 'Memo', exact: true }).fill('Important memo');
   await dialog.getByRole('button', { name: 'Bold' }).click();
   await dialog.getByRole('button', { name: 'Save changes' }).click();

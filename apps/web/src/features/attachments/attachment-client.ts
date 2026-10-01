@@ -30,6 +30,13 @@ export function attachmentMediaType(file: Pick<File, 'name' | 'type'>) {
 }
 export const uploadProgressPercent = (loaded: number, total: number) =>
   total > 0 ? Math.min(100, Math.max(0, Math.round((loaded / total) * 100))) : 0;
+async function responseProblem(response: Response, fallback: string) {
+  const problem = (await response.json().catch(() => undefined)) as
+    | { message?: string; correlationId?: string }
+    | undefined;
+  const reference = problem?.correlationId ? ` Reference: ${problem.correlationId}` : '';
+  return `${problem?.message ?? `${fallback} (${response.status})`}${reference}`;
+}
 function putWithProgress(
   url: string,
   headers: Record<string, string>,
@@ -47,7 +54,7 @@ function putWithProgress(
     request.onabort = () => reject(new Error('The encrypted upload was cancelled.'));
     request.onload = () => {
       if (request.status < 200 || request.status >= 300) {
-        reject(new Error('The encrypted upload did not complete.'));
+        reject(new Error(`The encrypted upload did not complete (${request.status}).`));
         return;
       }
       resolve({
@@ -85,7 +92,8 @@ export async function uploadAttachment(
       checksumSha256,
     }),
   });
-  if (!initiate.ok) throw new Error('The attachment upload could not be started.');
+  if (!initiate.ok)
+    throw new Error(await responseProblem(initiate, 'The attachment upload could not be started'));
   const grant = (await initiate.json()) as {
     attachment: Attachment;
     uploadSessionId: string;
@@ -105,7 +113,8 @@ export async function uploadAttachment(
     },
     body: JSON.stringify({ objectVersionId: uploaded.versionId, etag: uploaded.etag }),
   });
-  if (!completed.ok) throw new Error('The uploaded file could not be verified.');
+  if (!completed.ok)
+    throw new Error(await responseProblem(completed, 'The uploaded file could not be verified'));
   const attachment = (await completed.json()) as Attachment;
   await cacheAttachmentMetadata(attachment);
   return attachment;

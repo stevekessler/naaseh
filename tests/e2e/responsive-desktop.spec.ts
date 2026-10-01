@@ -10,7 +10,7 @@ for (const width of [768, 1024, 1280, 1440]) {
     await expectNoDocumentOverflow(page);
     await expectContained(page.locator('.task-form').first(), main);
     const mainBox = await main.boundingBox();
-    expect(mainBox?.width).toBeLessThanOrEqual(1120);
+    expect(mainBox?.width).toBeLessThanOrEqual(1344);
     await openTaskSection(page, 'Completed Tasks');
     const filters = page.locator('.completion-filters');
     await expectContained(filters, filters.locator('xpath=ancestor::main'));

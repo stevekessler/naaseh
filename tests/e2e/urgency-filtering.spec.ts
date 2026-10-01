@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
-import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, setTaskDueDate, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -57,9 +57,7 @@ async function createFilteredTask(
   await form.getByLabel('Priority', { exact: true }).selectOption(input.urgency);
   await form.getByLabel('Project').selectOption(input.projectId);
   await form.getByLabel('Assignee').selectOption('local-steve');
-  await form.getByLabel('Due').selectOption('timed');
-  await form.locator('input[type="date"]').fill(input.dueAt.slice(0, 10));
-  await form.getByLabel('Due time').selectOption(input.dueAt.slice(11));
+  await setTaskDueDate(form, input.dueAt.slice(0, 10), input.dueAt.slice(11));
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: input.label })).toBeVisible();
 }

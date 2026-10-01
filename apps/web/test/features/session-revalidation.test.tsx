@@ -1,8 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { revalidateProtectedSession } from '../../src/features/auth/session.js';
+import {
+  protectedSessionRevalidationAfterMs,
+  shouldRevalidateProtectedSession,
+} from '../../src/app/App.js';
 
 describe('protected session revalidation', () => {
   it('locks before validation and purges revoked data before exposing signed-out UI', async () => {
+    expect(
+      shouldRevalidateProtectedSession(1_000, 1_000 + protectedSessionRevalidationAfterMs - 1),
+    ).toBe(false);
+    expect(
+      shouldRevalidateProtectedSession(1_000, 1_000 + protectedSessionRevalidationAfterMs),
+    ).toBe(true);
     const order: string[] = [];
     await revalidateProtectedSession({
       lock: () => order.push('lock'),
