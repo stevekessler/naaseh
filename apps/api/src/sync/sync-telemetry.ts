@@ -28,22 +28,14 @@ type DiagnosticResult = {
 const safeVersion = (value: unknown) =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 
-export function syncMutationDiagnosticFields(input: {
+function mutationDiagnosticFields(input: {
   mutation: DiagnosticMutation;
-  result: DiagnosticResult;
   actorRole: 'admin' | 'user';
   correlationId: string;
-  serverRecordPresent?: boolean;
 }) {
   const entityType = entityTypeSchema.safeParse(input.mutation.entityType);
   const operation = mutationOperationSchema.safeParse(input.mutation.operation);
-  const candidateReason = input.result.reason ?? input.result.problem?.reason;
-  const reason =
-    typeof candidateReason === 'string' && safeReasons.has(candidateReason)
-      ? candidateReason
-      : 'unknown';
   const baseVersion = safeVersion(input.mutation.baseVersion);
-  const serverVersion = safeVersion(input.result.entityVersion ?? input.result.currentVersion);
   return {
     correlationId: input.correlationId,
     entityType: entityType.success
@@ -52,6 +44,26 @@ export function syncMutationDiagnosticFields(input: {
         ? 'personalStackOperation'
         : 'unknown',
     mutationOperation: operation.success ? operation.data : 'unknown',
+    actorRole: input.actorRole,
+    ...(baseVersion === undefined ? {} : { baseVersion }),
+  };
+}
+
+export function syncMutationDiagnosticFields(input: {
+  mutation: DiagnosticMutation;
+  result: DiagnosticResult;
+  actorRole: 'admin' | 'user';
+  correlationId: string;
+  serverRecordPresent?: boolean;
+}) {
+  const candidateReason = input.result.reason ?? input.result.problem?.reason;
+  const reason =
+    typeof candidateReason === 'string' && safeReasons.has(candidateReason)
+      ? candidateReason
+      : 'unknown';
+  const serverVersion = safeVersion(input.result.entityVersion ?? input.result.currentVersion);
+  return {
+    ...mutationDiagnosticFields(input),
     outcome:
       input.result.status === 'conflict' ||
       input.result.status === 'rejected' ||
@@ -59,11 +71,9 @@ export function syncMutationDiagnosticFields(input: {
         ? input.result.status
         : 'unknown',
     reason,
-    actorRole: input.actorRole,
     ...(input.serverRecordPresent === undefined
       ? {}
       : { serverRecordPresent: input.serverRecordPresent }),
-    ...(baseVersion === undefined ? {} : { baseVersion }),
     ...(serverVersion === undefined ? {} : { serverVersion }),
   };
 }
@@ -72,4 +82,12 @@ export function recordSyncMutationOutcome(
   input: Parameters<typeof syncMutationDiagnosticFields>[0],
 ) {
   log('sync.mutation_outcome', syncMutationDiagnosticFields(input));
+}
+
+export function recordSyncMutationAttempt(input: {
+  mutation: DiagnosticMutation;
+  actorRole: 'admin' | 'user';
+  correlationId: string;
+}) {
+  log('sync.mutation_attempt', mutationDiagnosticFields(input));
 }

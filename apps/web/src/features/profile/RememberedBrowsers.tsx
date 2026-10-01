@@ -80,8 +80,8 @@ export function RememberedBrowsers({ csrfToken }: { csrfToken: string }) {
             <li key={device.id}>
               <strong>{device.label}</strong> {device.current && <span>(this browser)</span>}
               <p>
-                Last used {new Date(device.lastUsedAt).toLocaleString()} · Expires{' '}
-                {new Date(device.expiresAt).toLocaleString()}
+                Last used {new Date(device.lastUsedAt).toLocaleString('en-US', { hour12: true })} ·
+                Expires {new Date(device.expiresAt).toLocaleString('en-US', { hour12: true })}
               </p>
               <form onSubmit={(event) => void rename(event, device)}>
                 <label>

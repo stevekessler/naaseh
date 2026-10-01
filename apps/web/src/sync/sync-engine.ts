@@ -118,6 +118,21 @@ export function classifyMutationResults(results: MutationResult[]) {
 export const syncHttpError = (operation: string, status: number) =>
   new Error(`${operation} failed (${status}); pending changes remain safely stored.`);
 
+export async function syncHttpResponseError(operation: string, response: Response) {
+  const problem = (await response.json().catch(() => ({}))) as {
+    message?: unknown;
+    correlationId?: unknown;
+  };
+  const message = typeof problem.message === 'string' ? problem.message.trim() : '';
+  const correlationId =
+    typeof problem.correlationId === 'string' ? problem.correlationId.trim() : '';
+  const detail = message ? ` ${message}` : '';
+  const reference = correlationId ? ` Reference: ${correlationId}.` : '';
+  return new Error(
+    `${operation} failed (${response.status}).${detail}${reference} Pending changes remain safely stored.`,
+  );
+}
+
 export function shouldBootstrapTaskSnapshot(
   taskCount: number,
   pendingCount: number,
@@ -160,7 +175,7 @@ async function recoverMissingSnapshots(): Promise<void> {
     const response = await fetch('/api/v1/sync/bootstrap', {
       credentials: 'include',
     });
-    if (!response.ok) throw syncHttpError('Synchronization bootstrap', response.status);
+    if (!response.ok) throw await syncHttpResponseError('Synchronization bootstrap', response);
     const body = (await response.json()) as {
       tasks?: unknown[];
       taskTimer?: unknown;
@@ -370,7 +385,7 @@ async function pushMutation(
       ...(isStackMutation ? {} : { backlog }),
     }),
   });
-  if (!response.ok) throw syncHttpError('Synchronization push', response.status);
+  if (!response.ok) throw await syncHttpResponseError('Synchronization push', response);
   const body = (await response.json()) as { results: MutationResult[] };
   return body.results[0];
 }
@@ -425,10 +440,7 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
           }
           continue;
         }
-        if (
-          result.status === 'conflict' ||
-          (result.status === 'rejected' && ['category', 'project'].includes(item.entityType))
-        ) {
+        if (result.status === 'conflict' || result.status === 'rejected') {
           if (item.entityType === 'category') blockedCategoryIds.add(item.entityId);
           if (isStackMutation) {
             await conflictLocalStackOperation({
@@ -469,10 +481,6 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
           }
           continue;
         }
-        if (result.status === 'rejected')
-          throw new Error(
-            `A pending ${item.entityType} change was rejected and remains stored. Other tasks can still download.${result.problem?.message ? ` ${result.problem.message}` : ''}${result.problem?.correlationId ? ` Reference: ${result.problem.correlationId}` : ''}`,
-          );
         throw new Error(
           `The server could not sync a saved ${item.entityType} change. Your change remains saved on this device.${result.problem?.message ? ` ${result.problem.message}` : ''}${result.problem?.correlationId ? ` Reference: ${result.problem.correlationId}` : ''}`,
         );
@@ -493,7 +501,7 @@ export async function pullChanges(): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ contractVersion: 5, cursor: current }),
   });
-  if (!response.ok) throw syncHttpError('Synchronization pull', response.status);
+  if (!response.ok) throw await syncHttpResponseError('Synchronization pull', response);
   const body = (await response.json()) as {
     changes: Array<{
       entityType?: string;

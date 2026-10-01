@@ -72,7 +72,7 @@ import { applyCrisisPlanSyncMutation } from '../journal/crisis-plan-handler.js';
 import { journalMutationSchema } from '@naaseh/domain';
 import { DynamoJournalRepository } from '../journal/journal-repository.js';
 import { JournalService } from '../journal/journal-service.js';
-import { recordSyncMutationOutcome } from './sync-telemetry.js';
+import { recordSyncMutationAttempt, recordSyncMutationOutcome } from './sync-telemetry.js';
 const MAX_BODY_BYTES = 1_000_000;
 const journalRepository = new DynamoJournalRepository();
 const journalService = new JournalService(journalRepository);
@@ -243,6 +243,11 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     metric('SyncOldestPendingAge', oldestAgeSeconds, 'Seconds');
   }
   for (const [mutationIndex, mutation] of body.mutations.entries()) {
+    recordSyncMutationAttempt({
+      mutation,
+      actorRole: actor.role,
+      correlationId: event.requestContext.requestId,
+    });
     if (
       (mutation as { entityType?: string }).entityType === 'journalEntry' ||
       (mutation as { entityType?: string }).entityType === 'journalProfile'
@@ -568,9 +573,22 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           parent.ownerId !== actorId ||
           mutation.baseVersion !== (current?.version ?? 0)
         ) {
+          const missingPreviouslySavedItem = !current && mutation.baseVersion > 0;
           results.push({
             mutationId: mutation.id,
-            status: current ? 'conflict' : 'rejected',
+            status: current || missingPreviouslySavedItem ? 'conflict' : 'rejected',
+            ...(missingPreviouslySavedItem
+              ? {
+                  reason: 'hard_deleted',
+                  problem: {
+                    code: 'list_item_no_longer_exists',
+                    message:
+                      'This list item no longer exists on the server. Discard the saved device change.',
+                    reason: 'hard_deleted',
+                    correlationId: event.requestContext.requestId,
+                  },
+                }
+              : {}),
             entityVersion: current?.version,
           });
           continue;

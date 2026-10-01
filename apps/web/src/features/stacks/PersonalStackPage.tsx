@@ -46,6 +46,7 @@ export function formatStackSyncTime(
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
     timeZone,
     timeZoneName: 'short',
   }).format(new Date(value));

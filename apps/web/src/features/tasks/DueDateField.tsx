@@ -1,16 +1,18 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { Task } from '@naaseh/domain';
-import { formatCalendarDate, timeOptionsForTask } from './due-value.js';
+import {
+  formatCalendarDate,
+  splitTimeForDisplay,
+  timeFromDisplay,
+  type Meridiem,
+} from './due-value.js';
 
 export function DueDateField({
-  task,
   dueKind,
   dueDate,
   dueTime,
   onChange,
   nestedDialog = false,
 }: {
-  task?: Task | undefined;
   dueKind: 'none' | 'date' | 'timed';
   dueDate: string;
   dueTime: string;
@@ -41,10 +43,21 @@ export function DueDateField({
       ? `${formatCalendarDate(dueDate)} ${new Intl.DateTimeFormat('en-US', {
           hour: 'numeric',
           minute: '2-digit',
+          hour12: true,
         }).format(new Date(`2000-01-01T${dueTime}`))}`
       : dueDate
         ? formatCalendarDate(dueDate)
         : '';
+  const displayTime = splitTimeForDisplay(draftTime);
+  const updateDisplayTime = (next: Partial<typeof displayTime>) => {
+    setDraftTime(
+      timeFromDisplay(
+        next.hour ?? displayTime.hour,
+        next.minute ?? displayTime.minute,
+        next.meridiem ?? displayTime.meridiem,
+      ),
+    );
+  };
   return (
     <div className="due-date-field">
       <span>Due date</span>
@@ -83,36 +96,81 @@ export function DueDateField({
           }}
         >
           <div>
-            <h3 id={titleId}>Set due date</h3>
-            <label>
-              Due date
-              <input
-                type="date"
-                value={draftDate}
-                onChange={(event) => setDraftDate(event.target.value)}
-                required
-              />
-            </label>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={draftKind === 'timed'}
-                onChange={(event) => setDraftKind(event.target.checked ? 'timed' : 'date')}
-              />
-              Add a time
-            </label>
-            {draftKind === 'timed' ? (
+            <header>
+              <span aria-hidden="true">📅</span>
+              <div>
+                <h3 id={titleId}>Set due date</h3>
+                <p>Choose when this task should be due.</p>
+              </div>
+            </header>
+            <div className="due-date-dialog-fields">
               <label>
-                Due time
-                <select value={draftTime} onChange={(event) => setDraftTime(event.target.value)}>
-                  {timeOptionsForTask(task?.dueAt).map((time) => (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  ))}
-                </select>
+                Due date
+                <input
+                  type="date"
+                  value={draftDate}
+                  onChange={(event) => setDraftDate(event.target.value)}
+                  required
+                />
               </label>
-            ) : null}
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={draftKind === 'timed'}
+                  onChange={(event) => setDraftKind(event.target.checked ? 'timed' : 'date')}
+                />
+                Add a time
+              </label>
+              {draftKind === 'timed' ? (
+                <fieldset className="due-time-fields">
+                  <legend>Due time</legend>
+                  <label>
+                    <span>Hour</span>
+                    <select
+                      aria-label="Due time hour"
+                      value={displayTime.hour}
+                      onChange={(event) => updateDisplayTime({ hour: event.target.value })}
+                    >
+                      {Array.from({ length: 12 }, (_, index) => String(index + 1)).map((hour) => (
+                        <option key={hour} value={hour}>
+                          {hour}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <span aria-hidden="true">:</span>
+                  <label>
+                    <span>Minute</span>
+                    <select
+                      aria-label="Due time minute"
+                      value={displayTime.minute}
+                      onChange={(event) => updateDisplayTime({ minute: event.target.value })}
+                    >
+                      {Array.from({ length: 12 }, (_, index) =>
+                        String(index * 5).padStart(2, '0'),
+                      ).map((minute) => (
+                        <option key={minute} value={minute}>
+                          {minute}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>AM or PM</span>
+                    <select
+                      aria-label="Due time AM or PM"
+                      value={displayTime.meridiem}
+                      onChange={(event) =>
+                        updateDisplayTime({ meridiem: event.target.value as Meridiem })
+                      }
+                    >
+                      <option value="AM">AM</option>
+                      <option value="PM">PM</option>
+                    </select>
+                  </label>
+                </fieldset>
+              ) : null}
+            </div>
             <div className="dialog-actions">
               <button
                 type="button"

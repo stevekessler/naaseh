@@ -6,6 +6,7 @@ import { RevisionLog } from './RevisionLog.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from './TaskEditDialog.js';
+import { TaskColumnSettings, useTaskColumns } from './TaskColumnSettings.js';
 export function TaskListPage({
   tasks,
   loading = false,
@@ -40,6 +41,7 @@ export function TaskListPage({
   defaultAssigneeId?: string;
   currentUserId?: string;
 }) {
+  const columns = useTaskColumns();
   if (loading) return <p role="status">Loading tasks…</p>;
   if (error)
     return (
@@ -50,6 +52,12 @@ export function TaskListPage({
     );
   return (
     <>
+      <div className="task-list-toolbar">
+        <p>
+          {tasks.length} task{tasks.length === 1 ? '' : 's'}
+        </p>
+        <TaskColumnSettings {...columns} />
+      </div>
       <TaskList
         tasks={tasks}
         onToggle={onToggle}
@@ -57,6 +65,7 @@ export function TaskListPage({
         onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
         categories={categories}
         projects={projects}
+        visibleColumns={columns.visible}
         {...(currentUserId ? { currentUserId } : {})}
       />
       {selected && (

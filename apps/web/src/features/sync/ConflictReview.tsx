@@ -101,8 +101,12 @@ function ConflictItem({
     <article className="sync-conflict-item">
       <h3>{title}</h3>
       {conflict.createdAt && (
-        <p>Saved on this device: {new Date(conflict.createdAt).toLocaleString()}</p>
+        <p>
+          Saved on this device:{' '}
+          {new Date(conflict.createdAt).toLocaleString('en-US', { hour12: true })}
+        </p>
       )}
+      {conflict.message && <p className="sync-conflict-reason">{conflict.message}</p>}
       {isTask && (
         <>
           <p>

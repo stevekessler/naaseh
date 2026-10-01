@@ -194,7 +194,10 @@ export function ArchivePage({
                     </td>
                     <td>
                       {archivedAt ? (
-                        <time dateTime={archivedAt} title={new Date(archivedAt).toLocaleString()}>
+                        <time
+                          dateTime={archivedAt}
+                          title={new Date(archivedAt).toLocaleString('en-US', { hour12: true })}
+                        >
                           {formatArchiveDate(archivedAt)}
                         </time>
                       ) : (

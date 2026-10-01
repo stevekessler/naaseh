@@ -4,6 +4,7 @@ const logging = vi.hoisted(() => ({ log: vi.fn() }));
 vi.mock('@naaseh/observability', () => ({ log: logging.log }));
 
 import {
+  recordSyncMutationAttempt,
   recordSyncMutationOutcome,
   syncMutationDiagnosticFields,
 } from '../../src/sync/sync-telemetry.js';
@@ -11,6 +12,26 @@ import {
 beforeEach(() => logging.log.mockClear());
 
 describe('sync mutation diagnostics', () => {
+  it('logs safe mutation metadata before dependencies are called', () => {
+    recordSyncMutationAttempt({
+      mutation: {
+        entityType: 'listItem',
+        operation: 'complete',
+        baseVersion: 1,
+      },
+      actorRole: 'admin',
+      correlationId: 'request-attempt',
+    });
+
+    expect(logging.log).toHaveBeenCalledWith('sync.mutation_attempt', {
+      correlationId: 'request-attempt',
+      entityType: 'listItem',
+      mutationOperation: 'complete',
+      actorRole: 'admin',
+      baseVersion: 1,
+    });
+  });
+
   it('logs only allowlisted metadata for a missing project', () => {
     const mutation = {
       id: 'private-mutation-id',

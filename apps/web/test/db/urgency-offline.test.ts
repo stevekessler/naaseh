@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
   projects: new Map<string, Row>(),
   categories: new Map<string, Row>(),
   lists: new Map<string, Row>(),
+  listItems: new Map<string, Row>(),
   outbox: new Map<string, Row>(),
   conflicts: new Map<string, Row>(),
   settings: new Map<string, Row>(),
@@ -78,6 +79,7 @@ const database = vi.hoisted(() => {
     secureProjects: table(state.projects),
     secureCategories: table(state.categories),
     secureLists: table(state.lists),
+    secureListItems: table(state.listItems),
     outbox: table(state.outbox),
     secureConflicts: table(state.conflicts),
     settings: table(state.settings, 'key'),
@@ -157,6 +159,77 @@ beforeEach(() => {
 });
 
 describe('organization sync recovery', () => {
+  it('removes a locally cached list item when review confirms it was deleted on the server', async () => {
+    const entityId = 'list-item-1';
+    const conflictId = 'mutation-1';
+    state.listItems.set(entityId, { id: entityId, value: { ciphertext: 'saved-list-item' } });
+    const savedConflict = {
+      mutation: {
+        id: conflictId,
+        entityId,
+        entityType: 'listItem',
+        operation: 'complete',
+        baseVersion: 1,
+        payload: { status: 'completed' },
+        createdAt: '2026-09-19T00:00:00.000Z',
+        attempts: 4,
+      },
+      result: {
+        status: 'conflict',
+        reason: 'hard_deleted',
+        problem: {
+          code: 'list_item_no_longer_exists',
+          message: 'This list item no longer exists on the server.',
+          reason: 'hard_deleted',
+        },
+      },
+    };
+    state.conflicts.set(conflictId, {
+      id: conflictId,
+      updatedAt: '2026-10-01T22:34:00.000Z',
+      value: {
+        iv: 'test-iv',
+        ciphertext: Buffer.from(JSON.stringify(savedConflict)).toString('base64'),
+      },
+    });
+
+    const [conflict] = await listReviewConflicts();
+    await resolveReviewedConflict(conflict!, 'remote', undefined);
+
+    expect(state.listItems.has(entityId)).toBe(false);
+    expect(state.conflicts.size).toBe(0);
+  });
+
+  it('moves a rejected task change out of the retry queue and into review', async () => {
+    const task = await saveNewTask({ label: 'Stale device task' }, 'owner');
+    vi.mocked(fetch).mockImplementationOnce(async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { mutations: Array<{ id: string }> };
+      return new Response(
+        JSON.stringify({
+          results: body.mutations.map((mutation) => ({
+            mutationId: mutation.id,
+            status: 'rejected',
+            problem: { code: 'missing_server_record', message: 'The item no longer exists.' },
+          })),
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    });
+
+    await drainOutbox('csrf');
+
+    expect(state.outbox.size).toBe(0);
+    expect(state.conflicts.size).toBe(1);
+    expect((await listLocalTasks())[0]?.id).toBe(task.id);
+    expect(await listReviewConflicts()).toEqual([
+      expect.objectContaining({
+        reason: 'validation_failed',
+        code: 'missing_server_record',
+        message: 'The item no longer exists.',
+      }),
+    ]);
+  });
+
   it('moves a rejected project into review without deleting the local project', async () => {
     const category = await saveNewLocalCategory({ name: 'Work', color: '#336699' });
     await drainOutbox('csrf');

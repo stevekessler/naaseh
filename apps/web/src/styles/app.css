@@ -214,21 +214,107 @@
   font-size: 0.82rem;
 }
 .due-date-dialog {
-  width: min(28rem, calc(100vw - 2rem));
+  width: min(32rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
-  padding: 1.25rem;
-  border: 0;
-  border-radius: 14px;
+  padding: 0;
+  border: 1px solid #cbd6cf;
+  border-radius: 20px;
+  background: #f4f6f5;
+  box-shadow: 0 24px 70px rgb(9 35 63 / 28%);
 }
 .due-date-dialog::backdrop {
-  background: rgb(0 0 0 / 45%);
+  background: rgb(14 29 42 / 52%);
+  backdrop-filter: blur(2px);
 }
 .due-date-dialog > div {
   display: grid;
-  gap: 1rem;
+  gap: 1.1rem;
+  padding: clamp(1rem, 4vw, 1.5rem);
+}
+.due-date-dialog header {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.due-date-dialog header > span {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: #dfe9e2;
+  font-size: 1.35rem;
 }
 .due-date-dialog h3 {
   margin: 0;
+}
+.due-date-dialog header p {
+  margin: 0.15rem 0 0;
+  color: #5d6e64;
+  font-size: 0.9rem;
+}
+.due-date-dialog-fields {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid #d7e0da;
+  border-radius: 14px;
+  background: white;
+}
+.due-date-dialog-fields > label:not(.checkbox) {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 700;
+}
+.due-date-dialog input[type='date'],
+.due-date-dialog select {
+  width: 100%;
+  min-height: 3.25rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #9fb2a7;
+  border-radius: 11px;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 650;
+}
+.due-time-fields {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 1fr) auto minmax(4.5rem, 1fr) minmax(5.75rem, 1fr);
+  align-items: end;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.due-time-fields legend {
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+}
+.due-time-fields label {
+  display: grid;
+  gap: 0.25rem;
+}
+.due-time-fields label > span {
+  color: #5d6e64;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+.due-time-fields > span {
+  align-self: center;
+  padding-top: 1rem;
+  color: var(--navy);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.due-date-dialog .dialog-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+}
+.due-date-dialog .dialog-actions > :first-child {
+  width: 100%;
 }
 .form-grid {
   display: grid;
@@ -1181,11 +1267,98 @@ main {
   background: white;
   overscroll-behavior-inline: contain;
 }
+.task-list-toolbar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: #eef2ef;
+}
+.task-list-toolbar + .task-table-wrap {
+  border-radius: 0 0 14px 14px;
+}
+.task-list-toolbar > p {
+  margin: 0;
+  color: #526359;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+.task-column-settings {
+  position: relative;
+}
+.task-column-settings > summary {
+  min-height: 2.5rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #afbeb5;
+  border-radius: 10px;
+  background: white;
+  color: var(--navy);
+  cursor: pointer;
+  font-weight: 750;
+  list-style: none;
+}
+.task-column-settings > summary::before {
+  content: '☷ ';
+}
+.task-column-settings > summary::-webkit-details-marker {
+  display: none;
+}
+.task-column-settings > fieldset {
+  position: absolute;
+  z-index: 30;
+  inset-block-start: calc(100% + 0.4rem);
+  inset-inline-end: 0;
+  width: min(21rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid #c8d4cc;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 14px 38px rgb(14 42 64 / 20%);
+}
+.task-column-settings legend {
+  padding: 0;
+  font-weight: 800;
+}
+.task-column-settings fieldset > p {
+  margin: 0.15rem 0 0.8rem;
+  color: #607168;
+  font-size: 0.82rem;
+}
+.task-column-settings fieldset > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.8rem;
+  margin-bottom: 0.8rem;
+}
+.task-column-settings label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+}
 .task-list {
   width: 100%;
-  min-width: 84rem;
+  min-width: max(44rem, calc(var(--task-visible-columns) * 8rem));
   border-collapse: collapse;
   table-layout: fixed;
+}
+.task-list.hide-project :is(.task-project-column, .task-project-cell),
+.task-list.hide-category :is(.task-category-column, .task-category-cell),
+.task-list.hide-memo :is(.task-memo-column, .task-memo-cell),
+.task-list.hide-link :is(.task-link-column, .task-link-cell),
+.task-list.hide-due :is(.task-due-column, .task-due-cell),
+.task-list.hide-priority :is(.task-priority-column, .task-priority-cell),
+.task-list.hide-assignee :is(.task-assignee-column, .task-assignee-cell),
+.task-list.hide-actions :is(.task-actions-column, .task-actions-heading, .task-actions-cell) {
+  display: none;
 }
 .task-list .task-status-column {
   width: 3.5rem;
@@ -1521,11 +1694,13 @@ main {
   bottom: calc(100% + 0.35rem);
   left: 50%;
   width: max-content;
-  max-width: 10rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 0.45rem;
-  background: #173e33;
-  color: white;
+  max-width: min(18rem, calc(100vw - 2rem));
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #c5cfca;
+  border-radius: 0.7rem;
+  background: #eef1ef;
+  box-shadow: 0 10px 28px rgb(14 42 64 / 20%);
+  color: var(--navy);
   font-size: 0.78rem;
   font-weight: 700;
   line-height: 1.2;
@@ -1539,23 +1714,39 @@ main {
 }
 .progress-indicator-editor {
   display: grid;
-  width: 13rem;
-  gap: 0.45rem;
+  width: min(17rem, calc(100vw - 3.2rem));
+  gap: 0.65rem;
+  padding: 0.35rem;
   pointer-events: auto;
 }
 .progress-indicator-editor label {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  text-align: left;
+}
+.progress-indicator-editor input {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--navy);
 }
 .progress-indicator-editor button {
-  min-height: 2rem;
-  padding: 0.25rem 0.6rem;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.7rem;
+}
+.progress-indicator-tooltip[role='dialog'] {
+  left: 0;
+  transform: translateY(0.2rem);
 }
 .progress-indicator-button:focus-visible + .progress-indicator-tooltip,
 .progress-indicator.is-open .progress-indicator-tooltip {
   visibility: visible;
   opacity: 1;
   transform: translate(-50%, 0);
+}
+.progress-indicator.is-open .progress-indicator-tooltip[role='dialog'] {
+  transform: translateY(0);
 }
 @media (hover: hover) and (pointer: fine) {
   .progress-indicator-button:hover {
@@ -1792,7 +1983,18 @@ dialog input {
     grid-template-columns: minmax(8rem, 1fr) auto auto;
   }
 }
-@media (max-width: 480px) {
+@media (max-width: 640px) {
+  .progress-indicator-tooltip {
+    position: fixed;
+    inset: auto 1rem calc(1rem + var(--safe-bottom));
+    width: auto;
+    max-width: none;
+    transform: translateY(0.2rem);
+  }
+  .progress-indicator-button:focus-visible + .progress-indicator-tooltip,
+  .progress-indicator.is-open .progress-indicator-tooltip {
+    transform: translateY(0);
+  }
   .task-list {
     min-width: 0;
   }

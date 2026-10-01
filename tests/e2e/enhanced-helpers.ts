@@ -13,7 +13,11 @@ export async function setTaskDueDate(form: Locator, date: string, time?: string)
   await dialog.getByLabel('Due date', { exact: true }).fill(date);
   if (time) {
     await dialog.getByLabel('Add a time').check();
-    await dialog.getByLabel('Due time').selectOption(time);
+    const [hourText = '10', minute = '00'] = time.split(':');
+    const hour24 = Number(hourText);
+    await dialog.getByLabel('Due time hour').selectOption(String(hour24 % 12 || 12));
+    await dialog.getByLabel('Due time minute').selectOption(minute);
+    await dialog.getByLabel('Due time AM or PM').selectOption(hour24 >= 12 ? 'PM' : 'AM');
   }
   await dialog.getByRole('button', { name: 'Set due date' }).click();
 }
