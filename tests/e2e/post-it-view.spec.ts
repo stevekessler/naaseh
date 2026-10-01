@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, setTaskDueDate, signIn } from './enhanced-helpers.js';
 
 async function signInAndAddTask(page: Page) {
   await signIn(page);
@@ -65,16 +65,21 @@ test('opens note details from its title and shows the due date below it', async 
   await signInAndAddTask(page);
   await page.getByRole('button', { name: 'Cedar post-it', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit task' });
-  await dialog.getByLabel('Due').selectOption('date');
-  await dialog.getByLabel('Due date', { exact: true }).fill('2026-12-31');
+  await setTaskDueDate(dialog.locator('.task-form'), '2026-12-31');
   await dialog.getByRole('button', { name: 'Save changes' }).click();
   await page.getByRole('button', { name: 'Post-its' }).click();
   const note = page.locator('.postit', { hasText: 'Cedar post-it' });
   const title = note.getByRole('button', { name: 'Cedar post-it', exact: true });
   const due = note.locator('.postit-due');
-  await expect(due).toHaveText('2026-12-31');
+  await expect(due).toHaveText('12/31/2026');
   await expect(note.locator('.user-full-name')).toHaveText('Steve');
+  await expect(
+    note.getByRole('button', { name: 'Start 10 minute timer for Cedar post-it' }),
+  ).toBeVisible();
   expect((await title.boundingBox())!.y).toBeLessThan((await due.boundingBox())!.y);
   await title.click();
-  await expect(page.getByRole('dialog', { name: 'Edit task' })).toBeVisible();
+  const reopenedDialog = page.getByRole('dialog', { name: 'Edit task' });
+  await expect(reopenedDialog).toBeVisible();
+  await expect(reopenedDialog.getByRole('heading', { name: 'Attachments' })).toBeVisible();
+  await expect(reopenedDialog.getByLabel(/Attach a file/)).toBeVisible();
 });

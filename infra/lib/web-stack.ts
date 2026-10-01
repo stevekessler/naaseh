@@ -16,16 +16,22 @@ export function createWebResources(
     webAclArn: string;
     webAssetPath: string;
     mediaOrigin?: string;
+    exportOrigin?: string;
   },
 ) {
+  const connectOrigins = [options.mediaOrigin, options.exportOrigin].filter(Boolean).join(' ');
   const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(scope, 'SecurityHeaders', {
     securityHeadersBehavior: {
       contentSecurityPolicy: {
-        contentSecurityPolicy: options.mediaOrigin
-          ? contentSecurityPolicy
-              .replace("img-src 'self' data:", `img-src 'self' data: ${options.mediaOrigin}`)
-              .replace("connect-src 'self'", `connect-src 'self' ${options.mediaOrigin}`)
-          : contentSecurityPolicy,
+        contentSecurityPolicy: contentSecurityPolicy
+          .replace(
+            "img-src 'self' data:",
+            `img-src 'self' data:${options.mediaOrigin ? ` ${options.mediaOrigin}` : ''}`,
+          )
+          .replace(
+            "connect-src 'self'",
+            `connect-src 'self'${connectOrigins ? ` ${connectOrigins}` : ''}`,
+          ),
         override: true,
       },
       contentTypeOptions: { override: true },

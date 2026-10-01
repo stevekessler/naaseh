@@ -7,6 +7,17 @@ export async function expandTaskDetails(form: Locator) {
   await expect(details).toHaveAttribute('open', '');
 }
 
+export async function setTaskDueDate(form: Locator, date: string, time?: string) {
+  await form.getByRole('button', { name: /Add due date|Change due date/ }).click();
+  const dialog = form.page().getByRole('dialog', { name: 'Set due date' });
+  await dialog.getByLabel('Due date', { exact: true }).fill(date);
+  if (time) {
+    await dialog.getByLabel('Add a time').check();
+    await dialog.getByLabel('Due time').selectOption(time);
+  }
+  await dialog.getByRole('button', { name: 'Set due date' }).click();
+}
+
 export async function signIn(page: Page) {
   await page.route('**/api/v1/sync/bootstrap', (route) =>
     route.fulfill({

@@ -149,7 +149,14 @@ async function completionExportRequest(
   } finally {
     window.clearTimeout(timeout);
   }
-  if (!response.ok) throw new Error(`Completion export failed (${response.status}).`);
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => undefined)) as
+      | { message?: string; correlationId?: string }
+      | undefined;
+    throw new Error(
+      `${problem?.message ?? `Completion export failed (${response.status}).`}${problem?.correlationId ? ` Reference: ${problem.correlationId}` : ''}`,
+    );
+  }
   return completionExportJobResponseSchema.parse(await response.json());
 }
 

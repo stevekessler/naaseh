@@ -105,6 +105,8 @@ describe('shared assignment controls', () => {
       expect(markup).toContain('Home');
       expect(markup).toContain('Yard');
     }
+    expect(form.indexOf('Priority')).toBeLessThan(form.indexOf('Task details'));
+    expect(form.indexOf('Due date')).toBeLessThan(form.indexOf('Task details'));
   });
 
   it('shows projects in list creation, including while a category is still hydrating', () => {

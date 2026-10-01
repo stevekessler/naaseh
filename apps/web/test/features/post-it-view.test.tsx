@@ -4,13 +4,22 @@ import { createTask, transitionTask } from '@naaseh/domain';
 import { PostItBoard } from '../../src/features/postit/PostItBoard.js';
 import { PostItNote } from '../../src/features/postit/PostItNote.js';
 import { ViewSwitcher } from '../../src/features/tasks/ViewSwitcher.js';
-import { rememberTaskView, restoreTaskView } from '../../src/features/tasks/task-view-state.js';
+import {
+  orderTasksForList,
+  rememberTaskView,
+  restoreTaskView,
+} from '../../src/features/tasks/task-view-state.js';
 import { readFileSync } from 'node:fs';
 
 describe('post-it task view', () => {
   it('places overdue time near the title and marks private notes', () => {
     const task = createTask(
-      { label: 'Follow up', dueAt: '2020-01-01T12:30:00.000Z', dueTimeZone: 'UTC' },
+      {
+        label: 'Follow up',
+        dueAt: '2020-01-01T12:30:00.000Z',
+        dueTimeZone: 'UTC',
+        link: 'https://example.com/a/very/long/task/link/that/is/compact',
+      },
       'steve',
     );
     const html = renderToStaticMarkup(
@@ -19,6 +28,8 @@ describe('post-it task view', () => {
     expect(html.indexOf('postit-due')).toBeLessThan(html.indexOf('postit-meta'));
     expect(html).toContain('overdue-label');
     expect(html).toContain('🔒 Private notes');
+    expect(html).toContain('href="https://example.com/a/very/long/task/link/that/is/compact"');
+    expect(html).toContain('example.com/a/very/long/task/link');
   });
   it('renders readable category colors and the completion animation state', () => {
     const open = createTask({ label: 'Open task', categoryId: 'calls' }, 'steve');
@@ -35,12 +46,17 @@ describe('post-it task view', () => {
             version: 1,
           },
         ]}
+        currentUserId="steve"
         onToggle={async () => undefined}
       />,
     );
     expect(html).toContain('class="postit crumpled"');
     expect(html).toContain('background:#06366b;color:#ffffff');
     expect(html).toContain('aria-label="Reopen Open task"');
+    expect(html).toContain('postit-category');
+    expect(html).toContain('Calls');
+    expect(html).toContain('Start 10 minute timer for Open task');
+    expect(html).toContain('Start 10 min');
   });
 
   it('shares navigation state while changing views', () => {
@@ -52,6 +68,16 @@ describe('post-it task view', () => {
     });
     const html = renderToStaticMarkup(<ViewSwitcher view="postit" change={() => undefined} />);
     expect(html).toContain('aria-pressed="true"');
+    const older = createTask({ label: 'Older' }, 'steve', new Date('2026-01-01T00:00:00Z'));
+    const ranked = createTask({ label: 'Ranked' }, 'steve', new Date('2026-01-02T00:00:00Z'));
+    const newer = createTask({ label: 'Newer' }, 'steve', new Date('2026-01-03T00:00:00Z'));
+    expect(
+      orderTasksForList(
+        [ranked, older, newer],
+        new Set([ranked.id]),
+        new Map([[ranked.id, 1]]),
+      ).map((task) => task.label),
+    ).toEqual(['Newer', 'Older', 'Ranked']);
   });
 
   it('offers the shared task editor from a post-it when editing is enabled', () => {

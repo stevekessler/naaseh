@@ -97,6 +97,7 @@ describe('foundation infrastructure', () => {
         .ContentSecurityPolicy.ContentSecurityPolicy;
     const serializedCsp = JSON.stringify(csp);
     expect(serializedCsp).toContain('RegionalDomainName');
+    expect(serializedCsp.match(/RegionalDomainName/g)).toHaveLength(3);
     expect(serializedCsp).not.toContain('*.amazonaws.com');
     template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
       RouteKey: 'GET /api/v1/users/directory',

@@ -11,6 +11,7 @@ export function TaskEditDialog({
   parentTasks,
   save,
   close,
+  primaryContent,
   secondaryContent,
 }: {
   task: Task;
@@ -20,6 +21,7 @@ export function TaskEditDialog({
   parentTasks: readonly Task[];
   save: (patch: Partial<Task>) => Promise<void>;
   close: () => void;
+  primaryContent?: ReactNode;
   secondaryContent?: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -78,6 +80,7 @@ export function TaskEditDialog({
         <fieldset disabled={busy}>
           <TaskForm
             task={task}
+            nestedDialogs
             categories={categories}
             projects={projects}
             assignees={assignees}
@@ -109,6 +112,7 @@ export function TaskEditDialog({
             }}
           />
         </fieldset>
+        {primaryContent}
         {secondaryContent}
       </div>
     </dialog>

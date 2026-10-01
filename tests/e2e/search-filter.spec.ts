@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails } from './enhanced-helpers.js';
+import { expandTaskDetails, setTaskDueDate } from './enhanced-helpers.js';
 
 async function signIn(page: Page) {
   await page.goto('/');
@@ -17,9 +17,7 @@ async function addTask(
   await form.getByLabel('Task label').fill(task.label);
   await expandTaskDetails(form);
   await form.getByRole('textbox', { name: 'Memo', exact: true }).fill(task.memo);
-  await form.getByLabel('Due').selectOption('timed');
-  await form.locator('input[type="date"]').fill(task.dueAt.slice(0, 10));
-  await form.getByLabel('Due time').selectOption(task.dueAt.slice(11));
+  await setTaskDueDate(form, task.dueAt.slice(0, 10), task.dueAt.slice(11));
   await form.getByLabel('Assignee').selectOption('local-steve');
   await form.getByRole('button', { name: 'Add task' }).click();
   await expect(page.getByRole('heading', { name: task.label })).toBeVisible();

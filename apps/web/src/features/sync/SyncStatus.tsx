@@ -32,10 +32,15 @@ export function SyncStatus({
               : conflicts
                 ? `${conflicts} conflict${conflicts === 1 ? '' : 's'}`
                 : pending
-                  ? `${pending} pending`
+                  ? `${pending} pending · syncing`
                   : 'Synced'}
         </span>
       )}
+      {online && pending > 0 && !error ? (
+        <small className="sync-status-guidance">
+          Usually completes within a few seconds; automatic retries wait at most 30 seconds.
+        </small>
+      ) : null}
       {error && (
         <div className="sync-status-error" role="alert">
           <span>{error}</span>

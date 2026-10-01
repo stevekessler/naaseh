@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { expandTaskDetails, openTaskSection, signIn } from './enhanced-helpers.js';
+import { expandTaskDetails, openTaskSection, setTaskDueDate, signIn } from './enhanced-helpers.js';
 
 test('creates, edits, completes, and inspects a responsive task with revisions and reminders', async ({
   page,
@@ -16,26 +16,34 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await form.getByLabel('Link', { exact: true }).fill('http://example.com/project');
   await form
     .getByRole('textbox', { name: 'Memo', exact: true })
-    .fill('Ask for an updated estimate');
-  await form.getByLabel('Due').selectOption('timed');
-  await form.locator('input[type="date"]').fill('2020-01-01');
-  await form.getByLabel('Due time').selectOption('09:00');
+    .fill('Ask for an updated estimate at https://memo.example/estimate');
+  await setTaskDueDate(form, '2020-01-01', '09:00');
   await expect(form.getByLabel('Assignee')).toHaveValue('local-steve');
   await form.getByLabel('Private task').check();
   await form.getByRole('button', { name: 'Add task' }).click();
   const taskTable = page.getByRole('table', { name: 'Tasks' });
   await expect(taskTable).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Task' })).toBeVisible();
-  if (test.info().project.name === 'iphone')
-    await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeHidden();
-  else await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeVisible();
+  if (test.info().project.name === 'iphone') {
+    const header = await taskTable.locator('thead').boundingBox();
+    expect(header?.width).toBeLessThanOrEqual(1);
+    expect(header?.height).toBeLessThanOrEqual(1);
+  } else await expect(taskTable.getByRole('columnheader', { name: 'Memo' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Due' })).toBeVisible();
+  await expect(taskTable.getByRole('link', { name: /example.com\/project/ })).toHaveAttribute(
+    'href',
+    'http://example.com/project',
+  );
+  await expect(
+    taskTable.getByRole('link', { name: 'https://memo.example/estimate' }),
+  ).toHaveAttribute('href', 'https://memo.example/estimate');
   await expect(taskTable.getByRole('columnheader', { name: 'Priority' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Assignee' })).toBeVisible();
-  if (test.info().project.name === 'iphone')
-    await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeHidden();
-  else await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
+  if (test.info().project.name === 'iphone') {
+    await expect(taskTable.locator('thead')).toHaveCSS('position', 'absolute');
+  } else await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
+  await taskTable.getByRole('button', { name: 'Actions for Call the contractor' }).click();
   await expect(taskTable.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();

@@ -3,36 +3,31 @@ import type { Task } from '@naaseh/domain';
 import { ReminderStatus } from '../reminders/ReminderStatus.js';
 import { useCompletionFeedback } from './useCompletionFeedback.js';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
-import { useBrowserTimeZone } from './due-value.js';
-import { MemoDocumentView } from '../memos/MemoDocumentView.js';
+import { formatDueValue, useBrowserTimeZone } from './due-value.js';
+import { LinkifiedText, MemoDocumentView } from '../memos/MemoDocumentView.js';
 import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
+import { CompactLink } from '../../components/CompactLink.js';
 export function TaskRow({
   task,
   onToggle,
   onSelect,
   onProgressChange,
   currentUserId,
+  categoryName,
+  projectName,
 }: {
   task: Task;
   onToggle: (task: Task) => void;
   onSelect: (task: Task) => void;
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
+  categoryName?: string | undefined;
+  projectName?: string | undefined;
 }) {
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
-  const dueLabel = task.dueAt
-    ? new Date(task.dueAt).toLocaleString(undefined, {
-        year: 'numeric',
-        month: 'numeric',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : task.dueDate
-      ? task.dueDate
-      : '';
+  const dueLabel = formatDueValue(task.dueAt, task.dueDate);
   return (
     <tr className={task.status === 'completed' ? 'done' : ''}>
       <td className="task-status-cell">
@@ -67,6 +62,8 @@ export function TaskRow({
           onChange={(percent) => onProgressChange(task, percent)}
         />
       </th>
+      <td className="task-project-cell">{projectName || <span aria-hidden="true">—</span>}</td>
+      <td className="task-category-cell">{categoryName || <span aria-hidden="true">—</span>}</td>
       <td className="task-memo-cell">
         <div className="task-row-memo">
           {task.memoHidden ? (
@@ -74,11 +71,16 @@ export function TaskRow({
           ) : task.memoDocument ? (
             <MemoDocumentView document={task.memoDocument} />
           ) : task.memo ? (
-            <p>{task.memo}</p>
+            <p>
+              <LinkifiedText text={task.memo} />
+            </p>
           ) : (
             <span aria-hidden="true">—</span>
           )}
         </div>
+      </td>
+      <td className="task-link-cell">
+        {task.link ? <CompactLink href={task.link} /> : <span aria-hidden="true">—</span>}
       </td>
       <td className="task-due-cell">
         {dueLabel ? <small>{dueLabel}</small> : <span aria-hidden="true">—</span>}
@@ -91,10 +93,19 @@ export function TaskRow({
         <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
       </td>
       <td className="task-actions-cell">
-        <button type="button" className="quiet task-edit-button" onClick={() => onSelect(task)}>
-          Edit
-        </button>
-        {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} compact /> : null}
+        <details className="task-row-actions-menu">
+          <summary role="button" aria-label={`Actions for ${task.label}`}>
+            Actions
+          </summary>
+          <div>
+            <button type="button" className="quiet task-edit-button" onClick={() => onSelect(task)}>
+              Edit
+            </button>
+            {currentUserId ? (
+              <TaskTimerForTask ownerId={currentUserId} task={task} compact />
+            ) : null}
+          </div>
+        </details>
       </td>
     </tr>
   );
