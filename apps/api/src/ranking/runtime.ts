@@ -224,7 +224,7 @@ const dynamoStore: DurableStackStore = {
         ConsistentRead: true,
       }),
     );
-    return Number(response.Item?.sequence ?? 0);
+    return Number(response.Item?.value ?? 0);
   },
   transact: (items) =>
     dynamodb.send(new TransactWriteCommand({ TransactItems: items })).then(() => undefined),

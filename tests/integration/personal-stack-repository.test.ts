@@ -107,7 +107,15 @@ describe('personal stack repository', () => {
     expect(items.some((item) => String(item.Put?.Item?.SK).startsWith('OP#'))).toBe(true);
     expect(items.some((item) => item.Put?.Item?.SK === `MUTATION#${mutationId}`)).toBe(true);
     expect(items.some((item) => String(item.Put?.Item?.SK).startsWith('AUDIT#'))).toBe(true);
-    expect(items.some((item) => item.Update?.Key?.PK === 'FEED#OWNER#user-a')).toBe(true);
+    expect(
+      items.some(
+        (item) =>
+          item.Update?.Key?.PK === 'FEED#OWNER#user-a' &&
+          item.Update.UpdateExpression === 'SET #value=:next' &&
+          item.Update.ExpressionAttributeNames?.['#value'] === 'value' &&
+          item.Update.ExpressionAttributeValues?.[':expected'] === 7,
+      ),
+    ).toBe(true);
     expect(items.some((item) => String(item.Put?.Item?.PK) === 'FEED#OWNER#user-a')).toBe(true);
     expect(
       items.every(

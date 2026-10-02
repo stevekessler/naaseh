@@ -84,6 +84,11 @@ describe('task timer sync v5', () => {
     });
     expect(transaction.TransactItems).toHaveLength(5);
     expect(JSON.stringify(transaction)).toContain(`USER#${ownerId}`);
+    expect(transaction.TransactItems[3]?.Update).toMatchObject({
+      UpdateExpression: 'SET #value = :next',
+      ConditionExpression: 'attribute_not_exists(#value) OR #value = :expected',
+      ExpressionAttributeNames: { '#value': 'value' },
+    });
     expect(JSON.stringify(transaction)).not.toContain('PUBLIC');
     expect(JSON.stringify(transaction)).not.toContain('GROUP#');
   });

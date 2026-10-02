@@ -21,6 +21,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('task column settings', () => {
+  it('closes when the user clicks away', () => {
+    const view = render(<Harness />);
+    const settings = view.container.querySelector('details')!;
+    fireEvent.click(view.getByText('Columns'));
+    expect(settings.open).toBe(true);
+
+    fireEvent.pointerDown(document.body);
+    expect(settings.open).toBe(false);
+  });
+
   it('keeps independent choices for phone and desktop layouts', () => {
     const view = render(<Harness />);
     fireEvent.click(view.getByText('Columns'));

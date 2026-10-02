@@ -5,6 +5,7 @@ import { usePostItCompletion } from './usePostItCompletion.js';
 import { TaskEditDialog } from '../tasks/TaskEditDialog.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
+import { PostItFieldSettings, usePostItFields } from './PostItFieldSettings.js';
 
 export function PostItBoard({
   tasks,
@@ -29,6 +30,7 @@ export function PostItBoard({
 }) {
   const { completing, announcement, complete } = usePostItCompletion(onToggle);
   const [editingId, setEditingId] = useState<string>();
+  const fields = usePostItFields();
   const editing = tasks.find((task) => task.id === editingId);
   const colors = new Map(categories.map((category) => [category.id, category.color]));
   return (
@@ -36,6 +38,12 @@ export function PostItBoard({
       <p className="visually-hidden" role="status" aria-live="polite">
         {announcement}
       </p>
+      <div className="postit-toolbar">
+        <p>
+          {tasks.length} post-it{tasks.length === 1 ? '' : 's'}
+        </p>
+        <PostItFieldSettings {...fields} />
+      </div>
       <div className="postit-board">
         {tasks.map((task) => {
           const project = projects.find((candidate) => candidate.id === task.projectId);
@@ -53,6 +61,7 @@ export function PostItBoard({
                   ?.displayName
               }
               categoryName={categories.find((category) => category.id === categoryId)?.name}
+              visibleFields={fields.visible}
               complete={() => void complete(task)}
               {...(currentUserId ? { currentUserId } : {})}
               {...(onUpdate ? { edit: () => setEditingId(task.id) } : {})}

@@ -64,8 +64,9 @@ export function buildTaskTimerTransaction(input: TaskTimerCommit) {
         Update: {
           TableName: tableName,
           Key: keys.taskTimerOwnerFeedCounter(input.ownerId),
-          UpdateExpression: 'SET sequence = :next',
-          ConditionExpression: 'attribute_not_exists(sequence) OR sequence = :expected',
+          UpdateExpression: 'SET #value = :next',
+          ConditionExpression: 'attribute_not_exists(#value) OR #value = :expected',
+          ExpressionAttributeNames: { '#value': 'value' },
           ExpressionAttributeValues: {
             ':expected': input.expectedFeedSequence,
             ':next': input.expectedFeedSequence + 1,
@@ -121,7 +122,7 @@ export async function getTaskTimerFeedSequence(ownerId: string) {
       ConsistentRead: true,
     }),
   );
-  return Number(result.Item?.sequence ?? 0);
+  return Number(result.Item?.value ?? 0);
 }
 
 export async function commitTaskTimer(input: TaskTimerCommit) {
