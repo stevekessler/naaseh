@@ -1,26 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-export const taskColumns = [
-  { id: 'project', label: 'Project' },
-  { id: 'category', label: 'Category' },
-  { id: 'memo', label: 'Memo' },
-  { id: 'link', label: 'Link' },
+export const postItFields = [
   { id: 'due', label: 'Due date' },
+  { id: 'progress', label: 'Progress' },
   { id: 'priority', label: 'Priority' },
   { id: 'assignee', label: 'Assignee' },
-  { id: 'actions', label: 'Actions' },
+  { id: 'category', label: 'Category' },
+  { id: 'timer', label: 'Timer' },
+  { id: 'link', label: 'Link' },
+  { id: 'memo', label: 'Memo' },
 ] as const;
 
-export type TaskColumnId = (typeof taskColumns)[number]['id'];
+export type PostItFieldId = (typeof postItFields)[number]['id'];
 type Breakpoint = 'phone' | 'tablet' | 'desktop';
 
-const allColumns = taskColumns.map(({ id }) => id);
-const defaults: Record<Breakpoint, TaskColumnId[]> = {
-  phone: allColumns,
-  tablet: allColumns,
-  desktop: allColumns,
-};
-
+const allFields = postItFields.map(({ id }) => id);
 const currentBreakpoint = (): Breakpoint => {
   const width = globalThis.window?.innerWidth ?? 1441;
   if (width <= 640) return 'phone';
@@ -28,37 +22,35 @@ const currentBreakpoint = (): Breakpoint => {
     return 'tablet';
   return 'desktop';
 };
+const storageKey = (breakpoint: Breakpoint) => `naaseh.post-it-fields.v1.${breakpoint}`;
 
-const storageKey = (breakpoint: Breakpoint) => `naaseh.task-columns.v1.${breakpoint}`;
-
-function readColumns(breakpoint: Breakpoint): TaskColumnId[] {
+function readFields(breakpoint: Breakpoint): PostItFieldId[] {
   try {
     const stored = JSON.parse(localStorage.getItem(storageKey(breakpoint)) ?? 'null') as unknown;
     if (Array.isArray(stored)) {
-      const valid = stored.filter((value): value is TaskColumnId =>
-        allColumns.includes(value as TaskColumnId),
+      const valid = stored.filter((value): value is PostItFieldId =>
+        allFields.includes(value as PostItFieldId),
       );
       if (valid.length === stored.length) return valid;
     }
   } catch {
     // Ignore unavailable or malformed device-local preferences.
   }
-  return defaults[breakpoint];
+  return allFields;
 }
 
-export function useTaskColumns() {
+export function usePostItFields() {
   const [breakpoint, setBreakpoint] = useState<Breakpoint>(currentBreakpoint);
-  const [visible, setVisible] = useState<TaskColumnId[]>(() => readColumns(breakpoint));
+  const [visible, setVisible] = useState<PostItFieldId[]>(() => readFields(breakpoint));
 
   useEffect(() => {
-    const update = () => setBreakpoint(currentBreakpoint());
-    window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
+    const updateBreakpoint = () => setBreakpoint(currentBreakpoint());
+    window.addEventListener('resize', updateBreakpoint);
+    return () => window.removeEventListener('resize', updateBreakpoint);
   }, []);
+  useEffect(() => setVisible(readFields(breakpoint)), [breakpoint]);
 
-  useEffect(() => setVisible(readColumns(breakpoint)), [breakpoint]);
-
-  const update = (next: TaskColumnId[]) => {
+  const update = (next: PostItFieldId[]) => {
     setVisible(next);
     try {
       localStorage.setItem(storageKey(breakpoint), JSON.stringify(next));
@@ -70,30 +62,24 @@ export function useTaskColumns() {
   return {
     breakpoint,
     visible: useMemo(() => new Set(visible), [visible]),
-    toggle(column: TaskColumnId) {
+    toggle(field: PostItFieldId) {
       update(
-        visible.includes(column) ? visible.filter((item) => item !== column) : [...visible, column],
+        visible.includes(field) ? visible.filter((item) => item !== field) : [...visible, field],
       );
     },
     reset() {
-      update(defaults[breakpoint]);
+      update(allFields);
     },
   };
 }
 
-export function TaskColumnSettings({
+export function PostItFieldSettings({
   breakpoint,
   visible,
   toggle,
   reset,
-}: {
-  breakpoint: Breakpoint;
-  visible: ReadonlySet<TaskColumnId>;
-  toggle: (column: TaskColumnId) => void;
-  reset: () => void;
-}) {
+}: ReturnType<typeof usePostItFields>) {
   const details = useRef<HTMLDetailsElement>(null);
-
   useEffect(() => {
     const closeWhenOutside = (event: PointerEvent) => {
       if (details.current?.open && !details.current.contains(event.target as Node))
@@ -104,21 +90,21 @@ export function TaskColumnSettings({
   }, []);
 
   return (
-    <details ref={details} className="task-column-settings">
-      <summary>Columns</summary>
+    <details ref={details} className="task-column-settings postit-field-settings">
+      <summary>Fields</summary>
       <fieldset>
-        <legend>Columns on this {breakpoint} layout</legend>
+        <legend>Fields on post-its for this {breakpoint} layout</legend>
         <p>Task and completion are always shown.</p>
         <div>
-          {taskColumns.map((column) => (
-            <label key={column.id}>
+          {postItFields.map((field) => (
+            <label key={field.id}>
               <input
                 type="checkbox"
-                aria-label={`Show ${column.label} column`}
-                checked={visible.has(column.id)}
-                onChange={() => toggle(column.id)}
+                aria-label={`Show ${field.label} on post-its`}
+                checked={visible.has(field.id)}
+                onChange={() => toggle(field.id)}
               />
-              {column.label}
+              {field.label}
             </label>
           ))}
         </div>

@@ -8,6 +8,7 @@ import { LinkifiedText, MemoDocumentView } from '../memos/MemoDocumentView.js';
 import { overdue } from '../../notifications/local-reminders.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
+import type { PostItFieldId } from './PostItFieldSettings.js';
 
 export function PostItNote({
   task,
@@ -18,6 +19,16 @@ export function PostItNote({
   currentUserId,
   complete,
   edit,
+  visibleFields = new Set<PostItFieldId>([
+    'due',
+    'progress',
+    'priority',
+    'assignee',
+    'category',
+    'timer',
+    'link',
+    'memo',
+  ]),
 }: {
   task: Task;
   color?: string;
@@ -27,6 +38,7 @@ export function PostItNote({
   currentUserId?: string | undefined;
   complete: () => void;
   edit?: () => void;
+  visibleFields?: ReadonlySet<PostItFieldId>;
 }) {
   const completed = task.status === 'completed';
   useBrowserTimeZone();
@@ -60,7 +72,7 @@ export function PostItNote({
         )}
         {task.visibility === 'private' && <span title="Private task"> 🔒</span>}
       </h2>
-      {(task.dueAt || task.dueDate) && (
+      {visibleFields.has('due') && (task.dueAt || task.dueDate) && (
         <small className="postit-due">
           {formatDueValue(task.dueAt, task.dueDate)}
           {overdue(task) && (
@@ -71,25 +83,42 @@ export function PostItNote({
           )}
         </small>
       )}
-      <div className="postit-meta">
-        <ProgressIndicator percent={task.percentComplete} label={task.label} />
-        <UrgencyBadge urgency={task.urgency} mode="compact" />
-        <UserAvatar
-          userId={task.assigneeId ?? task.ownerId}
-          {...(assigneeName ? { displayName: assigneeName } : {})}
-          showName
-        />
-      </div>
-      {categoryName ? <span className="postit-category">{categoryName}</span> : null}
-      {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} compact /> : null}
-      {task.link ? <CompactLink className="postit-link" href={task.link} /> : null}
+      {(['progress', 'priority', 'assignee'] as const).some((field) => visibleFields.has(field)) ? (
+        <div className="postit-meta">
+          {visibleFields.has('progress') ? (
+            <ProgressIndicator percent={task.percentComplete} label={task.label} />
+          ) : null}
+          {visibleFields.has('priority') ? (
+            <UrgencyBadge urgency={task.urgency} mode="compact" />
+          ) : null}
+          {visibleFields.has('assignee') ? (
+            <UserAvatar
+              userId={task.assigneeId ?? task.ownerId}
+              {...(assigneeName ? { displayName: assigneeName } : {})}
+              showName
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {visibleFields.has('category') && categoryName ? (
+        <span className="postit-category">{categoryName}</span>
+      ) : null}
+      {visibleFields.has('timer') && currentUserId ? (
+        <TaskTimerForTask ownerId={currentUserId} task={task} compact />
+      ) : null}
+      {visibleFields.has('link') && task.link ? (
+        <CompactLink className="postit-link" href={task.link} />
+      ) : null}
       {edit ? (
         <button type="button" className="quiet" aria-label={`Edit ${task.label}`} onClick={edit}>
           Edit
         </button>
       ) : null}
-      {task.memoHidden && <span title="Private notes">🔒 Private notes</span>}
-      {!task.memoHidden &&
+      {visibleFields.has('memo') && task.memoHidden && (
+        <span title="Private notes">🔒 Private notes</span>
+      )}
+      {visibleFields.has('memo') &&
+        !task.memoHidden &&
         (task.memoDocument ? (
           <MemoDocumentView document={task.memoDocument} />
         ) : (

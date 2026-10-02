@@ -93,6 +93,37 @@ describe('post-it task view', () => {
     expect(html).toContain('Edit Editable note');
   });
 
+  it('shows only the selected post-it fields', () => {
+    const task = createTask(
+      {
+        label: 'Focused note',
+        dueDate: '2026-12-31',
+        dueKind: 'date',
+        memo: 'Hide this memo',
+        link: 'https://example.com/hidden',
+        categoryId: 'calls',
+      },
+      'steve',
+    );
+    const html = renderToStaticMarkup(
+      <PostItNote
+        task={task}
+        categoryName="Calls"
+        currentUserId="steve"
+        visibleFields={new Set(['priority'] as const)}
+        complete={() => undefined}
+      />,
+    );
+    expect(html).toContain('urgency-badge');
+    expect(html).not.toContain('postit-due');
+    expect(html).not.toContain('progress-indicator');
+    expect(html).not.toContain('user-identity');
+    expect(html).not.toContain('Calls');
+    expect(html).not.toContain('Hide this memo');
+    expect(html).not.toContain('example.com');
+    expect(html).not.toContain('Start 10 minute timer');
+  });
+
   it('keeps completed styling offline and defines reduced-motion and sound feedback', () => {
     const css = readFileSync(new URL('../../src/styles/app.css', import.meta.url), 'utf8');
     const feedback = readFileSync(

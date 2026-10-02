@@ -180,8 +180,9 @@ export function buildStackAcceptanceTransaction(input: {
       {
         Update: {
           Key: keys.personalStackOwnerFeedCounter(input.scope.userId),
-          UpdateExpression: 'SET sequence=:next',
-          ConditionExpression: 'attribute_not_exists(sequence) OR sequence=:expected',
+          UpdateExpression: 'SET #value=:next',
+          ConditionExpression: 'attribute_not_exists(#value) OR #value=:expected',
+          ExpressionAttributeNames: { '#value': 'value' },
           ExpressionAttributeValues: {
             ':expected': input.expectedOwnerFeedSequence,
             ':next': input.expectedOwnerFeedSequence + 1,
