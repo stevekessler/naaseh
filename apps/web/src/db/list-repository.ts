@@ -17,6 +17,29 @@ import {
 import { db, type EncryptedEntityRecord } from './database.js';
 import { decryptLocalValue, encryptLocalValue } from './task-repository.js';
 
+const listItemWrites = new Map<string, Promise<void>>();
+async function serializeListItemWrite<T>(id: string, action: () => Promise<T>): Promise<T> {
+  const previous = listItemWrites.get(id) ?? Promise.resolve();
+  const result = previous.catch(() => undefined).then(action);
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  listItemWrites.set(id, settled);
+  try {
+    return await result;
+  } finally {
+    if (listItemWrites.get(id) === settled) listItemWrites.delete(id);
+  }
+}
+
+async function latestListItem(fallback: ListItem) {
+  const row = await db.secureListItems.get(fallback.id);
+  return row
+    ? listItemSchema.parse(await decryptLocalValue<ListItem>('listItem', row.id, row.value))
+    : fallback;
+}
+
 async function record(
   namespace: string,
   value: {
@@ -189,6 +212,16 @@ export async function addLocalListItem(
   return value;
 }
 export async function updateLocalListItem(
+  item: ListItem,
+  patch: Partial<ListItem>,
+  actorId: string,
+): Promise<ListItem> {
+  return serializeListItemWrite(item.id, async () =>
+    updateLocalListItemNow(await latestListItem(item), patch, actorId),
+  );
+}
+
+async function updateLocalListItemNow(
   item: ListItem,
   patch: Partial<ListItem>,
   actorId: string,

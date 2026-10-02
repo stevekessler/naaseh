@@ -19,11 +19,15 @@ describe('task timer controls', () => {
         now="2026-08-14T12:00:00.000Z"
         taskLabel="Write plan"
         command={vi.fn()}
+        movable
+        onDismiss={vi.fn()}
       />,
     );
     expect(html).toContain('10:00');
     expect(html).toContain('Pause timer');
     expect(html).toContain('Stop timer');
+    expect(html).toContain('Move timer');
+    expect(html).toContain('Close timer');
     expect(html).toContain('Repeat');
     expect(html).toContain('aria-live="polite"');
   });

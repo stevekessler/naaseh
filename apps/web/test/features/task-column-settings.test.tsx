@@ -26,6 +26,9 @@ describe('task column settings', () => {
     const settings = view.container.querySelector('details')!;
     fireEvent.click(view.getByText('Columns'));
     expect(settings.open).toBe(true);
+    expect(view.getByText('Category').compareDocumentPosition(view.getByText('Project'))).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
 
     fireEvent.pointerDown(document.body);
     expect(settings.open).toBe(false);

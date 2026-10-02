@@ -14,6 +14,7 @@ const database = vi.hoisted(() => {
     put: vi.fn(async (value: any) => {
       records.set(value.id, value);
     }),
+    get: vi.fn(async (id: string) => records.get(id)),
     toArray: vi.fn(async () => [...records.values()]),
     orderBy: vi.fn(() => ({ reverse: () => ({ toArray: async () => [...records.values()] }) })),
   });
@@ -58,6 +59,7 @@ import {
   listLocalListItems,
   listLocalLists,
   saveNewList,
+  updateLocalListItem,
 } from '../../src/db/list-repository.js';
 
 beforeEach(() => {
@@ -71,12 +73,22 @@ beforeEach(() => {
 describe('encrypted local list repository', () => {
   it('commits encrypted entity and durable outbox records together across a restart read', async () => {
     const list = await saveNewList('Groceries', 'owner');
-    await addLocalListItem(list.id, { name: 'Milk', amountMinor: null }, 'owner');
+    const item = await addLocalListItem(list.id, { name: 'Milk', amountMinor: null }, 'owner');
     expect(await listLocalLists()).toEqual([list]);
     expect((await listLocalListItems(list.id))[0]).toMatchObject({
       directorySnapshot: { name: 'Milk' },
     });
     expect(state.outbox.size).toBe(2);
+
+    const [completed, reopened] = await Promise.all([
+      updateLocalListItem(item, { status: 'completed' }, 'owner'),
+      updateLocalListItem(item, { status: 'open' }, 'owner'),
+    ]);
+    expect(completed.version).toBe(2);
+    expect(reopened.version).toBe(3);
+    expect([...state.outbox.values()].slice(-2).map((mutation) => mutation.baseVersion)).toEqual([
+      1, 2,
+    ]);
   });
 
   it('rolls the entity back when quota prevents the outbox write', async () => {

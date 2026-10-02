@@ -32,6 +32,8 @@ export function createProfileMediaResources(
           'x-amz-checksum-sha256',
           'x-amz-server-side-encryption',
           'x-amz-server-side-encryption-aws-kms-key-id',
+          'x-amz-meta-attachmentid',
+          'x-amz-meta-sessionid',
         ],
         exposedHeaders: ['etag', 'x-amz-version-id'],
         maxAge: 300,

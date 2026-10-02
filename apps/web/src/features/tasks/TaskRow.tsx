@@ -1,3 +1,4 @@
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { UserAvatar } from '../profile/user-directory.js';
 import type { Task } from '@naaseh/domain';
 import { ReminderStatus } from '../reminders/ReminderStatus.js';
@@ -8,6 +9,7 @@ import { LinkifiedText, MemoDocumentView } from '../memos/MemoDocumentView.js';
 import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 import { CompactLink } from '../../components/CompactLink.js';
+import { categoryForeground } from '../../styles/category-color.js';
 export function TaskRow({
   task,
   onToggle,
@@ -15,6 +17,7 @@ export function TaskRow({
   onProgressChange,
   currentUserId,
   categoryName,
+  categoryColor,
   projectName,
 }: {
   task: Task;
@@ -23,11 +26,22 @@ export function TaskRow({
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
   categoryName?: string | undefined;
+  categoryColor?: string | undefined;
   projectName?: string | undefined;
 }) {
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
   const dueLabel = formatDueValue(task.dueAt, task.dueDate);
+  const actions = useRef<HTMLDetailsElement>(null);
+  const categoryPalette = categoryForeground(categoryColor ?? '#fff2a8');
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      if (actions.current?.open && !actions.current.contains(event.target as Node))
+        actions.current.open = false;
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, []);
   return (
     <tr className={task.status === 'completed' ? 'done' : ''}>
       <td className="task-status-cell">
@@ -62,8 +76,24 @@ export function TaskRow({
           onChange={(percent) => onProgressChange(task, percent)}
         />
       </th>
+      <td className="task-category-cell">
+        {categoryName ? (
+          <span
+            className="task-category-chip"
+            style={
+              {
+                '--category-background': categoryPalette.background,
+                '--category-foreground': categoryPalette.foreground,
+              } as CSSProperties
+            }
+          >
+            {categoryName}
+          </span>
+        ) : (
+          <span aria-hidden="true">—</span>
+        )}
+      </td>
       <td className="task-project-cell">{projectName || <span aria-hidden="true">—</span>}</td>
-      <td className="task-category-cell">{categoryName || <span aria-hidden="true">—</span>}</td>
       <td className="task-memo-cell">
         <div className="task-row-memo">
           {task.memoHidden ? (
@@ -90,10 +120,10 @@ export function TaskRow({
         <UrgencyBadge urgency={task.urgency} mode="responsive" />
       </td>
       <td className="task-assignee-cell">
-        <UserAvatar userId={task.assigneeId ?? task.ownerId} showName />
+        <UserAvatar userId={task.assigneeId ?? task.ownerId} showName nameFormat="first" />
       </td>
       <td className="task-actions-cell">
-        <details className="task-row-actions-menu">
+        <details ref={actions} className="task-row-actions-menu">
           <summary role="button" aria-label={`Actions for ${task.label}`}>
             Actions
           </summary>
@@ -102,7 +132,14 @@ export function TaskRow({
               Edit
             </button>
             {currentUserId ? (
-              <TaskTimerForTask ownerId={currentUserId} task={task} compact />
+              <TaskTimerForTask
+                ownerId={currentUserId}
+                task={task}
+                compact
+                onDismiss={() => {
+                  if (actions.current) actions.current.open = false;
+                }}
+              />
             ) : null}
           </div>
         </details>

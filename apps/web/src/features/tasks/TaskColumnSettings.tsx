@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export const taskColumns = [
-  { id: 'project', label: 'Project' },
   { id: 'category', label: 'Category' },
+  { id: 'project', label: 'Project' },
   { id: 'memo', label: 'Memo' },
   { id: 'link', label: 'Link' },
   { id: 'due', label: 'Due date' },
@@ -106,10 +106,29 @@ export function TaskColumnSettings({
   return (
     <details ref={details} className="task-column-settings">
       <summary>Columns</summary>
-      <fieldset>
-        <legend>Columns on this {breakpoint} layout</legend>
-        <p>Task and completion are always shown.</p>
-        <div>
+      <div
+        className="task-column-settings-panel"
+        role="group"
+        aria-labelledby="task-column-settings-title"
+      >
+        <header>
+          <div>
+            <strong id="task-column-settings-title">Choose visible columns</strong>
+            <small>For this {breakpoint} layout</small>
+          </div>
+          <button
+            type="button"
+            className="quiet task-column-settings-close"
+            aria-label="Close column settings"
+            onClick={() => {
+              if (details.current) details.current.open = false;
+            }}
+          >
+            ×
+          </button>
+        </header>
+        <p>Task and completion stay visible.</p>
+        <div className="task-column-options">
           {taskColumns.map((column) => (
             <label key={column.id}>
               <input
@@ -122,10 +141,12 @@ export function TaskColumnSettings({
             </label>
           ))}
         </div>
-        <button type="button" className="quiet" onClick={reset}>
-          Reset for {breakpoint}
-        </button>
-      </fieldset>
+        <footer>
+          <button type="button" className="quiet" onClick={reset}>
+            Restore defaults
+          </button>
+        </footer>
+      </div>
     </details>
   );
 }

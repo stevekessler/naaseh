@@ -17,16 +17,23 @@ it('uses a stable colorful default and falls back when a photo fails', () => {
   const view = render(
     <UserDirectoryContext.Provider
       value={[
-        { id: 'a', displayName: 'Alex', username: 'alex', pictureUrl: 'https://media.test/photo' },
+        {
+          id: 'a',
+          displayName: 'Alex Rivera',
+          username: 'alex',
+          pictureUrl: 'https://media.test/photo',
+        },
       ]}
     >
-      <UserAvatar userId="a" showName />
+      <UserAvatar userId="a" showName nameFormat="first" />
     </UserDirectoryContext.Provider>,
   );
-  const picture = view.getByRole('img', { name: 'Alex' });
+  expect(view.getByText('Alex')).toBeTruthy();
+  expect(view.queryByText('Alex Rivera')).toBeNull();
+  const picture = view.getByRole('img', { name: 'Alex Rivera' });
   expect(picture.tagName).toBe('IMG');
   fireEvent.error(picture);
-  expect(view.getByRole('img', { name: 'Alex' }).tagName.toLowerCase()).toBe('svg');
+  expect(view.getByRole('img', { name: 'Alex Rivera' }).tagName.toLowerCase()).toBe('svg');
 });
 it('rejects unsupported or oversized profile images before requesting an upload', () => {
   const fetch = vi.fn();

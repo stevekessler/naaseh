@@ -179,8 +179,11 @@ function ConflictItem({
       {error && <p role="alert">{error}</p>}
       <div className="sync-conflict-actions">
         {!isTask &&
-          ['category', 'project'].includes(conflict.mutation?.entityType ?? '') &&
-          conflict.reason === 'project_unavailable' && (
+          ((['category', 'project'].includes(conflict.mutation?.entityType ?? '') &&
+            conflict.reason === 'project_unavailable') ||
+            (['list', 'listItem'].includes(conflict.mutation?.entityType ?? '') &&
+              conflict.reason === 'version_mismatch' &&
+              conflict.currentVersion !== undefined)) && (
             <button disabled={busy} onClick={() => void resolve('local')}>
               Retry saved change
             </button>
