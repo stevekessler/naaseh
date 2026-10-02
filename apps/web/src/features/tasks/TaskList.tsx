@@ -3,8 +3,8 @@ import type { CategoryRecord, Project, Task } from '@naaseh/domain';
 import { TaskRow } from './TaskRow.js';
 import type { TaskColumnId } from './TaskColumnSettings.js';
 const configurableColumns: TaskColumnId[] = [
-  'project',
   'category',
+  'project',
   'memo',
   'link',
   'due',
@@ -51,8 +51,8 @@ export function TaskList({
         <colgroup>
           <col className="task-status-column" />
           <col className="task-name-column" />
-          <col className="task-project-column" />
           <col className="task-category-column" />
+          <col className="task-project-column" />
           <col className="task-memo-column" />
           <col className="task-link-column" />
           <col className="task-due-column" />
@@ -66,11 +66,11 @@ export function TaskList({
               <span className="visually-hidden">Status</span>
             </th>
             <th scope="col">Task</th>
-            <th className="task-project-cell" scope="col">
-              Project
-            </th>
             <th className="task-category-cell" scope="col">
               Category
+            </th>
+            <th className="task-project-cell" scope="col">
+              Project
             </th>
             <th className="task-memo-cell" scope="col">
               Memo
@@ -104,6 +104,7 @@ export function TaskList({
                 onSelect={onSelect}
                 onProgressChange={onProgressChange}
                 categoryName={categories.find((category) => category.id === categoryId)?.name}
+                categoryColor={categories.find((category) => category.id === categoryId)?.color}
                 projectName={project?.name}
                 {...(currentUserId ? { currentUserId } : {})}
               />

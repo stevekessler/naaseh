@@ -574,9 +574,24 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           mutation.baseVersion !== (current?.version ?? 0)
         ) {
           const missingPreviouslySavedItem = !current && mutation.baseVersion > 0;
+          const versionMismatch = Boolean(
+            parent && parent.ownerId === actorId && current && !missingPreviouslySavedItem,
+          );
           results.push({
             mutationId: mutation.id,
             status: current || missingPreviouslySavedItem ? 'conflict' : 'rejected',
+            ...(versionMismatch
+              ? {
+                  reason: 'version_mismatch',
+                  problem: {
+                    code: 'list_item_version_mismatch',
+                    message:
+                      'This item changed before the saved edit synchronized. Review or retry the saved edit.',
+                    reason: 'version_mismatch',
+                    correlationId: event.requestContext.requestId,
+                  },
+                }
+              : {}),
             ...(missingPreviouslySavedItem
               ? {
                   reason: 'hard_deleted',

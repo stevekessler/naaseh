@@ -12,6 +12,7 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await organization.getByText('Add category', { exact: true }).click();
   const categoryForm = organization.locator('form').filter({ hasText: 'Save category' });
   await categoryForm.getByLabel('Name').fill('PAAO');
+  await categoryForm.getByLabel('Color').fill('#cdeccf');
   await categoryForm.getByRole('button', { name: 'Save category' }).click();
   await organization.getByText('Add project', { exact: true }).click();
   const projectForm = organization.locator('form').filter({ hasText: 'Create Project' });
@@ -26,6 +27,8 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await expandTaskDetails(taskForm);
   await taskForm.getByLabel('Project').selectOption({ label: 'API' });
   await taskForm.getByRole('button', { name: 'Add task' }).click();
+  const categoryChip = page.locator('.task-category-chip').filter({ hasText: 'PAAO' });
+  await expect(categoryChip).toHaveCSS('background-color', 'rgb(205, 236, 207)');
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
   const listForm = page.locator('.task-form').first();
   await listForm.getByLabel('List name').fill('Assigned list');

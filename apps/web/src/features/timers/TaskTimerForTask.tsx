@@ -9,10 +9,12 @@ export function TaskTimerForTask({
   ownerId,
   task,
   compact = false,
+  onDismiss,
 }: {
   ownerId: string;
   task: Task;
   compact?: boolean;
+  onDismiss?: () => void;
 }) {
   const timer = useLiveQuery(() => readLocalTaskTimer(ownerId), [ownerId]);
   const [pending, setPending] = useState(false);
@@ -55,6 +57,8 @@ export function TaskTimerForTask({
       state={pending ? 'pending' : 'idle'}
       announcement={announcement}
       command={send}
+      movable={compact}
+      {...(onDismiss ? { onDismiss } : {})}
     />
   );
 }

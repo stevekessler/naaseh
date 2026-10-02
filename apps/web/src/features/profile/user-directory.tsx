@@ -26,10 +26,12 @@ export function UserAvatar({
   userId,
   displayName,
   showName = false,
+  nameFormat = 'responsive',
 }: {
   userId: string;
   displayName?: string;
   showName?: boolean;
+  nameFormat?: 'responsive' | 'first' | 'full';
 }) {
   const user = useContext(UserDirectoryContext).find((entry) => entry.id === userId);
   const [failedUrl, setFailedUrl] = useState('');
@@ -68,12 +70,12 @@ export function UserAvatar({
           )}
         </svg>
       )}
-      {showName && (
+      {showName && nameFormat !== 'first' && (
         <span className="user-full-name" title={name}>
           {name}
         </span>
       )}
-      {showName && (
+      {showName && nameFormat !== 'full' && (
         <span className="user-first-name" title={name}>
           {name.split(/\s+/u)[0]}
         </span>

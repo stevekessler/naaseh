@@ -4,6 +4,13 @@ import { expandTaskDetails, openTaskSection, setTaskDueDate, signIn } from './en
 test('creates, edits, completes, and inspects a responsive task with revisions and reminders', async ({
   page,
 }) => {
+  await page.route('**/api/v1/users/directory', (route) =>
+    route.fulfill({
+      json: {
+        items: [{ id: 'local-steve', displayName: 'Steve Kessler', username: 'local-steve' }],
+      },
+    }),
+  );
   await signIn(page);
   await expect(page.getByRole('region', { name: 'Search and filters' })).toBeHidden();
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
@@ -39,12 +46,38 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   ).toHaveAttribute('href', 'https://memo.example/estimate');
   await expect(taskTable.getByRole('columnheader', { name: 'Priority' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Assignee' })).toBeVisible();
+  await expect(taskTable.locator('.task-assignee-cell .user-first-name')).toHaveText('Steve');
+  await expect(taskTable.locator('tbody .task-assignee-cell')).not.toContainText('Kessler');
   if (test.info().project.name === 'iphone') {
     await expect(taskTable.locator('thead')).toHaveCSS('position', 'absolute');
   } else await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
+  await page.locator('.task-column-settings > summary').click();
+  const columnSettings = page.getByRole('group', { name: 'Choose visible columns' });
+  await expect(columnSettings).toBeVisible();
+  const columnLabels = await columnSettings.locator('.task-column-options label').allTextContents();
+  expect(columnLabels.slice(0, 2)).toEqual(['Category', 'Project']);
+  await columnSettings.getByRole('button', { name: 'Close column settings' }).click();
+
+  await taskTable
+    .getByRole('button', { name: 'Call the contractor progress: 0% complete' })
+    .click();
+  const progress = taskTable.getByRole('dialog', { name: 'Adjust Call the contractor progress' });
+  await expect(progress).toBeVisible();
+  await progress.getByRole('slider').fill('50');
+  await progress.getByRole('button', { name: 'Save' }).click();
+  await expect(
+    taskTable.getByRole('button', { name: 'Call the contractor progress: 50% complete' }),
+  ).toBeVisible();
+
   await taskTable.getByRole('button', { name: 'Actions for Call the contractor' }).click();
   await expect(taskTable.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  await page.getByText('1 task', { exact: true }).click();
+  await expect(
+    taskTable
+      .getByRole('button', { name: 'Actions for Call the contractor' })
+      .locator('xpath=parent::details'),
+  ).not.toHaveAttribute('open', '');
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();
   await expect(page).toHaveURL(/\/tasks\//);

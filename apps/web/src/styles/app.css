@@ -1310,39 +1310,80 @@ main {
 .task-column-settings > summary::-webkit-details-marker {
   display: none;
 }
-.task-column-settings > fieldset {
+.task-column-settings-panel {
   position: absolute;
   z-index: 30;
   inset-block-start: calc(100% + 0.4rem);
   inset-inline-end: 0;
-  width: min(21rem, calc(100vw - 2rem));
+  width: min(24rem, calc(100vw - 2rem));
   margin: 0;
-  padding: 1rem;
+  padding: 0;
   border: 1px solid #c8d4cc;
   border-radius: 14px;
   background: white;
   box-shadow: 0 14px 38px rgb(14 42 64 / 20%);
+  overflow: hidden;
 }
-.task-column-settings legend {
-  padding: 0;
-  font-weight: 800;
+.task-column-settings-panel > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.75rem;
+  background: #f6f8f6;
+  border-bottom: 1px solid var(--line);
 }
-.task-column-settings fieldset > p {
-  margin: 0.15rem 0 0.8rem;
+.task-column-settings-panel > header > div {
+  display: grid;
+  gap: 0.15rem;
+}
+.task-column-settings-panel > header strong {
+  color: var(--navy);
+  font-size: 1rem;
+}
+.task-column-settings-panel > header small,
+.task-column-settings-panel > p {
   color: #607168;
   font-size: 0.82rem;
 }
-.task-column-settings fieldset > div {
+.task-column-settings-panel > p {
+  margin: 0;
+  padding: 0.75rem 1rem 0.35rem;
+}
+.task-column-settings-close {
+  min-width: 2rem;
+  min-height: 2rem;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+}
+.task-column-options {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem 0.8rem;
-  margin-bottom: 0.8rem;
+  gap: 0.45rem;
+  padding: 0.45rem 1rem 1rem;
 }
 .task-column-settings label {
   display: flex;
   align-items: center;
   gap: 0.45rem;
   min-height: 2.25rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #dce4df;
+  border-radius: 9px;
+  background: #fbfcfb;
+  font-weight: 650;
+}
+.task-column-settings label:has(input:checked) {
+  border-color: #9db9aa;
+  background: #eef6f1;
+}
+.task-column-settings-panel > footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.7rem 1rem;
+  border-top: 1px solid var(--line);
+  background: #f6f8f6;
 }
 .task-list {
   width: 100%;
@@ -1480,8 +1521,31 @@ main {
   width: 1.5rem;
   height: 1.5rem;
 }
+.task-list .user-full-name {
+  display: none;
+}
+.task-list .user-first-name {
+  display: inline;
+}
+.task-category-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 0.25rem 0.5rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--category-foreground) 24%, transparent);
+  border-radius: 999px;
+  background: var(--category-background);
+  color: var(--category-foreground);
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .task-row-actions-menu {
   position: relative;
+}
+.task-row-actions-menu[open]:has(.task-timer--movable) {
+  z-index: 110;
 }
 .task-row-actions-menu > summary {
   min-height: 2.25rem;
@@ -1769,6 +1833,13 @@ main {
 .progress-indicator.is-open .progress-indicator-tooltip[role='dialog'] {
   transform: translateY(0);
 }
+.task-list tbody tr:first-child .progress-indicator-tooltip {
+  top: calc(100% + 0.35rem);
+  bottom: auto;
+}
+.task-list tbody tr:first-child .progress-indicator.is-open {
+  z-index: 25;
+}
 @media (hover: hover) and (pointer: fine) {
   .progress-indicator-button:hover {
     transform: rotate(-7deg) scale(1.08);
@@ -2011,6 +2082,10 @@ dialog input {
     width: auto;
     max-width: none;
     transform: translateY(0.2rem);
+  }
+  .task-list tbody tr:first-child .progress-indicator-tooltip {
+    top: auto;
+    bottom: calc(1rem + var(--safe-bottom));
   }
   .progress-indicator-button:focus-visible + .progress-indicator-tooltip,
   .progress-indicator.is-open .progress-indicator-tooltip {
@@ -3242,6 +3317,37 @@ details:not([open]) > summary.project-workload-heading::after {
   padding: 0.75rem;
   border: 1px solid var(--border, #777);
   border-radius: 0.5rem;
+}
+.task-timer--movable {
+  position: fixed;
+  z-index: 100;
+  top: clamp(6rem, 24vh, 14rem);
+  right: max(1rem, var(--safe-right));
+  width: min(21rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 8rem);
+  overflow-y: auto;
+  background: white;
+  box-shadow: 0 12px 30px rgb(16 43 73 / 20%);
+}
+.task-timer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: -0.35rem -0.35rem 0;
+}
+.task-timer-header button {
+  width: auto;
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+}
+.task-timer-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.task-timer-drag-handle:active {
+  cursor: grabbing;
 }
 .timer-clock {
   margin: 0;

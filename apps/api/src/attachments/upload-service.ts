@@ -15,6 +15,22 @@ import { metric } from '@naaseh/observability';
 const s3 = new S3Client({});
 const bucket = process.env.NAASEH_ATTACHMENT_BUCKET ?? '';
 const keyArn = process.env.NAASEH_ATTACHMENT_KMS_KEY_ARN ?? '';
+export function requiredAttachmentUploadHeaders(input: {
+  mediaType: string;
+  checksumSha256: string;
+  keyArn: string;
+  attachmentId: string;
+  sessionId: string;
+}) {
+  return {
+    'content-type': input.mediaType,
+    'x-amz-checksum-sha256': input.checksumSha256,
+    'x-amz-server-side-encryption': 'aws:kms',
+    'x-amz-server-side-encryption-aws-kms-key-id': input.keyArn,
+    'x-amz-meta-attachmentid': input.attachmentId,
+    'x-amz-meta-sessionid': input.sessionId,
+  };
+}
 export async function initiateUpload(
   input: {
     parentType: 'task' | 'listItem';
@@ -95,12 +111,13 @@ export async function initiateUpload(
     attachment,
     uploadSessionId: sessionId,
     uploadUrl: await getSignedUrl(s3, command, { expiresIn: 300 }),
-    requiredHeaders: {
-      'content-type': policy.mediaType,
-      'x-amz-checksum-sha256': input.checksumSha256,
-      'x-amz-server-side-encryption': 'aws:kms',
-      'x-amz-server-side-encryption-aws-kms-key-id': keyArn,
-    },
+    requiredHeaders: requiredAttachmentUploadHeaders({
+      mediaType: policy.mediaType,
+      checksumSha256: input.checksumSha256,
+      keyArn,
+      attachmentId,
+      sessionId,
+    }),
     expiresAt,
   };
   if (mutationId) {

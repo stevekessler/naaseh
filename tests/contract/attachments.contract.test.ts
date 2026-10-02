@@ -6,6 +6,7 @@ import {
   attachmentUploadGrantSchema,
 } from '@naaseh/contracts';
 import { attachmentSchema } from '@naaseh/domain';
+import { requiredAttachmentUploadHeaders } from '../../apps/api/src/attachments/upload-service.js';
 const attachment = attachmentSchema.parse({
   id: '01J00000000000000000000000',
   parentType: 'task',
@@ -23,6 +24,22 @@ const attachment = attachmentSchema.parse({
 });
 describe('attachment contracts', () => {
   it('validates initiation, completion, metadata, and a five-minute no-store grant shape', () => {
+    expect(
+      requiredAttachmentUploadHeaders({
+        mediaType: 'text/plain',
+        checksumSha256: 'checksum',
+        keyArn: 'key-arn',
+        attachmentId: 'attachment-id',
+        sessionId: 'session-id',
+      }),
+    ).toEqual({
+      'content-type': 'text/plain',
+      'x-amz-checksum-sha256': 'checksum',
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': 'key-arn',
+      'x-amz-meta-attachmentid': 'attachment-id',
+      'x-amz-meta-sessionid': 'session-id',
+    });
     expect(
       attachmentInitiateSchema.parse({
         parentType: 'task',

@@ -27,6 +27,15 @@ describe('attachment infrastructure', () => {
       LifecycleConfiguration: Match.anyValue(),
     });
     template.hasResourceProperties('AWS::S3::Bucket', {
+      CorsConfiguration: {
+        CorsRules: Match.arrayWith([
+          Match.objectLike({
+            AllowedHeaders: Match.arrayWith(['x-amz-meta-attachmentid', 'x-amz-meta-sessionid']),
+          }),
+        ]),
+      },
+    });
+    template.hasResourceProperties('AWS::S3::Bucket', {
       LifecycleConfiguration: {
         Rules: Match.arrayWith([
           Match.objectLike({

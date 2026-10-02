@@ -13,6 +13,7 @@ export interface ReviewConflict {
   reason: string;
   message?: string;
   code?: string;
+  currentVersion?: number;
 }
 
 export async function listReviewConflicts(): Promise<ReviewConflict[]> {
@@ -23,9 +24,12 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
           mutation?: Mutation;
           result?: {
             reason?: string;
+            entityVersion?: number;
+            currentVersion?: number;
             problem?: { reason?: string; message?: string; code?: string };
           };
         }>('conflict', record.id, record.value);
+        const currentVersion = saved.result?.entityVersion ?? saved.result?.currentVersion;
         return {
           id: record.id,
           createdAt: record.updatedAt,
@@ -33,6 +37,7 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
           reason: saved.result?.reason ?? saved.result?.problem?.reason ?? 'version_mismatch',
           ...(saved.result?.problem?.message ? { message: saved.result.problem.message } : {}),
           ...(saved.result?.problem?.code ? { code: saved.result.problem.code } : {}),
+          ...(currentVersion !== undefined ? { currentVersion } : {}),
         };
       } catch {
         // Timer and legacy access-revocation records use other encryption namespaces.
@@ -71,14 +76,21 @@ export async function resolveReviewedConflict(
     const mutation = conflict.mutation;
     if (mutation?.entityType !== 'task') {
       if (choice === 'local') {
+        const retryableVersionConflict =
+          mutation &&
+          ['list', 'listItem'].includes(mutation.entityType) &&
+          conflict.reason === 'version_mismatch' &&
+          conflict.currentVersion !== undefined;
         if (
           !mutation ||
-          !['category', 'project'].includes(mutation.entityType) ||
-          !['project_unavailable'].includes(conflict.reason)
+          (!retryableVersionConflict &&
+            (!['category', 'project'].includes(mutation.entityType) ||
+              !['project_unavailable'].includes(conflict.reason)))
         )
           throw new Error('This change needs an edit or server review before it can be retried.');
         const retry = {
           ...mutation,
+          ...(retryableVersionConflict ? { baseVersion: conflict.currentVersion! } : {}),
           attempts: 0,
           createdAt: new Date().toISOString(),
           payload: await encryptLocalValue('mutation', mutation.id, mutation.payload),
