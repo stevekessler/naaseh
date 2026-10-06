@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import type { CategoryRecord, Project, Task } from '@naaseh/domain';
 import { TaskRow } from './TaskRow.js';
 import type { TaskColumnId } from './TaskColumnSettings.js';
@@ -46,7 +45,6 @@ export function TaskList({
           .map((column) => `hide-${column}`)
           .join(' ')}`}
         aria-label="Tasks"
-        style={{ '--task-visible-columns': visibleColumns.size + 2 } as CSSProperties}
       >
         <colgroup>
           <col className="task-status-column" />

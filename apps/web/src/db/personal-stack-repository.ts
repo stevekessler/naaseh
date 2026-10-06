@@ -119,6 +119,26 @@ function applyMove(
     : applyFilteredPermutation(work, move);
 }
 
+function rebaseSimpleMoveOnCurrentOrder(
+  work: readonly LocalStackWorkReference[],
+  move: Extract<LocalStackMove, { kind: 'simple_move' }>,
+): Extract<LocalStackMove, { kind: 'simple_move' }> {
+  const movedIndex = work.findIndex(
+    (reference) => referenceKey(reference) === referenceKey(move.movedWork),
+  );
+  if (movedIndex < 0) throw new Error('Moved work is not present in the current stack order.');
+
+  const beforeWork = work[movedIndex - 1];
+  const afterWork = work[movedIndex + 1];
+  return {
+    kind: 'simple_move',
+    movedWork: move.movedWork,
+    // A single current neighbor preserves the browser's intended position and
+    // remains valid when older anchors were separated by later offline moves.
+    ...(afterWork ? { afterWork } : beforeWork ? { beforeWork } : {}),
+  };
+}
+
 export async function initializeLocalStack(input: {
   ownerId: string;
   scope: LocalStackScope;
@@ -514,12 +534,16 @@ export async function resolveLocalStackConflict(
   const baseVersion = Math.max(current.version, conflict.currentVersion);
   if (baseVersion !== current.version)
     await db.secureStackScopes.put(await scopeRecord({ ...current, version: baseVersion }));
+  const rebasedMove =
+    conflict.move.kind === 'simple_move'
+      ? rebaseSimpleMoveOnCurrentOrder(current.work, conflict.move)
+      : conflict.move;
   const pending = await reorderLocalStack({
     ownerId: conflict.ownerId,
     scope: conflict.scope,
     baseVersion,
     sourceClientId: conflict.sourceClientId,
-    move: conflict.move,
+    move: rebasedMove,
   });
   await db.secureStackConflicts.delete(conflictId);
   return pending;

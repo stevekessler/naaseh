@@ -150,6 +150,11 @@ const listC = {
   workId: '01J00000000000000000000003',
   membershipEpoch: 'epoch-c',
 };
+const taskD = {
+  workType: 'task' as const,
+  workId: '01J00000000000000000000004',
+  membershipEpoch: 'epoch-d',
+};
 const overall = { scopeType: 'overall' as const };
 const ownerId = 'owner';
 
@@ -380,13 +385,23 @@ describe('encrypted offline personal-stack persistence', () => {
   });
 
   it('surfaces an encrypted conflict and can repair it by reapplying intent', async () => {
-    await seed();
+    await initializeLocalStack({
+      ownerId,
+      scope: overall,
+      version: 0,
+      work: [taskA, taskB, listC, taskD],
+    });
     const pending = await reorderLocalStack({
       ownerId,
       scope: overall,
       baseVersion: 0,
       sourceClientId: 'browser-a',
-      move: { kind: 'simple_move', movedWork: listC, afterWork: taskA },
+      move: {
+        kind: 'simple_move',
+        movedWork: taskD,
+        beforeWork: taskA,
+        afterWork: taskB,
+      },
     });
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(
@@ -410,11 +425,30 @@ describe('encrypted offline personal-stack persistence', () => {
       ciphertext: expect.any(String),
     });
 
+    await reorderLocalStack({
+      ownerId,
+      scope: overall,
+      baseVersion: 1,
+      sourceClientId: 'browser-a',
+      move: {
+        kind: 'simple_move',
+        movedWork: listC,
+        beforeWork: taskA,
+        afterWork: taskD,
+      },
+    });
+
     await resolvePersonalStackConflict(conflict!, 'reapply');
     expect(await listLocalStackConflicts(ownerId)).toEqual([]);
-    expect(await listPendingStackOperations(ownerId)).toEqual([
-      expect.objectContaining({ status: 'pending', baseVersion: 2 }),
-    ]);
+    expect(await listPendingStackOperations(ownerId)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ status: 'pending', baseVersion: 2 }),
+        expect.objectContaining({
+          status: 'pending',
+          move: { kind: 'simple_move', movedWork: taskD, afterWork: taskB },
+        }),
+      ]),
+    );
   });
 
   it('surfaces authorization conflicts as discard-only and removes them on discard', async () => {
