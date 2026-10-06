@@ -7,18 +7,17 @@ be specified and implemented one at a time with Spec Kit. It describes work need
 iPhone application; it does not repeat every web requirement. Unless a feature says otherwise, the
 existing product behavior and authorization rules remain the source of truth.
 
-## Candidate product direction
+## Selected product direction
 
-The lower-cost path is a hybrid iPhone application with Capacitor and WKWebView, reusing the existing
-React mobile interface, TypeScript domain packages, API contracts, encryption rules, and
-synchronization semantics. It would add narrow native adapters for Keychain/biometrics, APNs,
-background execution, file and camera access, deep links, and app lifecycle events.
+Build a fully native SwiftUI application. The iOS client will reuse the existing backend APIs,
+wire-format contracts, authorization model, product requirements, synchronization semantics, and
+cryptographic formats. It will not embed the web application or directly reuse the React UI, Dexie
+repositories, TypeScript sync engine, browser crypto implementation, or browser test suite.
 
-The alternative under consideration is a fully native SwiftUI application. SwiftUI would reuse the
-backend APIs and product requirements, but not the React UI, Dexie repositories, TypeScript sync
-engine, browser crypto implementation, or browser test suite directly. Selecting SwiftUI therefore
-changes this backlog from an adaptation project into a native client rewrite; each feature would
-need native data, sync, crypto, UI, accessibility, and test work.
+This is a native client rewrite. Every feature must include the necessary Swift domain models,
+networking, persistence, synchronization, cryptography, SwiftUI presentation, accessibility, and
+native tests. Contract fixtures and cross-client compatibility tests must ensure the SwiftUI and web
+clients interpret server data and security rules identically.
 
 ## Confirmed release decisions
 
@@ -28,7 +27,7 @@ need native data, sync, crypto, UI, accessibility, and test work.
   Journal, Crisis Plans, Google Tasks, files, offline work, reminders, ranking, and timers.
 - System administration and operator-only recovery/provisioning will remain web-only. The iOS app
   will retain personal Profile and account-security settings.
-- The implementation strategy (Capacitor or SwiftUI), iPhone/iPad device scope, and biometric scope
+- SwiftUI is the selected implementation strategy. iPhone/iPad device scope and biometric scope
   remain to be decided.
 
 ## Cross-cutting rules for every iOS feature
@@ -56,21 +55,22 @@ as the starting feature name.
 
 **Suggested slug:** `012-ios-app-foundation`
 
-Create an Xcode/Capacitor application that builds the existing React mobile interface as an iPhone
-app, uses separate development and production configuration, and can be installed on a simulator and
-physical device.
+Create a native SwiftUI application with a maintainable modular architecture, separate development
+and production configuration, and repeatable simulator and physical-device builds.
 
 Include:
 
-- Capacitor workspace, iOS bundle identifier, app icons, launch screen, display name, versioning, and
-  signing configuration without committed signing secrets.
-- A decision between bundling the web assets in the app and loading the production site. Bundled
-  assets are recommended so startup and basic offline use do not depend on the site being reachable.
-- An environment/configuration bridge for API origin, allowed navigation origins, and feature flags.
-- A compatibility layer so web and iOS builds share UI and business code without filling components
-  with platform-specific conditionals.
+- Xcode workspace/project, Swift package/module boundaries, iOS bundle identifier, app icons, launch
+  screen, display name, versioning, and signing configuration without committed signing secrets.
+- Native application, scene, dependency, navigation, networking, persistence, synchronization,
+  cryptography, and feature-module boundaries.
+- Environment configuration for API origin, universal/deep links, notification environment, and
+  feature flags, with no production secrets compiled into the application.
+- Swift request/response models that match the existing API and sync wire formats, backed by shared
+  fixtures and compatibility tests rather than duplicated undocumented assumptions.
+- A design-system foundation derived from the existing Na'aseh colors, logo, terminology, state
+  meanings, and accessibility rules while following native iOS interaction conventions.
 - A documented local build, simulator run, physical-device run, archive, and troubleshooting flow.
-- A minimal native capability that gives the App Store build value beyond a plain website wrapper.
 
 **Depends on:** none.
 
@@ -113,8 +113,10 @@ safe device-local session storage in the iPhone container.
 
 Include:
 
-- Compatibility between the current opaque-cookie/CSRF model and WKWebView, including origin,
-  SameSite, cookie persistence, revocation, and expired-session behavior.
+- A native URLSession-compatible form of the current opaque-session and CSRF protections, including
+  cookie or token persistence, origin expectations, revocation, and expired-session behavior. Any
+  server contract change must remain compatible with the web client and preserve current security
+  properties.
 - Secure storage of only the minimum device/session material in Keychain; no plaintext credentials.
 - Password-manager and AutoFill-compatible username, password, one-time-code, and new-password
   fields.
@@ -134,16 +136,19 @@ Include:
 
 **Suggested slug:** `015-ios-offline-sync`
 
-Make the existing encrypted IndexedDB/Dexie data, outbox, cursors, conflicts, and migrations reliable
-inside WKWebView and across iOS app upgrades, storage pressure, suspension, and forced termination.
+Implement a native encrypted local store, outbox, cursors, conflicts, and migrations that remain
+reliable across iOS app upgrades, storage pressure, suspension, and forced termination.
 
 Include:
 
-- A documented decision to retain Dexie/IndexedDB or introduce a native store behind the same
-  repository interface. Retaining Dexie is recommended for the first release if physical-device
-  durability tests pass.
-- Device-key generation and wrapping with Keychain protection, including reinstall, restore, and
-  unavailable-key behavior.
+- Select and document a native persistence layer such as SwiftData/Core Data or SQLite based on
+  atomic transactions, migration control, encrypted-record handling, query needs, testability, and
+  predictable behavior under termination. Do not assume a framework encrypts application fields.
+- Implement the established encrypted-record envelope and associated-data rules with audited Apple
+  cryptographic APIs or a narrowly reviewed dependency; prove byte-level interoperability with web
+  fixtures before storing production-compatible data.
+- Device-key generation and wrapping with Keychain protection, including reinstall, device restore,
+  keychain synchronization policy, and unavailable-key behavior.
 - Atomic local mutation plus outbox writes, idempotent replay, authorized pulls, privacy purge, and
   visible pending/conflict/retry states.
 - Foreground sync on launch, resume, manual refresh, and connectivity restoration.
@@ -424,11 +429,9 @@ gates.
 
 ## Remaining decisions before running `/speckit.specify` for Feature 1
 
-1. **Implementation strategy:** Is a Capacitor hybrid app that reuses the current React mobile UI
-   acceptable, or is a fully native SwiftUI application required?
-2. **Device scope:** iPhone only initially, or a universal iPhone/iPad app? Should Mac Catalyst be
+1. **Device scope:** iPhone only initially, or a universal iPhone/iPad app? Should Mac Catalyst be
    explicitly excluded?
-3. **Biometrics:** Should Face ID/Touch ID merely unlock local protected state after a normal sign-in,
+2. **Biometrics:** Should Face ID/Touch ID merely unlock local protected state after a normal sign-in,
    or should the app also pursue passkey-based server authentication in a later feature?
 
 ## Current-spec coverage map
