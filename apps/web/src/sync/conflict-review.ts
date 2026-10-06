@@ -1,4 +1,11 @@
-import { createUlid, taskSchema, type Mutation, type Task } from '@naaseh/domain';
+import {
+  createUlid,
+  listItemSchema,
+  listSchema,
+  taskSchema,
+  type Mutation,
+  type Task,
+} from '@naaseh/domain';
 import { db } from '../db/database.js';
 import {
   decryptLocalValue,
@@ -14,6 +21,59 @@ export interface ReviewConflict {
   message?: string;
   code?: string;
   currentVersion?: number;
+  display?: ConflictDisplayContext;
+}
+
+export interface ConflictDisplayContext {
+  entityLabel: string;
+  parentLabel?: string;
+}
+
+export const STALE_CONFLICT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function isStaleConflict(conflict: Pick<ReviewConflict, 'createdAt'>, now = Date.now()) {
+  if (!conflict.createdAt) return false;
+  const createdAt = Date.parse(conflict.createdAt);
+  return Number.isFinite(createdAt) && now - createdAt >= STALE_CONFLICT_AGE_MS;
+}
+
+const isObsoleteConflict = (conflict: ReviewConflict) => conflict.reason === 'hard_deleted';
+
+export async function readConflictDisplayContext(
+  mutation?: Mutation,
+): Promise<ConflictDisplayContext | undefined> {
+  if (!mutation) return undefined;
+  try {
+    if (mutation.entityType === 'listItem') {
+      const row = await db.secureListItems.get(mutation.entityId);
+      const parsed = row
+        ? listItemSchema.parse(await decryptLocalValue('listItem', mutation.entityId, row.value))
+        : mutation.operation === 'create'
+          ? listItemSchema.safeParse(mutation.payload).data
+          : undefined;
+      if (!parsed) return undefined;
+      const parentRow = await db.secureLists.get(parsed.listId);
+      const parent = parentRow
+        ? listSchema.parse(await decryptLocalValue('list', parsed.listId, parentRow.value))
+        : undefined;
+      return {
+        entityLabel: parsed.nameOverride ?? parsed.directorySnapshot.name,
+        ...(parent ? { parentLabel: parent.name } : {}),
+      };
+    }
+    if (mutation.entityType === 'list') {
+      const row = await db.secureLists.get(mutation.entityId);
+      const parsed = row
+        ? listSchema.parse(await decryptLocalValue('list', mutation.entityId, row.value))
+        : mutation.operation === 'create'
+          ? listSchema.safeParse(mutation.payload).data
+          : undefined;
+      return parsed ? { entityLabel: parsed.name } : undefined;
+    }
+  } catch {
+    // A missing or unreadable cache entry must not hide the conflict itself.
+  }
+  return undefined;
 }
 
 export async function listReviewConflicts(): Promise<ReviewConflict[]> {
@@ -28,8 +88,10 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
             currentVersion?: number;
             problem?: { reason?: string; message?: string; code?: string };
           };
+          display?: ConflictDisplayContext;
         }>('conflict', record.id, record.value);
         const currentVersion = saved.result?.entityVersion ?? saved.result?.currentVersion;
+        const display = saved.display ?? (await readConflictDisplayContext(saved.mutation));
         return {
           id: record.id,
           createdAt: record.updatedAt,
@@ -38,6 +100,7 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
           ...(saved.result?.problem?.message ? { message: saved.result.problem.message } : {}),
           ...(saved.result?.problem?.code ? { code: saved.result.problem.code } : {}),
           ...(currentVersion !== undefined ? { currentVersion } : {}),
+          ...(display ? { display } : {}),
         };
       } catch {
         // Timer and legacy access-revocation records use other encryption namespaces.
@@ -50,6 +113,44 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
       }
     }),
   );
+}
+
+export async function dismissObsoleteConflicts(options?: {
+  expiredOnly?: boolean;
+  now?: number;
+}): Promise<number> {
+  const now = options?.now ?? Date.now();
+  const targets = (await listReviewConflicts()).filter(
+    (conflict) =>
+      isObsoleteConflict(conflict) && (!options?.expiredOnly || isStaleConflict(conflict, now)),
+  );
+  if (!targets.length) return 0;
+  let dismissed = 0;
+  await db.transaction(
+    'rw',
+    [
+      db.secureConflicts,
+      db.secureTasks,
+      db.secureLists,
+      db.secureListItems,
+      db.outbox,
+      db.settings,
+    ],
+    async () => {
+      for (const conflict of targets) {
+        const mutation = conflict.mutation;
+        if (mutation && (await db.outbox.where('entityId').equals(mutation.entityId).count()) > 0)
+          continue;
+        if (mutation?.entityType === 'task') await db.secureTasks.delete(mutation.entityId);
+        if (mutation?.entityType === 'list') await db.secureLists.delete(mutation.entityId);
+        if (mutation?.entityType === 'listItem') await db.secureListItems.delete(mutation.entityId);
+        await db.secureConflicts.delete(conflict.id);
+        dismissed += 1;
+      }
+      await db.settings.put({ key: 'pending-sync-replay-cursor', value: '{}' });
+    },
+  );
+  return dismissed;
 }
 
 export async function readConflictTask(conflict: ReviewConflict): Promise<Task | null> {

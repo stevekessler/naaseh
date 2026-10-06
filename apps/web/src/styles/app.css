@@ -2841,6 +2841,7 @@ details:not([open]) > summary.project-workload-heading::after {
   .stack-list .stack-row > .workload-rank {
     grid-column: 1;
     grid-row: 1;
+    align-self: center;
   }
   .stack-list .stack-row > .stack-row-summary {
     grid-column: 2;
@@ -3320,14 +3321,14 @@ details:not([open]) > summary.project-workload-heading::after {
 }
 .task-timer--movable {
   position: fixed;
-  z-index: 100;
-  top: clamp(6rem, 24vh, 14rem);
+  z-index: 1000;
   right: max(1rem, var(--safe-right));
+  bottom: max(1rem, var(--safe-bottom));
   width: min(21rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 8rem);
+  max-height: calc(100dvh - 2rem);
   overflow-y: auto;
   background: white;
-  box-shadow: 0 12px 30px rgb(16 43 73 / 20%);
+  box-shadow: 0 16px 42px rgb(16 43 73 / 28%);
 }
 .task-timer-header {
   display: flex;
@@ -3582,6 +3583,16 @@ html:has(.task-undo-notices) {
   border-top: 1px solid var(--border, #d9e2dd);
   margin-top: 1.5rem;
   padding-top: 1rem;
+}
+.sync-conflict-cleanup,
+.sync-conflict-stale {
+  background: var(--surface-muted, #f5f7f6);
+  border: 1px solid var(--border, #d9e2dd);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+.sync-conflict-cleanup p {
+  margin-block-start: 0;
 }
 .sync-conflict-comparison {
   display: grid;

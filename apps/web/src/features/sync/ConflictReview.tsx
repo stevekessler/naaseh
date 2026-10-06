@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Task } from '@naaseh/domain';
 import {
+  dismissObsoleteConflicts,
+  isStaleConflict,
   listReviewConflicts,
   readConflictTask,
   resolveReviewedConflict,
@@ -27,6 +29,13 @@ const fieldLabels: Record<string, string> = {
   status: 'Status',
   memoHidden: 'Memo protection',
 };
+const entityLabels: Record<string, string> = {
+  category: 'Category',
+  list: 'List',
+  listItem: 'List item',
+  project: 'Project',
+  taskTimer: 'Task timer',
+};
 const displayValue = (value: unknown) =>
   value === undefined || value === null
     ? 'Not set'
@@ -34,7 +43,7 @@ const displayValue = (value: unknown) =>
       ? JSON.stringify(value)
       : String(value);
 
-function ConflictItem({
+export function ConflictItem({
   conflict,
   synchronize,
 }: {
@@ -45,6 +54,7 @@ function ConflictItem({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const isTask = conflict.mutation?.entityType === 'task';
+  const stale = isStaleConflict(conflict);
   const payload = conflict.mutation?.payload as Record<string, unknown> | undefined;
   const savedFields =
     payload && typeof payload.patch === 'object' && payload.patch
@@ -59,7 +69,9 @@ function ConflictItem({
   const title =
     typeof fields?.label === 'string'
       ? fields.label
-      : (remote?.label ?? `${conflict.mutation?.entityType ?? 'Saved change'} conflict`);
+      : (remote?.label ??
+        conflict.display?.entityLabel ??
+        `${entityLabels[conflict.mutation?.entityType ?? ''] ?? 'Saved change'} conflict`);
   const refresh = async () => {
     setBusy(true);
     setError('');
@@ -100,6 +112,18 @@ function ConflictItem({
   return (
     <article className="sync-conflict-item">
       <h3>{title}</h3>
+      {conflict.display?.parentLabel && (
+        <p className="sync-conflict-context">List: {conflict.display.parentLabel}</p>
+      )}
+      {!isTask && !conflict.display?.entityLabel && conflict.mutation?.entityId && (
+        <p className="sync-conflict-context">Item reference: {conflict.mutation.entityId}</p>
+      )}
+      {stale && conflict.reason !== 'hard_deleted' && (
+        <p className="sync-conflict-stale" role="status">
+          Stale conflict — this saved change is more than seven days old and still needs your
+          review. It will not expire automatically.
+        </p>
+      )}
       {conflict.createdAt && (
         <p>
           Saved on this device:{' '}
@@ -220,6 +244,9 @@ export function ConflictReview({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const conflicts = useLiveQuery(listReviewConflicts, []);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupMessage, setCleanupMessage] = useState('');
+  const obsoleteCount = conflicts?.filter((conflict) => conflict.reason === 'hard_deleted').length;
   useEffect(() => {
     const trigger = document.activeElement as HTMLElement | null;
     ref.current?.showModal();
@@ -246,6 +273,32 @@ export function ConflictReview({
         on another device or in another tab. Your saved change is kept here until you choose what to
         do.
       </p>
+      {Boolean(obsoleteCount) && (
+        <div className="sync-conflict-cleanup">
+          <p>
+            {obsoleteCount} conflict{obsoleteCount === 1 ? '' : 's'} refer to work the server says
+            was permanently deleted. These conflicts are removed automatically after seven days.
+          </p>
+          <button
+            disabled={cleanupBusy}
+            onClick={() => {
+              setCleanupBusy(true);
+              setCleanupMessage('');
+              void dismissObsoleteConflicts()
+                .then((count) =>
+                  setCleanupMessage(
+                    `${count} obsolete conflict${count === 1 ? '' : 's'} dismissed.`,
+                  ),
+                )
+                .catch(() => setCleanupMessage('Obsolete conflicts could not be dismissed.'))
+                .finally(() => setCleanupBusy(false));
+            }}
+          >
+            Dismiss obsolete conflicts
+          </button>
+        </div>
+      )}
+      {cleanupMessage && <p role="status">{cleanupMessage}</p>}
       {!conflicts ? (
         <p>Loading conflicts…</p>
       ) : conflicts.length === 0 ? (

@@ -80,6 +80,45 @@ describe('post-it task view', () => {
     ).toEqual(['Newer', 'Older', 'Ranked']);
   });
 
+  it('puts tasks due today or earlier before new and stack-ranked tasks', () => {
+    const now = new Date(2026, 9, 5, 15, 15);
+    const rankedFirst = createTask(
+      { label: 'Ranked first' },
+      'steve',
+      new Date('2026-01-01T00:00:00Z'),
+    );
+    const rankedDueToday = createTask(
+      { label: 'Due today', dueKind: 'date', dueDate: '2026-10-05' },
+      'steve',
+      new Date('2026-01-02T00:00:00Z'),
+    );
+    const rankedOverdue = createTask(
+      { label: 'Overdue', dueKind: 'date', dueDate: '2026-10-04' },
+      'steve',
+      new Date('2026-01-03T00:00:00Z'),
+    );
+    const newFuture = createTask(
+      { label: 'New future', dueKind: 'date', dueDate: '2026-10-06' },
+      'steve',
+      new Date('2026-01-04T00:00:00Z'),
+    );
+    const stored = new Set([rankedFirst.id, rankedDueToday.id, rankedOverdue.id]);
+    const ranks = new Map([
+      [rankedFirst.id, 1],
+      [rankedDueToday.id, 2],
+      [rankedOverdue.id, 3],
+    ]);
+
+    expect(
+      orderTasksForList(
+        [rankedFirst, rankedDueToday, rankedOverdue, newFuture],
+        stored,
+        ranks,
+        now,
+      ).map((task) => task.label),
+    ).toEqual(['Due today', 'Overdue', 'New future', 'Ranked first']);
+  });
+
   it('offers the shared task editor from a post-it when editing is enabled', () => {
     const task = createTask({ label: 'Editable note' }, 'steve');
     const html = renderToStaticMarkup(

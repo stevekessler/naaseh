@@ -36,8 +36,9 @@ export function TaskRow({
   const categoryPalette = categoryForeground(categoryColor ?? '#fff2a8');
   useEffect(() => {
     const closeOutside = (event: PointerEvent) => {
-      if (actions.current?.open && !actions.current.contains(event.target as Node))
-        actions.current.open = false;
+      const target = event.target as Element;
+      if (target.closest('.task-timer--movable')) return;
+      if (actions.current?.open && !actions.current.contains(target)) actions.current.open = false;
     };
     document.addEventListener('pointerdown', closeOutside);
     return () => document.removeEventListener('pointerdown', closeOutside);

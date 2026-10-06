@@ -32,6 +32,7 @@ import { PostItBoard } from '../features/postit/PostItBoard.js';
 import { ConflictReview } from '../features/sync/ConflictReview.js';
 import { SyncStatus } from '../features/sync/SyncStatus.js';
 import { drainSequentially } from '../sync/sync-engine.js';
+import { dismissObsoleteConflicts } from '../sync/conflict-review.js';
 import { drainJournalOutbox } from '../sync/journal-sync.js';
 import { drainJournalDataInDependencyOrder } from '../sync/crisis-plan-sync.js';
 import { zeroizeJournalKey } from '../crypto/journal-crypto.js';
@@ -419,6 +420,10 @@ export function App() {
     ) ?? 0;
   const [reviewConflicts, setReviewConflicts] = useState(false);
   const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
+  useEffect(() => {
+    if (!session || sessionValidation !== 'valid') return;
+    void dismissObsoleteConflicts({ expiredOnly: true }).catch(() => undefined);
+  }, [session, sessionValidation]);
   const eligibleStackWork = useMemo(
     () => [
       ...tasks

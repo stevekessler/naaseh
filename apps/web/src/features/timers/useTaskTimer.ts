@@ -11,6 +11,11 @@ export const timerStatusText = (state: TimerUiState) =>
     unavailable: 'Timer is unavailable until task access is restored.',
   })[state];
 
+export const isActiveTaskTimer = (
+  timer: TaskTimer | undefined,
+): timer is TaskTimer & { status: 'running' | 'paused' } =>
+  timer?.status === 'running' || timer?.status === 'paused';
+
 export function useTaskTimer(timer: TaskTimer | undefined) {
   const [now, setNow] = useState(() => Date.now());
   const [announcement, setAnnouncement] = useState('');

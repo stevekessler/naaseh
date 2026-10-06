@@ -3,6 +3,7 @@ import { createTask, createUlid, type Mutation } from '@naaseh/domain';
 import {
   advanceVectorCursor,
   applyTaskMutation,
+  classifyListItemSyncConflict,
   mergeNonOverlapping,
   nextFeedSequence,
   stableReplayResult,
@@ -24,6 +25,18 @@ describe('server synchronization rules', () => {
     expect(applyTaskMutation(task, mutation({ entityId: task.id, baseVersion: 0 })).status).toBe(
       'conflict',
     );
+    expect(classifyListItemSyncConflict({ baseVersion: 3 })).toMatchObject({
+      reason: 'hard_deleted',
+      code: 'list_item_no_longer_exists',
+    });
+    expect(
+      classifyListItemSyncConflict({
+        baseVersion: 3,
+        currentVersion: 4,
+        parentExists: true,
+        parentOwned: true,
+      }),
+    ).toMatchObject({ reason: 'version_mismatch', code: 'list_item_version_mismatch' });
   });
   it('does not move vector cursors backward and increments feed sequences exactly once', () => {
     expect(advanceVectorCursor({ PUBLIC: 9 }, 'PUBLIC', 4)).toEqual({ PUBLIC: 9 });

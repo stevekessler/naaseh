@@ -28,6 +28,7 @@ import { pushRequestSchema, stackSyncMutationSchema } from '@naaseh/contracts';
 import {
   applySharedWorkSyncPayload,
   applyTaskMutation,
+  classifyListItemSyncConflict,
   dispatchPersonalStackSyncMutation,
   dispatchTaskTimerSyncMutation,
   serializeSharedWorkChange,
@@ -540,6 +541,24 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     if (mutation.entityType === 'listItem') {
       const current = await findListItem(mutation.entityId);
       serverRecordPresence.set(mutationIndex, Boolean(current));
+      const missingItem = classifyListItemSyncConflict({
+        baseVersion: mutation.baseVersion,
+        ...(current ? { currentVersion: current.version } : {}),
+      });
+      if (missingItem?.reason === 'hard_deleted') {
+        results.push({
+          mutationId: mutation.id,
+          status: 'conflict',
+          reason: missingItem.reason,
+          problem: {
+            code: missingItem.code,
+            message: missingItem.message,
+            reason: missingItem.reason,
+            correlationId: event.requestContext.requestId,
+          },
+        });
+        continue;
+      }
       try {
         const payload = mutation.payload as Record<string, unknown>;
         const now = new Date();
@@ -568,42 +587,23 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
             : payload,
         );
         const parent = await findList(next.listId);
-        if (
-          !parent ||
-          parent.ownerId !== actorId ||
-          mutation.baseVersion !== (current?.version ?? 0)
-        ) {
-          const missingPreviouslySavedItem = !current && mutation.baseVersion > 0;
-          const versionMismatch = Boolean(
-            parent && parent.ownerId === actorId && current && !missingPreviouslySavedItem,
-          );
+        const conflict = classifyListItemSyncConflict({
+          baseVersion: mutation.baseVersion,
+          ...(current ? { currentVersion: current.version } : {}),
+          parentExists: Boolean(parent),
+          ...(parent ? { parentOwned: parent.ownerId === actorId } : {}),
+        });
+        if (conflict) {
           results.push({
             mutationId: mutation.id,
-            status: current || missingPreviouslySavedItem ? 'conflict' : 'rejected',
-            ...(versionMismatch
-              ? {
-                  reason: 'version_mismatch',
-                  problem: {
-                    code: 'list_item_version_mismatch',
-                    message:
-                      'This item changed before the saved edit synchronized. Review or retry the saved edit.',
-                    reason: 'version_mismatch',
-                    correlationId: event.requestContext.requestId,
-                  },
-                }
-              : {}),
-            ...(missingPreviouslySavedItem
-              ? {
-                  reason: 'hard_deleted',
-                  problem: {
-                    code: 'list_item_no_longer_exists',
-                    message:
-                      'This list item no longer exists on the server. Discard the saved device change.',
-                    reason: 'hard_deleted',
-                    correlationId: event.requestContext.requestId,
-                  },
-                }
-              : {}),
+            status: 'conflict',
+            reason: conflict.reason,
+            problem: {
+              code: conflict.code,
+              message: conflict.message,
+              reason: conflict.reason,
+              correlationId: event.requestContext.requestId,
+            },
             entityVersion: current?.version,
           });
           continue;

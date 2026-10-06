@@ -4,6 +4,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   EffectiveTaskTimer,
   TaskTimer as TaskTimerRecord,
@@ -61,9 +62,10 @@ export function TaskTimer({
       y: Math.min(current.maxY, Math.max(current.minY, current.startY + event.clientY - current.y)),
     });
   };
-  return (
+  const panel = (
     <section
       className={`task-timer${movable ? ' task-timer--movable' : ''}`}
+      {...(movable ? { role: 'dialog', 'aria-modal': false } : {})}
       aria-label={`Timer for ${taskLabel}`}
       style={{ transform: `translate(${offset.x}px, ${offset.y}px)` } as CSSProperties}
     >
@@ -168,4 +170,5 @@ export function TaskTimer({
       </p>
     </section>
   );
+  return movable && typeof document !== 'undefined' ? createPortal(panel, document.body) : panel;
 }

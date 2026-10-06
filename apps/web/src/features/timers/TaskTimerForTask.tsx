@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import type { Task, TaskTimerCommand } from '@naaseh/domain';
 import { mutateLocalTaskTimer, readLocalTaskTimer } from '../../db/task-timer-repository.js';
 import { TaskTimer } from './TaskTimer.js';
-import { useTaskTimer } from './useTaskTimer.js';
+import { isActiveTaskTimer, useTaskTimer } from './useTaskTimer.js';
 
 export function TaskTimerForTask({
   ownerId,
@@ -18,6 +18,7 @@ export function TaskTimerForTask({
 }) {
   const timer = useLiveQuery(() => readLocalTaskTimer(ownerId), [ownerId]);
   const [pending, setPending] = useState(false);
+  const [dismissedRunId, setDismissedRunId] = useState<string>();
   const { projected, announcement } = useTaskTimer(timer);
   async function send(command: TaskTimerCommand) {
     setPending(true);
@@ -27,26 +28,59 @@ export function TaskTimerForTask({
       setPending(false);
     }
   }
-  if (!projected || projected.taskId !== task.id) {
+  const active = isActiveTaskTimer(projected);
+  if (!active || projected.taskId !== task.id) {
+    const switching = active && projected.taskId !== task.id;
+    const startingFresh = !timer;
+    return (
+      <>
+        <button
+          className="task-timer-trigger"
+          type="button"
+          aria-label={
+            switching
+              ? `Switch timer to ${task.label}`
+              : startingFresh
+                ? `Start 10 minute timer for ${task.label}`
+                : `Start timer for ${task.label}`
+          }
+          disabled={pending}
+          onClick={() => {
+            if (switching && !confirm(`Switch the active timer to ${task.label}?`)) return;
+            void send(
+              switching
+                ? { type: 'switch', taskId: task.id }
+                : startingFresh
+                  ? { type: 'start', taskId: task.id, durationSeconds: 600 }
+                  : projected?.taskId === task.id
+                    ? { type: 'restart' }
+                    : { type: 'switch', taskId: task.id },
+            );
+          }}
+        >
+          {switching
+            ? 'Switch timer'
+            : startingFresh
+              ? compact
+                ? 'Start 10 min'
+                : 'Start 10 minute timer'
+              : 'Start timer'}
+        </button>
+        <span className="visually-hidden" role="status" aria-live="polite">
+          {announcement}
+        </span>
+      </>
+    );
+  }
+  if (compact && dismissedRunId === projected.runId) {
     return (
       <button
         className="task-timer-trigger"
         type="button"
-        aria-label={
-          projected ? `Switch timer to ${task.label}` : `Start 10 minute timer for ${task.label}`
-        }
-        disabled={pending}
-        onClick={() => {
-          const switching = projected && projected.status !== 'stopped';
-          if (switching && !confirm(`Switch the active timer to ${task.label}?`)) return;
-          void send(
-            projected
-              ? { type: 'switch', taskId: task.id }
-              : { type: 'start', taskId: task.id, durationSeconds: 600 },
-          );
-        }}
+        aria-label={`Show timer for ${task.label}`}
+        onClick={() => setDismissedRunId(undefined)}
       >
-        {projected ? 'Switch timer' : compact ? 'Start 10 min' : 'Start 10 minute timer'}
+        Show timer
       </button>
     );
   }
@@ -58,7 +92,14 @@ export function TaskTimerForTask({
       announcement={announcement}
       command={send}
       movable={compact}
-      {...(onDismiss ? { onDismiss } : {})}
+      {...(compact || onDismiss
+        ? {
+            onDismiss: () => {
+              if (compact) setDismissedRunId(projected.runId);
+              onDismiss?.();
+            },
+          }
+        : {})}
     />
   );
 }
