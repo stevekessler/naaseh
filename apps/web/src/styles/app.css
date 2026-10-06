@@ -865,6 +865,11 @@ main {
   margin: auto;
   padding: clamp(1rem, 4vw, 3rem);
 }
+@media (min-width: 1461px) {
+  main {
+    width: 92%;
+  }
+}
 .welcome {
   display: flex;
   justify-content: space-between;
@@ -1387,7 +1392,7 @@ main {
 }
 .task-list {
   width: 100%;
-  min-width: max(44rem, calc(var(--task-visible-columns) * 8rem));
+  min-width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -1402,32 +1407,32 @@ main {
   display: none;
 }
 .task-list .task-status-column {
-  width: 3.5rem;
+  width: 4%;
 }
 .task-list .task-name-column {
-  width: 14%;
+  width: 18%;
 }
 .task-list .task-project-column,
 .task-list .task-category-column {
   width: 10%;
 }
 .task-list .task-memo-column {
-  width: 14%;
+  width: 13%;
 }
 .task-list .task-link-column {
-  width: 12%;
+  width: 11%;
 }
 .task-list .task-due-column {
-  width: 11%;
-}
-.task-list .task-priority-column {
   width: 9%;
 }
+.task-list .task-priority-column {
+  width: 8%;
+}
 .task-list .task-assignee-column {
-  width: 11%;
+  width: 10%;
 }
 .task-list .task-actions-column {
-  width: 6rem;
+  width: 7%;
 }
 .task-list th,
 .task-list td {
