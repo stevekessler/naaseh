@@ -66,7 +66,21 @@ export function workloadProjectionChanges(
 export function workloadProjectionWrites(
   changes: WorkloadProjectionChange[],
 ): NonNullable<TransactWriteCommandInput['TransactItems']> {
-  return changes.flatMap((change) => {
+  type Key = { PK: string; SK: string };
+  const counters = new Map<string, { key: Key; delta: number }>();
+  const pointers = new Map<string, { key: Key; workId: string; delta: number }>();
+  const addCounter = (key: Key, delta: number) => {
+    const identity = `${key.PK}\0${key.SK}`;
+    const current = counters.get(identity);
+    counters.set(identity, { key, delta: (current?.delta ?? 0) + delta });
+  };
+  const addPointer = (key: Key, workId: string, delta: number) => {
+    const identity = `${key.PK}\0${key.SK}`;
+    const current = pointers.get(identity);
+    pointers.set(identity, { key, workId, delta: (current?.delta ?? 0) + delta });
+  };
+
+  for (const change of changes) {
     const counter = keys.workloadCounter(
       change.audience,
       change.scopeType,
@@ -84,42 +98,38 @@ export function workloadProjectionWrites(
       PK: counter.PK,
       SK: `${counter.SK}#URGENCY#${change.urgency}`,
     };
-    return [
-      {
+    addCounter(counter, change.delta);
+    addCounter(urgencyCounter, change.delta);
+    addPointer(pointer, change.workId, change.delta);
+  }
+
+  const now = new Date().toISOString();
+  return [
+    ...[...counters.values()]
+      .filter(({ delta }) => delta !== 0)
+      .map(({ key, delta }) => ({
         Update: {
           TableName: tableName,
-          Key: counter,
+          Key: key,
           UpdateExpression: 'ADD #count :delta SET #updatedAt=:now',
           ExpressionAttributeNames: { '#count': 'count', '#updatedAt': 'updatedAt' },
-          ExpressionAttributeValues: {
-            ':delta': change.delta,
-            ':now': new Date().toISOString(),
-          },
+          ExpressionAttributeValues: { ':delta': delta, ':now': now },
         },
-      },
-      {
-        Update: {
-          TableName: tableName,
-          Key: urgencyCounter,
-          UpdateExpression: 'ADD #count :delta SET #updatedAt=:now',
-          ExpressionAttributeNames: { '#count': 'count', '#updatedAt': 'updatedAt' },
-          ExpressionAttributeValues: {
-            ':delta': change.delta,
-            ':now': new Date().toISOString(),
-          },
-        },
-      },
-      change.delta > 0
-        ? {
-            Put: {
-              TableName: tableName,
-              Item: { ...pointer, workId: change.workId },
-              ConditionExpression: 'attribute_not_exists(PK)',
-            },
-          }
-        : { Delete: { TableName: tableName, Key: pointer } },
-    ];
-  });
+      })),
+    ...[...pointers.values()]
+      .filter(({ delta }) => delta !== 0)
+      .map(({ key, workId, delta }) =>
+        delta > 0
+          ? {
+              Put: {
+                TableName: tableName,
+                Item: { ...key, workId },
+                ConditionExpression: 'attribute_not_exists(PK)',
+              },
+            }
+          : { Delete: { TableName: tableName, Key: key } },
+      ),
+  ];
 }
 
 export function calculateWorkloadUrgencyBreakdown(
