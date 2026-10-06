@@ -7,15 +7,29 @@ be specified and implemented one at a time with Spec Kit. It describes work need
 iPhone application; it does not repeat every web requirement. Unless a feature says otherwise, the
 existing product behavior and authorization rules remain the source of truth.
 
-## Recommended product direction
+## Candidate product direction
 
-Build a hybrid iPhone application with Capacitor and WKWebView, reusing the existing React mobile
-interface, TypeScript domain packages, API contracts, encryption rules, and synchronization
-semantics. Add narrow native adapters for Keychain/biometrics, APNs, background execution, file and
-camera access, deep links, and app lifecycle events.
+The lower-cost path is a hybrid iPhone application with Capacitor and WKWebView, reusing the existing
+React mobile interface, TypeScript domain packages, API contracts, encryption rules, and
+synchronization semantics. It would add narrow native adapters for Keychain/biometrics, APNs,
+background execution, file and camera access, deep links, and app lifecycle events.
 
-This is a working assumption, not a settled requirement. A fully native SwiftUI client would require
-a larger rewrite and a separate feature decomposition.
+The alternative under consideration is a fully native SwiftUI application. SwiftUI would reuse the
+backend APIs and product requirements, but not the React UI, Dexie repositories, TypeScript sync
+engine, browser crypto implementation, or browser test suite directly. Selecting SwiftUI therefore
+changes this backlog from an adaptation project into a native client rewrite; each feature would
+need native data, sync, crypto, UI, accessibility, and test work.
+
+## Confirmed release decisions
+
+- The first release will be distributed through TestFlight rather than submitted to the public App
+  Store.
+- The first release will provide every current end-user web feature, including lists, reports,
+  Journal, Crisis Plans, Google Tasks, files, offline work, reminders, ranking, and timers.
+- System administration and operator-only recovery/provisioning will remain web-only. The iOS app
+  will retain personal Profile and account-security settings.
+- The implementation strategy (Capacitor or SwiftUI), iPhone/iPad device scope, and biometric scope
+  remain to be decided.
 
 ## Cross-cutting rules for every iOS feature
 
@@ -324,24 +338,22 @@ Include:
 
 **Source specifications:** 004 Google Tasks sync and 009 profile separation.
 
-### 13. Profile, Administration, and Account Recovery
+### 13. Profile and Account Security
 
-**Suggested slug:** `024-ios-profile-admin`
+**Suggested slug:** `024-ios-profile-security`
 
-Provide mobile access to personal settings and decide which administrative workflows belong in the
-iPhone app.
+Provide mobile access to personal settings and account-security workflows while keeping system
+administration on the web.
 
 Include:
 
 - Profile photo/avatar, completion sound, reminders/notifications, Google connection, password,
   TFA, and other personal settings.
-- User, category, project, global-item, and group administration only for authorized actors, with
-  responsive tables/forms and deliberate destructive confirmations.
-- Clear online-only behavior for security, administration, recovery, and provisioning actions that
-  cannot safely queue offline.
+- Clear online-only behavior for security and account actions that cannot safely queue offline.
 - Administrator TFA enforcement and session revocation/disabled-account behavior.
-- Keep operator-only user provisioning and recovery-administrator operations out of the consumer
-  app unless a later spec explicitly authorizes them.
+- Keep user administration, category/project administration, operator-only user provisioning, and
+  recovery-administrator operations out of the iOS app. Direct affected users to the web app when an
+  administrative workflow is required.
 
 **Depends on:** 3-4; integrates with 7, 8, 11, and 12.
 
@@ -402,29 +414,22 @@ Include:
 **Source specifications:** validation, accessibility, performance, recovery, release, and operations
 requirements across all current specs and runbooks.
 
-## Recommended first App Store release
+## First TestFlight release scope
 
-To control scope, the first release should include features 1-6, 11, 14, and 15. That gives users a
-secure native app for the core task workflow, offline synchronization, ranking/timer, and native
-notifications. Features 7-10, 12, and 13 can follow unless full web parity is required for launch.
+The first TestFlight release will include all 15 backlog features for full end-user web parity,
+except that Feature 13 excludes system administration and operator-only workflows. Keep the feature
+order so foundations, privacy, and data durability are validated before higher-level parity work.
+Do not treat the build as TestFlight-ready until all features pass the platform-security and release
+gates.
 
-If full parity is required at launch, keep the same feature order but do not treat the iOS app as
-release-ready until all 15 features pass the platform-security and release gates.
-
-## Decisions needed before running `/speckit.specify` for Feature 1
+## Remaining decisions before running `/speckit.specify` for Feature 1
 
 1. **Implementation strategy:** Is a Capacitor hybrid app that reuses the current React mobile UI
    acceptable, or is a fully native SwiftUI application required?
-2. **First-release scope:** Should v1 ship the recommended core task subset, or must it include every
-   current web feature (lists, reports, journal, crisis plans, Google sync, and administration)?
-3. **Distribution:** Is the target the public App Store, private/unlisted App Store distribution,
-   TestFlight-only use, or managed internal distribution?
-4. **Device scope:** iPhone only initially, or a universal iPhone/iPad app? Should Mac Catalyst be
+2. **Device scope:** iPhone only initially, or a universal iPhone/iPad app? Should Mac Catalyst be
    explicitly excluded?
-5. **Biometrics:** Should Face ID/Touch ID merely unlock local protected state after a normal sign-in,
+3. **Biometrics:** Should Face ID/Touch ID merely unlock local protected state after a normal sign-in,
    or should the app also pursue passkey-based server authentication in a later feature?
-6. **Administration:** Should system administration be available in the app, or intentionally remain
-   web-only for the first release?
 
 ## Current-spec coverage map
 
