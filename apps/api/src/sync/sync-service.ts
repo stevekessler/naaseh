@@ -25,6 +25,46 @@ export type MutationDispatchers = Partial<Record<EntityType, MutationDispatcher>
 
 export type PersonalStackSyncMutation = ReturnType<typeof stackSyncMutationSchema.parse>;
 
+export interface ListItemSyncConflict {
+  reason: 'authorization_changed' | 'hard_deleted' | 'version_mismatch';
+  code: string;
+  message: string;
+}
+
+export function classifyListItemSyncConflict(input: {
+  baseVersion: number;
+  currentVersion?: number;
+  parentExists?: boolean;
+  parentOwned?: boolean;
+}): ListItemSyncConflict | undefined {
+  if (input.currentVersion === undefined && input.baseVersion > 0)
+    return {
+      reason: 'hard_deleted',
+      code: 'list_item_no_longer_exists',
+      message: 'This list item no longer exists on the server. Discard the saved device change.',
+    };
+  if (input.parentExists === false)
+    return {
+      reason: 'hard_deleted',
+      code: 'list_no_longer_exists',
+      message: 'The list containing this item no longer exists. Discard the saved device change.',
+    };
+  if (input.parentOwned === false)
+    return {
+      reason: 'authorization_changed',
+      code: 'list_item_access_changed',
+      message: 'You no longer have access to the list containing this item.',
+    };
+  if (input.currentVersion !== undefined && input.baseVersion !== input.currentVersion)
+    return {
+      reason: 'version_mismatch',
+      code: 'list_item_version_mismatch',
+      message:
+        'This item changed before the saved edit synchronized. Review or retry the saved edit.',
+    };
+  return undefined;
+}
+
 export async function dispatchTaskTimerSyncMutation(input: {
   actorId: string;
   sourceClientId: string;

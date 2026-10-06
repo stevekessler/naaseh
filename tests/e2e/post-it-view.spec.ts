@@ -73,9 +73,31 @@ test('opens note details from its title and shows the due date below it', async 
   const due = note.locator('.postit-due');
   await expect(due).toHaveText('12/31/2026');
   await expect(note.locator('.user-full-name')).toHaveText('Steve');
-  await expect(
-    note.getByRole('button', { name: 'Start 10 minute timer for Cedar post-it' }),
-  ).toBeVisible();
+  await note.getByRole('button', { name: 'Start 10 minute timer for Cedar post-it' }).click();
+  const timer = page.getByRole('dialog', { name: 'Timer for Cedar post-it' });
+  await expect(timer).toBeVisible();
+  await expect(timer).toHaveCSS('position', 'fixed');
+  await expect(timer).toHaveAttribute('aria-modal', 'false');
+  await expect(note.locator('.task-timer')).toHaveCount(0);
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const bounds = await timer.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.y).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width);
+    expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height);
+  }
+  await timer.getByRole('button', { name: 'Close timer' }).click();
+  await expect(timer).toBeHidden();
+  await note.getByRole('button', { name: 'Show timer for Cedar post-it' }).click();
+  await expect(timer).toBeVisible();
+  await timer.getByRole('button', { name: 'Close timer' }).click();
+  await expect(timer).toBeHidden();
+  await expect(note.getByRole('button', { name: 'Show timer for Cedar post-it' })).toBeVisible();
   expect((await title.boundingBox())!.y).toBeLessThan((await due.boundingBox())!.y);
   await title.click();
   const reopenedDialog = page.getByRole('dialog', { name: 'Edit task' });

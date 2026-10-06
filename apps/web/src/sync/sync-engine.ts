@@ -33,7 +33,7 @@ import {
   readLocalTaskSnapshot,
 } from '../db/task-repository.js';
 import { getClientId } from '../db/client-id.js';
-import { listReviewConflicts } from './conflict-review.js';
+import { listReviewConflicts, readConflictDisplayContext } from './conflict-review.js';
 import { listLocalLists } from '../db/list-repository.js';
 import { refreshGoogleSyncCache } from '../features/google-sync/google-sync-client.js';
 import {
@@ -463,8 +463,10 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
               command: mutation.payload as import('@naaseh/domain').TaskTimerCommand,
             });
           } else {
+            const display = await readConflictDisplayContext(mutation);
             const value = await encryptLocalValue('conflict', item.id, {
               mutation,
+              ...(display ? { display } : {}),
               result:
                 result.status === 'rejected'
                   ? { ...result, reason: result.reason ?? 'validation_failed' }

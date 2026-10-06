@@ -23,16 +23,16 @@ test('timer survives offline navigation and does not complete its task', async (
   await setOffline(page);
   await openTaskActions(page, 'Timer task');
   await page.getByRole('button', { name: 'Start 10 minute timer for Timer task' }).click();
-  const timer = page.getByRole('region', { name: 'Timer for Timer task' });
+  const timer = page.getByRole('dialog', { name: 'Timer for Timer task' });
   await expect(timer.getByText('10:00')).toBeVisible();
   await timer.getByRole('button', { name: 'Pause timer' }).click();
   await expect(timer.getByRole('button', { name: 'Resume timer' })).toBeVisible();
   await timer.getByRole('button', { name: 'Close timer' }).click();
   await expect(timer).toBeHidden();
+  await expect(page.locator('[aria-label="Show timer for Timer task"]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Post-its', exact: true }).click();
   await page.getByRole('button', { name: 'List', exact: true }).click();
-  await openTaskActions(page, 'Timer task');
-  await expect(page.getByRole('region', { name: 'Timer for Timer task' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Timer for Timer task' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Complete Timer task' })).toBeVisible();
 });
 
@@ -50,7 +50,10 @@ test('timer changes duration, repeats, and requires confirmation to switch tasks
   await page.getByText('2 tasks', { exact: true }).click();
   await openTaskActions(page, 'First timer task');
   await page.getByRole('button', { name: 'Start 10 minute timer for First timer task' }).click();
-  const timer = page.getByRole('region', { name: 'Timer for First timer task' });
+  const timer = page.getByRole('dialog', { name: 'Timer for First timer task' });
+  await expect(timer).toHaveCSS('position', 'fixed');
+  await expect(timer).toHaveAttribute('aria-modal', 'false');
+  await expect(page.locator('.postit .task-timer, .task-list .task-timer')).toHaveCount(0);
   const beforeMove = await timer.boundingBox();
   const moveHandle = timer.getByRole('button', { name: 'Move timer' });
   const handleBox = await moveHandle.boundingBox();
@@ -73,10 +76,13 @@ test('timer changes duration, repeats, and requires confirmation to switch tasks
   ).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Switch timer to Second timer task' }).click();
-  const secondTimer = page.getByRole('region', { name: 'Timer for Second timer task' });
+  const secondTimer = page.getByRole('dialog', { name: 'Timer for Second timer task' });
   await expect(secondTimer).toBeVisible();
   await secondTimer.getByRole('button', { name: 'Stop timer' }).click();
-  await expect(secondTimer).toContainText('Timer stopped');
-  await secondTimer.getByRole('button', { name: 'Close timer' }).click();
   await expect(secondTimer).toBeHidden();
+  await expect(
+    page.getByRole('button', { name: 'Start timer for Second timer task' }),
+  ).toBeVisible();
+  await expect(page.locator('[aria-label="Start timer for First timer task"]')).toHaveCount(1);
+  await expect(page.locator('[aria-label^="Switch timer to"]')).toHaveCount(0);
 });
