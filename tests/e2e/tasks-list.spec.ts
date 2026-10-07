@@ -52,6 +52,15 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
     await expect(taskTable.locator('thead')).toHaveCSS('position', 'absolute');
   } else await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
+  const dueFontSize = await taskTable
+    .locator('.task-due-cell > span')
+    .first()
+    .evaluate((element) => getComputedStyle(element).fontSize);
+  const taskFontSize = await taskTable
+    .locator('.task-name-cell')
+    .first()
+    .evaluate((element) => getComputedStyle(element).fontSize);
+  expect(dueFontSize).toBe(taskFontSize);
   await page.locator('.task-column-settings > summary').click();
   const columnSettings = page.getByRole('group', { name: 'Choose visible columns' });
   await expect(columnSettings).toBeVisible();

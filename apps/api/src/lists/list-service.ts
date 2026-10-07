@@ -13,10 +13,12 @@ export const createOwnedList = (
   now = new Date(),
   projectId?: string,
   urgency?: List['urgency'],
+  categoryId?: string,
 ) =>
   createList(
     {
       name,
+      ...(categoryId ? { categoryId } : {}),
       ...(projectId ? { projectId } : {}),
       ...(urgency ? { urgency } : {}),
     },
@@ -25,7 +27,10 @@ export const createOwnedList = (
   );
 export function updateOwnedList(
   current: List,
-  patch: Pick<Partial<List>, 'name' | 'groupId' | 'locked' | 'status' | 'projectId' | 'urgency'>,
+  patch: Pick<
+    Partial<List>,
+    'name' | 'groupId' | 'locked' | 'status' | 'categoryId' | 'projectId' | 'urgency'
+  >,
   actorId: string,
   now = new Date(),
 ) {

@@ -48,6 +48,7 @@ async function record(
     listId?: string;
     parentId?: string;
     projectId?: string | undefined;
+    categoryId?: string | undefined;
     lifecycle?: string | undefined;
     urgency?: Urgency | undefined;
   },
@@ -56,6 +57,7 @@ async function record(
     id: value.id,
     ...((value.listId ?? value.parentId) ? { taskId: value.listId ?? value.parentId } : {}),
     ...(value.projectId ? { projectId: value.projectId } : {}),
+    ...(value.categoryId ? { categoryId: value.categoryId } : {}),
     ...(value.lifecycle ? { lifecycle: value.lifecycle } : {}),
     ...(value.urgency ? { urgency: value.urgency } : {}),
     updatedAt: value.updatedAt,
@@ -121,10 +123,12 @@ export async function saveNewList(
   ownerId: string,
   projectId?: string,
   urgency?: Urgency,
+  categoryId?: string,
 ): Promise<List> {
   const value = createList(
     {
       name,
+      ...(categoryId ? { categoryId } : {}),
       ...(projectId ? { projectId } : {}),
       ...(urgency ? { urgency } : {}),
     },
@@ -140,7 +144,11 @@ export async function saveNewList(
   });
   return value;
 }
-export async function updateLocalList(current: List, patch: Partial<List>): Promise<List> {
+export type LocalListPatch = Omit<Partial<List>, 'categoryId' | 'projectId'> & {
+  categoryId?: string | null;
+  projectId?: string | null;
+};
+export async function updateLocalList(current: List, patch: LocalListPatch): Promise<List> {
   const wantsArchive = patch.lifecycle === 'archived' || patch.status === 'archived';
   const wantsRestore = patch.lifecycle === 'active' && current.lifecycle === 'archived';
   const operation = wantsRestore
@@ -165,7 +173,12 @@ export async function updateLocalList(current: List, patch: Partial<List>): Prom
           updatedAt: new Date().toISOString(),
           version: current.version + 1,
         };
-  const next = listSchema.parse({ ...transitioned, ...patch });
+  const localPatch = {
+    ...patch,
+    ...(patch.categoryId === null ? { categoryId: undefined } : {}),
+    ...(patch.projectId === null ? { projectId: undefined } : {}),
+  };
+  const next = listSchema.parse({ ...transitioned, ...localPatch });
   const [stored, mutation] = await Promise.all([
     record('list', next),
     queue('list', next.id, operation, current.version, patch, next.updatedAt),

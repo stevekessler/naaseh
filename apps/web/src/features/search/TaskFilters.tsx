@@ -5,6 +5,31 @@ import { CategoryPicker } from '../../components/CategoryPicker.js';
 import { PriorityFilter } from '../../components/PriorityFilter.js';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
 
+export type DatePreset = 'today' | 'tomorrow' | 'week' | 'month';
+
+const localDate = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export function dateRangeForPreset(preset: DatePreset, now = new Date()) {
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const end = new Date(start);
+  if (preset === 'tomorrow') {
+    start.setDate(start.getDate() + 1);
+    end.setDate(end.getDate() + 1);
+  } else if (preset === 'week') {
+    start.setDate(start.getDate() - start.getDay());
+    end.setDate(start.getDate() + 6);
+  } else if (preset === 'month') {
+    start.setDate(1);
+    end.setMonth(start.getMonth() + 1, 0);
+  }
+  return { from: localDate(start), to: localDate(end) };
+}
+
 export function TaskFilters({
   value,
   change,
@@ -120,6 +145,25 @@ export function TaskFilters({
           onChange={(event) => change({ ...value, to: event.target.value })}
         />
       </label>
+      <div className="date-filter-presets" role="group" aria-label="Due date shortcuts">
+        {(
+          [
+            ['today', 'Today'],
+            ['tomorrow', 'Tomorrow'],
+            ['week', 'This week'],
+            ['month', 'This month'],
+          ] as const
+        ).map(([preset, label]) => (
+          <button
+            type="button"
+            className="quiet"
+            key={preset}
+            onClick={() => change({ ...value, ...dateRangeForPreset(preset) })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <label>
         <span>Filter by assignee</span>
         <AssigneePicker

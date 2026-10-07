@@ -8,10 +8,20 @@ export interface TaskFilters {
   status?: Task['status'];
   urgencies?: Urgency[];
 }
+export function taskDueDateKey(task: Pick<Task, 'dueAt' | 'dueDate'>) {
+  if (task.dueDate) return task.dueDate;
+  if (!task.dueAt) return undefined;
+  const due = new Date(task.dueAt);
+  const year = due.getFullYear();
+  const month = String(due.getMonth() + 1).padStart(2, '0');
+  const day = String(due.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 export function matchesFilters(task: Task, filters: TaskFilters) {
+  const dueDate = taskDueDateKey(task);
   return (
-    (!filters.from || Boolean(task.dueAt && task.dueAt >= filters.from)) &&
-    (!filters.to || Boolean(task.dueAt && task.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
+    (!filters.from || Boolean(dueDate && dueDate >= filters.from)) &&
+    (!filters.to || Boolean(dueDate && dueDate <= filters.to)) &&
     (!filters.assigneeId || task.assigneeId === filters.assigneeId) &&
     (!filters.categoryId || task.categoryId === filters.categoryId) &&
     (!filters.projectId ||

@@ -1,6 +1,8 @@
 import type { CategoryRecord, Project, Task } from '@naaseh/domain';
+import { useState } from 'react';
 import { TaskRow } from './TaskRow.js';
 import type { TaskColumnId } from './TaskColumnSettings.js';
+import { sortTasksForTable, type TaskListSort, type TaskListSortKey } from './task-list-sort.js';
 const configurableColumns: TaskColumnId[] = [
   'category',
   'project',
@@ -11,6 +13,42 @@ const configurableColumns: TaskColumnId[] = [
   'assignee',
   'actions',
 ];
+const sortLabels: Record<TaskListSortKey, string> = {
+  due: 'Due date',
+  category: 'Category',
+  project: 'Project',
+  priority: 'Priority',
+};
+
+function SortableHeading({
+  sortKey,
+  sort,
+  change,
+  className,
+}: {
+  sortKey: TaskListSortKey;
+  sort: TaskListSort | undefined;
+  change: (key: TaskListSortKey) => void;
+  className: string;
+}) {
+  const active = sort?.key === sortKey;
+  const nextDirection = active && sort.direction === 'ascending' ? 'descending' : 'ascending';
+  return (
+    <th className={className} scope="col" aria-sort={active ? sort.direction : 'none'}>
+      <button
+        type="button"
+        className="task-sort-button"
+        aria-label={`Sort by ${sortLabels[sortKey]} ${nextDirection}`}
+        onClick={() => change(sortKey)}
+      >
+        <span>{sortLabels[sortKey]}</span>
+        <span aria-hidden="true">
+          {active ? (sort.direction === 'ascending' ? '▲' : '▼') : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
 export function TaskList({
   tasks,
   onToggle,
@@ -30,6 +68,14 @@ export function TaskList({
   projects?: readonly Project[];
   visibleColumns: ReadonlySet<TaskColumnId>;
 }) {
+  const [sort, setSort] = useState<TaskListSort>();
+  const changeSort = (key: TaskListSortKey) =>
+    setSort((current) => ({
+      key,
+      direction:
+        current?.key === key && current.direction === 'ascending' ? 'descending' : 'ascending',
+    }));
+  const displayedTasks = sortTasksForTable(tasks, sort, categories, projects);
   if (!tasks.length)
     return (
       <div className="empty">
@@ -64,24 +110,36 @@ export function TaskList({
               <span className="visually-hidden">Status</span>
             </th>
             <th scope="col">Task</th>
-            <th className="task-category-cell" scope="col">
-              Category
-            </th>
-            <th className="task-project-cell" scope="col">
-              Project
-            </th>
+            <SortableHeading
+              sortKey="category"
+              sort={sort}
+              change={changeSort}
+              className="task-category-cell"
+            />
+            <SortableHeading
+              sortKey="project"
+              sort={sort}
+              change={changeSort}
+              className="task-project-cell"
+            />
             <th className="task-memo-cell" scope="col">
               Memo
             </th>
             <th className="task-link-cell" scope="col">
               Link
             </th>
-            <th className="task-due-cell" scope="col">
-              Due
-            </th>
-            <th className="task-priority-cell" scope="col">
-              <span className="visually-hidden">Priority</span>
-            </th>
+            <SortableHeading
+              sortKey="due"
+              sort={sort}
+              change={changeSort}
+              className="task-due-cell"
+            />
+            <SortableHeading
+              sortKey="priority"
+              sort={sort}
+              change={changeSort}
+              className="task-priority-cell"
+            />
             <th className="task-assignee-cell" scope="col">
               Assignee
             </th>
@@ -91,7 +149,7 @@ export function TaskList({
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task) => {
+          {displayedTasks.map((task) => {
             const project = projects.find((candidate) => candidate.id === task.projectId);
             const categoryId = task.categoryId ?? project?.categoryId;
             return (

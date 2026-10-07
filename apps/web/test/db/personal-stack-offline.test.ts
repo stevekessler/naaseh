@@ -207,6 +207,19 @@ describe('encrypted offline personal-stack persistence', () => {
     expect(await readLocalStack(ownerId, overall)).toEqual(before);
   });
 
+  it('uses the project id, not the local composite key, for project-stack sync', async () => {
+    const scope = { scopeType: 'project' as const, scopeId: '01J00000000000000000000009' };
+    await initializeLocalStack({ ownerId, scope, version: 0, work: [taskA, taskB] });
+    await reorderLocalStack({
+      ownerId,
+      scope,
+      baseVersion: 0,
+      sourceClientId: 'browser-a',
+      move: { kind: 'simple_move', movedWork: taskB, afterWork: taskA },
+    });
+    expect([...state.outbox.values()][0]?.entityId).toBe(scope.scopeId);
+  });
+
   it('recovers the same order and pending acknowledgement after a repository restart', async () => {
     await seed();
     const pending = await reorderLocalStack({
@@ -449,6 +462,39 @@ describe('encrypted offline personal-stack persistence', () => {
         }),
       ]),
     );
+  });
+
+  it('automatically rebases a stale simple move without surfacing a manual conflict', async () => {
+    await seed();
+    const pending = await reorderLocalStack({
+      ownerId,
+      scope: overall,
+      baseVersion: 0,
+      sourceClientId: 'browser-a',
+      move: { kind: 'simple_move', movedWork: taskB, afterWork: taskA },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          results: [
+            {
+              mutationId: pending.mutationId,
+              status: 'conflict',
+              reason: 'version_mismatch',
+              currentVersion: 2,
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    await drainOutbox('csrf');
+
+    expect(await listLocalStackConflicts(ownerId)).toEqual([]);
+    expect(await listPendingStackOperations(ownerId)).toEqual([
+      expect.objectContaining({ baseVersion: 2, status: 'pending' }),
+    ]);
   });
 
   it('surfaces authorization conflicts as discard-only and removes them on discard', async () => {

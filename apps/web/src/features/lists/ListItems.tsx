@@ -107,48 +107,61 @@ export function ListItems({
 }) {
   if (!items.length) return <p>No items yet.</p>;
   return (
-    <ul className="list-items">
-      {items.map((item, index) => {
-        const current = item.directoryItemId
-          ? directory.find((entry) => entry.id === item.directoryItemId)
-          : undefined;
-        const effective = effectiveDirectoryFields(
-          {
-            directorySnapshot: item.directorySnapshot,
-            ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
-            ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
-          },
-          current,
-        );
-        const move = (offset: number) => {
-          const ordered = [...items];
-          const [selected] = ordered.splice(index, 1);
-          if (!selected) return;
-          ordered.splice(index + offset, 0, selected);
-          reorder(ordered);
-        };
-        return (
-          <ListItemRow
-            key={item.id}
-            item={item}
-            name={effective.name}
-            onToggle={() => toggle(item)}
-            onRemove={() => remove(item)}
-            onEdit={(input) => edit(item, input)}
-            {...(item.directoryItemId ? { onReset: () => reset(item) } : {})}
-            onPromote={() => promote(item, effective.name)}
-            {...(index > 0 ? { moveUp: () => move(-1) } : {})}
-            {...(index < items.length - 1 ? { moveDown: () => move(1) } : {})}
-            attachments={
-              <AttachmentPanelForParent
-                parentType="listItem"
-                parentId={item.id}
-                csrfToken={csrfToken}
+    <div className="task-table-wrap list-item-table-wrap">
+      <table className="task-list list-item-table" aria-label="List items">
+        <thead>
+          <tr>
+            <th scope="col" aria-label="Status" />
+            <th scope="col">Item</th>
+            <th scope="col">Due</th>
+            <th scope="col">Memo</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item, index) => {
+            const current = item.directoryItemId
+              ? directory.find((entry) => entry.id === item.directoryItemId)
+              : undefined;
+            const effective = effectiveDirectoryFields(
+              {
+                directorySnapshot: item.directorySnapshot,
+                ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
+                ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
+              },
+              current,
+            );
+            const move = (offset: number) => {
+              const ordered = [...items];
+              const [selected] = ordered.splice(index, 1);
+              if (!selected) return;
+              ordered.splice(index + offset, 0, selected);
+              reorder(ordered);
+            };
+            return (
+              <ListItemRow
+                key={item.id}
+                item={item}
+                name={effective.name}
+                onToggle={() => toggle(item)}
+                onRemove={() => remove(item)}
+                onEdit={(input) => edit(item, input)}
+                {...(item.directoryItemId ? { onReset: () => reset(item) } : {})}
+                onPromote={() => promote(item, effective.name)}
+                {...(index > 0 ? { moveUp: () => move(-1) } : {})}
+                {...(index < items.length - 1 ? { moveDown: () => move(1) } : {})}
+                attachments={
+                  <AttachmentPanelForParent
+                    parentType="listItem"
+                    parentId={item.id}
+                    csrfToken={csrfToken}
+                  />
+                }
               />
-            }
-          />
-        );
-      })}
-    </ul>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

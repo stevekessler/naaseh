@@ -3,7 +3,7 @@ import { isValidElement, type ComponentType, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { filtersFromSearch } from '../../src/features/search/search-state.js';
-import { TaskFilters } from '../../src/features/search/TaskFilters.js';
+import { dateRangeForPreset, TaskFilters } from '../../src/features/search/TaskFilters.js';
 import type { Filters } from '../../src/search/task-search.js';
 import { PriorityFilter } from '../../src/components/PriorityFilter.js';
 
@@ -44,6 +44,25 @@ function findElement(
 }
 
 describe('TaskFilters urgency controls', () => {
+  it('builds today, tomorrow, calendar-week, and calendar-month ranges', () => {
+    const now = new Date(2026, 9, 6, 12);
+    expect(dateRangeForPreset('today', now)).toEqual({
+      from: '2026-10-06',
+      to: '2026-10-06',
+    });
+    expect(dateRangeForPreset('tomorrow', now)).toEqual({
+      from: '2026-10-07',
+      to: '2026-10-07',
+    });
+    expect(dateRangeForPreset('week', now)).toEqual({
+      from: '2026-10-04',
+      to: '2026-10-10',
+    });
+    expect(dateRangeForPreset('month', now)).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-31',
+    });
+  });
   it('renders four accessible multi-select urgency checkboxes with full labels', () => {
     const html = renderToStaticMarkup(
       <UrgencyTaskFilters value={value()} change={vi.fn()} resultCount={10} />,

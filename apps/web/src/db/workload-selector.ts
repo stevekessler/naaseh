@@ -10,6 +10,7 @@ export interface LocalWorkload {
   kind: 'task' | 'list';
   lifecycle?: 'active' | 'archived' | 'deleting' | undefined;
   projectId?: string | undefined;
+  categoryId?: string | undefined;
   urgency?: Urgency | undefined;
 }
 export interface LocalProjectRef {
@@ -48,6 +49,11 @@ export function calculateWorkloadTree(
       continue;
     if (!item.projectId) {
       add(unassigned, item);
+      if (item.categoryId) {
+        const categoryCount = categoryCounts.get(item.categoryId) ?? empty();
+        add(categoryCount, item);
+        categoryCounts.set(item.categoryId, categoryCount);
+      }
       continue;
     }
     const project = projectById.get(item.projectId);

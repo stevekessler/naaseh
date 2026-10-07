@@ -1,5 +1,6 @@
 import type { ListItem } from '@naaseh/domain';
 import { useEffect, useState } from 'react';
+import { Fragment } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
 import type { NewListItem } from './ListItems.js';
 import { formatCalendarDate } from '../tasks/due-value.js';
@@ -34,104 +35,118 @@ export function ListItemRow({
   const [draftMemo, setDraftMemo] = useState(item.memo ?? '');
   useEffect(() => setDraftName(name), [name]);
   return (
-    <li className={`list-item ${done ? 'completed' : ''}`}>
-      <div className="list-item-summary">
-        <button
-          className="check"
-          aria-label={`${done ? 'Reopen' : 'Complete'} ${name}`}
-          onClick={() => {
-            feedback.complete(name, !done);
-            onToggle();
-          }}
-        >
-          {done ? '✓' : ''}
-        </button>
-        <span className="completion-label">{name}</span>
-      </div>
-      {(item.dueDate || item.memo) && (
-        <div className="list-item-details">
-          {item.dueDate && <small>Due {formatCalendarDate(item.dueDate)}</small>}
-          {item.memo && <p>{item.memo}</p>}
-        </div>
-      )}
-      <div className="list-item-actions" aria-label={`Actions for ${name}`}>
-        <button
-          className="quiet"
-          type="button"
-          disabled={!moveUp}
-          onClick={moveUp}
-          aria-label={`Move ${name} up`}
-        >
-          ↑
-        </button>
-        <button
-          className="quiet"
-          type="button"
-          disabled={!moveDown}
-          onClick={moveDown}
-          aria-label={`Move ${name} down`}
-        >
-          ↓
-        </button>
-        <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
-          {editing ? 'Close editor' : 'Edit'}
-        </button>
-        {!item.directoryItemId && (
-          <button className="quiet" type="button" onClick={onPromote}>
-            Add to global directory
-          </button>
-        )}
-        <button className="quiet" aria-label={`Remove ${name}`} onClick={onRemove}>
-          Remove
-        </button>
-      </div>
-      {editing && (
-        <div className="list-item-editor">
-          <label>
-            Item name
-            <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
-          </label>
-          {onReset && (
-            <button type="button" className="quiet" onClick={onReset}>
-              Reset to global item name
-            </button>
-          )}
-          <label>
-            Due date
-            <input
-              type="date"
-              value={draftDueDate}
-              onChange={(event) => setDraftDueDate(event.target.value)}
-            />
-          </label>
-          <label>
-            Memo
-            <textarea
-              maxLength={2000}
-              value={draftMemo}
-              onChange={(event) => setDraftMemo(event.target.value)}
-            />
-          </label>
+    <Fragment>
+      <tr className={`list-item ${done ? 'completed' : ''}`}>
+        <td className="list-item-status-cell">
           <button
-            type="button"
-            disabled={!draftName.trim()}
+            className="check"
+            aria-label={`${done ? 'Reopen' : 'Complete'} ${name}`}
             onClick={() => {
-              onEdit({
-                name: draftName.trim(),
-                ...(draftDueDate ? { dueDate: draftDueDate } : {}),
-                ...(draftMemo.trim() ? { memo: draftMemo.trim() } : {}),
-              });
-              setEditing(false);
+              feedback.complete(name, !done);
+              onToggle();
             }}
           >
-            Save item
+            {done ? '✓' : ''}
           </button>
-        </div>
+        </td>
+        <th className="list-item-name-cell" scope="row">
+          <span className="completion-label">{name}</span>
+        </th>
+        <td className="list-item-due-cell">
+          {item.dueDate ? formatCalendarDate(item.dueDate) : <span aria-hidden="true">—</span>}
+        </td>
+        <td className="list-item-memo-cell">
+          {item.memo ? <p>{item.memo}</p> : <span aria-hidden="true">—</span>}
+        </td>
+        <td className="list-item-actions" aria-label={`Actions for ${name}`}>
+          <button
+            className="quiet"
+            type="button"
+            disabled={!moveUp}
+            onClick={moveUp}
+            aria-label={`Move ${name} up`}
+          >
+            ↑
+          </button>
+          <button
+            className="quiet"
+            type="button"
+            disabled={!moveDown}
+            onClick={moveDown}
+            aria-label={`Move ${name} down`}
+          >
+            ↓
+          </button>
+          <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
+            {editing ? 'Close editor' : 'Edit'}
+          </button>
+          {!item.directoryItemId && (
+            <button className="quiet" type="button" onClick={onPromote}>
+              Add to global directory
+            </button>
+          )}
+          <button className="quiet" aria-label={`Remove ${name}`} onClick={onRemove}>
+            Remove
+          </button>
+        </td>
+      </tr>
+      {editing && (
+        <tr className="list-item-expanded-row">
+          <td colSpan={5}>
+            <div className="list-item-editor">
+              <label>
+                Item name
+                <input value={draftName} onChange={(event) => setDraftName(event.target.value)} />
+              </label>
+              {onReset && (
+                <button type="button" className="quiet" onClick={onReset}>
+                  Reset to global item name
+                </button>
+              )}
+              <label>
+                Due date
+                <input
+                  type="date"
+                  value={draftDueDate}
+                  onChange={(event) => setDraftDueDate(event.target.value)}
+                />
+              </label>
+              <label>
+                Memo
+                <textarea
+                  maxLength={2000}
+                  value={draftMemo}
+                  onChange={(event) => setDraftMemo(event.target.value)}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!draftName.trim()}
+                onClick={() => {
+                  onEdit({
+                    name: draftName.trim(),
+                    ...(draftDueDate ? { dueDate: draftDueDate } : {}),
+                    ...(draftMemo.trim() ? { memo: draftMemo.trim() } : {}),
+                  });
+                  setEditing(false);
+                }}
+              >
+                Save item
+              </button>
+            </div>
+          </td>
+        </tr>
       )}
-      <span className="visually-hidden" role="status" aria-live="polite">
-        {feedback.announcement}
-      </span>
-      {attachments}
-    </li>
+      {(feedback.announcement || attachments) && (
+        <tr className="list-item-expanded-row">
+          <td colSpan={5}>
+            <span className="visually-hidden" role="status" aria-live="polite">
+              {feedback.announcement}
+            </span>
+            {attachments}
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }

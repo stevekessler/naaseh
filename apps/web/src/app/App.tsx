@@ -26,6 +26,7 @@ import {
   normalizeSearch,
   type Filters,
 } from '../search/task-search.js';
+import { taskDueDateKey } from '../search/task-filters.js';
 import { Login } from '../features/auth/Login.js';
 import { TaskForm } from '../features/tasks/TaskForm.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
@@ -445,7 +446,7 @@ export function App() {
           ...(task.projectId ? { projectId: task.projectId } : {}),
           ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
           ...(task.categoryId ? { categoryId: task.categoryId } : {}),
-          ...(task.dueAt ? { dueAt: task.dueAt } : {}),
+          ...(taskDueDateKey(task) ? { dueDate: taskDueDateKey(task) } : {}),
           contentType: 'todos' as const,
         })),
       ...lists
@@ -459,9 +460,9 @@ export function App() {
           label: list.name,
           urgency: list.urgency,
           ...(list.projectId ? { projectId: list.projectId } : {}),
+          ...(list.categoryId ? { categoryId: list.categoryId } : {}),
           assigneeId: undefined,
-          categoryId: undefined,
-          dueAt: undefined,
+          dueDate: undefined,
           contentType: 'lists' as const,
         })),
     ],
@@ -516,8 +517,8 @@ export function App() {
               (filters.projectId === 'unassigned'
                 ? !work.projectId
                 : work.projectId === filters.projectId)) &&
-            (!filters.from || Boolean(work.dueAt && work.dueAt >= filters.from)) &&
-            (!filters.to || Boolean(work.dueAt && work.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
+            (!filters.from || Boolean(work.dueDate && work.dueDate >= filters.from)) &&
+            (!filters.to || Boolean(work.dueDate && work.dueDate <= filters.to)) &&
             (filters.contentType === 'all' ||
               filters.contentType === undefined ||
               work.contentType === filters.contentType) &&
@@ -659,7 +660,10 @@ export function App() {
             ? !list.projectId
             : list.projectId === filters.projectId)) &&
         !filters.assigneeId &&
-        !filters.categoryId &&
+        (!filters.categoryId ||
+          list.categoryId === filters.categoryId ||
+          projects.find((project) => project.id === list.projectId)?.categoryId ===
+            filters.categoryId) &&
         !filters.from &&
         !filters.to,
     );
@@ -681,7 +685,7 @@ export function App() {
             .includes(query),
         ),
     );
-  }, [filters, lists, listItems, directoryItems]);
+  }, [filters, lists, listItems, directoryItems, projects]);
   const projectDetailRows = useMemo(
     () =>
       overallRankedStackItems
@@ -1501,8 +1505,8 @@ export function App() {
               groups={groups.map((group) => ({ id: group.id, name: group.name }))}
               categories={categories}
               projects={projects}
-              createList={async (name, projectId, urgency) => {
-                await saveNewList(name, session.userId, projectId, urgency);
+              createList={async (name, projectId, urgency, categoryId) => {
+                await saveNewList(name, session.userId, projectId, urgency, categoryId);
               }}
               addItem={async (listId, input) => {
                 await addLocalListItem(listId, input, session.userId);
@@ -1594,6 +1598,9 @@ export function App() {
                       filters.assigneeId ||
                       filters.categoryId ||
                       filters.projectId ||
+                      filters.urgencies.length > 0 ||
+                      (filters.contentType && filters.contentType !== 'all') ||
+                      (filters.lifecycle && filters.lifecycle !== 'active') ||
                       (filters.progress && filters.progress !== 'all')) && (
                       <button className="quiet" onClick={() => setFilters(emptyFilters)}>
                         Clear filters

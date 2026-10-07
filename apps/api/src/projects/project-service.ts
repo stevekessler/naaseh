@@ -57,7 +57,7 @@ export const assignWorkToProject = <T extends Task | List>(
   const next = {
     ...work,
     projectId: assignment.projectId,
-    ...('categoryId' in work ? { categoryId: assignment.categoryId } : {}),
+    categoryId: assignment.categoryId,
     updatedAt: new Date().toISOString(),
     version: work.version + 1,
   } as T;

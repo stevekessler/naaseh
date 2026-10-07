@@ -15,6 +15,12 @@ describe('list HTTP contracts', () => {
       name: 'Groceries',
       urgency: 'medium',
     });
+    expect(
+      listCreateSchema.parse({
+        name: 'Groceries',
+        categoryId: '01J00000000000000000000001',
+      }),
+    ).toMatchObject({ categoryId: '01J00000000000000000000001' });
     expect(listPatchSchema.parse({ locked: true })).toEqual({ locked: true });
     expect(listItemCreateSchema.parse({ name: 'Milk', amountMinor: -499 })).toMatchObject({
       amountMinor: -499,

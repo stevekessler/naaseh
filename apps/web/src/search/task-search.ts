@@ -1,5 +1,6 @@
 import MiniSearch from 'minisearch';
 import { matchesUrgencySet, type Task, type Urgency } from '@naaseh/domain';
+import { taskDueDateKey } from './task-filters.js';
 export interface Filters {
   query: string;
   assigneeId: string;
@@ -48,8 +49,9 @@ export function searchTaskIds(tasks: Task[], query: string): Set<string> {
 export function filterTasks(tasks: Task[], filters: Filters): Task[] {
   if (filters.contentType === 'lists') return [];
   const ids = filters.query.trim() ? searchTaskIds(tasks, filters.query) : undefined;
-  return tasks.filter(
-    (task) =>
+  return tasks.filter((task) => {
+    const dueDate = taskDueDateKey(task);
+    return (
       (!ids || ids.has(task.id)) &&
       (filters.lifecycle === 'all' ||
         (filters.lifecycle === 'archive'
@@ -61,9 +63,10 @@ export function filterTasks(tasks: Task[], filters: Filters): Task[] {
         (filters.projectId === 'unassigned'
           ? !task.projectId
           : task.projectId === filters.projectId)) &&
-      (!filters.from || Boolean(task.dueAt && task.dueAt >= filters.from)) &&
-      (!filters.to || Boolean(task.dueAt && task.dueAt <= `${filters.to}T23:59:59.999Z`)) &&
+      (!filters.from || Boolean(dueDate && dueDate >= filters.from)) &&
+      (!filters.to || Boolean(dueDate && dueDate <= filters.to)) &&
       matchesProgressFilter(task.percentComplete, filters.progress) &&
-      matchesUrgencySet(task.urgency, filters.urgencies),
-  );
+      matchesUrgencySet(task.urgency, filters.urgencies)
+    );
+  });
 }

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createTask, createUlid, type Mutation } from '@naaseh/domain';
+import { createList, createTask, createUlid, type Mutation } from '@naaseh/domain';
 import {
   advanceVectorCursor,
   applyTaskMutation,
+  applySharedWorkSyncPayload,
   classifyListItemSyncConflict,
   mergeNonOverlapping,
   nextFeedSequence,
@@ -20,6 +21,17 @@ const mutation = (overrides: Partial<Mutation> = {}): Mutation => ({
   ...overrides,
 });
 describe('server synchronization rules', () => {
+  it('applies and clears list category assignments from offline mutations', () => {
+    const current = createList({ name: 'List', categoryId: '01J00000000000000000000001' }, 'owner');
+    const cleared = applySharedWorkSyncPayload(
+      'list',
+      current,
+      { categoryId: null },
+      current.version + 1,
+      new Date().toISOString(),
+    );
+    expect(cleared.categoryId).toBeUndefined();
+  });
   it('returns stable conflicts for stale base versions', () => {
     const task = createTask({ label: 'x' }, 'u');
     expect(applyTaskMutation(task, mutation({ entityId: task.id, baseVersion: 0 })).status).toBe(

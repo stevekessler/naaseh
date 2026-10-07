@@ -20,6 +20,7 @@ export function useWorkloadTree(
         kind: 'list' as const,
         lifecycle: list.lifecycle,
         projectId: list.projectId,
+        categoryId: list.categoryId,
         urgency: list.urgency,
       })),
     ]);

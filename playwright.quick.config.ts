@@ -6,6 +6,7 @@ const chromiumJourneys = [
   'profile-identity.spec.ts',
   'baseline.spec.ts',
   'tasks-list.spec.ts',
+  'search-filter.spec.ts',
   'lists-basic.spec.ts',
   'archive-restore.spec.ts',
   'offline-sync.spec.ts',

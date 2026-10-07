@@ -254,7 +254,7 @@ export async function reorderLocalStack(input: {
   ]);
   const mutation = {
     id: mutationId,
-    entityId: scopeKey,
+    entityId: input.scope.scopeType === 'project' ? input.scope.scopeId : scopeKey,
     entityType: 'personalStackOperation',
     operation: 'reorder',
     baseVersion: input.baseVersion,

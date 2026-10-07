@@ -14,6 +14,7 @@ export const listSchema = z
     ownerId: z.string().min(1),
     name: z.string().trim().min(1).max(300),
     groupId: z.string().min(1).optional(),
+    categoryId: ulidSchema.optional(),
     projectId: ulidSchema.optional(),
     locked: z.boolean(),
     urgency: urgencySchema.default(defaultUrgency),
@@ -33,6 +34,7 @@ export const listInputSchema = z
   .object({
     name: z.string().trim().min(1).max(300),
     groupId: z.string().min(1).optional(),
+    categoryId: ulidSchema.optional(),
     projectId: ulidSchema.optional(),
     urgency: urgencySchema.default(defaultUrgency),
   })
@@ -76,6 +78,7 @@ export function createList(input: ListInput, ownerId: string, now = new Date()):
     ownerId,
     name: parsed.name,
     ...(parsed.groupId ? { groupId: parsed.groupId } : {}),
+    ...(parsed.categoryId ? { categoryId: parsed.categoryId } : {}),
     ...(parsed.projectId ? { projectId: parsed.projectId } : {}),
     urgency: parsed.urgency,
     locked: false,

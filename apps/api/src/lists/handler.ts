@@ -68,6 +68,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         new Date(),
         assignment.projectId,
         urgency,
+        assignment.categoryId ?? input.categoryId ?? undefined,
       );
       const feeds = await Promise.all(
         listAudienceChanges(undefined, value).map(prepareAudienceChange),
@@ -97,10 +98,18 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         ...Object.fromEntries(
           Object.entries(parsed).filter(([, value]) => value !== undefined && value !== null),
         ),
+        ...(parsed.projectId === null ? { projectId: undefined } : {}),
+        ...(parsed.categoryId === null ? { categoryId: undefined } : {}),
+        ...(parsed.groupId === null ? { groupId: undefined } : {}),
         ...(assignment ? { projectId: assignment.projectId } : {}),
+        ...(assignment?.categoryId
+          ? { categoryId: assignment.categoryId }
+          : parsed.categoryId !== undefined
+            ? { categoryId: parsed.categoryId ?? undefined }
+            : {}),
       } as Pick<
         Partial<typeof current>,
-        'name' | 'groupId' | 'locked' | 'status' | 'projectId' | 'urgency'
+        'name' | 'groupId' | 'locked' | 'status' | 'categoryId' | 'projectId' | 'urgency'
       >;
       const value = updateOwnedList(current, patch, actor.id);
       const feeds = await Promise.all(

@@ -114,7 +114,7 @@ export function TaskRow({
         {task.link ? <CompactLink href={task.link} /> : <span aria-hidden="true">—</span>}
       </td>
       <td className="task-due-cell">
-        {dueLabel ? <small>{dueLabel}</small> : <span aria-hidden="true">—</span>}
+        {dueLabel ? <span>{dueLabel}</span> : <span aria-hidden="true">—</span>}
         <ReminderStatus task={task} />
       </td>
       <td className="task-priority-cell">

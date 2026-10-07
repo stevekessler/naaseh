@@ -1,5 +1,6 @@
 import type { List } from '@naaseh/domain';
 import { ReferenceCombobox } from '../../components/ReferenceCombobox.js';
+import type { LocalListPatch } from '../../db/list-repository.js';
 export function ListVisibilityControl({
   list,
   groups = [],
@@ -7,7 +8,7 @@ export function ListVisibilityControl({
 }: {
   list: List;
   groups?: { id: string; name: string }[];
-  change: (patch: Partial<List>) => void;
+  change: (patch: LocalListPatch) => void;
 }) {
   return (
     <fieldset>

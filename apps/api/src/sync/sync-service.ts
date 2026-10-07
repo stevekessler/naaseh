@@ -164,7 +164,15 @@ export function applySharedWorkSyncPayload(
   updatedAt: string,
 ) {
   const payload = sharedWorkPayload(value);
-  const candidate = current ? { ...current, ...payload, version, updatedAt } : payload;
+  const normalizedPayload = Object.fromEntries(
+    Object.entries(payload).map(([key, field]) => [
+      key,
+      field === null && ['categoryId', 'projectId', 'groupId'].includes(key) ? undefined : field,
+    ]),
+  );
+  const candidate = current
+    ? { ...current, ...normalizedPayload, version, updatedAt }
+    : normalizedPayload;
   return entityType === 'task' ? taskSchema.parse(candidate) : listSchema.parse(candidate);
 }
 

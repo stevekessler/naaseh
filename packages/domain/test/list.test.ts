@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createList, createListItem, moveListItem, transitionListItem } from '../src/list.js';
 
 describe('lists and lightweight items', () => {
+  it('preserves a direct category assignment without requiring a project', () => {
+    const list = createList(
+      { name: 'Categorized', categoryId: '01J00000000000000000000001' },
+      'owner',
+    );
+    expect(list.categoryId).toBe('01J00000000000000000000001');
+    expect(list.projectId).toBeUndefined();
+  });
   it('creates independently versioned items without task fields', () => {
     const list = createList({ name: ' Groceries ' }, 'owner', new Date('2026-01-01T00:00:00Z'));
     const item = createListItem(

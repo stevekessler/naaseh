@@ -17,8 +17,14 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByLabel('List name').fill('Groceries');
   await page.getByRole('button', { name: 'Create list' }).click();
   await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
+  await expect(page.getByText('Visibility', { exact: true })).toBeHidden();
+  await page.getByText('List settings', { exact: true }).click();
+  await expect(page.getByText('Visibility', { exact: true })).toBeVisible();
+  await page.getByText('List settings', { exact: true }).click();
   await page.getByLabel('Add an item').fill('Milk');
   await page.getByRole('button', { name: 'Add item' }).click();
+  await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Item' })).toBeVisible();
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
   const complete = item.getByRole('button', { name: 'Complete Milk' });
   await expectMinimumTarget(complete);
@@ -26,12 +32,12 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
     .poll(() => complete.evaluate((element) => getComputedStyle(element, '::before').width))
     .toBe('24px');
   await expectNoIntersection(
-    item.locator('.list-item-summary'),
+    item.locator('.list-item-name-cell'),
     item.locator('.list-item-actions'),
   );
 
   await item.getByRole('button', { name: 'Edit', exact: true }).click();
-  const editor = item.locator('.list-item-editor');
+  const editor = page.getByRole('table', { name: 'List items' }).locator('.list-item-editor');
   await expect(editor).toBeVisible();
   await expectContained(editor.getByLabel('Item name'), editor);
   await expect(editor.getByLabel('Amount')).toHaveCount(0);

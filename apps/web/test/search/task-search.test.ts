@@ -31,6 +31,55 @@ describe('authorized task search', () => {
       }),
     ).toEqual([match]);
   });
+  it('filters date-only and timed work by local calendar date', () => {
+    const dateOnly = task('Date only', {
+      label: 'Date only',
+      dueKind: 'date',
+      dueDate: '2026-10-05',
+    });
+    const timed = task('Timed', {
+      label: 'Timed',
+      dueAt: '2026-10-06T18:00:00.000Z',
+      dueTimeZone: 'UTC',
+    });
+    const base = {
+      query: '',
+      assigneeId: '',
+      categoryId: '',
+      urgencies: [],
+      from: '2026-10-05',
+      to: '2026-10-05',
+    };
+    expect(filterTasks([dateOnly, timed], base)).toEqual([dateOnly]);
+  });
+
+  it('supports every task filter dimension in combination', () => {
+    const match = task('Matching', {
+      label: 'Matching',
+      assigneeId: 'alex',
+      categoryId: '01J00000000000000000000001',
+      projectId: '01J00000000000000000000002',
+      urgency: 'critical',
+      percentComplete: 60,
+      dueKind: 'date',
+      dueDate: '2026-10-06',
+    });
+    const other = task('Other', { label: 'Other', urgency: 'low' });
+    expect(
+      filterTasks([match, other], {
+        query: 'match',
+        assigneeId: 'alex',
+        categoryId: '01J00000000000000000000001',
+        projectId: '01J00000000000000000000002',
+        from: '2026-10-06',
+        to: '2026-10-06',
+        lifecycle: 'active',
+        contentType: 'todos',
+        progress: 'in-progress',
+        urgencies: ['critical'],
+      }),
+    ).toEqual([match]);
+  });
   it('searches a hidden task label without indexing its memo and drops stale IDs on rebuild', () => {
     const hidden = task('Visible label', {
       label: 'Visible label',

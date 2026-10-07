@@ -107,6 +107,7 @@ export async function saveList(
   const projected = async (list: List | undefined): Promise<ProjectedWorkView | undefined> => {
     if (!list) return undefined;
     const project = list.projectId ? await getProject(list.projectId) : undefined;
+    const categoryId = list.categoryId ?? project?.categoryId;
     return {
       id: list.id,
       workType: 'list' as const,
@@ -121,7 +122,7 @@ export async function saveList(
       ],
       lifecycle: list.lifecycle ?? list.status,
       ...(list.projectId ? { projectId: list.projectId } : {}),
-      ...(project?.categoryId ? { categoryId: project.categoryId } : {}),
+      ...(categoryId ? { categoryId } : {}),
       urgency: list.urgency,
       sortKey: list.updatedAt,
     };

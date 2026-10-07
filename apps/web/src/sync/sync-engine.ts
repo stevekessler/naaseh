@@ -43,6 +43,7 @@ import {
   localStackScopeKey,
   readLocalStack,
   reorderLocalStack,
+  resolveLocalStackConflict,
   type LocalStackMove,
   type LocalStackScope,
 } from '../db/personal-stack-repository.js';
@@ -443,15 +444,18 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
         if (result.status === 'conflict' || result.status === 'rejected') {
           if (item.entityType === 'category') blockedCategoryIds.add(item.entityId);
           if (isStackMutation) {
-            await conflictLocalStackOperation({
+            const reason = result.reason ?? result.problem?.reason ?? 'version_mismatch';
+            const conflict = await conflictLocalStackOperation({
               mutationId: item.id,
-              reason: result.reason ?? result.problem?.reason ?? 'version_mismatch',
+              reason,
               currentVersion:
                 result.currentVersion ??
                 result.problem?.currentVersion ??
                 result.version ??
                 item.baseVersion,
             });
+            if (conflict?.move.kind === 'simple_move' && reason === 'version_mismatch')
+              await resolveLocalStackConflict(conflict.id, 'reapply');
           } else if (item.entityType === 'taskTimer') {
             await conflictLocalTaskTimer({
               ownerId: item.entityId,

@@ -157,6 +157,7 @@ export const listCreateSchema = z
   .object({
     name: z.string().trim().min(1).max(300),
     groupId: z.string().min(1).optional(),
+    categoryId: ulidSchema.nullable().optional(),
     projectId: ulidSchema.nullable().optional(),
     urgency: urgencySchema.default(defaultUrgency),
   })
@@ -167,6 +168,7 @@ export const listPatchSchema = z
     groupId: z.string().min(1).nullable().optional(),
     locked: z.boolean().optional(),
     status: z.enum(['active', 'archived']).optional(),
+    categoryId: ulidSchema.nullable().optional(),
     projectId: ulidSchema.nullable().optional(),
     urgency: urgencySchema.optional(),
   })
