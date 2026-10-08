@@ -40,6 +40,9 @@ import {
   acknowledgeLocalStackOperation,
   applyOwnerStackChange,
   conflictLocalStackOperation,
+  initializeLocalStack,
+  listLocalStacks,
+  listPendingStackOperations,
   localStackScopeKey,
   readLocalStack,
   reorderLocalStack,
@@ -47,6 +50,7 @@ import {
   type LocalStackMove,
   type LocalStackScope,
 } from '../db/personal-stack-repository.js';
+import { readCanonicalStack } from '../features/stacks/stack-client.js';
 import { conflictLocalTaskTimer, purgeLocalTaskTimer } from '../db/task-timer-repository.js';
 export type SyncState = 'offline' | 'idle' | 'syncing' | 'error';
 type MutationResult = {
@@ -514,6 +518,7 @@ export async function pullChanges(): Promise<void> {
   if (!response.ok) throw await syncHttpResponseError('Synchronization pull', response);
   const body = (await response.json()) as {
     changes: Array<{
+      audience?: string;
       entityType?: string;
       entityId: string;
       operation: 'upsert' | 'tombstone';
@@ -526,6 +531,7 @@ export async function pullChanges(): Promise<void> {
   const tombstones = [];
   const enhanced = [];
   const revocations: { groupId: string; listIds: string[] }[] = [];
+  const refreshedStackScopes = new Set<string>();
   const parsers: Partial<Record<EntityType, { parse(value: unknown): unknown }>> = {
     list: listSchema,
     listItem: listItemSchema,
@@ -543,6 +549,50 @@ export async function pullChanges(): Promise<void> {
     if (entityType === 'personalStackOperation') {
       if (change.operation !== 'upsert') {
         throw new Error('Personal stack operations cannot be tombstoned.');
+      }
+      const pointer = change.payload as {
+        operationId?: unknown;
+        scope?: unknown;
+        projectId?: unknown;
+      } | null;
+      if (
+        pointer &&
+        typeof pointer === 'object' &&
+        typeof pointer.operationId === 'string' &&
+        !('id' in pointer)
+      ) {
+        if (pointer.operationId !== change.entityId)
+          throw new Error('Personal stack operation feed identity does not match its envelope.');
+        if (!change.audience?.startsWith('OWNER#'))
+          throw new Error('Personal stack operation feed has no owner audience.');
+        const ownerId = change.audience.slice('OWNER#'.length);
+        const localStacks = (await listLocalStacks()).filter((stack) => stack.ownerId === ownerId);
+        const affected = localStacks.filter((stack) => {
+          if (pointer.scope === 'overall') return stack.scope.scopeType === 'overall';
+          if (pointer.scope === 'project' && typeof pointer.projectId === 'string')
+            return stack.scope.scopeType === 'project' && stack.scope.scopeId === pointer.projectId;
+          // Legacy feed pointers did not include scope metadata. Refresh every
+          // initialized owner stack so those records can be consumed safely.
+          return true;
+        });
+        for (const stack of affected) {
+          const scopeKey = localStackScopeKey(stack.ownerId, stack.scope);
+          if (refreshedStackScopes.has(scopeKey)) continue;
+          const pending = await listPendingStackOperations(stack.ownerId);
+          if (pending.some((operation) => operation.scopeKey === scopeKey)) continue;
+          await serializeScope(scopeKey, async () => {
+            const canonical = await readCanonicalStack(stack.scope);
+            if (canonical.version < stack.version) return;
+            await initializeLocalStack({
+              ownerId: stack.ownerId,
+              scope: stack.scope,
+              version: canonical.version,
+              work: canonical.work,
+            });
+          });
+          refreshedStackScopes.add(scopeKey);
+        }
+        continue;
       }
       const operation = personalStackOperationSchema.parse(change.payload);
       if (operation.id !== change.entityId) {

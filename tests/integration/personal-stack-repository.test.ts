@@ -118,6 +118,15 @@ describe('personal stack repository', () => {
     ).toBe(true);
     expect(items.some((item) => String(item.Put?.Item?.PK) === 'FEED#OWNER#user-a')).toBe(true);
     expect(
+      items.find((item) => String(item.Put?.Item?.PK) === 'FEED#OWNER#user-a')?.Put?.Item?.data,
+    ).toMatchObject({
+      entityType: 'personalStackOperation',
+      operationId,
+      scope: 'overall',
+      version: 1,
+      status: 'applied',
+    });
+    expect(
       items.every(
         (item) =>
           !String(item.Put?.Item?.PK ?? item.Update?.Key?.PK ?? '').includes('PUBLIC') &&

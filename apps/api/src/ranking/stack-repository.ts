@@ -196,7 +196,18 @@ export function buildStackAcceptanceTransaction(input: {
               input.scope.userId,
               input.expectedOwnerFeedSequence + 1,
             ),
-            data: { entityType: 'personalStackOperation', operationId: operation.id },
+            // The feed entry is an invalidation pointer rather than the full operation:
+            // filtered permutations can be much larger than DynamoDB's item limit. Keep
+            // enough scope metadata here for clients to refresh only the affected stack.
+            data: {
+              entityType: 'personalStackOperation',
+              operationId: operation.id,
+              scope: operation.scopeType,
+              ...(operation.scopeType === 'project' ? { projectId: operation.scopeId } : {}),
+              version: operation.version,
+              status: operation.outcome,
+              changedAt: operation.acceptedAt,
+            },
           },
           ConditionExpression: 'attribute_not_exists(PK)',
         },

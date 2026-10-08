@@ -200,6 +200,15 @@ export async function readLocalStack(ownerId: string, scope: LocalStackScope) {
     : undefined;
 }
 
+export async function listLocalStacks(): Promise<LocalStackState[]> {
+  const records = await db.secureStackScopes.toArray();
+  return Promise.all(
+    records.map((record) =>
+      decryptLocalValue<LocalStackState>('personalStackScope', record.id, record.value),
+    ),
+  );
+}
+
 export async function reorderLocalStack(input: {
   ownerId: string;
   scope: LocalStackScope;
