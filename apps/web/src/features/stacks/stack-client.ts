@@ -37,6 +37,8 @@ type WireStackItem = {
 
 type StackPage = { items: WireStackItem[]; nextCursor: string | null };
 
+type CanonicalStackPage = StackPage & { version: number };
+
 const problemKind = (status: number, code?: string): StackReadError => {
   if (status === 410 || code === 'cursor_expired') return 'expired_cursor';
   if (status === 409 || code === 'pagination_context_changed') return 'context_changed';
@@ -128,4 +130,51 @@ export async function readFilteredStack(
     if (cursor) seenCursors.add(cursor);
   } while (cursor);
   return rows;
+}
+
+/**
+ * Reload the unfiltered canonical order after the owner feed invalidates a stack.
+ * Feed records intentionally contain only a pointer because a filtered permutation
+ * can be too large to duplicate into the synchronization feed.
+ */
+export async function readCanonicalStack(scope: LocalStackScope): Promise<{
+  version: number;
+  work: WorkReference[];
+}> {
+  const work: WorkReference[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+  let version: number | undefined;
+  do {
+    const query = new URLSearchParams({ limit: '50', contentType: 'all' });
+    if (cursor) query.set('cursor', cursor);
+    const response = await fetch(`${pathFor(scope)}?${query}`, { credentials: 'include' });
+    if (!response.ok) {
+      const problem = (await response.json().catch(() => ({}))) as {
+        code?: string;
+        message?: string;
+      };
+      throw new StackReadProblem(
+        problemKind(response.status, problem.code),
+        problem.message ?? `Unable to refresh the stack (${response.status}).`,
+      );
+    }
+    const page = (await response.json()) as CanonicalStackPage;
+    if (!Number.isSafeInteger(page.version) || page.version < 0)
+      throw new StackReadProblem('failed', 'The refreshed stack version is invalid.');
+    if (version !== undefined && page.version !== version)
+      throw new StackReadProblem('context_changed', 'The stack changed while it was refreshing.');
+    version = page.version;
+    for (const item of page.items) {
+      const workId = item.work.id ?? item.work.workId;
+      const membershipEpoch = item.work.membershipEpoch ?? String(item.work.version ?? '');
+      if (!workId || !membershipEpoch) continue;
+      work.push({ workType: item.work.workType, workId, membershipEpoch });
+    }
+    cursor = page.nextCursor ?? undefined;
+    if (cursor && seenCursors.has(cursor))
+      throw new StackReadProblem('context_changed', 'The stack refresh cursor repeated.');
+    if (cursor) seenCursors.add(cursor);
+  } while (cursor);
+  return { version: version ?? 0, work };
 }

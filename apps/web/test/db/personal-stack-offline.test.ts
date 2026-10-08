@@ -287,6 +287,49 @@ describe('encrypted offline personal-stack persistence', () => {
     });
   });
 
+  it('consumes legacy stack feed pointers by refreshing the canonical owner stack', async () => {
+    await seed();
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            changes: [
+              {
+                audience: `OWNER#${ownerId}`,
+                entityType: 'personalStackOperation',
+                entityId: '01J00000000000000000000010',
+                operation: 'upsert',
+                payload: { operationId: '01J00000000000000000000010' },
+              },
+            ],
+            cursor: { owner: 1 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            version: 1,
+            items: [taskB, taskA, listC].map((work, index) => ({
+              work,
+              rank: { overallPosition: index + 1 },
+            })),
+            nextCursor: null,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+
+    await pullChanges();
+
+    await expect(readLocalStack(ownerId, overall)).resolves.toMatchObject({
+      version: 1,
+      work: [taskB, taskA, listC],
+    });
+    expect(vi.mocked(fetch).mock.calls[1]?.[0]).toContain('/api/v1/stacks/overall');
+  });
+
   it('serializes same-user scope writes and derives each queued base version locally', async () => {
     await seed();
     const first = queuePersonalStackReorder({
