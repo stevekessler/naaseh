@@ -4,7 +4,12 @@ import {
   TransactWriteCommand,
   type TransactWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
-import { type ContentActor, type PersonalStackScope, type WorkReference } from '@naaseh/domain';
+import {
+  stackMembershipEpochFor,
+  type ContentActor,
+  type PersonalStackScope,
+  type WorkReference,
+} from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { keys } from '../shared/keys.js';
 import { listProjectedWork } from '../reporting/work-view-repository.js';
@@ -250,7 +255,7 @@ export async function listEligibleStackWork(
     ...projected.tasks.map((work) => ({
       workType: 'task' as const,
       workId: work.id,
-      membershipEpoch: `${String(work.version).padStart(12, '0')}:${work.updatedAt}`,
+      membershipEpoch: stackMembershipEpochFor(work),
       urgency: work.urgency,
       projectId: work.projectId,
       categoryId: work.categoryId,
@@ -264,7 +269,7 @@ export async function listEligibleStackWork(
     ...projected.lists.map((work) => ({
       workType: 'list' as const,
       workId: work.id,
-      membershipEpoch: `${String(work.version).padStart(12, '0')}:${work.updatedAt}`,
+      membershipEpoch: stackMembershipEpochFor(work),
       urgency: work.urgency,
       projectId: work.projectId,
       lifecycle: work.lifecycle ?? (work.status === 'active' ? 'active' : 'archived'),

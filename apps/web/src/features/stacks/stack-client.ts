@@ -30,6 +30,7 @@ type WireStackItem = {
     name?: string;
     urgency: Urgency;
     percentComplete?: number;
+    dueDate?: string;
   };
   rank: { overallPosition: number; projectPosition?: number };
 };
@@ -106,7 +107,10 @@ export async function readFilteredStack(
           (reference.workType === 'task' ? 'To-do' : 'List'),
         urgency: item.work.urgency,
         ...(item.work.workType === 'task'
-          ? { percentComplete: item.work.percentComplete ?? 0 }
+          ? {
+              percentComplete: item.work.percentComplete ?? 0,
+              ...(item.work.dueDate ? { dueDate: item.work.dueDate } : {}),
+            }
           : {}),
         overallPosition: item.rank.overallPosition,
         ...(item.rank.projectPosition === undefined

@@ -7,6 +7,23 @@ type SignOutDependencies = {
   clearSession: () => void;
 };
 
+export function confirmSignOutWithUnsyncedData(
+  pending: number,
+  conflicts: number,
+  confirm: (message: string) => boolean = (message) => window.confirm(message),
+) {
+  if (pending === 0 && conflicts === 0) return true;
+  const details = [
+    pending ? `${pending} change${pending === 1 ? '' : 's'} waiting to sync` : '',
+    conflicts ? `${conflicts} saved conflict${conflicts === 1 ? '' : 's'}` : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
+  return confirm(
+    `You have ${details}. Signing out removes local data and may permanently lose changes that have not synced. Are you sure you want to sign out?`,
+  );
+}
+
 /** Revoke the online session when possible, then remove all account-derived browser data. */
 export async function signOutBrowser(
   csrfToken?: string,

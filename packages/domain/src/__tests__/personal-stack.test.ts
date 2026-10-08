@@ -5,6 +5,7 @@ import {
   orderImplicitTail,
   personalStackScopeSchema,
   replayPersonalStack,
+  stackMembershipEpochFor,
   stackScopeIdentity,
   workReferenceIdentity,
   workReferenceSchema,
@@ -34,6 +35,18 @@ const c = ref(workIds.c, '00000000000000000003');
 const d = ref(workIds.d, '00000000000000000004', 'list');
 
 describe('personal stack', () => {
+  it('uses one stable membership identity across clients and the server', () => {
+    expect(
+      stackMembershipEpochFor({
+        createdAt: '2026-08-05T12:00:00.000Z',
+        stackMembershipEpoch: '2026-10-08T03:33:00.000Z',
+      }),
+    ).toBe('2026-10-08T03:33:00.000Z');
+    expect(stackMembershipEpochFor({ createdAt: '2026-08-05T12:00:00.000Z' })).toBe(
+      '2026-08-05T12:00:00.000Z',
+    );
+  });
+
   it('gives overall and per-Project scopes distinct user-owned identities', () => {
     const overall = personalStackScopeSchema.parse({ userId: 'user-a', scopeType: 'overall' });
     const project = personalStackScopeSchema.parse({

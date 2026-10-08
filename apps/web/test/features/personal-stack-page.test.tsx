@@ -19,6 +19,7 @@ const task = {
   urgency: 'high' as const,
   overallPosition: 2,
   projectPosition: 1,
+  dueDate: '2026-10-09',
 };
 const list = {
   reference: {
@@ -74,6 +75,8 @@ describe('personal stack accessibility contract', () => {
     expect(html).toContain('Moved Call the dentist to position 1 of 2 in Home Project stack.');
     expect(html).toContain('Project position 1 of 2');
     expect(html).toContain('Overall position 2');
+    expect(html).toContain('Due date');
+    expect(html).toContain('10/9/2026');
     expect(html).toContain('Low');
   });
 

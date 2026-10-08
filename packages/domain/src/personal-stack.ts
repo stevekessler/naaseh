@@ -30,6 +30,17 @@ export const personalStackScopeSchema = z.discriminatedUnion('scopeType', [
 
 export type PersonalStackScope = z.infer<typeof personalStackScopeSchema>;
 
+/**
+ * A membership epoch changes only when work leaves and later re-enters the active stack.
+ * Existing records predate the explicit field, so their creation time is the stable fallback.
+ */
+export function stackMembershipEpochFor(work: {
+  createdAt: string;
+  stackMembershipEpoch?: string | undefined;
+}): string {
+  return work.stackMembershipEpoch ?? work.createdAt;
+}
+
 export function workReferenceIdentity(reference: WorkReference): string {
   return `${reference.workType}:${reference.workId}:${reference.membershipEpoch}`;
 }

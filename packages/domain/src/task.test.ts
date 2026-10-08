@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canReadTask, createTask, postItColorSchema, taskInputSchema } from './task.js';
+import {
+  archiveTask,
+  canReadTask,
+  createTask,
+  postItColorSchema,
+  restoreArchivedTask,
+  taskInputSchema,
+} from './task.js';
 
 describe('task boundaries', () => {
   it('allows all active users to read public tasks', () => {
@@ -33,5 +40,23 @@ describe('task boundaries', () => {
     expect(taskInputSchema.safeParse({ label: 'Unsafe', postItColor: '#ffffff' }).success).toBe(
       false,
     );
+  });
+  it('keeps one membership epoch through edits and renews it after restoration', () => {
+    const created = createTask(
+      { label: 'Ranked work' },
+      'steve',
+      new Date('2026-08-05T12:00:00.000Z'),
+    );
+    const archived = archiveTask(created, 'steve', new Date('2026-08-06T12:00:00.000Z'));
+    const restored = restoreArchivedTask(
+      archived,
+      undefined,
+      'steve',
+      undefined,
+      new Date('2026-08-07T12:00:00.000Z'),
+    ).task;
+
+    expect(archived.stackMembershipEpoch).toBe(created.stackMembershipEpoch);
+    expect(restored.stackMembershipEpoch).toBe('2026-08-07T12:00:00.000Z');
   });
 });

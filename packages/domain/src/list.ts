@@ -25,6 +25,7 @@ export const listSchema = z
     archivedBy: z.string().min(1).optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
+    stackMembershipEpoch: z.string().datetime().optional(),
     version: z.number().int().positive(),
   })
   .strict();
@@ -86,6 +87,7 @@ export function createList(input: ListInput, ownerId: string, now = new Date()):
     lifecycle: 'active',
     createdAt: timestamp,
     updatedAt: timestamp,
+    stackMembershipEpoch: timestamp,
     version: 1,
   });
 }
@@ -170,6 +172,7 @@ function transitionListLifecycle(
           archiveReason: undefined,
           archivedAt: undefined,
           archivedBy: undefined,
+          stackMembershipEpoch: timestamp,
         }),
     updatedAt: timestamp,
     version: list.version + 1,

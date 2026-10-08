@@ -1,5 +1,6 @@
 import { urgencyValues, type CategoryRecord, type Project, type Task } from '@naaseh/domain';
 import { taskDueDateKey } from '../../search/task-filters.js';
+import { db } from '../../db/database.js';
 
 export type TaskListSortKey = 'due' | 'category' | 'project' | 'priority';
 export type TaskListSortDirection = 'ascending' | 'descending';
@@ -7,6 +8,29 @@ export interface TaskListSort {
   key: TaskListSortKey;
   direction: TaskListSortDirection;
 }
+
+const taskListSortSettingKey = 'task-list-manual-sort';
+
+export async function loadTaskListSort(): Promise<TaskListSort | undefined> {
+  const setting = await db.settings.get(taskListSortSettingKey);
+  if (!setting) return undefined;
+  try {
+    const candidate = JSON.parse(setting.value) as Partial<TaskListSort>;
+    if (
+      ['due', 'category', 'project', 'priority'].includes(candidate.key ?? '') &&
+      ['ascending', 'descending'].includes(candidate.direction ?? '')
+    )
+      return candidate as TaskListSort;
+  } catch {
+    // An invalid local preference falls back to the automatic task order.
+  }
+  return undefined;
+}
+
+export const saveTaskListSort = (sort: TaskListSort) =>
+  db.settings.put({ key: taskListSortSettingKey, value: JSON.stringify(sort) });
+
+export const resetTaskListSort = () => db.settings.delete(taskListSortSettingKey);
 
 const textCollator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 

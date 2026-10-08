@@ -1,7 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { signOutBrowser } from '../../src/features/auth/sign-out.js';
+import {
+  confirmSignOutWithUnsyncedData,
+  signOutBrowser,
+} from '../../src/features/auth/sign-out.js';
 
 describe('browser sign-out', () => {
+  it('requires confirmation without blocking sign-out when local work is at risk', () => {
+    const decline = vi.fn(() => false);
+    expect(confirmSignOutWithUnsyncedData(3, 1, decline)).toBe(false);
+    expect(decline).toHaveBeenCalledWith(
+      expect.stringContaining('may permanently lose changes that have not synced'),
+    );
+
+    const accept = vi.fn(() => true);
+    expect(confirmSignOutWithUnsyncedData(3, 1, accept)).toBe(true);
+    expect(confirmSignOutWithUnsyncedData(0, 0, accept)).toBe(true);
+    expect(accept).toHaveBeenCalledOnce();
+  });
+
   it('uses a refreshed CSRF token and clears all local authorized data', async () => {
     const request = vi
       .fn()

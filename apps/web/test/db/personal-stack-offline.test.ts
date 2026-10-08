@@ -497,6 +497,60 @@ describe('encrypted offline personal-stack persistence', () => {
     ]);
   });
 
+  it('stops retrying when an optimistic local stack version is ahead of the server', async () => {
+    await initializeLocalStack({
+      ownerId,
+      scope: overall,
+      version: 151,
+      work: [taskA, taskB, listC],
+    });
+    const first = await reorderLocalStack({
+      ownerId,
+      scope: overall,
+      baseVersion: 151,
+      sourceClientId: 'browser-a',
+      move: { kind: 'simple_move', movedWork: taskB, afterWork: taskA },
+    });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          results: [
+            {
+              mutationId: first.mutationId,
+              status: 'conflict',
+              reason: 'version_mismatch',
+              currentVersion: 0,
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    );
+
+    await drainOutbox('csrf');
+
+    expect(await listPendingStackOperations(ownerId)).toEqual([]);
+    expect(await listLocalStackConflicts(ownerId)).toEqual([
+      expect.objectContaining({
+        mutationId: first.mutationId,
+        reason: 'version_mismatch',
+        baseVersion: 151,
+        currentVersion: 0,
+      }),
+    ]);
+
+    const [conflict] = await listLocalStackConflicts(ownerId);
+    await resolvePersonalStackConflict(conflict!, 'reapply');
+    expect(await listLocalStackConflicts(ownerId)).toEqual([]);
+    expect(await listPendingStackOperations(ownerId)).toEqual([
+      expect.objectContaining({
+        status: 'pending',
+        baseVersion: 0,
+        move: { kind: 'simple_move', movedWork: taskB, afterWork: taskA },
+      }),
+    ]);
+  });
+
   it('surfaces authorization conflicts as discard-only and removes them on discard', async () => {
     await seed();
     const pending = await reorderLocalStack({

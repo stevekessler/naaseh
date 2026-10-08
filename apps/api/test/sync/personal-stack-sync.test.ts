@@ -137,6 +137,37 @@ describe('contract-v4 personal stack synchronization', () => {
     expect(commits).toBe(1);
   });
 
+  it('returns the actionable conflict reason and current server version', async () => {
+    const service = {
+      async read() {
+        return { version: 0, items: [] };
+      },
+      async reorder() {
+        return {
+          status: 'conflict' as const,
+          stackVersion: 9,
+          reason: 'authorization_changed' as const,
+        };
+      },
+    };
+
+    await expect(
+      dispatchPersonalStackSyncMutation({
+        actorId: 'owner-a',
+        sourceClientId: 'browser-a',
+        mutation: stackMutation(),
+        service,
+      }),
+    ).resolves.toEqual({
+      mutationId,
+      operationId,
+      status: 'conflict',
+      version: 9,
+      reason: 'authorization_changed',
+      currentVersion: 9,
+    });
+  });
+
   it('normalizes legacy owner records but suppresses stack operations from shared feeds', () => {
     const stored = [
       {

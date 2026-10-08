@@ -80,23 +80,6 @@ const syncProblemEnvelopeBaseSchema = z
   })
   .strict();
 
-/** The stable per-mutation result emitted by sync contract version 4. */
-export const contractV4MutationResultSchema = z
-  .object({
-    mutationId: mutationResultIdSchema,
-    status: stableMutationStatusSchema,
-    version: z.number().int().nonnegative().optional(),
-    operationId: mutationResultIdSchema.optional(),
-  })
-  .strict();
-export type ContractV4MutationResult = z.infer<typeof contractV4MutationResultSchema>;
-
-/** Actionable problem returned when a sync operation can be retried safely. */
-export const syncRetryEnvelopeSchema = syncProblemEnvelopeBaseSchema
-  .extend({ retryAfterSeconds: z.number().int().positive() })
-  .strict();
-export type SyncRetryEnvelope = z.infer<typeof syncRetryEnvelopeSchema>;
-
 export const stackConflictReasonSchema = z.enum([
   'version_mismatch',
   'anchor_removed',
@@ -107,6 +90,25 @@ export const stackConflictReasonSchema = z.enum([
   'hard_deleted',
 ]);
 export type StackConflictReason = z.infer<typeof stackConflictReasonSchema>;
+
+/** The stable per-mutation result emitted by sync contract version 4. */
+export const contractV4MutationResultSchema = z
+  .object({
+    mutationId: mutationResultIdSchema,
+    status: stableMutationStatusSchema,
+    version: z.number().int().nonnegative().optional(),
+    operationId: mutationResultIdSchema.optional(),
+    reason: stackConflictReasonSchema.optional(),
+    currentVersion: z.number().int().nonnegative().optional(),
+  })
+  .strict();
+export type ContractV4MutationResult = z.infer<typeof contractV4MutationResultSchema>;
+
+/** Actionable problem returned when a sync operation can be retried safely. */
+export const syncRetryEnvelopeSchema = syncProblemEnvelopeBaseSchema
+  .extend({ retryAfterSeconds: z.number().int().positive() })
+  .strict();
+export type SyncRetryEnvelope = z.infer<typeof syncRetryEnvelopeSchema>;
 
 /** Actionable problem returned for a rejected personal-stack ordering basis. */
 export const syncConflictEnvelopeSchema = syncProblemEnvelopeBaseSchema
@@ -131,6 +133,8 @@ export const compatibleMutationResultSchema = z.union([
       version: z.number().int().nonnegative().optional(),
       entityVersion: z.number().int().nonnegative().optional(),
       operationId: mutationResultIdSchema.optional(),
+      reason: stackConflictReasonSchema.optional(),
+      currentVersion: z.number().int().nonnegative().optional(),
       entity: z.unknown().optional(),
       current: z.unknown().optional(),
       conflict: z.unknown().optional(),
@@ -152,6 +156,8 @@ export function normalizeMutationResult(value: unknown): ContractV4MutationResul
         ? { version: legacyVersion }
         : {}),
     ...(parsed.operationId ? { operationId: parsed.operationId } : {}),
+    ...(parsed.reason ? { reason: parsed.reason } : {}),
+    ...(parsed.currentVersion === undefined ? {} : { currentVersion: parsed.currentVersion }),
   });
 }
 

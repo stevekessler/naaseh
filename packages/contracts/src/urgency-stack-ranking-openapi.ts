@@ -324,6 +324,18 @@ export const mutationResultSchema = z
     status: z.enum(['applied', 'alreadyApplied', 'duplicate', 'conflict', 'rejected', 'retry']),
     version: z.number().int().nonnegative().optional(),
     operationId: ulidSchema.optional(),
+    reason: z
+      .enum([
+        'version_mismatch',
+        'anchor_removed',
+        'authorization_changed',
+        'lifecycle_changed',
+        'project_changed',
+        'filter_basis_changed',
+        'hard_deleted',
+      ])
+      .optional(),
+    currentVersion: z.number().int().nonnegative().optional(),
   })
   .strict();
 

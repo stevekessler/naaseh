@@ -1,8 +1,15 @@
 import type { CategoryRecord, Project, Task } from '@naaseh/domain';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TaskRow } from './TaskRow.js';
 import type { TaskColumnId } from './TaskColumnSettings.js';
-import { sortTasksForTable, type TaskListSort, type TaskListSortKey } from './task-list-sort.js';
+import {
+  loadTaskListSort,
+  resetTaskListSort,
+  saveTaskListSort,
+  sortTasksForTable,
+  type TaskListSort,
+  type TaskListSortKey,
+} from './task-list-sort.js';
 const configurableColumns: TaskColumnId[] = [
   'category',
   'project',
@@ -69,12 +76,25 @@ export function TaskList({
   visibleColumns: ReadonlySet<TaskColumnId>;
 }) {
   const [sort, setSort] = useState<TaskListSort>();
-  const changeSort = (key: TaskListSortKey) =>
-    setSort((current) => ({
+  useEffect(() => {
+    let active = true;
+    void loadTaskListSort()
+      .then((stored) => {
+        if (active) setSort(stored);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  const changeSort = (key: TaskListSortKey) => {
+    const next: TaskListSort = {
       key,
-      direction:
-        current?.key === key && current.direction === 'ascending' ? 'descending' : 'ascending',
-    }));
+      direction: sort?.key === key && sort.direction === 'ascending' ? 'descending' : 'ascending',
+    };
+    setSort(next);
+    void saveTaskListSort(next).catch(() => undefined);
+  };
   const displayedTasks = sortTasksForTable(tasks, sort, categories, projects);
   if (!tasks.length)
     return (
@@ -85,6 +105,23 @@ export function TaskList({
     );
   return (
     <div className="task-table-wrap">
+      {sort ? (
+        <div className="task-sort-toolbar" role="status">
+          <span>
+            Sorted by {sortLabels[sort.key]} {sort.direction}
+          </span>
+          <button
+            type="button"
+            className="quiet"
+            onClick={() => {
+              setSort(undefined);
+              void resetTaskListSort().catch(() => undefined);
+            }}
+          >
+            Reset sort
+          </button>
+        </div>
+      ) : null}
       <table
         className={`task-list ${configurableColumns
           .filter((column) => !visibleColumns.has(column))

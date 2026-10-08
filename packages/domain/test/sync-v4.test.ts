@@ -28,6 +28,15 @@ describe('sync contract version 4 response envelopes', () => {
         entityVersion: 4,
       }),
     ).toThrow();
+    expect(
+      contractV4MutationResultSchema.parse({
+        mutationId: 'mutation-2',
+        status: 'conflict',
+        version: 9,
+        reason: 'authorization_changed',
+        currentVersion: 9,
+      }),
+    ).toMatchObject({ reason: 'authorization_changed', currentVersion: 9 });
   });
 
   it('defines actionable retry and stack-conflict problems', () => {
@@ -69,7 +78,19 @@ describe('sync contract version 4 response envelopes', () => {
       }),
     ).toEqual({ mutationId: 'mutation-2', status: 'alreadyApplied', version: 7 });
     expect(
-      normalizeMutationResult({ mutationId: 'mutation-3', status: 'conflict', version: 8 }),
-    ).toEqual({ mutationId: 'mutation-3', status: 'conflict', version: 8 });
+      normalizeMutationResult({
+        mutationId: 'mutation-3',
+        status: 'conflict',
+        version: 8,
+        reason: 'anchor_removed',
+        currentVersion: 8,
+      }),
+    ).toEqual({
+      mutationId: 'mutation-3',
+      status: 'conflict',
+      version: 8,
+      reason: 'anchor_removed',
+      currentVersion: 8,
+    });
   });
 });

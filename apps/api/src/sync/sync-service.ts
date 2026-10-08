@@ -121,6 +121,10 @@ export async function dispatchPersonalStackSyncMutation(input: {
     status: result.status === 'pending_compaction' ? 'applied' : result.status,
     version: result.stackVersion,
     operationId: mutation.entityId,
+    ...(result.reason ? { reason: result.reason } : {}),
+    ...(result.status === 'conflict' || result.status === 'rejected'
+      ? { currentVersion: result.stackVersion }
+      : {}),
   });
 }
 

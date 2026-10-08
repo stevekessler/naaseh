@@ -910,6 +910,59 @@ form > label {
   min-height: 40px;
   padding: 0.45rem 0.75rem;
 }
+.sync-status-details {
+  position: relative;
+}
+.sync-status-details > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.sync-status-details > summary::-webkit-details-marker {
+  display: none;
+}
+.sync-status-details > summary::after {
+  content: ' ▾';
+}
+.sync-status-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 0.55rem);
+  left: 0;
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: min(70vh, 36rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 12px 32px rgb(20 47 37 / 18%);
+  color: var(--navy);
+}
+.sync-status-panel :is(h2, h3, p) {
+  margin-top: 0;
+}
+.sync-status-panel section + section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.sync-activity-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+.sync-activity-list li span {
+  display: block;
+  color: #607166;
+  font-size: 0.8rem;
+}
+.sync-safety-note,
+.sync-history-note {
+  margin: 0.85rem 0 0;
+  color: #607166;
+  font-size: 0.8rem;
+}
 .reminder-settings p {
   margin: 0;
   max-width: 24rem;
@@ -1389,6 +1442,22 @@ main {
   font-size: 0.85rem;
   font-weight: 700;
 }
+.task-sort-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  background: #f7faf8;
+  color: #526359;
+  font-size: 0.82rem;
+}
+.task-sort-toolbar .quiet {
+  min-height: 2.25rem;
+  padding: 0.35rem 0.55rem;
+  text-decoration: underline;
+}
 .task-column-settings {
   position: relative;
 }
@@ -1624,6 +1693,9 @@ main {
   line-height: 1.3;
 }
 .task-due-cell small {
+  display: block;
+}
+.task-due-cell .overdue-label {
   display: block;
 }
 .task-list .urgency-badge {
@@ -3010,14 +3082,20 @@ details:not([open]) > summary.project-workload-heading::after {
     grid-row: 1;
     align-self: center;
   }
-  .stack-list .stack-row > .stack-ranks {
+  .stack-list .stack-row > .stack-due-date {
     grid-column: 2 / 4;
     grid-row: 2;
+    color: #526879;
+    font-size: 0.84rem;
+  }
+  .stack-list .stack-row > .stack-ranks {
+    grid-column: 2 / 4;
+    grid-row: 3;
     text-align: start;
   }
   .stack-list .stack-row > .stack-row-controls {
     grid-column: 1 / 4;
-    grid-row: 3;
+    grid-row: 4;
     display: grid;
     grid-template-columns: auto minmax(9rem, 1fr);
     align-items: center;
