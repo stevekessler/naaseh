@@ -1,4 +1,5 @@
 import type { Task } from '@naaseh/domain';
+import { taskDueDateKey } from '../../search/task-filters.js';
 
 export interface TaskViewState {
   focusedTaskId?: string;
@@ -19,7 +20,7 @@ function localDateKey(value: Date) {
 }
 
 export function isTaskDueTodayOrPast(task: Pick<Task, 'dueAt' | 'dueDate'>, now = new Date()) {
-  const dueDate = task.dueDate ?? (task.dueAt ? localDateKey(new Date(task.dueAt)) : undefined);
+  const dueDate = taskDueDateKey(task);
   return dueDate !== undefined && dueDate <= localDateKey(now);
 }
 
@@ -33,11 +34,25 @@ export function orderTasksForList(
     const leftIsDue = isTaskDueTodayOrPast(left, now);
     const rightIsDue = isTaskDueTodayOrPast(right, now);
     if (leftIsDue !== rightIsDue) return leftIsDue ? -1 : 1;
-    const leftIsNew = !storedTaskIds.has(left.id);
-    const rightIsNew = !storedTaskIds.has(right.id);
-    if (leftIsNew !== rightIsNew) return leftIsNew ? -1 : 1;
-    if (leftIsNew)
-      return right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id);
-    return (ranks.get(left.id) ?? Infinity) - (ranks.get(right.id) ?? Infinity);
+    const leftDueDate = taskDueDateKey(left);
+    const rightDueDate = taskDueDateKey(right);
+    if (leftIsDue && rightIsDue) {
+      const dueDateOrder = (leftDueDate ?? '').localeCompare(rightDueDate ?? '');
+      if (dueDateOrder) return dueDateOrder;
+    }
+    const leftIsRanked = storedTaskIds.has(left.id);
+    const rightIsRanked = storedTaskIds.has(right.id);
+    if (leftIsRanked !== rightIsRanked) return leftIsRanked ? -1 : 1;
+    if (leftIsRanked && rightIsRanked)
+      return (
+        (ranks.get(left.id) ?? Infinity) - (ranks.get(right.id) ?? Infinity) ||
+        left.id.localeCompare(right.id)
+      );
+    if (leftDueDate !== rightDueDate) {
+      if (!leftDueDate) return 1;
+      if (!rightDueDate) return -1;
+      return leftDueDate.localeCompare(rightDueDate);
+    }
+    return right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id);
   });
 }

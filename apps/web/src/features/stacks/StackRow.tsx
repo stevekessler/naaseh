@@ -4,6 +4,7 @@ import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import type { LocalStackScope } from '../../db/personal-stack-repository.js';
 import { StackMoveControls, stackRowFocusId, type StackMoveHandler } from './StackMoveControls.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
+import { formatCalendarDate } from '../tasks/due-value.js';
 
 export { stackRowFocusId } from './StackMoveControls.js';
 
@@ -15,6 +16,7 @@ export interface StackDisplayItem {
   projectPosition?: number;
   pending?: boolean;
   percentComplete?: number;
+  dueDate?: string;
 }
 
 export const stackDragId = (reference: WorkReference) =>
@@ -137,6 +139,9 @@ function StackRowContent({
       </th>
       <td className="stack-level">
         <UrgencyBadge urgency={item.urgency} mode="responsive" />
+      </td>
+      <td className="stack-due-date">
+        {item.dueDate ? formatCalendarDate(item.dueDate) : <span aria-hidden="true">—</span>}
       </td>
       <td className="stack-ranks workload-positions">
         {scope.scopeType === 'project' ? (

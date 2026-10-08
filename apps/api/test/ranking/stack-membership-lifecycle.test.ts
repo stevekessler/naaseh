@@ -14,7 +14,9 @@ const active = (overrides: Partial<StackMembershipWorkState> = {}): StackMembers
   id: '01K00000000000000000000100',
   ownerId: 'owner',
   version: 1,
+  createdAt: '2026-08-05T12:00:00.000Z',
   updatedAt: '2026-08-05T12:00:00.000Z',
+  stackMembershipEpoch: '2026-08-05T12:00:00.000Z',
   lifecycle: 'active',
   status: 'open',
   projectId: projectA,
@@ -41,7 +43,11 @@ describe('personal stack membership lifecycle', () => {
     const restored = stackMembershipChangeForWork(
       'task',
       archived,
-      active({ version: 3, updatedAt: '2026-08-05T12:02:00.000Z' }),
+      active({
+        version: 3,
+        updatedAt: '2026-08-05T12:02:00.000Z',
+        stackMembershipEpoch: '2026-08-05T12:02:00.000Z',
+      }),
     );
 
     expect(created).toMatchObject({ kind: 'admit', reason: 'create' });

@@ -44,6 +44,52 @@ describe('header controls', () => {
     expect(conflicted).toContain('<button>Retry</button>');
   });
 
+  it('opens pending work and seven-day local history from the sync summary', () => {
+    const html = renderToStaticMarkup(
+      <SyncStatus
+        online
+        pending={1}
+        pendingItems={[
+          {
+            key: 'ordinary:change-1',
+            id: 'change-1',
+            entityId: 'task-1',
+            area: 'tasks and lists',
+            entityType: 'task',
+            queuedAt: '2026-10-07T20:00:00.000Z',
+            attempts: 2,
+            title: 'Call Adam',
+          },
+        ]}
+        history={[
+          {
+            eventId: 'synced:ordinary:change-0',
+            key: 'ordinary:change-0',
+            id: 'change-0',
+            entityId: 'list-item-1',
+            area: 'tasks and lists',
+            entityType: 'listItem',
+            queuedAt: '2026-10-07T18:00:00.000Z',
+            attempts: 0,
+            status: 'synced',
+            occurredAt: '2026-10-07T19:00:00.000Z',
+          },
+        ]}
+        retry={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('<summary class="sync-status-summary">1 pending · syncing</summary>');
+    expect(html).toContain('Scheduled to sync');
+    expect(html).toContain('Call Adam</strong>');
+    expect(html).toContain('Task · tasks and lists');
+    expect(html).toContain('2 retries');
+    expect(html).toContain('Last 7 days');
+    expect(html).toContain('List item · synced');
+    expect(html).toContain('Private task titles are never recorded');
+    expect(html).not.toContain('change-1');
+  });
+
   it('retains updates and reloads an activated shell only after user action', async () => {
     const apply = () => undefined;
     announceServiceWorkerUpdate(apply);

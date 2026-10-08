@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pushRequestSchema } from './openapi.js';
 import {
+  mutationResultSchema,
   reorderRequestSchema,
   stackPageSchema,
   urgencyCountsSchema,
@@ -74,5 +75,17 @@ describe('urgency and personal stack contracts', () => {
     expect(
       pushRequestSchema.safeParse({ contractVersion: 3, mutations: [stackMutation] }).success,
     ).toBe(false);
+  });
+
+  it('returns actionable per-mutation Stack conflicts', () => {
+    expect(
+      mutationResultSchema.parse({
+        mutationId,
+        status: 'conflict',
+        version: 7,
+        reason: 'authorization_changed',
+        currentVersion: 7,
+      }),
+    ).toMatchObject({ reason: 'authorization_changed', currentVersion: 7 });
   });
 });

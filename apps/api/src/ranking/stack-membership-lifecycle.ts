@@ -1,10 +1,14 @@
+import { stackMembershipEpochFor } from '@naaseh/domain';
+
 export type StackMembershipWorkType = 'task' | 'list';
 
 export interface StackMembershipWorkState {
   id: string;
   ownerId: string;
   version: number;
+  createdAt: string;
   updatedAt: string;
+  stackMembershipEpoch?: string | undefined;
   status?: string | undefined;
   lifecycle?: string | undefined;
   completionState?: string | undefined;
@@ -56,7 +60,7 @@ export function configureStackMembershipLifecycleSink(
 }
 
 export function membershipEpochForWork(work: StackMembershipWorkState): string {
-  return `${String(work.version).padStart(12, '0')}:${work.updatedAt}`;
+  return stackMembershipEpochFor(work);
 }
 
 function active(work: StackMembershipWorkState | undefined): boolean {

@@ -123,6 +123,7 @@ export function StackList({
               <th scope="col">Rank</th>
               <th scope="col">Task</th>
               <th scope="col">Level</th>
+              <th scope="col">Due date</th>
               <th scope="col">Positions</th>
               <th scope="col">Actions</th>
             </tr>

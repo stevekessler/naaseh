@@ -804,6 +804,19 @@ components:
       properties:
         operationId:
           $ref: '#/components/schemas/Ulid'
+        reason:
+          type: string
+          enum:
+            - version_mismatch
+            - anchor_removed
+            - authorization_changed
+            - lifecycle_changed
+            - project_changed
+            - filter_basis_changed
+            - hard_deleted
+        currentVersion:
+          type: integer
+          minimum: 0
         mutationId:
           $ref: '#/components/schemas/Ulid'
         status:

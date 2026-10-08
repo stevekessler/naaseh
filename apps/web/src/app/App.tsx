@@ -11,6 +11,7 @@ import { lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   effectiveDirectoryFields,
   matchesUrgencySet,
+  stackMembershipEpochFor,
   workReferenceIdentity,
   type ListItem,
   type Task,
@@ -32,6 +33,11 @@ import { TaskForm } from '../features/tasks/TaskForm.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
 import { ConflictReview } from '../features/sync/ConflictReview.js';
 import { SyncStatus } from '../features/sync/SyncStatus.js';
+import {
+  listPendingSyncItems,
+  listSyncHistory,
+  reconcileSyncHistory,
+} from '../features/sync/sync-activity.js';
 import { drainSequentially } from '../sync/sync-engine.js';
 import { dismissObsoleteConflicts } from '../sync/conflict-review.js';
 import { drainJournalOutbox } from '../sync/journal-sync.js';
@@ -98,7 +104,7 @@ import {
   saveSessionView,
   validateBrowserSession,
 } from '../features/auth/session.js';
-import { signOutBrowser } from '../features/auth/sign-out.js';
+import { confirmSignOutWithUnsyncedData, signOutBrowser } from '../features/auth/sign-out.js';
 import {
   initializeLocalStack,
   latestAppliedStackOperationAt,
@@ -407,20 +413,31 @@ export function App() {
       ],
     );
   }, [directoryUsers, adminUsers, session, tasks, categories]);
-  const pending =
+  const pendingSyncItems = useLiveQuery(() => listPendingSyncItems(), []) ?? [];
+  const pending = pendingSyncItems.length;
+  const syncHistory = useLiveQuery(() => listSyncHistory(), []) ?? [];
+  const pendingSyncIdentity = pendingSyncItems
+    .map((item) => `${item.key}:${item.attempts}`)
+    .join(',');
+  useEffect(() => {
+    void listPendingSyncItems()
+      .then((items) => reconcileSyncHistory(items))
+      .catch(() => undefined);
+  }, [pendingSyncIdentity]);
+  const [reviewConflicts, setReviewConflicts] = useState(false);
+  const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
+  const savedConflictCount =
     useLiveQuery(
       async () =>
         (
           await Promise.all([
-            db.outbox.count(),
-            db.secureCrisisPlanOutbox.count(),
-            db.secureJournalOutbox.count(),
+            db.secureConflicts.count(),
+            db.secureStackConflicts.count(),
+            db.secureJournalConflicts.count(),
           ])
         ).reduce((total, count) => total + count, 0),
       [],
-    ) ?? 0;
-  const [reviewConflicts, setReviewConflicts] = useState(false);
-  const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
+    ) ?? conflicts;
   useEffect(() => {
     if (!session || sessionValidation !== 'valid') return;
     void dismissObsoleteConflicts({ expiredOnly: true }).catch(() => undefined);
@@ -438,7 +455,7 @@ export function App() {
           reference: {
             workType: 'task' as const,
             workId: task.id,
-            membershipEpoch: task.createdAt,
+            membershipEpoch: stackMembershipEpochFor(task),
           },
           label: task.label,
           urgency: task.urgency,
@@ -455,7 +472,7 @@ export function App() {
           reference: {
             workType: 'list' as const,
             workId: list.id,
-            membershipEpoch: list.createdAt,
+            membershipEpoch: stackMembershipEpochFor(list),
           },
           label: list.name,
           urgency: list.urgency,
@@ -1109,6 +1126,8 @@ export function App() {
               <SyncStatus
                 online={online}
                 pending={pending}
+                pendingItems={pendingSyncItems}
+                history={syncHistory}
                 conflicts={conflicts}
                 reviewConflicts={() => setReviewConflicts(true)}
                 error={
@@ -1159,7 +1178,13 @@ export function App() {
             <button
               className="quiet"
               disabled={signingOut}
+              title={
+                pending > 0 || savedConflictCount > 0
+                  ? 'Signing out may discard changes that have not synchronized.'
+                  : undefined
+              }
               onClick={() => {
+                if (!confirmSignOutWithUnsyncedData(pending, savedConflictCount)) return;
                 signingOutRef.current = true;
                 setSigningOut(true);
                 void signOutBrowser(session.csrfToken)
@@ -1208,6 +1233,7 @@ export function App() {
                   reference: work.reference,
                   label: work.label,
                   urgency: work.urgency,
+                  ...(work.dueDate ? { dueDate: work.dueDate } : {}),
                   overallPosition: rank.overallPosition,
                   ...(rank.projectPosition === undefined
                     ? {}

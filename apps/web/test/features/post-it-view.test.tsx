@@ -77,10 +77,10 @@ describe('post-it task view', () => {
         new Set([ranked.id]),
         new Map([[ranked.id, 1]]),
       ).map((task) => task.label),
-    ).toEqual(['Newer', 'Older', 'Ranked']);
+    ).toEqual(['Ranked', 'Newer', 'Older']);
   });
 
-  it('puts tasks due today or earlier before new and stack-ranked tasks', () => {
+  it('puts due tasks first, followed by stack-ranked and then unstacked tasks', () => {
     const now = new Date(2026, 9, 5, 15, 15);
     const rankedFirst = createTask(
       { label: 'Ranked first' },
@@ -116,7 +116,39 @@ describe('post-it task view', () => {
         ranks,
         now,
       ).map((task) => task.label),
-    ).toEqual(['Due today', 'Overdue', 'New future', 'Ranked first']);
+    ).toEqual(['Overdue', 'Due today', 'Ranked first', 'New future']);
+  });
+
+  it('orders unstacked work by due date and then newest creation time', () => {
+    const olderUndated = createTask(
+      { label: 'Older undated' },
+      'steve',
+      new Date('2026-01-01T00:00:00Z'),
+    );
+    const newerUndated = createTask(
+      { label: 'Newer undated' },
+      'steve',
+      new Date('2026-01-03T00:00:00Z'),
+    );
+    const later = createTask(
+      { label: 'Later', dueKind: 'date', dueDate: '2026-12-20' },
+      'steve',
+      new Date('2026-01-04T00:00:00Z'),
+    );
+    const sooner = createTask(
+      { label: 'Sooner', dueKind: 'date', dueDate: '2026-12-10' },
+      'steve',
+      new Date('2026-01-02T00:00:00Z'),
+    );
+
+    expect(
+      orderTasksForList(
+        [olderUndated, later, newerUndated, sooner],
+        new Set(),
+        new Map(),
+        new Date('2026-10-07T12:00:00Z'),
+      ).map((task) => task.label),
+    ).toEqual(['Sooner', 'Later', 'Newer undated', 'Older undated']);
   });
 
   it('offers the shared task editor from a post-it when editing is enabled', () => {

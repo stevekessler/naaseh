@@ -454,7 +454,11 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
                 result.version ??
                 item.baseVersion,
             });
-            if (conflict?.move.kind === 'simple_move' && reason === 'version_mismatch')
+            if (
+              conflict?.move.kind === 'simple_move' &&
+              reason === 'version_mismatch' &&
+              conflict.currentVersion > conflict.baseVersion
+            )
               await resolveLocalStackConflict(conflict.id, 'reapply');
           } else if (item.entityType === 'taskTimer') {
             await conflictLocalTaskTimer({

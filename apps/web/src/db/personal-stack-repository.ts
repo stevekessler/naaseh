@@ -529,9 +529,14 @@ export async function resolveLocalStackConflict(
     );
   const current = await readLocalStack(conflict.ownerId, conflict.scope);
   if (!current) throw new Error('Personal stack is unavailable.');
-  // Rebase onto the server's reported version without ever rolling a newer
-  // local scope backward. Retain the current work order and membership.
-  const baseVersion = Math.max(current.version, conflict.currentVersion);
+  const hasPendingInScope = (await listPendingStackOperations(conflict.ownerId)).some(
+    (operation) => operation.scopeKey === conflict.scopeKey,
+  );
+  // When no newer local operation is queued, the server's reported version is
+  // authoritative even if an earlier browser bug inflated the local version.
+  // Once a rebased operation is pending, continue its local version chain so a
+  // group of preserved intentions can be submitted sequentially.
+  const baseVersion = hasPendingInScope ? current.version : conflict.currentVersion;
   if (baseVersion !== current.version)
     await db.secureStackScopes.put(await scopeRecord({ ...current, version: baseVersion }));
   const rebasedMove =

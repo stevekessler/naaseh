@@ -13,6 +13,8 @@ describe('list archive lifecycle', () => {
     const restored = restoreList(finished, 'owner', new Date('2026-07-25T12:00:00.000Z'));
     expect(finished).toMatchObject({ lifecycle: 'archived', archiveReason: 'finished' });
     expect(restored.lifecycle).toBe('active');
+    expect(finished.stackMembershipEpoch).toBe(list.stackMembershipEpoch);
+    expect(restored.stackMembershipEpoch).toBe('2026-07-25T12:00:00.000Z');
     expect(children).toHaveLength(1_000);
     expect(children.every((item) => item.status === 'open')).toBe(true);
   });
