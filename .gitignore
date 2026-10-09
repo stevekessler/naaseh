@@ -23,6 +23,6 @@ venv/
 .build/
 DerivedData/
 *.swiftpm/
-Packages/
+SourcePackages/
 *.xcuserstate
 xcuserdata/
