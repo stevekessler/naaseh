@@ -21,3 +21,12 @@ daily same-Region AWS Backup points, compliance-mode Vault Lock, signed manifest
 isolated restore testing are retained. There is no global-table replica, passive stack,
 cross-Region backup copy, or replicated secret/key/media architecture. Total `us-west-2` loss is
 outside v1 scope.
+
+Native SwiftUI clients add a universal iPhone/iPad OS 27 application and a native arm64 macOS 27
+desktop application. They share Swift wire contracts, crypto, encrypted SwiftData/outbox, sync,
+service, feature, and design-system packages. All use the existing production API and authorization
+model; compatibility and privacy-safe telemetry reuse the request-driven sync Lambda and its
+CloudWatch log group, and native alerts reuse the existing notification path. App Intents route
+Siri task creation through the same idempotent task command service as UI and alert actions. The web
+application remains the sole administration, provisioning, Project/Category lifecycle, and
+recovery-operator interface. See [native security and sync](native-apple-security-sync.md).

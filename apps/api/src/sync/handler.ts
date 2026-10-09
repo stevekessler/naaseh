@@ -38,6 +38,7 @@ import { keys } from '../shared/keys.js';
 import { loadPublicKeyRegistry } from '../crypto-recovery/public-key-registry.js';
 import { metric } from '@naaseh/observability';
 import { listUserMemberships } from '../groups/group-repository.js';
+import { handler as nativeClientHandler } from '../client/compatibility-handler.js';
 import {
   findList,
   findListItem,
@@ -736,7 +737,9 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   return json(200, { results });
 }
 
-export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+export const handler: APIGatewayProxyHandlerV2 = async (event, context, callback) => {
+  if (event.rawPath === '/api/client/compatibility' || event.rawPath === '/api/client/telemetry')
+    return (await nativeClientHandler(event, context, callback)) as APIGatewayProxyResultV2;
   try {
     return await handle(event);
   } catch (error) {

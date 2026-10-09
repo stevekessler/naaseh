@@ -1,0 +1,20 @@
+{
+  "policy": "Synthetic, redacted content only; never capture production or smoke-account protected data.",
+  "fixtures": [
+    {
+      "id": "phone-tasks-redacted",
+      "device": "supported iPhone",
+      "content": ["Prepare sample agenda", "Review example notes"]
+    },
+    {
+      "id": "pad-workspace-redacted",
+      "device": "supported iPad",
+      "content": ["Example project", "Sample category"]
+    },
+    {
+      "id": "mac-desktop-redacted",
+      "device": "Apple-silicon Mac",
+      "content": ["Demonstration list", "No personal data"]
+    }
+  ]
+}

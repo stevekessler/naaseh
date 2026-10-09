@@ -5,12 +5,10 @@ Backup's temporary same-Region resources, verify the locked recovery point and s
 then run record-count, authorization, retained-key, hidden-memo decrypt, RPO, and RTO checks.
 Never restore over production. Confirm AWS Backup cleans up the temporary resources.
 
-Before any restored table can serve traffic, cancel every restored Google synchronization operation
-in `pending`, `retry`, or `running` state. Remove every restored Google refresh-token ciphertext and
-transition each restored connection to `reauthRequired`; users must complete OAuth again. The restore
-validator reports both counts and `safeToExpose=false` until these steps are complete. Never replay a
-restored provider operation or reuse a restored OAuth token, because either could overwrite Google
-changes made after the recovery point.
+Google Tasks synchronization is retired. Old Google connection, link, sharing, or operation records
+in a restored table are inert historical data and must never be replayed. Remove them only through a
+separately reviewed, backup-aware cleanup migration; they are not a condition for exposing otherwise
+validated Na'aseh records.
 
 The five-minute RPO and four-hour RTO apply to recoverable incidents within `us-west-2`. Total
 Region loss is outside v1 scope because there is no secondary architecture or cross-Region backup.

@@ -35,7 +35,6 @@ import {
 import { getClientId } from '../db/client-id.js';
 import { listReviewConflicts, readConflictDisplayContext } from './conflict-review.js';
 import { listLocalLists } from '../db/list-repository.js';
-import { refreshGoogleSyncCache } from '../features/google-sync/google-sync-client.js';
 import {
   acknowledgeLocalStackOperation,
   applyOwnerStackChange,
@@ -763,7 +762,6 @@ async function performSync(csrfToken: string) {
   await pullChanges();
   if (pushError) throw pushError;
   if (recoveryError) throw recoveryError;
-  await refreshGoogleSyncCache(csrfToken).catch(() => undefined);
 }
 
 export async function syncNow(csrfToken: string) {

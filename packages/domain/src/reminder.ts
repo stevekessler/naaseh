@@ -9,6 +9,8 @@ export const reminderSchema = z
     status: z.enum(['scheduled', 'shown', 'delivered', 'overdue', 'cancelled']),
     remoteScheduleName: z.string().optional(),
     pushSubscriptionId: z.string().optional(),
+    occurrenceId: z.string().min(1).optional(),
+    nativeInstallationIds: z.array(z.string().min(1)).max(20).optional(),
     version: z.number().int().positive().default(1),
   })
   .strict();

@@ -27,8 +27,6 @@ export function TaskActions({
       <PrivacyControl
         privateTask={task.visibility === 'private'}
         change={(locked) => update({ visibility: locked ? 'private' : 'public' })}
-        taskId={task.id}
-        csrfToken={csrfToken}
       />
       {currentUserId ? <TaskTimerForTask ownerId={currentUserId} task={task} /> : null}
       <PermanentDeleteDialog

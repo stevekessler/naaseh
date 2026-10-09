@@ -14,4 +14,4 @@ Deploy readers before writers. Keep version-1 hidden memo and legacy due-time fi
 
 After restore, validate task schemas, ciphertext package versions, derived memo projection consistency, due-kind exclusivity, revision/outbox ordering, and unresolved conflict records before reopening writes. Never log memo documents, plaintext projections for hidden memos, combobox queries, ciphertext packages, task labels, or reference labels.
 
-Google Tasks setup only moved to the profile surface. Existing import, merge, publish, date-boundary, DST, and legacy-zone behavior is protected by focused regression tests; no Google synchronization behavior changes unless those tests demonstrate a compatibility defect.
+External task synchronization is not part of the product. Na'aseh remains authoritative for task dates, time zones, urgency, and ranking.

@@ -26,7 +26,6 @@ export * from './completion-event.js';
 export * from './deletion.js';
 export * from './workload.js';
 export * from './crypto/hidden-memo-package.js';
-export * from './google-sync.js';
 export * from './urgency.js';
 export * from './personal-stack.js';
 export * from './feature-version.js';

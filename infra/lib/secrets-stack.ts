@@ -29,12 +29,7 @@ export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
     removalPolicy: RemovalPolicy.RETAIN,
   });
   const webPushSecret = new secretsmanager.Secret(scope, 'WebPushCredentials', {
-    description: 'Versioned VAPID keys and subject for generic Web Push reminders.',
-    encryptionKey: primaryKey,
-    removalPolicy: RemovalPolicy.RETAIN,
-  });
-  const googleOAuthSecret = new secretsmanager.Secret(scope, 'GoogleOAuthCredentials', {
-    description: 'Google OAuth web client JSON with clientId, clientSecret, and exact redirectUri.',
+    description: 'Versioned VAPID and APNs token credentials for generic native reminders.',
     encryptionKey: primaryKey,
     removalPolicy: RemovalPolicy.RETAIN,
   });
@@ -47,7 +42,6 @@ export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
   for (const [secret, owner] of [
     [pepper, 'authentication'],
     [webPushSecret, 'notifications'],
-    [googleOAuthSecret, 'google-sync'],
     [cursorSigningSecret, 'pagination'],
   ] as const) {
     Tags.of(secret).add('NaasehRotationOwner', owner);
@@ -82,7 +76,6 @@ export function createRuntimeSecrets(scope: Construct, alerts: sns.ITopic) {
     primaryKey,
     pepper,
     webPushSecret,
-    googleOAuthSecret,
     cursorSigningSecret,
     policyChangeAlarm,
   };

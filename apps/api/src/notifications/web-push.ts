@@ -60,6 +60,9 @@ export async function scheduleGenericReminder(
         type: 'task-reminder',
         taskId: input.taskId,
         userId: input.userId,
+        occurrenceId: createHash('sha256')
+          .update(`${input.userId}\0${input.taskId}\0${input.dueAt}`)
+          .digest('hex'),
       }),
     },
   };

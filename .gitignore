@@ -20,3 +20,9 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+.build/
+DerivedData/
+*.swiftpm/
+Packages/
+*.xcuserstate
+xcuserdata/

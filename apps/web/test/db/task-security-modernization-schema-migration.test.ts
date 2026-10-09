@@ -10,10 +10,10 @@ import { runTaskSecurityBrowserMigrations } from '../../src/db/feature-migration
 
 describe('Dexie schema version 11 migration scaffold', () => {
   it('keeps the foundation scaffold separate while story migrations preserve protected state', () => {
-    expect(currentSchemaVersion).toBe(13);
+    expect(currentSchemaVersion).toBe(14);
     expect(planEnhancedSchemaMigration(10)).toMatchObject({
       from: 10,
-      to: 13,
+      to: 14,
       preserveOutbox: true,
       storesToAdd: [
         'secureTaskTimers',
@@ -31,7 +31,7 @@ describe('Dexie schema version 11 migration scaffold', () => {
     expect(preservedEncryptedStores).toEqual(
       expect.arrayContaining(['settings', 'cryptoKeys', 'outbox', 'secureConflicts']),
     );
-    expect(planEnhancedSchemaMigration(13).storesToAdd).toEqual([]);
+    expect(planEnhancedSchemaMigration(14).storesToAdd).toEqual([]);
   });
 
   it('checkpoints completed steps and resumes after interruption without replay', async () => {

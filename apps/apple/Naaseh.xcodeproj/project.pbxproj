@@ -1,0 +1,272 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		C10000000000000000000001 /* NaasehFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = C70000000000000000000001 /* NaasehFeatures */; };
+		C10000000000000000000002 /* NaasehDesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = C70000000000000000000002 /* NaasehDesignSystem */; };
+		C10000000000000000000003 /* NaasehFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = C70000000000000000000003 /* NaasehFeatures */; };
+		C10000000000000000000004 /* NaasehDesignSystem in Frameworks */ = {isa = PBXBuildFile; productRef = C70000000000000000000004 /* NaasehDesignSystem */; };
+		C10000000000000000000005 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* SharedAssets.xcassets */; };
+		C10000000000000000000006 /* SharedAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* SharedAssets.xcassets */; };
+		C10000000000000000000007 /* NaasehTimerActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* NaasehTimerActivity.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		C10000000000000000000008 /* NaasehFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = C70000000000000000000005 /* NaasehFeatures */; };
+		E10000000000000000000001 /* PhoneExperienceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000011 /* PhoneExperienceUITests.swift */; };
+		E10000000000000000000002 /* PadExperienceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000012 /* PadExperienceUITests.swift */; };
+		E10000000000000000000003 /* MacExperienceUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E30000000000000000000013 /* MacExperienceUITests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D10000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A50000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A30000000000000000000004; remoteInfo = NaasehTimerActivity; };
+		E20000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A50000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A30000000000000000000001; remoteInfo = "Naaseh-iOS"; };
+		E20000000000000000000002 = {isa = PBXContainerItemProxy; containerPortal = A50000000000000000000001 /* Project object */; proxyType = 1; remoteGlobalIDString = A30000000000000000000002; remoteInfo = "Naaseh-macOS"; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A4000000000000000000000D = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (C10000000000000000000007 /* NaasehTimerActivity.appex in Embed App Extensions */, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000001 /* Naaseh-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Naaseh-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000002 /* Naaseh-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Naaseh-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000003 /* NaasehAppIntents.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NaasehAppIntents.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000004 /* NaasehTimerActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NaasehTimerActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E30000000000000000000001 /* Naaseh-iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Naaseh-iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E30000000000000000000002 /* Naaseh-macOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Naaseh-macOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E30000000000000000000011 /* PhoneExperienceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneExperienceUITests.swift; sourceTree = "<group>"; };
+		E30000000000000000000012 /* PadExperienceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PadExperienceUITests.swift; sourceTree = "<group>"; };
+		E30000000000000000000013 /* MacExperienceUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacExperienceUITests.swift; sourceTree = "<group>"; };
+		C20000000000000000000003 /* SharedAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = SharedAssets.xcassets; sourceTree = "<group>"; };
+		C20000000000000000000006 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		C20000000000000000000007 /* TestFlight.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = TestFlight.xcconfig; sourceTree = "<group>"; };
+		C20000000000000000000008 /* Info-TimerActivity.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info-TimerActivity.plist"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		C20000000000000000000001 /* iOSApp */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = iOSApp; sourceTree = "<group>"; };
+		C20000000000000000000002 /* macOSApp */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = macOSApp; sourceTree = "<group>"; };
+		C20000000000000000000004 /* AppIntents */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = SystemExtensions/AppIntents; sourceTree = "<group>"; };
+		C20000000000000000000005 /* TimerLiveActivity */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = SystemExtensions/TimerLiveActivity; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXGroup section */
+		A20000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000001 /* iOSApp */,
+				C20000000000000000000002 /* macOSApp */,
+				C20000000000000000000004 /* AppIntents */,
+				C20000000000000000000005 /* TimerLiveActivity */,
+				C20000000000000000000003 /* SharedAssets.xcassets */,
+				A20000000000000000000003 /* Config */,
+				E40000000000000000000001 /* UI Tests */,
+				A20000000000000000000002 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A20000000000000000000002 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000001 /* Naaseh-iOS.app */,
+				A10000000000000000000002 /* Naaseh-macOS.app */,
+				A10000000000000000000003 /* NaasehAppIntents.appex */,
+				A10000000000000000000004 /* NaasehTimerActivity.appex */,
+				E30000000000000000000001 /* Naaseh-iOSUITests.xctest */,
+				E30000000000000000000002 /* Naaseh-macOSUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A20000000000000000000003 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000006 /* Debug.xcconfig */,
+				C20000000000000000000007 /* TestFlight.xcconfig */,
+				C20000000000000000000008 /* Info-TimerActivity.plist */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		E40000000000000000000001 /* UI Tests */ = {
+			isa = PBXGroup;
+			children = (
+				E30000000000000000000011 /* PhoneExperienceUITests.swift */,
+				E30000000000000000000012 /* PadExperienceUITests.swift */,
+				E30000000000000000000013 /* MacExperienceUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A30000000000000000000001 /* Naaseh-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000001;
+			buildPhases = (A40000000000000000000001, A40000000000000000000002, A40000000000000000000003, A4000000000000000000000D);
+			buildRules = ();
+			dependencies = (D20000000000000000000001 /* PBXTargetDependency */);
+			fileSystemSynchronizedGroups = (C20000000000000000000001 /* iOSApp */, C20000000000000000000004 /* AppIntents */);
+			name = "Naaseh-iOS";
+			packageProductDependencies = (C70000000000000000000001 /* NaasehFeatures */, C70000000000000000000002 /* NaasehDesignSystem */);
+			productName = Naaseh;
+			productReference = A10000000000000000000001;
+			productType = "com.apple.product-type.application";
+		};
+		A30000000000000000000002 /* Naaseh-macOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000002;
+			buildPhases = (A40000000000000000000004, A40000000000000000000005, A40000000000000000000006);
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (C20000000000000000000002 /* macOSApp */, C20000000000000000000004 /* AppIntents */);
+			name = "Naaseh-macOS";
+			packageProductDependencies = (C70000000000000000000003 /* NaasehFeatures */, C70000000000000000000004 /* NaasehDesignSystem */);
+			productName = Naaseh;
+			productReference = A10000000000000000000002;
+			productType = "com.apple.product-type.application";
+		};
+		A30000000000000000000003 /* NaasehAppIntents */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000003;
+			buildPhases = (A40000000000000000000007, A40000000000000000000008, A40000000000000000000009);
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (C20000000000000000000004 /* AppIntents */);
+			name = NaasehAppIntents;
+			packageProductDependencies = (C70000000000000000000005 /* NaasehFeatures */);
+			productName = NaasehAppIntents;
+			productReference = A10000000000000000000003;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A30000000000000000000004 /* NaasehTimerActivity */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A60000000000000000000004;
+			buildPhases = (A4000000000000000000000A, A4000000000000000000000B, A4000000000000000000000C);
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (C20000000000000000000005 /* TimerLiveActivity */);
+			name = NaasehTimerActivity;
+			productName = NaasehTimerActivity;
+			productReference = A10000000000000000000004;
+			productType = "com.apple.product-type.app-extension";
+		};
+		E50000000000000000000001 /* Naaseh-iOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E90000000000000000000001;
+			buildPhases = (E70000000000000000000001, E70000000000000000000002, E70000000000000000000003);
+			buildRules = ();
+			dependencies = (E60000000000000000000001 /* PBXTargetDependency */);
+			name = "Naaseh-iOSUITests";
+			productName = "Naaseh-iOSUITests";
+			productReference = E30000000000000000000001;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		E50000000000000000000002 /* Naaseh-macOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E90000000000000000000002;
+			buildPhases = (E70000000000000000000004, E70000000000000000000005, E70000000000000000000006);
+			buildRules = ();
+			dependencies = (E60000000000000000000002 /* PBXTargetDependency */);
+			name = "Naaseh-macOSUITests";
+			productName = "Naaseh-macOSUITests";
+			productReference = E30000000000000000000002;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXTargetDependency section */
+		D20000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A30000000000000000000004 /* NaasehTimerActivity */; targetProxy = D10000000000000000000001; };
+		E60000000000000000000001 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A30000000000000000000001 /* Naaseh-iOS */; targetProxy = E20000000000000000000001; };
+		E60000000000000000000002 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A30000000000000000000002 /* Naaseh-macOS */; targetProxy = E20000000000000000000002; };
+/* End PBXTargetDependency section */
+
+/* Begin PBXProject section */
+		A50000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2700; LastUpgradeCheck = 2700; };
+			buildConfigurationList = A60000000000000000000000;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base);
+			mainGroup = A20000000000000000000001;
+			packageReferences = (C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */);
+			productRefGroup = A20000000000000000000002;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (A30000000000000000000001, A30000000000000000000002, A30000000000000000000003, A30000000000000000000004, E50000000000000000000001, E50000000000000000000002);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A40000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A40000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A40000000000000000000007 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A4000000000000000000000A = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E70000000000000000000001 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (E10000000000000000000001, E10000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+		E70000000000000000000004 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (E10000000000000000000003); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A40000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000001, C10000000000000000000002); runOnlyForDeploymentPostprocessing = 0; };
+		A40000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000003, C10000000000000000000004); runOnlyForDeploymentPostprocessing = 0; };
+		A40000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000008); runOnlyForDeploymentPostprocessing = 0; };
+		A4000000000000000000000B = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E70000000000000000000002 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E70000000000000000000005 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A40000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000005); runOnlyForDeploymentPostprocessing = 0; };
+		A40000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (C10000000000000000000006); runOnlyForDeploymentPostprocessing = 0; };
+		A40000000000000000000009 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A4000000000000000000000C = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E70000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		E70000000000000000000006 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		B10000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 6.0;}; name = Debug;};
+		B10000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SWIFT_VERSION = 6.0;}; name = TestFlight;};
+		B10000000000000000000003 = {isa = XCBuildConfiguration; baseConfigurationReference = C20000000000000000000006 /* Debug.xcconfig */; buildSettings = {ARCHS = arm64; CODE_SIGN_ENTITLEMENTS = "Entitlements/Naaseh-iOS.entitlements"; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = "Config/Info-iOS.plist"; IPHONEOS_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = Debug;};
+		B10000000000000000000004 = {isa = XCBuildConfiguration; baseConfigurationReference = C20000000000000000000007 /* TestFlight.xcconfig */; buildSettings = {ARCHS = arm64; CODE_SIGN_ENTITLEMENTS = "Entitlements/Naaseh-iOS.entitlements"; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = "Config/Info-iOS.plist"; IPHONEOS_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = iphoneos; SUPPORTS_MACCATALYST = NO; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2";}; name = TestFlight;};
+		B10000000000000000000005 = {isa = XCBuildConfiguration; baseConfigurationReference = C20000000000000000000006 /* Debug.xcconfig */; buildSettings = {ARCHS = arm64; CODE_SIGN_ENTITLEMENTS = "Entitlements/Naaseh-macOS.entitlements"; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = "Config/Info-macOS.plist"; MACOSX_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.macos; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 6.0;}; name = Debug;};
+		B10000000000000000000006 = {isa = XCBuildConfiguration; baseConfigurationReference = C20000000000000000000007 /* TestFlight.xcconfig */; buildSettings = {ARCHS = arm64; CODE_SIGN_ENTITLEMENTS = "Entitlements/Naaseh-macOS.entitlements"; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = "Config/Info-macOS.plist"; MACOSX_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.macos; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 6.0;}; name = TestFlight;};
+		B10000000000000000000007 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.intents; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 6.0;}; name = Debug;};
+		B10000000000000000000008 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.intents; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = iphoneos; SWIFT_VERSION = 6.0;}; name = TestFlight;};
+		B10000000000000000000009 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = "Config/Info-TimerActivity.plist"; IPHONEOS_DEPLOYMENT_TARGET = 27.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.timeractivity; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 6.0;}; name = Debug;};
+		B1000000000000000000000A = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = "Config/Info-TimerActivity.plist"; IPHONEOS_DEPLOYMENT_TARGET = 27.0; MARKETING_VERSION = 0.1.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.timeractivity; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = iphoneos; SWIFT_VERSION = 6.0;}; name = TestFlight;};
+		E80000000000000000000001 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.iosuitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = "Naaseh-iOS";}; name = Debug;};
+		E80000000000000000000002 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.iosuitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = iphoneos; SWIFT_VERSION = 6.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = "Naaseh-iOS";}; name = TestFlight;};
+		E80000000000000000000003 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.macosuitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 6.0; TEST_TARGET_NAME = "Naaseh-macOS";}; name = Debug;};
+		E80000000000000000000004 = {isa = XCBuildConfiguration; buildSettings = {ARCHS = arm64; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 27.0; PRODUCT_BUNDLE_IDENTIFIER = link.thepandas.naaseh.macosuitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = macosx; SUPPORTED_PLATFORMS = macosx; SWIFT_VERSION = 6.0; TEST_TARGET_NAME = "Naaseh-macOS";}; name = TestFlight;};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A60000000000000000000000 = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000001, B10000000000000000000002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+		A60000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000003, B10000000000000000000004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+		A60000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000005, B10000000000000000000006); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+		A60000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000007, B10000000000000000000008); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+		A60000000000000000000004 = {isa = XCConfigurationList; buildConfigurations = (B10000000000000000000009, B1000000000000000000000A); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+		E90000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (E80000000000000000000001, E80000000000000000000002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+		E90000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (E80000000000000000000003, E80000000000000000000004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug;};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */ = {isa = XCLocalSwiftPackageReference; relativePath = ../../packages/apple; };
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C70000000000000000000001 /* NaasehFeatures */ = {isa = XCSwiftPackageProductDependency; package = C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */; productName = NaasehFeatures; };
+		C70000000000000000000002 /* NaasehDesignSystem */ = {isa = XCSwiftPackageProductDependency; package = C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */; productName = NaasehDesignSystem; };
+		C70000000000000000000003 /* NaasehFeatures */ = {isa = XCSwiftPackageProductDependency; package = C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */; productName = NaasehFeatures; };
+		C70000000000000000000004 /* NaasehDesignSystem */ = {isa = XCSwiftPackageProductDependency; package = C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */; productName = NaasehDesignSystem; };
+		C70000000000000000000005 /* NaasehFeatures */ = {isa = XCSwiftPackageProductDependency; package = C60000000000000000000001 /* XCLocalSwiftPackageReference "../../packages/apple" */; productName = NaasehFeatures; };
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = A50000000000000000000001 /* Project object */;
+}
