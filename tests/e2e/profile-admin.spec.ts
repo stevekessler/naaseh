@@ -32,9 +32,7 @@ test('discovers personal settings on Profile and renders a responsive administra
   await expect(page.getByRole('heading', { name: 'Your profile' })).toBeVisible();
   await page.locator('summary').filter({ hasText: 'Reminders and sounds' }).click();
   await expect(page.getByText('Completion sounds')).toBeVisible();
-  await expect(
-    page.locator('summary').filter({ hasText: 'Google Tasks synchronization' }),
-  ).toBeVisible();
+  await expect(page.getByText('Google Tasks synchronization')).toHaveCount(0);
   await page.locator('summary').filter({ hasText: 'Account security' }).click();
   await expect(page.getByText(/password reset/i).first()).toBeVisible();
 

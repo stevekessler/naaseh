@@ -19,20 +19,17 @@ at `gsd.thepandas.link`.
 ## Prerequisites
 
 The setup operator needs Node.js 24, npm, AWS CLI v2, an approved non-root administrative AWS
-session for one-time setup, Route 53 access, and permission to configure GitHub environments. Google
-Tasks synchronization additionally requires the Google Cloud CLI, `jq`, a separate Google Cloud
-project for each environment, and permission to configure Google Auth Platform. Do not create an IAM
+session for one-time setup, Route 53 access, and permission to configure GitHub environments. Do not create an IAM
 user for GitHub or store long-lived AWS keys there.
 
-| Setting            | Production value                                                 |
-| ------------------ | ---------------------------------------------------------------- |
-| AWS account        | `093733938983`                                                   |
-| Application Region | `us-west-2`                                                      |
-| Edge Region        | `us-east-1`                                                      |
-| Hosted zone        | `thepandas.link`                                                 |
-| Hosted-zone ID     | `Z03233042WRAYW9S16I7T`                                          |
-| Site URL           | `https://gsd.thepandas.link`                                     |
-| Google callback    | `https://gsd.thepandas.link/api/v1/integrations/google/callback` |
+| Setting            | Production value             |
+| ------------------ | ---------------------------- |
+| AWS account        | `093733938983`               |
+| Application Region | `us-west-2`                  |
+| Edge Region        | `us-east-1`                  |
+| Hosted zone        | `thepandas.link`             |
+| Hosted-zone ID     | `Z03233042WRAYW9S16I7T`      |
+| Site URL           | `https://gsd.thepandas.link` |
 
 Confirm the operator identity before changing AWS. Stop if the ARN ends in `:root`; use an
 approved assumed role instead.
@@ -40,8 +37,6 @@ approved assumed role instead.
 ```console
 node --version
 aws sts get-caller-identity --profile PROFILE
-gcloud version
-jq --version
 npm ci
 npm run validate:pre-aws
 ```
@@ -578,28 +573,7 @@ web deployment/invalidation, on-demand DynamoDB with PITR, retained KMS keys and
 same-Region backup vault, restore testing, alarms, and notification resources. They must not
 contain a global-table replica, cross-Region backup copy, or passive application stack.
 
-Do not load even disposable Google credentials until the IAM/KMS implementation and its negative
-infrastructure assertions are complete. This command must produce no output before importing an
-OAuth client:
-
-```console
-rg -n '^- \[ \] T(011|012)\b' specs/004-google-tasks-sync/tasks.md
-```
-
-After T011 and T012 are completed, run the focused infrastructure and security assertions again:
-
-```console
-npx vitest run \
-  infra/test/google-sync.test.ts \
-  tests/security/google-sync.security.test.ts \
-  tests/security/google-sync-controls.security.test.ts
-```
-
-The assertions must prove that the stream function has no Secrets Manager or KMS access and only
-the DynamoDB actions required to consume and enqueue owner-scoped operations. The reconciler must
-read only the Google OAuth secret, use only the token-encryption key, and have KMS permissions
-restricted by the approved encryption-context keys and purpose. A test that merely finds a KMS
-grant somewhere in the template is not sufficient.
+Google Tasks synchronization has been retired. Do not create or import Google OAuth credentials.
 
 ## 7. Perform the one-time production bootstrap
 
@@ -759,10 +733,18 @@ commit SHA as the known-good `rollback_ref` for the next release.
    Follow the run in GitHub Actions or use `gh run watch RUN_ID`. The deploy, authenticated smoke,
    and rollback jobs must all have the expected results before closing the handoff.
 
-9. Leave Google Tasks disconnected until the production release gates in section 8 are complete.
-   An empty or placeholder Secrets Manager value is not authorization to connect production users.
+9. Confirm the retired Google synchronization routes, workers, schedule, and OAuth secret are absent
+   from the synthesized template. Follow the cleanup procedure in
+   `docs/operations/native-production-readiness.md` for any previously retained secret.
 
-## 8. Configure Google Tasks OAuth and the AWS secret
+## 8. Retired Google Tasks procedure — do not execute
+
+Google Tasks is no longer part of Na'aseh. The historical text below is retained only to identify
+old resources during cleanup. Do not enable the API, create an OAuth client, import credentials, or
+run the historical validation commands.
+
+<details>
+<summary>Historical procedure retained for resource identification only</summary>
 
 Do this independently for staging and production. Never reuse a Google Cloud project or OAuth
 client between environments. The examples below use production values; replace the project and
@@ -897,10 +879,10 @@ rg -n '^- \[ \] T(006|011|012|037|041|051|053|054)\b' \
   specs/004-google-tasks-sync/tasks.md
 ```
 
-For rotation, create a new Google client secret, import it as a new `AWSCURRENT` version using the
-same file-based procedure, validate a disposable connection, and revoke the old Google credential.
-Never delete a retained AWS secret or KMS key while a live record or backup still references it. See
-[Google Tasks synchronization operations](google-tasks-sync.md) and [key rotation](key-rotation.md).
+This retired procedure is intentionally non-operational. Do not rotate, recreate, or reconnect a
+Google OAuth credential. General retained-secret guidance remains in [key rotation](key-rotation.md).
+
+</details>
 
 ## 9. Use GitHub for subsequent releases
 

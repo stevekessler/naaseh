@@ -1,0 +1,32 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "00006040-0004103021EA801C",
+        "deviceName": "My Mac",
+        "exportedFileName": "4AE59D05-60EF-43D2-8D73-8FA754A04DF9.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "Mac-Import-Alternative_0_9B1ADD53-F042-4C01-B803-DCEB4A4454B4.png",
+        "timestamp": 1791510459.378
+      }
+    ],
+    "testIdentifier": "MacExperienceUITests/testDragAndFileActionsHaveMenuAlternatives()",
+    "testIdentifierURL": "test://com.apple.xcode/Naaseh/Naaseh-macOSUITests/MacExperienceUITests/testDragAndFileActionsHaveMenuAlternatives"
+  },
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "00006040-0004103021EA801C",
+        "deviceName": "My Mac",
+        "exportedFileName": "C749F81C-EDB3-45AA-A337-C9E7D72C095A.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "Mac-Desktop-Window_0_458C632A-E11D-4E89-959B-02353922BFA3.png",
+        "timestamp": 1791510463.297
+      }
+    ],
+    "testIdentifier": "MacExperienceUITests/testResizableWindowsMenusFocusContextAndRestoration()",
+    "testIdentifierURL": "test://com.apple.xcode/Naaseh/Naaseh-macOSUITests/MacExperienceUITests/testResizableWindowsMenusFocusContextAndRestoration"
+  }
+]

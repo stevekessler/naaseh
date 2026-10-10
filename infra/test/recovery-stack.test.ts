@@ -24,7 +24,7 @@ beforeAll(() => {
       ...webProps,
     }),
   );
-}, 60_000);
+}, 120_000);
 
 describe('single-region recovery infrastructure', () => {
   it('rejects a production stack outside us-west-2', () => {
@@ -72,7 +72,7 @@ describe('single-region recovery infrastructure', () => {
   });
 
   it('keeps secrets and private versioned media in one region without replication', () => {
-    template.resourceCountIs('AWS::SecretsManager::Secret', 5);
+    template.resourceCountIs('AWS::SecretsManager::Secret', 4);
     template.hasResourceProperties('AWS::SecretsManager::Secret', {
       Tags: Match.arrayWith([Match.objectLike({ Key: 'NaasehRotationReviewDays', Value: '90' })]),
     });

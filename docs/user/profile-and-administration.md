@@ -1,9 +1,7 @@
 # Profile and administration
 
-Open **Profile** for settings that belong to your own account: reminders, completion sounds, Google
-Tasks setup, password reset, and two-factor authentication. The former `/google` address opens the
-same profile destination, so bookmarks continue to work without changing Google synchronization
-behavior.
+Open **Profile** for settings that belong to your own account: reminders, completion sounds,
+password reset, and two-factor authentication.
 
 Only administrators can open **Admin**. The user table is ordered by username and stable user ID and
 loads at most 100 accounts at a time. It reports role, status, a safe TFA state, a bounded group

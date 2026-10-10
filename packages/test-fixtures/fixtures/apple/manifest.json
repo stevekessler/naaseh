@@ -1,0 +1,48 @@
+{
+  "schema": "naaseh-apple-fixtures/v1",
+  "generatedAt": "2026-10-06T00:00:00Z",
+  "provenance": {
+    "repository": "Naaseh",
+    "authoritativeContracts": [
+      "packages/contracts/src",
+      "packages/domain/src",
+      "specs/012-native-apple-apps/contracts/native-api-additions.openapi.yaml"
+    ],
+    "cryptoStandards": ["NIST AES-GCM", "RFC 5869 HKDF-SHA256", "RFC 4648 base64url"]
+  },
+  "fixtures": [
+    {
+      "id": "api-problem-v1",
+      "file": "contracts/api-problem.json",
+      "kind": "contract",
+      "containsProtectedData": false
+    },
+    {
+      "id": "sync-envelope-v4",
+      "file": "contracts/sync-envelope-v4.json",
+      "kind": "contract",
+      "containsProtectedData": false
+    },
+    {
+      "id": "crypto-vectors-v1",
+      "file": "crypto/vectors.json",
+      "kind": "cryptography",
+      "containsProtectedData": false
+    },
+    {
+      "id": "rsa-oaep-fixture-v1",
+      "file": "crypto/rsa-oaep-fixture.json",
+      "kind": "cryptography-test-key",
+      "containsProtectedData": false,
+      "productionUseProhibited": true
+    },
+    {
+      "id": "siri-en-US-v1",
+      "file": "siri-en-US-v1.json",
+      "kind": "voice-evaluation-corpus",
+      "containsProtectedData": false,
+      "completeRequests": 240,
+      "ambiguousRequests": 60
+    }
+  ]
+}

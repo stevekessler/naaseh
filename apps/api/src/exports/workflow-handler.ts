@@ -13,7 +13,6 @@ import {
   type Attachment,
   type CategoryRecord,
   type CompletionEvent,
-  type GoogleTaskLink,
   type GroupRecord,
   type Project,
   type Reminder,
@@ -75,7 +74,6 @@ export const handler: Handler<{
     const categories = new Map<string, CategoryRecord>();
     const projects = new Map<string, Project>();
     const groups = new Map<string, GroupRecord>();
-    const googleLinks = new Map<string, GoogleTaskLink>();
     const reminders = new Map<string, Reminder[]>();
     let attachmentTotal = 0;
     let token: string | undefined;
@@ -110,11 +108,6 @@ export const handler: Handler<{
           if (item.PK?.startsWith('GROUP#') && item.SK === 'GROUP') {
             const group = item.data as GroupRecord;
             groups.set(group.id, group);
-            continue;
-          }
-          if (item.PK?.startsWith('TASK#') && item.SK === 'GOOGLE#LINK') {
-            const link = item.data as GoogleTaskLink;
-            googleLinks.set(link.naasehTaskId, link);
             continue;
           }
           if (item.PK?.startsWith('REMINDER#')) {
@@ -195,16 +188,6 @@ export const handler: Handler<{
                       status,
                       version,
                     })),
-                  ...(googleLinks.get(task.id)
-                    ? {
-                        googleTaskId: googleLinks.get(task.id)!.googleTaskId,
-                        googleTaskListId: googleLinks.get(task.id)!.googleTaskListId,
-                        googleSyncState: googleLinks.get(task.id)!.state,
-                        ...(googleLinks.get(task.id)!.lastSyncedAt
-                          ? { googleLastSyncedAt: googleLinks.get(task.id)!.lastSyncedAt! }
-                          : {}),
-                      }
-                    : {}),
                 },
               ] as const,
             ]

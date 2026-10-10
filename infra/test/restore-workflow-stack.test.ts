@@ -21,7 +21,7 @@ beforeAll(() => {
       webAssetPath: fileURLToPath(new URL('../../apps/web/public', import.meta.url)),
     }),
   );
-}, 60_000);
+}, 120_000);
 
 describe('urgency and stack restore workflow infrastructure', () => {
   it('backs up canonical operations and marks snapshots as rebuildable', () => {

@@ -50,7 +50,6 @@ export class NaasehStack extends Stack {
       primaryKey: runtimeSecretsKey,
       pepper,
       webPushSecret,
-      googleOAuthSecret,
       cursorSigningSecret,
     } = createRuntimeSecrets(this, criticalAlerts);
     const { media } = createProfileMediaResources(this, {
@@ -124,7 +123,6 @@ export class NaasehStack extends Stack {
       recoveryWrappingKey: recoveryKeys.recoveryWrappingKey,
       manifestSigningKey: recoveryKeys.manifestSigningKey,
       webPushSecret,
-      googleOAuthSecret,
       alerts: criticalAlerts,
       adminTfaRecoveryOperatorArn: props.breakGlassRoleArn,
     });
@@ -136,7 +134,6 @@ export class NaasehStack extends Stack {
         auth: functions.auth,
         sync: functions.sync,
         reporting: functions.reporting,
-        googleSync: functions.googleSync,
         crisisPlan: functions.crisisPlan,
         crisisPlanBroker: functions.crisisPlanBroker,
       },

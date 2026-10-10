@@ -1,0 +1,8 @@
+{
+  "type": "urn:naaseh:problem:validation_failed",
+  "title": "Request validation failed.",
+  "status": 400,
+  "code": "validation_failed",
+  "message": "Request validation failed.",
+  "correlationId": "fixture-correlation-1"
+}

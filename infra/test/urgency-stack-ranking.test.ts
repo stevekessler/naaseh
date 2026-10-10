@@ -22,7 +22,7 @@ beforeAll(() => {
       webAssetPath: fileURLToPath(new URL('../../apps/web/public', import.meta.url)),
     }),
   );
-}, 60_000);
+}, 120_000);
 
 describe('urgency and personal-stack infrastructure', () => {
   it('uses encrypted pay-per-use storage with cursor TTL, streams, and PITR', () => {

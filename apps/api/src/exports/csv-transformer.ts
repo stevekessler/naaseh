@@ -18,10 +18,6 @@ export interface CompletionExportMetadata {
   listItemId?: string;
   listAmountMinor?: number;
   effectivePostItColor?: string;
-  googleTaskId?: string;
-  googleTaskListId?: string;
-  googleSyncState?: string;
-  googleLastSyncedAt?: string;
   syncState?: string;
 }
 
@@ -201,10 +197,11 @@ export function transformCompletedTasksToCsv(
       list_amount_minor: metadata.listAmountMinor ?? '',
       post_it_color: task.postItColor ?? '',
       post_it_effective_color: metadata.effectivePostItColor ?? task.postItColor ?? 'yellow',
-      google_task_id: metadata.googleTaskId ?? '',
-      google_task_list_id: metadata.googleTaskListId ?? '',
-      google_sync_state: metadata.googleSyncState ?? '',
-      google_last_synced_at: metadata.googleLastSyncedAt ?? '',
+      // These retired v1 columns remain blank so existing CSV consumers keep a stable schema.
+      google_task_id: '',
+      google_task_list_id: '',
+      google_sync_state: '',
+      google_last_synced_at: '',
       attachments_json: stableJson(safeAttachments(attachments.get(task.id) ?? [])),
       task_version: task.version,
       completion_version: metadata.completionVersion ?? '',

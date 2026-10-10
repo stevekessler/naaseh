@@ -52,7 +52,6 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (/^\/projects\/?$/.test(pathname)) return { section: 'projects' };
   if (/^\/dashboard\/?$/.test(pathname)) return { section: 'dashboard' };
   if (/^\/stack\/?$/.test(pathname)) return { section: 'stack' };
-  if (/^\/google\/?$/.test(pathname)) return { section: 'profile' };
   if (/^\/profile\/?$/.test(pathname)) return { section: 'profile' };
   if (/^\/admin\/?$/.test(pathname)) return { section: 'admin' };
   if (/^\/admin\/categories\/?$/.test(pathname)) return { section: 'admin-categories' };
