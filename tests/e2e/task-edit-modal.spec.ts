@@ -34,7 +34,9 @@ test('task editing opens in a modal and restores context', async ({ page }) => {
   await expect(heading).toBeVisible();
 });
 
-test('adds a five-minute due time while editing and saves it with a rich memo', async ({ page }) => {
+test('adds a five-minute due time while editing and saves it with a rich memo', async ({
+  page,
+}) => {
   await signIn(page);
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Timed task');
