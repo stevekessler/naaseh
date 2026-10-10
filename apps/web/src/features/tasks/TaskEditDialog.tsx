@@ -3,6 +3,22 @@ import type { CategoryRecord, Project, Task, TaskInput } from '@naaseh/domain';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskForm } from './TaskForm.js';
 
+export function taskEditPatch(input: TaskInput, task: Task): Partial<Task> {
+  const patch: Record<string, unknown> = { ...input };
+  if (input.dueKind === 'timed') {
+    if (task.dueDate) patch.dueDate = null;
+  } else if (input.dueKind === 'date') {
+    if (task.dueAt) patch.dueAt = null;
+    if (task.dueTimeZone) patch.dueTimeZone = null;
+  } else if (task.dueKind || task.dueAt || task.dueDate) {
+    patch.dueKind = null;
+    patch.dueDate = null;
+    patch.dueAt = null;
+    patch.dueTimeZone = null;
+  }
+  return patch as Partial<Task>;
+}
+
 export function TaskEditDialog({
   task,
   categories,
@@ -91,13 +107,7 @@ export function TaskEditDialog({
               setBusy(true);
               setError('');
               try {
-                const patch: Record<string, unknown> = { ...input };
-                if (!input.dueKind && (task.dueKind || task.dueAt || task.dueDate)) {
-                  patch.dueKind = null;
-                  patch.dueDate = null;
-                  patch.dueAt = null;
-                  patch.dueTimeZone = null;
-                }
+                const patch = taskEditPatch(input, task) as Record<string, unknown>;
                 if (!input.parentId && task.parentId) patch.parentId = null;
                 if (!input.groupId && task.groupId) patch.groupId = null;
                 if (!input.postItColor && task.postItColor) patch.postItColor = null;

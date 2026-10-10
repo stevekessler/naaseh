@@ -204,14 +204,33 @@
   gap: 0.25rem;
 }
 .due-date-trigger {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
   min-height: var(--control-min-size);
   border: 1px solid #afbeb5;
   border-radius: 10px;
   background: white;
   text-align: left;
 }
+.due-date-calendar {
+  flex: 0 0 auto;
+}
+.due-date-value {
+  display: grid;
+  line-height: 1.15;
+}
+.due-date-time {
+  color: #4f657c;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
 .due-date-clear {
+  flex: 0 0 auto;
   font-size: 0.82rem;
+  white-space: nowrap;
 }
 .due-date-dialog {
   width: min(32rem, calc(100vw - 2rem));

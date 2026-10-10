@@ -38,16 +38,16 @@ export function DueDateField({
     dialog.current?.close();
     setOpen(false);
   };
-  const label =
+  const dateLabel = dueDate ? formatCalendarDate(dueDate) : '';
+  const timeLabel =
     dueKind === 'timed' && dueDate
-      ? `${formatCalendarDate(dueDate)} ${new Intl.DateTimeFormat('en-US', {
+      ? new Intl.DateTimeFormat('en-US', {
           hour: 'numeric',
           minute: '2-digit',
           hour12: true,
-        }).format(new Date(`2000-01-01T${dueTime}`))}`
-      : dueDate
-        ? formatCalendarDate(dueDate)
-        : '';
+        }).format(new Date(`2000-01-01T${dueTime}`))
+      : '';
+  const label = [dateLabel, timeLabel].filter(Boolean).join(' ');
   const displayTime = splitTimeForDisplay(draftTime);
   const updateDisplayTime = (next: Partial<typeof displayTime>) => {
     setDraftTime(
@@ -73,7 +73,17 @@ export function DueDateField({
             setOpen(true);
           }}
         >
-          <span aria-hidden="true">📅</span> {label || 'Add date'}
+          <span className="due-date-calendar" aria-hidden="true">
+            📅
+          </span>
+          {label ? (
+            <span className="due-date-value">
+              <span>{dateLabel}</span>
+              {timeLabel ? <span className="due-date-time">{timeLabel}</span> : null}
+            </span>
+          ) : (
+            <span>Add date</span>
+          )}
         </button>
         {dueKind !== 'none' ? (
           <button
