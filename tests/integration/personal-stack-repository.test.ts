@@ -232,6 +232,42 @@ describe('personal stack repository', () => {
     });
   });
 
+  it('replays canonical operations after their moved work or anchors leave active membership', () => {
+    expect(
+      recoverCanonicalStack({
+        scope,
+        baseMembership: [workRef(1), workRef(2)],
+        operations: [simpleMove(1, 2, 0)],
+      }),
+    ).toMatchObject({
+      rebuiltSnapshot: false,
+      throughVersion: 1,
+      workRefs: [workRef(2), workRef(0), workRef(1)],
+    });
+  });
+
+  it('adds work introduced after a snapshot before replaying its first reorder', () => {
+    const snapshot = prepareStackSnapshot({
+      scope,
+      generation: 1,
+      throughVersion: 0,
+      workRefs: [workRef(0), workRef(1)],
+    });
+
+    expect(
+      recoverCanonicalStack({
+        scope,
+        baseMembership: [workRef(0), workRef(1), workRef(2)],
+        snapshot,
+        operations: [simpleMove(1, 2, 0)],
+      }),
+    ).toMatchObject({
+      rebuiltSnapshot: false,
+      throughVersion: 1,
+      workRefs: [workRef(2), workRef(0), workRef(1)],
+    });
+  });
+
   it('rejects missing chunks and canonical operation version gaps instead of advancing', () => {
     const snapshot = prepareStackSnapshot({
       scope,

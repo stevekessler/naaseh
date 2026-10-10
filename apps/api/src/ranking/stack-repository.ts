@@ -4,6 +4,7 @@ import {
   applyFilteredPermutation,
   applySimpleMove,
   orderImplicitTail,
+  workReferenceIdentity,
   type PersonalStackMove,
   type PersonalStackScope,
   type WorkReference,
@@ -289,6 +290,32 @@ function replay(order: WorkReference[], operations: Array<Record<string, unknown
   return current;
 }
 
+function operationWorkReferences(operation: Record<string, unknown>): WorkReference[] {
+  const references = [operation.movedWork, operation.beforeWork, operation.afterWork];
+  if (Array.isArray(operation.affectedWork)) references.push(...operation.affectedWork);
+  return references.filter((reference): reference is WorkReference => reference !== undefined);
+}
+
+function completeReplayBase(
+  order: readonly WorkReference[],
+  operations: Array<Record<string, unknown>>,
+  rebuildImplicitOrder: boolean,
+): WorkReference[] {
+  const known = new Set(order.map(workReferenceIdentity));
+  const missing: WorkReference[] = [];
+  for (const operation of operations) {
+    for (const reference of operationWorkReferences(operation)) {
+      const identity = workReferenceIdentity(reference);
+      if (known.has(identity)) continue;
+      known.add(identity);
+      missing.push(reference);
+    }
+  }
+  return rebuildImplicitOrder
+    ? orderImplicitTail([...order, ...missing])
+    : [...order, ...orderImplicitTail(missing)];
+}
+
 export function compactStackSnapshot(input: {
   scope: PersonalStackScope;
   current: PreparedStackSnapshot;
@@ -301,7 +328,15 @@ export function compactStackSnapshot(input: {
     if (Number(operation.version) !== expectedVersion + index)
       throw new Error('Canonical operation versions must be contiguous for compaction.');
   });
-  const order = replay(validateStackSnapshot(input.current), input.operations);
+  const snapshotOrder = validateStackSnapshot(input.current);
+  const order = replay(
+    completeReplayBase(
+      snapshotOrder,
+      input.operations,
+      input.current.generation === 0 && input.current.throughVersion === 0,
+    ),
+    input.operations,
+  );
   const present = new Set(order.map((work) => canonical(work)));
   for (const work of orderImplicitTail(input.implicitTail))
     if (!present.has(canonical(work))) order.push(work);
@@ -374,6 +409,7 @@ export function recoverCanonicalStack(input: {
       rebuiltSnapshot = true;
     }
   }
+  base = completeReplayBase(base, remaining, input.snapshot === undefined || rebuiltSnapshot);
   const workRefs = replay(base, remaining);
   return {
     rebuiltSnapshot,
