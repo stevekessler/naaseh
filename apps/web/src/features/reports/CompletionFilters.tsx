@@ -1,6 +1,7 @@
 import { type CategoryRecord, type Project, type Urgency } from '@naaseh/domain';
 import type { CompletionPeriod } from './completion-bucketing.js';
 import { PriorityFilter } from '../../components/PriorityFilter.js';
+import type { TaskReportState, TaskTimeliness } from './task-reporting.js';
 
 export interface CompletionFilterValue {
   period: CompletionPeriod;
@@ -9,6 +10,10 @@ export interface CompletionFilterValue {
   timeZone: string;
   weekStartsOn: number;
   urgencies: Urgency[];
+  from: string;
+  to: string;
+  taskState: TaskReportState;
+  timeliness: TaskTimeliness;
 }
 
 export function CompletionFilters({
@@ -27,7 +32,20 @@ export function CompletionFilters({
     : projects;
   return (
     <fieldset className="completion-filters">
-      <legend>Completion report filters</legend>
+      <legend>Task report filters</legend>
+      <label>
+        Task state
+        <select
+          value={value.taskState}
+          onChange={(event) =>
+            change({ ...value, taskState: event.target.value as TaskReportState })
+          }
+        >
+          <option value="all">Open and closed</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+      </label>
       <label>
         Period
         <select
@@ -38,6 +56,24 @@ export function CompletionFilters({
           <option value="week">Weekly</option>
           <option value="month">Monthly</option>
         </select>
+      </label>
+      <label>
+        From
+        <input
+          type="date"
+          value={value.from}
+          max={value.to || undefined}
+          onChange={(event) => change({ ...value, from: event.target.value })}
+        />
+      </label>
+      <label>
+        To
+        <input
+          type="date"
+          value={value.to}
+          min={value.from || undefined}
+          onChange={(event) => change({ ...value, to: event.target.value })}
+        />
       </label>
       <label>
         Category
@@ -84,6 +120,20 @@ export function CompletionFilters({
           </select>
         </label>
       )}
+      <label>
+        Closed on time
+        <select
+          value={value.timeliness}
+          onChange={(event) =>
+            change({ ...value, timeliness: event.target.value as TaskTimeliness })
+          }
+        >
+          <option value="all">All timing</option>
+          <option value="on-time">On time</option>
+          <option value="delayed">Delayed</option>
+          <option value="no-due-date">No due date</option>
+        </select>
+      </label>
       <PriorityFilter
         ariaLabel="Completion urgency filters"
         value={value.urgencies}

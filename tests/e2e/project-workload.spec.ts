@@ -35,18 +35,18 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await listForm.getByLabel('Project').selectOption({ label: 'API' });
   await listForm.getByRole('button', { name: 'Create list' }).click();
 
-  await page.getByRole('button', { name: 'Projects' }).click();
+  await openTaskSection(page, 'Personal Stack');
+  await page.getByText('Category and project overview', { exact: true }).click();
   await context.setOffline(true);
-  const tree = page.locator('.project-workload-tree');
+  const tree = page.locator('.stack-workload-overview');
   const category = tree.locator('li').filter({ hasText: 'PAAO' }).first();
   await expect(category).toContainText('1 to-dos');
   await expect(category).toContainText('1 lists');
   const project = tree.locator('li').filter({ hasText: 'API' }).first();
   await expect(project).toContainText('overdue');
   await expect(project).toContainText('2 remaining');
-  await expect(tree.getByText('Unassigned to a project', { exact: true })).toBeVisible();
-  const rankedWork = page.getByRole('region', { name: 'Workload report detail' });
-  const assignedWork = rankedWork.getByRole('listitem').filter({ hasText: 'Assigned work' });
+  await expect(tree.getByText('Unassigned', { exact: true })).toBeVisible();
+  const assignedWork = page.getByRole('row').filter({ hasText: 'Assigned work' });
   await expect(assignedWork.getByRole('group', { name: 'Reorder Assigned work' })).toBeVisible();
   await assignedWork.getByRole('button', { name: 'Move to position' }).click();
   await expect(assignedWork.getByRole('spinbutton', { name: 'Position' })).toBeVisible();

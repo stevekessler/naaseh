@@ -20,7 +20,7 @@ for (const width of [768, 1024, 1440, 1920]) {
       page.locator('.task-table-wrap').evaluate((element) => element.clientWidth),
     ]);
     expect(tableWidth).toBeCloseTo(tableWrapWidth, 0);
-    await openTaskSection(page, 'Completed Tasks');
+    await openTaskSection(page, 'Task Reporting');
     const filters = page.locator('.completion-filters');
     await expectContained(filters, filters.locator('xpath=ancestor::main'));
   });

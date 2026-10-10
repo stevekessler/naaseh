@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReminderSettings } from '../../src/features/reminders/ReminderSettings.js';
 import { SyncStatus } from '../../src/features/sync/SyncStatus.js';
@@ -7,6 +9,8 @@ import {
   subscribeToServiceWorkerUpdate,
 } from '../../src/app/service-worker-update.js';
 import { registerAppServiceWorker } from '../../src/app/register-service-worker.js';
+
+afterEach(cleanup);
 
 describe('header controls', () => {
   it('does not offer push reminders when the deployment has no public key', () => {
@@ -88,6 +92,39 @@ describe('header controls', () => {
     expect(html).toContain('List item · synced');
     expect(html).toContain('Private task titles are never recorded');
     expect(html).not.toContain('change-1');
+  });
+
+  it('closes synchronization history when someone clicks away', () => {
+    const view = render(
+      <SyncStatus
+        online
+        pending={0}
+        history={[
+          {
+            eventId: 'synced:ordinary:change-0',
+            key: 'ordinary:change-0',
+            id: 'change-0',
+            entityId: 'task-1',
+            area: 'tasks and lists',
+            entityType: 'task',
+            queuedAt: '2026-10-07T18:00:00.000Z',
+            attempts: 0,
+            status: 'synced',
+            occurredAt: '2026-10-07T19:00:00.000Z',
+          },
+        ]}
+        retry={() => undefined}
+      />,
+    );
+    const details = view.container.querySelector('details');
+    expect(details).not.toBeNull();
+    details!.open = true;
+
+    fireEvent.pointerDown(view.getByText('Last 7 days'));
+    expect(details!.open).toBe(true);
+
+    fireEvent.pointerDown(document.body);
+    expect(details!.open).toBe(false);
   });
 
   it('retains updates and reloads an activated shell only after user action', async () => {

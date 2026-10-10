@@ -10,8 +10,8 @@ test('connects completion archive, workload, reporting, and organization lifecyc
   await expect(page.getByRole('heading', { name: 'Integrated completion' })).toBeHidden();
   await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Integrated completion' })).toBeVisible();
-  await openTaskSection(page, 'Completed Tasks');
-  await expect(page.getByLabel('1 completed to-dos')).toBeVisible();
-  await page.getByRole('button', { name: 'Projects' }).click();
-  await expect(page.getByRole('heading', { name: 'Projects' })).toBeVisible();
+  await openTaskSection(page, 'Task Reporting');
+  await expect(page.getByLabel('1 tasks in this report')).toBeVisible();
+  await openTaskSection(page, 'Personal Stack');
+  await expect(page.getByRole('heading', { name: 'Integrated completion' })).toHaveCount(0);
 });

@@ -766,11 +766,31 @@ async function performSync(csrfToken: string) {
   await refreshGoogleSyncCache(csrfToken).catch(() => undefined);
 }
 
+export async function runWithSyncLock(
+  action: () => Promise<void>,
+  locks: Pick<LockManager, 'request'> | null | undefined = navigator.locks,
+  timeoutMs = 2_000,
+) {
+  if (!locks) return action();
+  // Queue behind a sync already running in another tab. `ifAvailable` silently
+  // discarded this tab's only sync attempt whenever the lock was busy, leaving
+  // locally saved work stranded until an unrelated later event retried it. A
+  // broken or suspended tab must not hold every other tab indefinitely, so a
+  // bounded wait falls back to the server's idempotent mutation handling.
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    await locks.request('naaseh-sync', { signal: controller.signal }, action);
+  } catch (error) {
+    if (!(error instanceof DOMException) || error.name !== 'AbortError') throw error;
+    await action();
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
+}
+
 export async function syncNow(csrfToken: string) {
-  if (!navigator.locks) return performSync(csrfToken);
-  await navigator.locks.request('naaseh-sync', { ifAvailable: true }, async (lock) => {
-    if (lock) await performSync(csrfToken);
-  });
+  await runWithSyncLock(() => performSync(csrfToken));
 }
 export async function drainSequentially(
   csrfToken: string,

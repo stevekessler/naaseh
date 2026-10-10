@@ -70,7 +70,7 @@ describe('archived and revised urgency display', () => {
     );
 
     expect(html).toContain('<table class="archive-table">');
-    expect(html).toContain('<th scope="col">Deleted</th>');
+    expect(html).toContain('<th scope="col">Archived</th>');
     expect(html).toContain('dateTime="2026-08-05T12:00:00.000Z"');
     expect(html).toContain('Aug 5, 2026');
     expect(html).toContain('Operations');

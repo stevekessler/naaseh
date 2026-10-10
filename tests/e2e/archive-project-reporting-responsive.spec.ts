@@ -9,10 +9,10 @@ test('dashboard and organization navigation remain keyboard-operable without ove
   await page.keyboard.press('Enter');
   await page
     .locator('#tasks-navigation-links')
-    .getByRole('button', { name: 'Completed Tasks', exact: true })
+    .getByRole('button', { name: 'Task Reporting', exact: true })
     .focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Completed Tasks' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Task Reporting' })).toBeVisible();
   const dimensions = await page.evaluate(() => ({
     scroll: document.documentElement.scrollWidth,
     client: document.documentElement.clientWidth,

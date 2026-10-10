@@ -67,6 +67,8 @@ export function completionReportQuery(filters: CompletionFilterValue, cursor?: s
     browserTimeZone: filters.timeZone,
     weekStartsOn: String(filters.weekStartsOn),
   });
+  if (filters.from) query.set('from', filters.from);
+  if (filters.to) query.set('to', filters.to);
   if (filters.categoryId) query.set('categoryId', filters.categoryId);
   if (filters.projectId) query.set('projectId', filters.projectId);
   if (filters.urgencies.length) query.set('urgencies', filters.urgencies.join(','));
@@ -224,6 +226,8 @@ export async function runCompletionExport(
   const body: CompletionExportRequest = {
     filters: {
       period: filters.period,
+      ...(filters.from ? { from: filters.from } : {}),
+      ...(filters.to ? { to: filters.to } : {}),
       weekStartsOn: filters.weekStartsOn,
       urgencies: filters.urgencies,
       ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),

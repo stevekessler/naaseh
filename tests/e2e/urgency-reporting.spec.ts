@@ -26,7 +26,7 @@ test('keeps report filters keyboard/touch operable and exposes live report state
   page,
 }, testInfo) => {
   await signIn(page);
-  await openTaskSection(page, 'Completed Tasks');
+  await openTaskSection(page, 'Task Reporting');
   const filters = page.getByRole('group', { name: 'Completion urgency filters' });
   const high = filters.getByRole('checkbox', { name: 'High' });
   await high.focus();
@@ -44,8 +44,8 @@ test('keeps report filters keyboard/touch operable and exposes live report state
 
 test('shows all five completion urgency buckets and historical semantics', async ({ page }) => {
   await signIn(page);
-  await openTaskSection(page, 'Completed Tasks');
-  await expect(page.getByRole('heading', { name: 'Priority at completion' })).toBeVisible();
+  await openTaskSection(page, 'Task Reporting');
+  await expect(page.getByRole('heading', { name: 'Tasks by priority' })).toBeVisible();
   for (const label of ['Low', 'Medium', 'High', 'Critical'])
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   await expect(page.getByText(/Low.*0/)).toBeVisible();
@@ -59,22 +59,20 @@ test('filters report detail and orders eligible rows by viewer-only ranks', asyn
   await expandTaskDetails(form);
   await form.getByLabel('Priority', { exact: true }).selectOption('high');
   await form.getByRole('button', { name: 'Add task' }).click();
-  await page.getByRole('button', { name: 'Projects' }).click();
+  await openTaskSection(page, 'Personal Stack');
   await page
-    .getByRole('group', { name: 'Current priorities' })
+    .getByRole('group', { name: 'Urgency levels' })
     .getByRole('checkbox', { name: 'High', exact: true })
     .check();
-  const report = page.getByRole('region', { name: 'Workload report detail' });
-  await report.getByRole('radio', { name: 'Sort by Overall rank' }).check();
+  const report = page.locator('.stack-list');
   await expect(report.getByText(/Overall position 1/).first()).toBeVisible();
-  await expect(report.getByRole('radio', { name: 'Sort by Project rank' })).toBeDisabled();
   await expect(report).not.toContainText(/another user.*position/i);
 });
 
 test('offers the verified completed-task export after priority reporting', async ({ page }) => {
   await signIn(page);
-  await openTaskSection(page, 'Completed Tasks');
-  await expect(page.getByRole('button', { name: /export csv/i })).toBeVisible();
+  await openTaskSection(page, 'Task Reporting');
+  await expect(page.getByRole('button', { name: 'Export filtered CSV' })).toBeVisible();
 });
 
 test('reads a warmed cached report offline and refreshes pending urgency after reconnect', async ({
@@ -82,35 +80,29 @@ test('reads a warmed cached report offline and refreshes pending urgency after r
   context,
 }) => {
   await signIn(page);
-  await openTaskSection(page, 'Completed Tasks');
+  await openTaskSection(page, 'Task Reporting');
   await expect(page.getByText(/Critical.*1/)).toBeVisible();
   await context.setOffline(true);
   await openTaskSection(page, 'My Tasks');
-  await openTaskSection(page, 'Completed Tasks');
+  await openTaskSection(page, 'Task Reporting');
   await expect(page.getByText('Offline · showing previously synchronized report')).toBeVisible();
   await context.setOffline(false);
   await expect(page.getByText(/Last synchronized/i)).toBeVisible({ timeout: 15_000 });
 });
 
-for (const failure of [
-  { status: 500, code: 'report_calculation_failed', action: 'Retry report' },
-  { status: 410, code: 'cursor_expired', action: 'Restart report' },
-  { status: 409, code: 'pagination_context_changed', action: 'Restart report' },
-] as const) {
-  test(`offers recovery for ${failure.code}`, async ({ page }) => {
-    await page.route('**/api/v1/reporting/completion-report**', (route) =>
-      route.fulfill({
-        status: failure.status,
-        contentType: 'application/problem+json',
-        body: JSON.stringify({ code: failure.code, message: failure.code }),
-      }),
-    );
-    await signIn(page);
-    await openTaskSection(page, 'Completed Tasks');
-    const alert = page
-      .getByRole('alert')
-      .filter({ has: page.getByRole('button', { name: failure.action }) });
-    await expect(alert).toBeVisible();
-    await expect(alert.getByRole('button', { name: failure.action })).toBeVisible();
-  });
-}
+test('keeps local task reporting available when the legacy report endpoint fails', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/reporting/completion-report**', (route) =>
+    route.fulfill({
+      status: 500,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ code: 'report_calculation_failed' }),
+    }),
+  );
+  await signIn(page);
+  await openTaskSection(page, 'Task Reporting');
+  await expect(page.getByText('Up to date.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Export filtered CSV' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry report' })).toHaveCount(0);
+});

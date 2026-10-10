@@ -161,6 +161,66 @@ describe('personal stack accessibility contract', () => {
     expect(synced).toContain(formatStackSyncTime(syncedAt));
   });
 
+  it('combines category and project workload context with the ranked stack', () => {
+    const html = renderToStaticMarkup(
+      <PersonalStackPage
+        scope={{ scopeType: 'overall' }}
+        projects={projects}
+        items={[task]}
+        announcement=""
+        pendingOperationIds={[]}
+        conflictCount={0}
+        changeScope={vi.fn()}
+        move={vi.fn()}
+        workloadTree={
+          {
+            asOf: '2026-10-09T12:00:00.000Z',
+            categories: [
+              {
+                category: { id: 'category', name: 'Home', color: '#336699', archived: false },
+                count: {
+                  taskCount: 1,
+                  listCount: 1,
+                  urgencyCounts: { low: 1, medium: 0, high: 1, critical: 0 },
+                },
+                projects: [
+                  {
+                    project: {
+                      id: projectId,
+                      categoryId: 'category',
+                      name: 'House',
+                      lifecycle: 'active',
+                      endDate: '2026-10-08',
+                      createdAt: '2026-10-01T00:00:00.000Z',
+                      updatedAt: '2026-10-01T00:00:00.000Z',
+                      version: 1,
+                    },
+                    count: {
+                      taskCount: 1,
+                      listCount: 1,
+                      urgencyCounts: { low: 1, medium: 0, high: 1, critical: 0 },
+                    },
+                  },
+                ],
+              },
+            ],
+            unassigned: {
+              taskCount: 0,
+              listCount: 0,
+              urgencyCounts: { low: 0, medium: 0, high: 0, critical: 0 },
+            },
+          } as Parameters<typeof PersonalStackPage>[0]['workloadTree']
+        }
+      />,
+    );
+
+    expect(html).toContain('Category and project overview');
+    expect(html).toContain('1 to-dos · 1 lists');
+    expect(html).toContain('House');
+    expect(html).toContain('2 remaining');
+    expect(html).toContain('overdue');
+  });
+
   it('formats last sync time in the requested browser time zone', () => {
     const formatted = formatStackSyncTime('2026-08-10T20:15:30.000Z', 'America/Denver');
 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { PendingSyncItem, SyncHistoryEntry } from './sync-activity.js';
 
 const syncTypeLabels: Record<string, string> = {
@@ -49,6 +50,20 @@ export function SyncStatus({
   retry: () => void;
   reviewConflicts?: () => void;
 }) {
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const closeWhenClickingAway = (event: PointerEvent) => {
+      const details = detailsRef.current;
+      if (details?.open && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    };
+
+    document.addEventListener('pointerdown', closeWhenClickingAway);
+    return () => document.removeEventListener('pointerdown', closeWhenClickingAway);
+  }, []);
+
   const summary = !online
     ? `Offline${pending ? ` · ${pending} pending` : ''}`
     : error
@@ -69,7 +84,7 @@ export function SyncStatus({
           {conflicts} conflict{conflicts === 1 ? '' : 's'} — review and resolve
         </button>
       ) : pendingItems.length || history.length ? (
-        <details className="sync-status-details">
+        <details ref={detailsRef} className="sync-status-details">
           <summary className="sync-status-summary">{summary}</summary>
           <div className="sync-status-panel">
             <h2>Synchronization</h2>
