@@ -33,7 +33,7 @@ invalidating the implemented/tested mappings.
 | SC-010    | **Blocked**                                           | Phone safe-area/keyboard, iPad state restoration, and Mac multiwindow/resize behavior have source and unit coverage. Physical window-class, resize, keyboard, and restoration matrices remain T131/T153 release evidence.                                                                                        |
 | SC-011    | **Automated pass; signed upgrade smoke pending**      | Clean-store, staged migration, interruption quarantine, rollback, low-storage atomicity, key failure, sign-out, account partition, and account-switch tests pass with zero silent loss. Signed build upgrade/backup/restore remains in T153.                                                                     |
 | SC-012    | **Automated pass; device availability cases pending** | Compatibility, expired build/version, offline, expired session, blocked mutation, and actionable-state tests pass. Unsupported hardware and unavailable Siri behavior must be inspected on physical devices in T080/T153.                                                                                        |
-| SC-013    | **Blocked**                                           | The unchanged required browser gate has 30 tests and passed locally in 26.94 seconds. A candidate six-test Swift slice passed in 2.06 seconds. No required workflow expansion was made; hosted PR duration for this diff remains T166.                                                                           |
+| SC-013    | **Pass**                                              | The unchanged required browser gate has 30 tests and passed locally in 26.94 seconds. Pull request #57 passed the complete hosted required job in 5 minutes 54 seconds, leaving 4 minutes 6 seconds of headroom under the ten-minute ceiling. No required workflow expansion was made.                           |
 | SC-014    | **Blocked**                                           | Archive validators and TestFlight configuration sources pass. No signed iPhone/iPad or Mac build has been uploaded, processed, installed, upgraded, or smoke-tested (T149/T153).                                                                                                                                 |
 | SC-015    | **Planning pass; production measurement pending**     | The design reuses existing API Gateway, Lambda, DynamoDB, Scheduler, logs, alarms, and notification resources and adds no always-on service or separate beta environment. Confirm the production Cost Explorer delta after smoke traffic before expanding access.                                                |
 
@@ -41,5 +41,5 @@ invalidating the implemented/tested mappings.
 
 The automated implementation baseline is suitable for continued release preparation, but the first
 tester rollout is **not approved**. Open release gates are the Siri device corpus (T080), physical
-layout/accessibility evidence (T131), App Store Connect configuration (T149), signed TestFlight
-archive/upload/smoke (T153), and hosted PR runtime confirmation (T166).
+layout/accessibility evidence (T131), App Store Connect configuration (T149), and signed TestFlight
+archive/upload/smoke (T153). Hosted required validation and its runtime target have passed.

@@ -32,9 +32,10 @@ are recorded as blocked rather than skipped silently.
 | Signed archive and App Store Connect upload                                                             | **Pending authorization** — signing/distribution credentials and authorized App Store Connect access are intentionally absent from the repository.                                                                                             |
 | Production smoke account and rollback/stop-testing exercise                                             | **Pending** — must follow successful processing and internal smoke-group assignment; no tester rollout is authorized yet.                                                                                                                      |
 
-The full repository gate's three CDK hook timeouts are not treated as passing and should be checked
-on the hosted runner. They do not change the focused native/API/contract results, but they remain a
-validation limitation alongside the hosted PR timing gate.
+The local full-repository run remains subject to the documented Vitest worker IPC timeout while
+packaging native Lambda dependencies. Pull request #57 subsequently passed the complete hosted
+`npm run validate` step and the 30-test required browser gate. The hosted required job completed in
+5 minutes 54 seconds, so the authoritative PR gate is green and remains below ten minutes.
 
 ## Safety result
 
