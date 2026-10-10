@@ -68,7 +68,7 @@ export function TasksNavigation({
               [
                 ['tasks', 'My Tasks'],
                 ['stack', 'Personal Stack'],
-                ['dashboard', 'Completed Tasks'],
+                ['dashboard', 'Task Reporting'],
                 ['archive', 'Archive'],
               ] as const
             ).map(([target, label]) => (

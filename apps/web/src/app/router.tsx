@@ -49,7 +49,7 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (/^\/groups\/?$/.test(pathname)) return { section: 'groups' };
   if (/^\/directory\/?$/.test(pathname)) return { section: 'directory' };
   if (/^\/archive\/?$/.test(pathname)) return { section: 'archive' };
-  if (/^\/projects\/?$/.test(pathname)) return { section: 'projects' };
+  if (/^\/projects\/?$/.test(pathname)) return { section: 'stack' };
   if (/^\/dashboard\/?$/.test(pathname)) return { section: 'dashboard' };
   if (/^\/stack\/?$/.test(pathname)) return { section: 'stack' };
   if (/^\/google\/?$/.test(pathname)) return { section: 'profile' };
@@ -75,6 +75,7 @@ export function routePath(route: AppRoute): string {
             ? `/journal/${encodeURIComponent(route.entryId)}`
             : '/journal';
   if (route.section === 'admin-categories') return '/admin/categories';
+  if (route.section === 'projects') return '/stack';
   return `/${route.section}`;
 }
 

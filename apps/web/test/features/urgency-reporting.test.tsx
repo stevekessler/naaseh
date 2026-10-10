@@ -136,8 +136,8 @@ describe('urgency-aware reporting surfaces', () => {
     }
     expect(html).toContain('Low: 1');
     expect(html).toContain('Critical: 0');
-    expect(html).toContain('Priority at completion');
-    expect(html).toContain('uses the priority captured when each to-do was completed');
+    expect(html).toContain('Tasks by priority');
+    expect(html).toContain('closed work is reported by completion date');
   });
 
   it('renders current urgency breakdowns throughout Category, Project, and unassigned workload tree', () => {
@@ -299,10 +299,10 @@ describe('urgency-aware reporting surfaces', () => {
       }),
     );
 
-    expect(html).toContain('Completed Tasks');
+    expect(html).toContain('Task Reporting');
     expect(html).not.toContain('zero-period');
     expect(html).toContain('positive-period');
-    expect(html).toContain('3 completed');
+    expect(html).toContain('3 tasks');
     expect(html).toContain('Preserved detail');
     expect(html).toContain('2 local changes pending sync');
     expect(html).toContain('Offline · showing previously synchronized report');
@@ -320,7 +320,7 @@ describe('urgency-aware reporting surfaces', () => {
         },
       }),
     );
-    expect(html).toContain('No completed tasks occurred in the selected range.');
+    expect(html).toContain('No tasks occurred in the selected range.');
     expect(html).toContain('1 local change pending sync');
     expect(html).not.toContain('Completion totals by period');
   });
@@ -332,7 +332,7 @@ describe('urgency-aware reporting surfaces', () => {
         remoteReport: { total: 0, urgencyCounts: zeroFilled, buckets: [] },
       }),
     );
-    expect(html).toContain('No completed tasks match the current filters.');
+    expect(html).toContain('No tasks match the current filters.');
   });
 
   it('uses the safe recovery path for invalid source periods', () => {

@@ -9,6 +9,8 @@ import type { Filters } from '../../search/task-search.js';
 import { TaskForm } from '../tasks/TaskForm.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from '../tasks/TaskEditDialog.js';
+import type { ReturnTypeWorkloadTree } from '../projects/project-tree-types.js';
+import { ProjectStatus } from '../projects/ProjectStatus.js';
 
 export interface PersonalStackPageProps {
   scope: LocalStackScope;
@@ -34,6 +36,7 @@ export interface PersonalStackPageProps {
   readError?: 'invalid_cursor' | 'expired_cursor' | 'context_changed' | 'failed' | 'timeout';
   retryRead?: () => void;
   restartRead?: () => void;
+  workloadTree?: ReturnTypeWorkloadTree;
 }
 
 export function formatStackSyncTime(
@@ -84,6 +87,7 @@ export function PersonalStackPage({
   readError,
   retryRead,
   restartRead,
+  workloadTree,
 }: PersonalStackPageProps) {
   const pendingCount = pendingOperationIds.length;
   const [editingId, setEditingId] = useState<string>();
@@ -109,10 +113,49 @@ export function PersonalStackPage({
         <div>
           <p className="eyebrow">My priorities</p>
           <h1>Personal Stack</h1>
-          <p>Order your active work independently of its priority.</p>
+          <p>View and order your active tasks and lists in one place.</p>
         </div>
         <StackScopePicker scope={scope} projects={projects} change={changeScope} />
       </header>
+
+      {workloadTree ? (
+        <details className="stack-workload-overview">
+          <summary>Category and project overview</summary>
+          <ul>
+            {workloadTree.categories.map(({ category, count, projects: categoryProjects }) => (
+              <li key={category.id}>
+                <strong>{category.name}</strong>
+                <span>
+                  {count.taskCount} to-dos · {count.listCount} lists
+                </span>
+                {categoryProjects.length ? (
+                  <ul>
+                    {categoryProjects.map(({ project, count: projectCount }) => (
+                      <li key={project.id}>
+                        <strong>{project.name}</strong>
+                        <span>
+                          {projectCount.taskCount} to-dos · {projectCount.listCount} lists
+                        </span>
+                        <ProjectStatus
+                          project={project}
+                          remaining={projectCount.taskCount + projectCount.listCount}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            ))}
+            <li>
+              <strong>Unassigned</strong>
+              <span>
+                {workloadTree.unassigned.taskCount} to-dos · {workloadTree.unassigned.listCount}{' '}
+                lists
+              </span>
+            </li>
+          </ul>
+        </details>
+      ) : null}
 
       {createTask ? (
         <details className="stack-task-composer">

@@ -1180,6 +1180,41 @@ main {
   flex-basis: 100%;
   margin: 0.25rem 0 0;
 }
+.stack-workload-overview {
+  margin: 1rem 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+.stack-workload-overview > summary {
+  cursor: pointer;
+  padding: 0.9rem 1rem;
+  color: var(--navy);
+  font-weight: 750;
+}
+.stack-workload-overview > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0 1rem 1rem;
+  list-style: none;
+}
+.stack-workload-overview > ul > li,
+.stack-workload-overview ul ul > li {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.stack-workload-overview ul ul {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
 .stack-task-composer {
   margin: 1rem 0;
   border: 1px solid var(--line);
@@ -3212,6 +3247,55 @@ details:not([open]) > summary.project-workload-heading::after {
 .completion-filters select {
   width: 100%;
   min-width: 0;
+}
+
+.task-report-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+
+.task-report-summary div {
+  padding: 0.9rem;
+  border: 1px solid var(--border, #d9e2dd);
+  border-radius: 0.65rem;
+  background: var(--surface, #fff);
+}
+
+.task-report-summary dt {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.task-report-summary dd {
+  margin: 0.2rem 0 0;
+  color: var(--navy);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.task-report-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-block: 1rem;
+}
+
+.task-report-groups {
+  margin-block: 1.5rem;
+}
+
+.task-report-groups table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.task-report-groups th,
+.task-report-groups td {
+  padding: 0.65rem;
+  border-bottom: 1px solid var(--border, #d9e2dd);
+  text-align: left;
 }
 
 .completion-chart {

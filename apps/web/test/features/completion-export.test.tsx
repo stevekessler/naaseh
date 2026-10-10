@@ -23,7 +23,7 @@ describe('completed task export UI', () => {
       />,
     );
     expect(html).not.toContain('Time zone');
-    expect(html).toContain('Completion report filters');
+    expect(html).toContain('Task report filters');
   });
 
   it('accepts only a CSV whose checksum, headers, and row count all match', async () => {

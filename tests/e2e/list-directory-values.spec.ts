@@ -16,11 +16,11 @@ test('@enhanced-lists global names can be added, overridden, and reset without m
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
   const refund = list.locator('.list-item').filter({ hasText: 'Refund' });
   await refund.getByRole('button', { name: 'Edit', exact: true }).click();
-  await refund.getByLabel('Item name').fill('Refund receipt');
-  await refund.getByRole('button', { name: 'Save item' }).click();
+  await list.getByLabel('Item name').fill('Refund receipt');
+  await list.getByRole('button', { name: 'Save item' }).click();
   await expect(refund.getByText('Refund receipt', { exact: true })).toBeVisible();
   await refund.getByRole('button', { name: 'Edit', exact: true }).click();
-  await refund.getByRole('button', { name: 'Reset to global item name' }).click();
+  await list.getByRole('button', { name: 'Reset to global item name' }).click();
   await expect(refund.getByText('Refund', { exact: true })).toBeVisible();
   await expect(list.getByLabel('List total')).toHaveCount(0);
 });

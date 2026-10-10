@@ -9,13 +9,13 @@ test('shows personal completion totals with period and organization filters offl
   await addTask(page, 'Dashboard completion');
   await page.getByRole('button', { name: 'Complete Dashboard completion' }).click();
   await openCompletedTasks(page);
-  await expect(page.getByRole('heading', { name: 'Completed Tasks' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Task Reporting' })).toBeVisible();
   await openTaskSection(page, 'My Tasks');
   await context.setOffline(true);
   await openCompletedTasks(page);
   await expect(page).toHaveURL(/\/dashboard(?:\?|$)/);
-  await expect(page.getByRole('heading', { name: 'Completed Tasks' })).toBeVisible();
-  await expect(page.getByLabel('1 completed to-dos')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Task Reporting' })).toBeVisible();
+  await expect(page.getByLabel('1 tasks in this report')).toBeVisible();
   await page.getByRole('combobox', { name: 'Period', exact: true }).selectOption('week');
   await expect(page.getByLabel('Week starts')).toBeVisible();
   await page.getByLabel('Category').selectOption('unassigned');

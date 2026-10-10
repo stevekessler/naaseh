@@ -124,7 +124,6 @@ import {
 import type { StackDisplayItem } from '../features/stacks/StackRow.js';
 import type { CompletionFilterValue } from '../features/reports/CompletionFilters.js';
 import {
-  runCompletionExport,
   fetchCompletionReport,
   readCompletionReportCache,
   saveCompletionReportCache,
@@ -306,6 +305,10 @@ export function App() {
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     weekStartsOn: 0,
     urgencies: [],
+    from: '',
+    to: '',
+    taskState: 'all',
+    timeliness: 'all',
   });
   const [completionReport, setCompletionReport] = useState<CompletionReportPayload>();
   const [completionReportState, setCompletionReportState] = useState<CompletionReportState>();
@@ -1149,13 +1152,6 @@ export function App() {
               </button>
               <button
                 className="quiet"
-                aria-current={section === 'projects' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'projects' })}
-              >
-                Projects
-              </button>
-              <button
-                className="quiet"
                 aria-current={section === 'lists' ? 'page' : undefined}
                 onClick={() => navigate({ section: 'lists' })}
               >
@@ -1223,6 +1219,7 @@ export function App() {
               assignees={assignees}
               parentTasks={tasks}
               defaultAssigneeId={session.userId}
+              workloadTree={workloadTree}
               createTask={addTask}
               updateTask={async (task, patch) => {
                 await completionUndo.save(task, patch, session.userId);
@@ -1479,6 +1476,7 @@ export function App() {
           ) : section === 'dashboard' ? (
             <CompletionDashboard
               events={completionEvents}
+              tasks={tasks}
               categories={categories}
               projects={projects}
               pending={pending}
@@ -1493,9 +1491,6 @@ export function App() {
               retry={() => setCompletionReportAttempt((value) => value + 1)}
               restart={() => setCompletionReportAttempt((value) => value + 1)}
               refreshAfterReconnect={() => setCompletionReportAttempt((value) => value + 1)}
-              exportCsv={async (filters) => {
-                await runCompletionExport(filters, session.csrfToken);
-              }}
             />
           ) : section === 'archive' ? (
             <ArchivePage

@@ -14,6 +14,7 @@ test('@enhanced-lists lock precedence, deep links, copy readiness, and responsiv
   );
   await signIn(page);
   const list = await createListWithItem(page, 'Shared packing', 'Passports');
+  await list.getByText('List settings', { exact: true }).click();
   await list.getByLabel('Lock list').click();
   await expect(list.getByText('Only you can see this list.')).toBeVisible();
   await expect(list.getByLabel('Group')).toHaveCount(0);

@@ -153,7 +153,7 @@ export function ArchivePage({
               <tr>
                 <th scope="col">Work</th>
                 <th scope="col">Priority</th>
-                <th scope="col">Deleted</th>
+                <th scope="col">Archived</th>
                 <th scope="col">Category</th>
                 <th scope="col">Project</th>
                 <th scope="col">Actions</th>

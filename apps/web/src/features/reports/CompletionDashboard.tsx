@@ -4,6 +4,7 @@ import {
   type CategoryRecord,
   type CompletionEvent,
   type Project,
+  type Task,
   type Urgency,
   type UrgencyCounts,
 } from '@naaseh/domain';
@@ -17,6 +18,7 @@ import { bucketCompletionEvents } from './completion-bucketing.js';
 import { projectCompletionChart } from './completion-presentation.js';
 import { CompletionFilters, type CompletionFilterValue } from './CompletionFilters.js';
 import { useBrowserTimeZone } from '../tasks/due-value.js';
+import { buildTaskReport, downloadTaskReportCsv, type TaskReport } from './task-reporting.js';
 
 const dateOffset = (days: number) => {
   const date = new Date();
@@ -49,6 +51,7 @@ export interface CompletionReportState {
 
 export interface CompletionDashboardProps {
   events: readonly CompletionEvent[];
+  tasks?: readonly Task[];
   categories: readonly CategoryRecord[];
   projects: readonly Project[];
   pending: number;
@@ -70,7 +73,7 @@ export interface CompletionDashboardProps {
     buckets: Array<{ key: string; count: number }>;
   };
   changeFilters?: (value: CompletionFilterValue) => void;
-  exportCsv?: (filters: CompletionFilterValue) => Promise<void> | void;
+  exportCsv?: (filters: CompletionFilterValue, scope: 'filtered' | 'all') => Promise<void> | void;
 }
 
 const cursorErrorCopy: Partial<Record<CompletionReportError, string>> = {
@@ -81,6 +84,7 @@ const cursorErrorCopy: Partial<Record<CompletionReportError, string>> = {
 
 export function CompletionDashboard({
   events,
+  tasks,
   categories,
   projects,
   pending,
@@ -111,6 +115,10 @@ export function CompletionDashboard({
     timeZone: browserTimeZone,
     weekStartsOn: 0,
     urgencies: initialUrgencies,
+    from: '',
+    to: '',
+    taskState: 'all',
+    timeliness: 'all',
   });
   useEffect(() => {
     void loadReportingPreferences().then((preferences) =>
@@ -131,8 +139,8 @@ export function CompletionDashboard({
         period: filters.period,
         timeZone: filters.timeZone,
         weekStartsOn: filters.weekStartsOn,
-        from: dateOffset(-29),
-        to: dateOffset(0),
+        from: filters.from || dateOffset(-29),
+        to: filters.to || dateOffset(0),
         urgencies: filters.urgencies,
         ...(filters.categoryId ? { categoryId: filters.categoryId as string | 'unassigned' } : {}),
         ...(filters.projectId ? { projectId: filters.projectId as string | 'unassigned' } : {}),
@@ -140,10 +148,24 @@ export function CompletionDashboard({
     [events, filters],
   );
   const displayedBuckets = remoteReport?.buckets ?? report.buckets;
-  const displayedTotal = remoteReport?.total ?? report.total;
+  const taskReport = useMemo<TaskReport | undefined>(
+    () =>
+      tasks && (tasks.length > 0 || !remoteReport)
+        ? buildTaskReport(tasks, categories, projects, filters)
+        : undefined,
+    [tasks, categories, projects, filters, remoteReport],
+  );
+  const displayedTotal = taskReport?.total ?? remoteReport?.total ?? report.total;
   const chart = projectCompletionChart(
-    displayedBuckets,
-    Boolean(filters.categoryId || filters.projectId || filters.urgencies.length),
+    taskReport?.buckets.map((bucket) => ({ key: bucket.key, count: bucket.closed })) ??
+      displayedBuckets,
+    Boolean(
+      filters.categoryId ||
+        filters.projectId ||
+        filters.urgencies.length ||
+        filters.taskState !== 'all' ||
+        filters.timeliness !== 'all',
+    ),
   );
   const sortedRows = [...detailRows].sort((left, right) => {
     if (orderBy === 'overallRank')
@@ -153,15 +175,46 @@ export function CompletionDashboard({
     return 0;
   });
   const cursorError = reportState?.error ? cursorErrorCopy[reportState.error] : undefined;
+  const runExport = (scope: 'filtered' | 'all') => {
+    setExportState('running');
+    setExportError('');
+    const selectedFilters =
+      scope === 'filtered'
+        ? filters
+        : {
+            ...filters,
+            categoryId: '',
+            projectId: '',
+            urgencies: [],
+            from: '',
+            to: '',
+            taskState: 'all' as const,
+            timeliness: 'all' as const,
+          };
+    const action = exportCsv
+      ? exportCsv(selectedFilters, scope)
+      : tasks
+        ? downloadTaskReportCsv(
+            buildTaskReport(tasks, categories, projects, selectedFilters).rows,
+            scope === 'filtered' ? 'task-report-filtered.csv' : 'task-report-all.csv',
+          )
+        : Promise.reject(new Error('Task data is not available for export.'));
+    void Promise.resolve(action)
+      .then(() => setExportState('idle'))
+      .catch((error: Error) => {
+        setExportError(error.message);
+        setExportState('failed');
+      });
+  };
   return (
     <section aria-labelledby="completion-dashboard-heading">
       <header className="welcome">
         <div>
-          <p className="eyebrow">Your completed to-dos</p>
-          <h1 id="completion-dashboard-heading">Completed Tasks</h1>
+          <p className="eyebrow">Open and completed work</p>
+          <h1 id="completion-dashboard-heading">Task Reporting</h1>
         </div>
-        <strong aria-label={`${displayedTotal} completed to-dos`}>
-          {displayedTotal} completed
+        <strong aria-label={`${displayedTotal} tasks in this report`}>
+          {displayedTotal} tasks
         </strong>
       </header>
       <CompletionFilters
@@ -177,32 +230,61 @@ export function CompletionDashboard({
           });
         }}
       />
-      <p className="muted">This report uses the priority captured when each to-do was completed.</p>
+      {taskReport ? (
+        <dl className="task-report-summary" aria-label="Task report summary">
+          <div>
+            <dt>Tasks</dt>
+            <dd>{taskReport.total}</dd>
+          </div>
+          <div>
+            <dt>Open</dt>
+            <dd>{taskReport.open}</dd>
+          </div>
+          <div>
+            <dt>Closed</dt>
+            <dd>{taskReport.closed}</dd>
+          </div>
+          <div>
+            <dt>Closed on time</dt>
+            <dd>{taskReport.onTime}</dd>
+          </div>
+          <div>
+            <dt>Closed late</dt>
+            <dd>{taskReport.delayed}</dd>
+          </div>
+          <div>
+            <dt>Closed without a due date</dt>
+            <dd>{taskReport.withoutDueDate}</dd>
+          </div>
+        </dl>
+      ) : null}
+      <p className="muted">
+        Open work is reported by creation date; closed work is reported by completion date.
+      </p>
       <UrgencyBreakdown
-        counts={urgencyCounts ?? remoteReport?.urgencyCounts ?? report.urgencyCounts}
-        label="Priority at completion"
+        counts={
+          taskReport?.urgencyCounts ??
+          urgencyCounts ??
+          remoteReport?.urgencyCounts ??
+          report.urgencyCounts
+        }
+        label="Tasks by priority"
       />
-      {exportCsv ? (
+      <div className="task-report-export-actions">
         <button
           type="button"
           disabled={exportState === 'running'}
-          onClick={() => {
-            setExportState('running');
-            setExportError('');
-            void Promise.resolve(exportCsv(filters))
-              .then(() => setExportState('idle'))
-              .catch((error: Error) => {
-                setExportError(error.message);
-                setExportState('failed');
-              });
-          }}
+          onClick={() => runExport('filtered')}
         >
-          {exportState === 'running' ? 'Preparing export…' : 'Export CSV'}
+          {exportState === 'running' ? 'Preparing export…' : 'Export filtered CSV'}
         </button>
-      ) : null}
+        <button type="button" disabled={exportState === 'running'} onClick={() => runExport('all')}>
+          Export all task data
+        </button>
+      </div>
       {exportState === 'failed' ? (
         <p role="alert">
-          Export failed: {exportError || 'The file could not be verified.'} Try again; no partial
+          Export failed: {exportError || 'The file could not be prepared.'} Try again; no partial
           file was saved.
         </p>
       ) : null}
@@ -232,7 +314,7 @@ export function CompletionDashboard({
           ) : null}
         </div>
       ) : null}
-      {reportState?.error === 'calculation_failed' ? (
+      {!taskReport && reportState?.error === 'calculation_failed' ? (
         <div role="alert">
           <p>Unable to calculate this report.</p>
           {retry ? (
@@ -242,7 +324,7 @@ export function CompletionDashboard({
           ) : null}
         </div>
       ) : null}
-      {chart.kind === 'invalid' && reportState?.error !== 'calculation_failed' ? (
+      {!taskReport && chart.kind === 'invalid' && reportState?.error !== 'calculation_failed' ? (
         <div role="alert">
           <p>Unable to calculate this report.</p>
           {retry ? (
@@ -252,7 +334,7 @@ export function CompletionDashboard({
           ) : null}
         </div>
       ) : null}
-      {cursorError ? (
+      {!taskReport && cursorError ? (
         <div role="alert">
           <p>{cursorError}</p>
           {restart ? (
@@ -268,7 +350,7 @@ export function CompletionDashboard({
           : 'Up to date.'}
       </p>
       {chart.kind === 'ready' ? (
-        <ol className="completion-chart" aria-label="Completion totals by period">
+        <ol className="completion-chart" aria-label="Closed task totals by period">
           {chart.visiblePeriods.map((bucket) => (
             <li key={bucket.key}>
               <span>{bucket.key}</span>
@@ -288,11 +370,40 @@ export function CompletionDashboard({
       ) : chart.kind === 'empty' ? (
         <p className="empty completion-empty" role="status">
           {chart.emptyReason === 'filtered'
-            ? 'No completed tasks match the current filters.'
-            : 'No completed tasks occurred in the selected range.'}
+            ? 'No tasks match the current filters.'
+            : 'No tasks occurred in the selected range.'}
         </p>
       ) : null}
-      {detailRows.length ? (
+      {taskReport?.groups.length ? (
+        <section className="task-report-groups" aria-labelledby="task-report-groups-heading">
+          <h2 id="task-report-groups-heading">Organization breakdown</h2>
+          <div className="table-scroll" tabIndex={0}>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Category</th>
+                  <th scope="col">Project</th>
+                  <th scope="col">Tasks</th>
+                  <th scope="col">Open</th>
+                  <th scope="col">Closed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {taskReport.groups.map((group) => (
+                  <tr key={group.key}>
+                    <th scope="row">{group.category}</th>
+                    <td>{group.project}</td>
+                    <td>{group.total}</td>
+                    <td>{group.open}</td>
+                    <td>{group.closed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
+      {!taskReport && detailRows.length ? (
         <section aria-label="Completion report detail">
           {changeOrder ? (
             <label>
@@ -318,7 +429,7 @@ export function CompletionDashboard({
           </ol>
         </section>
       ) : null}
-      {nextCursor && loadMore && !cursorError ? (
+      {!taskReport && nextCursor && loadMore && !cursorError ? (
         <button type="button" onClick={loadMore}>
           Load more report rows
         </button>

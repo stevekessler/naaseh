@@ -10,17 +10,16 @@ test('representative responsive pages have no serious or critical axe findings',
     'Tasks',
     'Personal Stack',
     'Profile',
-    'Completed Tasks',
+    'Task Reporting',
     'Lists',
     'Global Items',
     'Groups',
     'Archive',
-    'Projects',
     'Users',
   ]) {
     if (pageName === 'Tasks') await openTaskSection(page, 'My Tasks');
     else if (pageName === 'Personal Stack') await openTaskSection(page, 'Personal Stack');
-    else if (pageName === 'Completed Tasks') await openTaskSection(page, 'Completed Tasks');
+    else if (pageName === 'Task Reporting') await openTaskSection(page, 'Task Reporting');
     else if (pageName === 'Archive') await openTaskSection(page, 'Archive');
     else {
       if (['Global Items', 'Groups', 'Users'].includes(pageName))

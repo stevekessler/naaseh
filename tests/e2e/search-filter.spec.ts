@@ -124,25 +124,30 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
 
   const taskTable = page.getByRole('table', { name: 'Tasks' });
   const visibleTaskLabels = () => taskTable.locator('tbody .task-link').allTextContents();
-  await taskTable.getByRole('button', { name: 'Sort by Due date ascending' }).click();
+  const sort = async (name: string) => {
+    const button = taskTable.getByRole('button', { name });
+    await button.focus();
+    await button.press('Enter');
+  };
+  await sort('Sort by Due date ascending');
   await expect(taskTable.getByRole('columnheader', { name: /Due date/ })).toHaveAttribute(
     'aria-sort',
     'ascending',
   );
   expect((await visibleTaskLabels())[0]).toBe('Yesterday date only');
-  await taskTable.getByRole('button', { name: 'Sort by Due date descending' }).click();
+  await sort('Sort by Due date descending');
   expect((await visibleTaskLabels())[0]).toBe('Grocery list');
-  await taskTable.getByRole('button', { name: 'Sort by Category ascending' }).click();
+  await sort('Sort by Category ascending');
   expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
-  await taskTable.getByRole('button', { name: 'Sort by Category descending' }).click();
+  await sort('Sort by Category descending');
   expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
-  await taskTable.getByRole('button', { name: 'Sort by Project ascending' }).click();
+  await sort('Sort by Project ascending');
   expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
-  await taskTable.getByRole('button', { name: 'Sort by Project descending' }).click();
+  await sort('Sort by Project descending');
   expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
-  await taskTable.getByRole('button', { name: 'Sort by Priority ascending' }).click();
+  await sort('Sort by Priority ascending');
   expect((await visibleTaskLabels())[0]).toBe('Grocery list');
-  await taskTable.getByRole('button', { name: 'Sort by Priority descending' }).click();
+  await sort('Sort by Priority descending');
   expect((await visibleTaskLabels())[0]).toBe('Project Cedar');
 
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
