@@ -45,7 +45,7 @@ export function createExportResources(
     ],
   });
   const worker = new nodejs.NodejsFunction(scope, 'ExportWorkflowFunction', {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     entry: fileURLToPath(
       new URL('../../apps/api/src/exports/workflow-handler.ts', import.meta.url),
     ),

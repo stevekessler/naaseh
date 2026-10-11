@@ -15,7 +15,7 @@ export function createArchiveProjectMigration(
   },
 ) {
   const fn = new nodejs.NodejsFunction(scope, 'ArchiveProjectMigrationFunction', {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     entry: fileURLToPath(
       new URL('../../apps/api/src/projects/migration-handler.ts', import.meta.url),
     ),
@@ -32,7 +32,7 @@ export function createArchiveProjectMigration(
     scope,
     'TaskSecurityFeatureMigrationGateFunction',
     {
-      runtime: lambda.Runtime.NODEJS_24_X,
+      runtime: lambda.Runtime.NODEJS_22_X,
       entry: fileURLToPath(
         new URL('../../apps/api/src/migrations/feature-migration-registry.ts', import.meta.url),
       ),
@@ -46,7 +46,7 @@ export function createArchiveProjectMigration(
     },
   );
   const extraLowInventory = new nodejs.NodejsFunction(scope, 'ExtraLowInventoryFunction', {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     entry: fileURLToPath(
       new URL('../../apps/api/src/projects/extra-low-inventory-handler.ts', import.meta.url),
     ),
