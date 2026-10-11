@@ -2,7 +2,6 @@ import { ProfilePictureSettings } from './ProfilePictureSettings.js';
 import { SecuritySettings } from './SecuritySettings.js';
 import { ReminderSettings } from '../reminders/ReminderSettings.js';
 import { CompletionSoundSetting } from '../tasks/CompletionSoundSetting.js';
-import { GoogleSyncPage } from '../google-sync/GoogleSyncPage.js';
 
 export function ProfilePage({
   csrfToken,
@@ -35,12 +34,6 @@ export function ProfilePage({
           <div className="profile-section-content profile-preferences">
             <ReminderSettings csrfToken={csrfToken} />
             <CompletionSoundSetting />
-          </div>
-        </details>
-        <details className="profile-section">
-          <summary>Google Tasks synchronization</summary>
-          <div className="profile-section-content">
-            <GoogleSyncPage csrfToken={csrfToken} showHeading={false} />
           </div>
         </details>
         <details className="profile-section">

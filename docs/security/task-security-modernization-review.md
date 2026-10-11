@@ -11,7 +11,7 @@ Status: local design and automated controls pass; deployed recovery, CloudTrail,
 - **Browser cache:** a restored session is validated before cached data unlocks. Revocation atomically purges protected stores and dependent mutations. Validation failure keeps the cache locked.
 - **Task authorization:** owner/group/lock policy remains server-enforced on direct, sync, search, rank, attachment, report, and export paths. UI routing is not an authorization control.
 - **Hidden data:** the rich memo allowlist is stored as a validated document, rendered without arbitrary HTML, and encrypted with its text projection when hidden. Hidden plaintext/document content is excluded from indexes, logs, telemetry, and CSV.
-- **Timer privacy:** the owner ID is the aggregate identity. Non-owner commands and lost task authorization are rejected. Timer state is absent from collaborator/admin task feeds, reports, Google sync, and completed-task events. Revocation purges dependent cached timer state.
+- **Timer privacy:** the owner ID is the aggregate identity. Non-owner commands and lost task authorization are rejected. Timer state is absent from collaborator/admin task feeds, reports, and completed-task events. Revocation purges dependent cached timer state.
 - **CSV:** rows and fields are reauthorized; the fixed contract excludes secrets/cipher packages/object paths; formula-leading cells are neutralized; result access is owner-scoped and available only after integrity checks.
 - **Dependencies:** TOTP, Downshift, Lexical, and dnd-kit are bounded to their stated roles. No jQuery/Select2 runtime, sanitizer, timezone package, icon library, always-on component, or device-bound credential was added.
 

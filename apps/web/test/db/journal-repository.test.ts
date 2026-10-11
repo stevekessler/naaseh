@@ -7,8 +7,8 @@ import {
 } from '../../src/db/journal-repository.js';
 
 describe('Dexie journal migration', () => {
-  it('retains encrypted journal stores through schema version 13', () => {
-    expect(currentSchemaVersion).toBe(13);
+  it('retains encrypted journal stores through schema version 14', () => {
+    expect(currentSchemaVersion).toBe(14);
     expect(planEnhancedSchemaMigration(11).storesToAdd).toEqual([
       'secureJournalEntries',
       'secureJournalProfiles',

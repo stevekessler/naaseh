@@ -1,0 +1,5300 @@
+{
+  "schema": "naaseh-siri-corpus/v1",
+  "version": "1.0.0",
+  "locale": "en-US",
+  "generatedAt": "2026-10-07T00:00:00Z",
+  "counts": {
+    "complete": 240,
+    "ambiguous": 60,
+    "total": 300,
+    "perPlatform": {
+      "complete": 80,
+      "ambiguous": 20
+    }
+  },
+  "privacy": "Synthetic labels and project names only; no production data.",
+  "complete": [
+    {
+      "id": "iphone-complete-001",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-002",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-003",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to House",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-004",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to House",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-005",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service tomorrow",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-006",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan tomorrow",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-007",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to House tomorrow",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-008",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to House tomorrow",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-009",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill at 9 AM",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-010",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup at 9 AM",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-011",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Personal at 9 AM",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-012",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Personal at 9 AM",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-013",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-014",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-015",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-016",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-017",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription, please",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-018",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike, please",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-019",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Work, please",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-020",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Work, please",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-021",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist tomorrow, please",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-022",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report tomorrow, please",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-023",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Work tomorrow, please",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-024",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Work tomorrow, please",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-025",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service at 9 AM, please",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-026",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan at 9 AM, please",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-027",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to Health at 9 AM, please",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-028",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to Health at 9 AM, please",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-029",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-030",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-031",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Health next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-032",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Health next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "iphone-complete-033",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries, for me",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-034",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes, for me",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-035",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to House, for me",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-036",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to House, for me",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-037",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription tomorrow, for me",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-038",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike tomorrow, for me",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-039",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to House tomorrow, for me",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-040",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to House tomorrow, for me",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-041",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist at 9 AM, for me",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-042",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report at 9 AM, for me",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-043",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Personal at 9 AM, for me",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-044",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Personal at 9 AM, for me",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-045",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-046",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-047",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to Personal next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-048",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to Personal next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "iphone-complete-049",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill, when you get a chance",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-050",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup, when you get a chance",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-051",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Work, when you get a chance",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-052",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Work, when you get a chance",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-053",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries tomorrow, when you get a chance",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-054",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes tomorrow, when you get a chance",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-055",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Work tomorrow, when you get a chance",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-056",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Work tomorrow, when you get a chance",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-057",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-058",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-059",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Health at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-060",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Health at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-061",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-062",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-063",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Health next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-064",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Health next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "iphone-complete-065",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-066",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-067",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to House",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-068",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to House",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-069",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill tomorrow",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-070",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup tomorrow",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-071",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to House tomorrow",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-072",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to House tomorrow",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-073",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries at 9 AM",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-074",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes at 9 AM",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-075",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Personal at 9 AM",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-076",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Personal at 9 AM",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-077",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-078",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-079",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "iphone-complete-080",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-001",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-002",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-003",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to House",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-004",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to House",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-005",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service tomorrow",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-006",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan tomorrow",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-007",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to House tomorrow",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-008",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to House tomorrow",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-009",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill at 9 AM",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-010",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup at 9 AM",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-011",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Personal at 9 AM",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-012",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Personal at 9 AM",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-013",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-014",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-015",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-016",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-017",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription, please",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-018",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike, please",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-019",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Work, please",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-020",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Work, please",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-021",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist tomorrow, please",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-022",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report tomorrow, please",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-023",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Work tomorrow, please",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-024",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Work tomorrow, please",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-025",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service at 9 AM, please",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-026",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan at 9 AM, please",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-027",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to Health at 9 AM, please",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-028",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to Health at 9 AM, please",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-029",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-030",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-031",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Health next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-032",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Health next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "ipad-complete-033",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries, for me",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-034",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes, for me",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-035",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to House, for me",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-036",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to House, for me",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-037",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription tomorrow, for me",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-038",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike tomorrow, for me",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-039",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to House tomorrow, for me",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-040",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to House tomorrow, for me",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-041",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist at 9 AM, for me",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-042",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report at 9 AM, for me",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-043",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Personal at 9 AM, for me",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-044",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Personal at 9 AM, for me",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-045",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-046",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-047",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to Personal next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-048",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to Personal next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "ipad-complete-049",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill, when you get a chance",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-050",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup, when you get a chance",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-051",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Work, when you get a chance",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-052",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Work, when you get a chance",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-053",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries tomorrow, when you get a chance",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-054",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes tomorrow, when you get a chance",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-055",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Work tomorrow, when you get a chance",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-056",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Work tomorrow, when you get a chance",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-057",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-058",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-059",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Health at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-060",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Health at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-061",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-062",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-063",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Health next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-064",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Health next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "ipad-complete-065",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-066",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-067",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to House",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-068",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to House",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-069",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill tomorrow",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-070",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup tomorrow",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-071",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to House tomorrow",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-072",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to House tomorrow",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-073",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries at 9 AM",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-074",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes at 9 AM",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-075",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Personal at 9 AM",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-076",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Personal at 9 AM",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-077",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-078",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-079",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "ipad-complete-080",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-001",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-002",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-003",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to House",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-004",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to House",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-005",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service tomorrow",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-006",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan tomorrow",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-007",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to House tomorrow",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-008",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to House tomorrow",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-009",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill at 9 AM",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-010",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup at 9 AM",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-011",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Personal at 9 AM",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-012",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Personal at 9 AM",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-013",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-014",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-015",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-016",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-017",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription, please",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-018",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike, please",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-019",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Work, please",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-020",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Work, please",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-021",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist tomorrow, please",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-022",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report tomorrow, please",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-023",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Work tomorrow, please",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-024",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Work tomorrow, please",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-025",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service at 9 AM, please",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-026",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan at 9 AM, please",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-027",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to Health at 9 AM, please",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-028",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to Health at 9 AM, please",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-029",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-030",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-031",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Health next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-032",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Health next Tuesday at 2:30 PM, please",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "please"
+      }
+    },
+    {
+      "id": "mac-complete-033",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries, for me",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-034",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes, for me",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-035",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to House, for me",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-036",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to House, for me",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-037",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription tomorrow, for me",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-038",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike tomorrow, for me",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-039",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to House tomorrow, for me",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-040",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to House tomorrow, for me",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-041",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist at 9 AM, for me",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-042",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report at 9 AM, for me",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-043",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Personal at 9 AM, for me",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-044",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Personal at 9 AM, for me",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-045",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-046",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-047",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to Personal next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-048",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to Personal next Tuesday at 2:30 PM, for me",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "for me"
+      }
+    },
+    {
+      "id": "mac-complete-049",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill, when you get a chance",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-050",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup, when you get a chance",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-051",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to Work, when you get a chance",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-052",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to Work, when you get a chance",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "Work",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-053",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries tomorrow, when you get a chance",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-054",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes tomorrow, when you get a chance",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-055",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Work tomorrow, when you get a chance",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-056",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Work tomorrow, when you get a chance",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Work",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-057",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-058",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-059",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Health at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-060",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Health at 9 AM, when you get a chance",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Health",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-061",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Call the dentist",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-062",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Submit expense report",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-063",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries to Health next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Buy groceries",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-064",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes to Health next Tuesday at 2:30 PM, when you get a chance",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": "Health",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "when you get a chance"
+      }
+    },
+    {
+      "id": "mac-complete-065",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service",
+      "expected": {
+        "title": "Schedule car service",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-066",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan",
+      "expected": {
+        "title": "Email Jordan",
+        "project": null,
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-067",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription to House",
+      "expected": {
+        "title": "Refill prescription",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-068",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike to House",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": "House",
+        "dueMode": "none",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "none",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-069",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill tomorrow",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-070",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup tomorrow",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": null,
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-071",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Call the dentist to House tomorrow",
+      "expected": {
+        "title": "Call the dentist",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-072",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Submit expense report to House tomorrow",
+      "expected": {
+        "title": "Submit expense report",
+        "project": "House",
+        "dueMode": "date",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-073",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Buy groceries at 9 AM",
+      "expected": {
+        "title": "Buy groceries",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-074",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Review quarterly notes at 9 AM",
+      "expected": {
+        "title": "Review quarterly notes",
+        "project": null,
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-075",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Schedule car service to Personal at 9 AM",
+      "expected": {
+        "title": "Schedule car service",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-076",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Email Jordan to Personal at 9 AM",
+      "expected": {
+        "title": "Email Jordan",
+        "project": "Personal",
+        "dueMode": "time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-077",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Refill prescription next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Refill prescription",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-078",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Plan weekend hike next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Plan weekend hike",
+        "project": null,
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "omitted",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-079",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Pay electricity bill to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Pay electricity bill",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    },
+    {
+      "id": "mac-complete-080",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Book annual checkup to Personal next Tuesday at 2:30 PM",
+      "expected": {
+        "title": "Book annual checkup",
+        "project": "Personal",
+        "dueMode": "date-time",
+        "outcome": "commit-one-task"
+      },
+      "dimensions": {
+        "projectMode": "selected",
+        "dueMode": "date-time",
+        "filler": "none"
+      }
+    }
+  ],
+  "ambiguous": [
+    {
+      "id": "iphone-ambiguous-001",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Review quarterly notes to Home, please",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-002",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Schedule car service to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-003",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Email Jordan to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-004",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Refill prescription to Home, please",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-005",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Plan weekend hike to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-006",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Pay electricity bill to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-007",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Book annual checkup to Family, please",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-008",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Call the dentist to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-009",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Submit expense report to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-010",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Buy groceries to Family, please",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-011",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Review quarterly notes to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-012",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Schedule car service to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-013",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Email Jordan to Planning, please",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-014",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Refill prescription to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-015",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Plan weekend hike to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-016",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Pay electricity bill to Shared, please",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-017",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Book annual checkup to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-018",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Call the dentist to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-019",
+      "platform": "iphone",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Submit expense report to Shared, please",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "iphone-ambiguous-020",
+      "platform": "iphone",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Buy groceries to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-001",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Review quarterly notes to Home, please",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-002",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Schedule car service to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-003",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Email Jordan to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-004",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Refill prescription to Home, please",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-005",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Plan weekend hike to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-006",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Pay electricity bill to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-007",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Book annual checkup to Family, please",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-008",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Call the dentist to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-009",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Submit expense report to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-010",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Buy groceries to Family, please",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-011",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Review quarterly notes to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-012",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Schedule car service to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-013",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Email Jordan to Planning, please",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-014",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Refill prescription to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-015",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Plan weekend hike to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-016",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Pay electricity bill to Shared, please",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-017",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Book annual checkup to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-018",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Call the dentist to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-019",
+      "platform": "ipad",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Submit expense report to Shared, please",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "ipad-ambiguous-020",
+      "platform": "ipad",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Buy groceries to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-001",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Review quarterly notes to Home, please",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-002",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Schedule car service to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-003",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Email Jordan to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-004",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Refill prescription to Home, please",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-005",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Plan weekend hike to Home",
+      "fixture": {
+        "authorizedProjectIDs": ["home-a", "home-b"],
+        "sharedDisplayName": "Home"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-006",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Pay electricity bill to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-007",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Book annual checkup to Family, please",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-008",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Call the dentist to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-009",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Submit expense report to Family",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-010",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Buy groceries to Family, please",
+      "fixture": {
+        "authorizedProjectIDs": ["family-a", "family-b"],
+        "sharedDisplayName": "Family"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-011",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Review quarterly notes to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-012",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Schedule car service to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-013",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Email Jordan to Planning, please",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-014",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Refill prescription to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-015",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Plan weekend hike to Planning",
+      "fixture": {
+        "authorizedProjectIDs": ["planning-a", "planning-b"],
+        "sharedDisplayName": "Planning"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-016",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Pay electricity bill to Shared, please",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-017",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Book annual checkup to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-018",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Call the dentist to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-019",
+      "platform": "mac",
+      "appName": "Na’aseh",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use Na’aseh to add Submit expense report to Shared, please",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    },
+    {
+      "id": "mac-ambiguous-020",
+      "platform": "mac",
+      "appName": "GSD",
+      "locale": "en-US",
+      "phrase": "Hey Siri, use GSD to add Buy groceries to Shared",
+      "fixture": {
+        "authorizedProjectIDs": ["shared-a", "shared-b"],
+        "sharedDisplayName": "Shared"
+      },
+      "expected": {
+        "outcome": "clarify",
+        "silentSelection": false,
+        "commitCount": 0
+      }
+    }
+  ]
+}

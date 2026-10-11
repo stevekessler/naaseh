@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 512" role="img" aria-label="Na'aseh — We Will Do It">
+  <rect width="1024" height="512" rx="72" fill="#fff"/>
+  <circle cx="220" cy="230" r="150" fill="none" stroke="#032743" stroke-width="28"/>
+  <circle cx="165" cy="205" r="24" fill="#032743"/>
+  <circle cx="235" cy="200" r="24" fill="#2b9a2f"/>
+  <path d="M110 220c82 36 105 140 117 151 37-119 97-202 183-262-81 94-142 192-178 306-10 22-42 18-52 0-20-80-39-139-70-195z" fill="#2b9a2f"/>
+  <path d="M222 371c37-119 97-202 183-262-79 98-136 196-173 306z" fill="#032743"/>
+  <text x="435" y="270" font-family="-apple-system,Arial,sans-serif" font-size="132" font-weight="700" fill="#032743">נעשה</text>
+  <text x="460" y="355" font-family="-apple-system,Arial,sans-serif" font-size="38" font-weight="600" letter-spacing="10" fill="#032743">WE WILL DO IT</text>
+</svg>

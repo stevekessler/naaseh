@@ -1,0 +1,32 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "E5DE4602-1942-43A0-BD59-1A594F7CBEBC",
+        "deviceName": "iPad Pro 13-inch (M5)",
+        "exportedFileName": "3DCB7EC3-A0F9-4E52-856E-9DA5044FE83A.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "iPad-Named-Controls_0_69D6EFC6-CDE2-4830-849F-3AEC8D667E36.png",
+        "timestamp": 1791486929.768
+      }
+    ],
+    "testIdentifier": "PadExperienceUITests/testPencilOnlyGesturesHaveAccessibleAlternatives()",
+    "testIdentifierURL": "test://com.apple.xcode/Naaseh/Naaseh-iOSUITests/PadExperienceUITests/testPencilOnlyGesturesHaveAccessibleAlternatives"
+  },
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "E5DE4602-1942-43A0-BD59-1A594F7CBEBC",
+        "deviceName": "iPad Pro 13-inch (M5)",
+        "exportedFileName": "9007E319-8B7B-48B2-A123-BDC607C2A0AC.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "iPad-Split-View-Landscape_0_BB4A8447-36A1-4CF1-9952-367BE3967164.png",
+        "timestamp": 1791486936.704
+      }
+    ],
+    "testIdentifier": "PadExperienceUITests/testSplitViewKeyboardPointerAndRestoration()",
+    "testIdentifierURL": "test://com.apple.xcode/Naaseh/Naaseh-iOSUITests/PadExperienceUITests/testSplitViewKeyboardPointerAndRestoration"
+  }
+]

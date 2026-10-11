@@ -11,6 +11,13 @@ import {
   type StoredPushSubscription,
 } from './web-push.js';
 import { metric } from '@naaseh/observability';
+import { findTask } from '../tasks/task-repository.js';
+import { APNSProvider, apnsPayload } from './apns.js';
+import {
+  nativeInstallationKey,
+  nativeInstallationSchema,
+  type StoredNativeInstallation,
+} from './native-installation.js';
 
 const secrets = new SecretsManagerClient({});
 const subscriptionSchema = z
@@ -50,7 +57,23 @@ async function api(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResult
     event.headers['x-csrf-token'],
   );
   if (event.requestContext.http.method === 'POST') {
-    const body = subscriptionSchema.parse(JSON.parse(event.body ?? '{}'));
+    const input: unknown = JSON.parse(event.body ?? '{}');
+    if (input && typeof input === 'object' && 'kind' in input && input.kind === 'apple') {
+      const body = nativeInstallationSchema.parse(input);
+      const installation: StoredNativeInstallation = {
+        ...body,
+        userId,
+        updatedAt: new Date().toISOString(),
+      };
+      await dynamodb.send(
+        new PutCommand({
+          TableName: tableName,
+          Item: { ...nativeInstallationKey(userId, body.clientId), data: installation },
+        }),
+      );
+      return json(204, undefined);
+    }
+    const body = subscriptionSchema.parse(input);
     const subscription: StoredPushSubscription = {
       userId,
       clientId: body.clientId,
@@ -80,15 +103,20 @@ async function api(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResult
         'Client ID is required.',
         event.requestContext.requestId,
       );
-    await dynamodb.send(
-      new DeleteCommand({ TableName: tableName, Key: subscriptionKey(userId, clientId) }),
-    );
+    const kind = event.queryStringParameters?.kind;
+    const key =
+      kind === 'apple'
+        ? nativeInstallationKey(userId, clientId)
+        : subscriptionKey(userId, clientId);
+    await dynamodb.send(new DeleteCommand({ TableName: tableName, Key: key }));
     return json(204, undefined);
   }
   return problem(405, 'method_not_allowed', 'Method not allowed.', event.requestContext.requestId);
 }
 
-async function scheduled(event: { taskId: string; userId: string }) {
+async function scheduled(event: { taskId: string; userId: string; occurrenceId?: string }) {
+  const task = await findTask(event.taskId);
+  if (!task || task.ownerId !== event.userId || task.status !== 'open') return;
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: tableName,
@@ -99,22 +127,66 @@ async function scheduled(event: { taskId: string; userId: string }) {
   const secret = await secrets.send(
     new GetSecretValueCommand({ SecretId: process.env.WEB_PUSH_SECRET_ID }),
   );
-  const vapid = JSON.parse(secret.SecretString ?? '{}') as {
+  const credentials = JSON.parse(secret.SecretString ?? '{}') as {
     subject?: string;
     publicKey?: string;
     privateKey?: string;
+    apns?: {
+      teamId?: string;
+      keyId?: string;
+      privateKey?: string;
+      topics?: { ios?: string; macos?: string };
+    };
   };
-  if (!vapid.subject || !vapid.publicKey || !vapid.privateKey)
-    throw new Error('Web Push credentials are unavailable.');
   for (const item of result.Items ?? []) {
+    if (String(item.SK ?? '').startsWith('APPLE#')) {
+      const installation = item.data as StoredNativeInstallation;
+      const topic = installation.topic;
+      const apns = credentials.apns;
+      if (!apns?.teamId || !apns.keyId || !apns.privateKey) {
+        metric('APNSDeliveryFailures', 1, 'Count', { failureClass: 'configuration' });
+        continue;
+      }
+      const provider = new APNSProvider({
+        teamId: apns.teamId,
+        keyId: apns.keyId,
+        privateKey: apns.privateKey,
+        topic,
+        environment: installation.environment,
+      });
+      const outcome = await provider.send(
+        installation,
+        apnsPayload({
+          occurrenceId: event.occurrenceId ?? `${event.userId}:${event.taskId}`,
+          taskId: event.taskId,
+          previewPolicy: installation.previewPolicy,
+          ...(installation.previewPolicy === 'private' ? { title: task.label } : {}),
+        }),
+      );
+      metric(outcome === 'success' ? 'APNSDeliveries' : 'APNSDeliveryFailures', 1, 'Count', {
+        outcome,
+      });
+      if (outcome === 'invalid-token')
+        await dynamodb.send(
+          new DeleteCommand({
+            TableName: tableName,
+            Key: nativeInstallationKey(installation.userId, installation.clientId),
+          }),
+        );
+      continue;
+    }
     const subscription = item.data as StoredPushSubscription;
+    if (!credentials.subject || !credentials.publicKey || !credentials.privateKey) {
+      metric('WebPushDeliveryFailures', 1, 'Count', { failureClass: 'configuration' });
+      continue;
+    }
     try {
       await deliverGenericReminder({
         taskId: event.taskId,
         subscription,
-        vapidSubject: vapid.subject,
-        vapidPublicKey: vapid.publicKey,
-        vapidPrivateKey: vapid.privateKey,
+        vapidSubject: credentials.subject,
+        vapidPublicKey: credentials.publicKey,
+        vapidPrivateKey: credentials.privateKey,
       });
       metric('WebPushDeliveries', 1);
     } catch (error) {
@@ -149,7 +221,16 @@ export const handler: Handler = async (event: unknown) => {
     }
   }
   const scheduledEvent = z
-    .object({ type: z.literal('task-reminder'), taskId: z.string(), userId: z.string() })
+    .object({
+      type: z.literal('task-reminder'),
+      taskId: z.string(),
+      userId: z.string(),
+      occurrenceId: z.string().optional(),
+    })
     .parse(event);
-  await scheduled(scheduledEvent);
+  await scheduled({
+    taskId: scheduledEvent.taskId,
+    userId: scheduledEvent.userId,
+    ...(scheduledEvent.occurrenceId ? { occurrenceId: scheduledEvent.occurrenceId } : {}),
+  });
 };

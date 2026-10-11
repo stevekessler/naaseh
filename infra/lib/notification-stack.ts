@@ -13,6 +13,8 @@ export const notificationControls = {
   genericPayloads: true,
   expiredSubscriptionCleanup: true,
   deliveryFailureMetrics: true,
+  apnsUsesExistingSecretLambdaTableAndLogs: true,
+  snsMobilePush: false,
 } as const;
 
 export function createNotificationResources(

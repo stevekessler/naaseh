@@ -1,0 +1,32 @@
+[
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "768E94BE-926C-4311-BB7F-712568924941",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "36C34F4C-B0F5-45F5-809F-C4AAA2FCF947.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "iPhone-Reduced-Motion_0_80728D15-AE69-4E5F-A563-C16AEF5100BD.png",
+        "timestamp": 1791499299.59
+      }
+    ],
+    "testIdentifier": "PhoneExperienceUITests/testReducedMotionAndVoiceOverOrderHaveNamedAlternatives()",
+    "testIdentifierURL": "test://com.apple.xcode/Naaseh/Naaseh-iOSUITests/PhoneExperienceUITests/testReducedMotionAndVoiceOverOrderHaveNamedAlternatives"
+  },
+  {
+    "attachments": [
+      {
+        "configurationName": "Test Scheme Action",
+        "deviceId": "768E94BE-926C-4311-BB7F-712568924941",
+        "deviceName": "iPhone 18 Pro",
+        "exportedFileName": "796BEAF0-768F-45CA-8553-B20C9579967B.png",
+        "isAssociatedWithFailure": false,
+        "suggestedHumanReadableName": "iPhone-AccessibilityXXXL-Portrait_0_EF0E1658-C6F3-42D2-8B23-25FC5061AAC7.png",
+        "timestamp": 1791499308.678
+      }
+    ],
+    "testIdentifier": "PhoneExperienceUITests/testSafeAreaKeyboardRotationDynamicTypeAndState()",
+    "testIdentifierURL": "test://com.apple.xcode/Naaseh/Naaseh-iOSUITests/PhoneExperienceUITests/testSafeAreaKeyboardRotationDynamicTypeAndState"
+  }
+]

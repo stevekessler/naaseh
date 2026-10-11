@@ -398,7 +398,6 @@ async function probeRestoredResource(
       resourceType: 'DynamoDB' as const,
       itemCount: items.length,
       integrity,
-      googleSyncSafety: googleRestoreSafetyPlan(items),
     };
   }
 
@@ -476,27 +475,6 @@ export function validateUrgencyRestore(items: RestoredItem[]) {
     completionSnapshots,
     urgencyCounterGroups: totals.size,
     urgencyTotalsReconciled: true as const,
-  };
-}
-
-export function googleRestoreSafetyPlan(items: RestoredItem[]) {
-  let connectionsRequiringReauthorization = 0;
-  let operationsToCancel = 0;
-  for (const item of items) {
-    const data = item.data as { state?: unknown; encryptedRefreshToken?: unknown } | undefined;
-    if (item.SK === 'GOOGLE#CONNECTION' && data?.encryptedRefreshToken)
-      connectionsRequiringReauthorization += 1;
-    if (
-      typeof item.SK === 'string' &&
-      item.SK.startsWith('OP#') &&
-      ['pending', 'retry', 'running'].includes(String(data?.state))
-    )
-      operationsToCancel += 1;
-  }
-  return {
-    connectionsRequiringReauthorization,
-    operationsToCancel,
-    safeToExpose: connectionsRequiringReauthorization === 0 && operationsToCancel === 0,
   };
 }
 

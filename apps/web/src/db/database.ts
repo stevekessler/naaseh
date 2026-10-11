@@ -110,7 +110,6 @@ class NaasehDatabase extends Dexie {
   secureProjects!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureCompletionEvents!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureDeletionJobs!: EntityTable<EncryptedEntityRecord, 'id'>;
-  secureGoogleSync!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureStackScopes!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureStackMemberships!: EntityTable<EncryptedEntityRecord, 'id'>;
   secureStackOperations!: EntityTable<EncryptedEntityRecord, 'id'>;
@@ -363,6 +362,9 @@ class NaasehDatabase extends Dexie {
       secureCrisisPlanOutbox: 'id,ownerId,mutationId,updatedAt',
       secureCrisisPlanOwnerKeys: 'id,&ownerId,updatedAt',
     });
+    // Remove the retired Google Tasks cache during upgrade. Dexie deletes the object store and
+    // its encrypted contents atomically as part of the version change.
+    this.version(14).stores({ secureGoogleSync: null });
   }
 }
 

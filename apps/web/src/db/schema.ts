@@ -1,4 +1,4 @@
-export const currentSchemaVersion = 13;
+export const currentSchemaVersion = 14;
 
 const storeIntroductions = [
   {
@@ -44,7 +44,9 @@ const storeIntroductions = [
   },
 ] as const;
 
-export const enhancedEncryptedStores = storeIntroductions.flatMap(({ stores }) => stores);
+export const enhancedEncryptedStores = storeIntroductions
+  .flatMap(({ stores }) => stores)
+  .filter((store) => store !== 'secureGoogleSync');
 export const preservedEncryptedStores = [
   'settings',
   'cryptoKeys',
@@ -58,6 +60,7 @@ export interface EnhancedSchemaMigrationPlan {
   preserveOutbox: true;
   preservedStores: typeof preservedEncryptedStores;
   storesToAdd: readonly string[];
+  storesToDelete: readonly string[];
 }
 
 export function planEnhancedSchemaMigration(from: number): EnhancedSchemaMigrationPlan {
@@ -70,7 +73,9 @@ export function planEnhancedSchemaMigration(from: number): EnhancedSchemaMigrati
     preservedStores: preservedEncryptedStores,
     storesToAdd: storeIntroductions
       .filter(({ version }) => version > from)
-      .flatMap(({ stores }) => [...stores]),
+      .flatMap(({ stores }) => [...stores])
+      .filter((store) => store !== 'secureGoogleSync'),
+    storesToDelete: from < 14 ? ['secureGoogleSync'] : [],
   };
 }
 export interface Migration {

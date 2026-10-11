@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "marketingVersion": "0.1.0",
+  "buildNumber": 1,
+  "minimumOS": { "ios": "27.0", "ipados": "27.0", "macos": "27.0" },
+  "architecture": "arm64",
+  "contractVersion": 4,
+  "productionOrigin": "https://gsd.thepandas.link",
+  "exportCompliance": { "usesEncryption": true, "exemptEncryptionOnly": true },
+  "records": [
+    {
+      "platform": "ios-ipados",
+      "bundleId": "link.thepandas.naaseh",
+      "skuTemplate": "NAASEH-IOS-001",
+      "privacyManifest": "../iOSApp/PrivacyInfo.xcprivacy"
+    },
+    {
+      "platform": "macos",
+      "bundleId": "link.thepandas.naaseh.macos",
+      "skuTemplate": "NAASEH-MAC-001",
+      "privacyManifest": "../macOSApp/PrivacyInfo.xcprivacy"
+    }
+  ],
+  "metadataTemplates": {
+    "subtitle": "Get things done, privately",
+    "betaDescription": "Native iPhone, iPad, and Mac evaluation build for existing Na’aseh accounts.",
+    "feedbackEmail": "TESTFLIGHT_FEEDBACK_EMAIL_FROM_SECRET_STORE"
+  },
+  "screenshotFixtures": ["phone-tasks-redacted", "pad-workspace-redacted", "mac-desktop-redacted"]
+}

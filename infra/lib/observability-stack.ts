@@ -52,7 +52,6 @@ export function createOperationalVisibility(
     auth: lambda.IFunction;
     sync: lambda.IFunction;
     reporting?: lambda.IFunction;
-    googleSync?: lambda.IFunction;
     crisisPlan?: lambda.IFunction;
     crisisPlanBroker?: lambda.IFunction;
   },
@@ -120,6 +119,7 @@ export function createOperationalVisibility(
       { metricName: 'ProjectionReconciliationFailures', threshold: 1 },
       { metricName: 'CompletionExportIntegrityFailures', threshold: 1 },
       { metricName: 'TaskTimerInvariantFailures', threshold: 1 },
+      { metricName: 'APNSDeliveryFailures', threshold: 5 },
     ],
     1,
   );
@@ -135,6 +135,7 @@ export function createOperationalVisibility(
       { metricName: 'TaskTimerFailures', threshold: 1 },
       { metricName: 'ExtraLowInventoryBlocked', threshold: 1 },
       { metricName: 'CrisisPlanOperationFailure', threshold: 1 },
+      { metricName: 'NativeClientFailures', threshold: 5 },
     ],
     1,
   );
@@ -165,7 +166,6 @@ export function createOperationalVisibility(
         functions.task.metricErrors(),
         functions.sync.metricErrors(),
         functions.auth.metricErrors(),
-        ...(functions.googleSync ? [functions.googleSync.metricErrors()] : []),
         ...(functions.crisisPlan ? [functions.crisisPlan.metricErrors()] : []),
         ...(functions.crisisPlanBroker ? [functions.crisisPlanBroker.metricErrors()] : []),
       ],
@@ -173,7 +173,6 @@ export function createOperationalVisibility(
         functions.task.metricThrottles(),
         functions.sync.metricThrottles(),
         functions.auth.metricThrottles(),
-        ...(functions.googleSync ? [functions.googleSync.metricThrottles()] : []),
         ...(functions.crisisPlan ? [functions.crisisPlan.metricThrottles()] : []),
         ...(functions.crisisPlanBroker ? [functions.crisisPlanBroker.metricThrottles()] : []),
       ],
@@ -255,10 +254,12 @@ export function createOperationalVisibility(
       ],
     }),
     new cloudwatch.GraphWidget({
-      title: 'Sync conflicts/retries and Web Push failures',
+      title: 'Sync conflicts/retries and notification delivery',
       left: [applicationMetric('SyncConflicts'), applicationMetric('SyncRetryableFailures')],
       right: [
         applicationMetric('WebPushDeliveryFailures'),
+        applicationMetric('APNSDeliveries'),
+        applicationMetric('APNSDeliveryFailures'),
         applicationMetric('SyncBacklogDepth', 'Maximum'),
       ],
     }),
@@ -275,21 +276,6 @@ export function createOperationalVisibility(
         applicationMetric('StackCompactions'),
         applicationMetric('StackCompactionFailures'),
         applicationMetric('ExtraLowInventoryBlocked'),
-      ],
-    }),
-    new cloudwatch.GraphWidget({
-      title: 'Google synchronization health',
-      left: [
-        applicationMetric('GoogleSyncAuthorizationFailures'),
-        applicationMetric('GoogleSyncRevocations'),
-        applicationMetric('GoogleSyncRunFailures'),
-        applicationMetric('GoogleSyncCheckpointStalls'),
-      ],
-      right: [
-        applicationMetric('GoogleSyncThrottles'),
-        applicationMetric('GoogleSyncConflicts'),
-        applicationMetric('GoogleSyncQuarantines'),
-        applicationMetric('GoogleSyncLagSeconds', 'Maximum'),
       ],
     }),
     new cloudwatch.GraphWidget({

@@ -1,0 +1,45 @@
+{
+  "schema": "naaseh-crypto-vectors/v1",
+  "encoding": "lowercase hex unless otherwise noted",
+  "aes256Gcm": [
+    {
+      "id": "nist-empty-plaintext",
+      "key": "0000000000000000000000000000000000000000000000000000000000000000",
+      "nonce": "000000000000000000000000",
+      "aad": "",
+      "plaintext": "",
+      "ciphertext": "",
+      "tag": "530f8afbc74536b9a963b4f1c4cb738b",
+      "source": "NIST GCMVS AES-256 empty-plaintext vector"
+    }
+  ],
+  "hkdfSha256": [
+    {
+      "id": "rfc5869-test-case-1",
+      "ikm": "0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b0b",
+      "salt": "000102030405060708090a0b0c",
+      "info": "f0f1f2f3f4f5f6f7f8f9",
+      "length": 42,
+      "okm": "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+    }
+  ],
+  "argon2id": [
+    {
+      "id": "node-rs-cross-language-v19",
+      "passwordUtf8": "password",
+      "saltUtf8": "somesalt",
+      "memoryKiB": 32,
+      "iterations": 3,
+      "parallelism": 1,
+      "outputLength": 32,
+      "hash": "6d4c5fa26a057c23e3a4f72ae34c64e71398c851f2c79464e3e670ed41b543f9",
+      "source": "@node-rs/argon2 2.0.2 Argon2id v=19"
+    }
+  ],
+  "base64url": [
+    { "bytes": "", "encoded": "" },
+    { "bytes": "66", "encoded": "Zg" },
+    { "bytes": "666f6f", "encoded": "Zm9v" },
+    { "bytes": "fbff", "encoded": "-_8" }
+  ]
+}

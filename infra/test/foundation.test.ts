@@ -36,8 +36,8 @@ describe('foundation infrastructure', () => {
   it('keeps the production template below the resource budget', () => {
     const resourceCount = Object.keys(template.toJSON().Resources ?? {}).length;
     expect(resourceCount).toBeLessThanOrEqual(400);
-    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 21);
-    template.resourceCountIs('AWS::Lambda::Permission', 27);
+    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 20);
+    template.resourceCountIs('AWS::Lambda::Permission', 25);
   });
 
   it('keeps focused helpers inside one deployable stack', () => {
@@ -257,7 +257,7 @@ describe('foundation infrastructure', () => {
   });
 
   it('creates retained log groups, only critical alarms, and a dashboard', () => {
-    template.resourceCountIs('AWS::Logs::LogGroup', 12);
+    template.resourceCountIs('AWS::Logs::LogGroup', 11);
     template.hasResourceProperties('AWS::Logs::LogGroup', { RetentionInDays: 90 });
     template.hasResourceProperties('AWS::Logs::LogGroup', {
       KmsKeyId: Match.anyValue(),
