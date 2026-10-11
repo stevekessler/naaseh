@@ -220,6 +220,14 @@ describe('foundation infrastructure', () => {
     expect(rendered).toContain('ProfilePictureProcessor');
   });
 
+  it('keeps each custom dashboard within the free 50-metric allowance', () => {
+    const dashboards = Object.values(template.findResources('AWS::CloudWatch::Dashboard'));
+    expect(dashboards).toHaveLength(2);
+    const rendered = JSON.stringify(dashboards);
+    expect(rendered).toContain('Lambda errors and throttles');
+    expect(rendered).toContain('Attachment security and reconciliation');
+  });
+
   it('isolates recovery decrypt permission and bounds recovery concurrency', () => {
     template.hasResourceProperties('AWS::Lambda::Function', {
       ReservedConcurrentExecutions: 1,
@@ -349,6 +357,6 @@ describe('foundation infrastructure', () => {
       'TaskTimerConflicts',
     ])
       expect(JSON.stringify(alarms)).toContain(metric);
-    template.resourceCountIs('AWS::CloudWatch::Dashboard', 1);
+    template.resourceCountIs('AWS::CloudWatch::Dashboard', 2);
   });
 });

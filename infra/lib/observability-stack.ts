@@ -158,8 +158,8 @@ export function createOperationalVisibility(
     3,
     2,
   );
-  const dashboard = new cloudwatch.Dashboard(scope, 'OperationsDashboard');
-  dashboard.addWidgets(
+  const primaryDashboard = new cloudwatch.Dashboard(scope, 'PrimaryOperationsDashboard');
+  primaryDashboard.addWidgets(
     new cloudwatch.GraphWidget({
       title: 'Lambda errors and throttles',
       left: [
@@ -229,6 +229,9 @@ export function createOperationalVisibility(
         applicationMetric('AdminAuthorizationDenials'),
       ],
     }),
+  );
+  const serviceDashboard = new cloudwatch.Dashboard(scope, 'ServiceOperationsDashboard');
+  serviceDashboard.addWidgets(
     new cloudwatch.GraphWidget({
       title: 'Task timer synchronization',
       left: [
@@ -292,7 +295,7 @@ export function createOperationalVisibility(
       ],
     }),
   );
-  return dashboard;
+  return { primaryDashboard, serviceDashboard };
 }
 
 export const crisisPlanObservabilityControls = Object.freeze({
