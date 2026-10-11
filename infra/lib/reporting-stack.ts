@@ -17,7 +17,7 @@ export function createReportingReconciliation(
   },
 ) {
   const fn = new nodejs.NodejsFunction(scope, 'WorkloadProjectionReconciliationFunction', {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     entry: fileURLToPath(
       new URL('../../apps/api/src/reporting/projection-reconciliation-handler.ts', import.meta.url),
     ),

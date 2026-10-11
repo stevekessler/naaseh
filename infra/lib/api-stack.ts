@@ -27,7 +27,7 @@ import { createCrisisPlanSharingResources } from './crisis-plan-sharing-stack.js
 export const sharedLambdaDefaults = (
   environment: Record<string, string>,
 ): Pick<nodejs.NodejsFunctionProps, 'runtime' | 'timeout' | 'bundling' | 'environment'> => ({
-  runtime: lambda.Runtime.NODEJS_24_X,
+  runtime: lambda.Runtime.NODEJS_22_X,
   timeout: Duration.seconds(15),
   bundling: { minify: true, sourceMap: true },
   environment,

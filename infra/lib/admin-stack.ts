@@ -37,7 +37,7 @@ export function createAdminFunctions(
   },
 ) {
   const common = {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     timeout: Duration.seconds(15),
     environment: {
       ...options.environment,

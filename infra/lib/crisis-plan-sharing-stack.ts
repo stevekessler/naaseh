@@ -58,7 +58,7 @@ export function createCrisisPlanSharingResources(
     removalPolicy: RemovalPolicy.RETAIN,
   });
   const common = {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     timeout: Duration.seconds(15),
     bundling: { minify: true, sourceMap: true },
   } as const;

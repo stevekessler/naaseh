@@ -30,7 +30,7 @@ export function createNotificationResources(
   const fn = new nodejs.NodejsFunction(scope, 'NotificationFunction', {
     entry: fileURLToPath(new URL('../../apps/api/src/notifications/handler.ts', import.meta.url)),
     handler: 'handler',
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     timeout: Duration.seconds(15),
     memorySize: 512,
     reservedConcurrentExecutions: 5,

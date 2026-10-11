@@ -29,7 +29,7 @@ export function createCollaborationFunction(
   const group = new nodejs.NodejsFunction(scope, 'GroupFunction', {
     entry: fileURLToPath(new URL('../../apps/api/src/groups/handlers.ts', import.meta.url)),
     handler: 'handler',
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     timeout: Duration.seconds(15),
     memorySize: 1024,
     reservedConcurrentExecutions: collaborationControls.joinBurst,

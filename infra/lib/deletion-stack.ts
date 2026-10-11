@@ -29,7 +29,7 @@ export function createDeletionResources(
     generateSecretString: { passwordLength: 48, excludePunctuation: true },
   });
   const common = {
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     bundling: { minify: true, sourceMap: true },
     logGroup: options.logGroup,
   } as const;

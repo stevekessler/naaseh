@@ -70,7 +70,7 @@ export function createRestoreWorkflow(
   const validator = new nodejs.NodejsFunction(scope, 'RestoreTestingValidator', {
     entry,
     handler: 'handler',
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     timeout: Duration.minutes(15),
     memorySize: 512,
     reservedConcurrentExecutions: 1,

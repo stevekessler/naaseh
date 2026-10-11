@@ -139,7 +139,7 @@ describe('foundation infrastructure', () => {
         }),
       }),
     });
-    template.hasResourceProperties('AWS::Lambda::Function', { Runtime: 'nodejs24.x' });
+    template.hasResourceProperties('AWS::Lambda::Function', { Runtime: 'nodejs22.x' });
     template.hasResourceProperties('AWS::Lambda::Function', {
       Environment: {
         Variables: Match.objectLike({ NODE_ENV: 'production' }),

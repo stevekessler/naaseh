@@ -33,7 +33,7 @@ export function createCryptoRecoveryFunction(
   const fn = new nodejs.NodejsFunction(scope, 'CryptoRecoveryFunction', {
     entry: fileURLToPath(new URL('../../apps/api/src/crypto-recovery/handler.ts', import.meta.url)),
     handler: 'handler',
-    runtime: lambda.Runtime.NODEJS_24_X,
+    runtime: lambda.Runtime.NODEJS_22_X,
     timeout: Duration.seconds(15),
     memorySize: 1024,
     reservedConcurrentExecutions: 1,
