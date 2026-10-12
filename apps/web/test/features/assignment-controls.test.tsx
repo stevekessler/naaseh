@@ -107,7 +107,8 @@ describe('shared assignment controls', () => {
     }
     expect(form.indexOf('Priority')).toBeLessThan(form.indexOf('Task details'));
     expect(form.indexOf('Due date')).toBeLessThan(form.indexOf('Task details'));
-    expect(form).toContain('Repeat schedule');
+    expect(form.match(/>Repeat</gu)).toHaveLength(1);
+    expect(form.indexOf('Project')).toBeLessThan(form.indexOf('>Repeat<'));
     expect(form).toContain('Every x days');
   });
 
