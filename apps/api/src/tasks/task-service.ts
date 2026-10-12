@@ -31,6 +31,8 @@ const mutableTaskFields = new Set<keyof Task>([
   'dueKind',
   'dueDate',
   'dueTimeZone',
+  'repeatInterval',
+  'repeatUnit',
   'assigneeId',
   'categoryId',
   'projectId',
@@ -60,6 +62,8 @@ export function sanitizeTaskPatch(value: unknown): Partial<Task> {
     'groupId',
     'projectId',
     'postItColor',
+    'repeatInterval',
+    'repeatUnit',
   ]);
   if (entries.some(([field, fieldValue]) => fieldValue === null && !clearable.has(field)))
     throw new Error('Task patch contains an invalid null field.');

@@ -1079,7 +1079,8 @@ main {
   width: 100%;
 }
 .priority-filter-group {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.45rem;
   flex: 1 1 100%;
@@ -1099,7 +1100,11 @@ main {
 .priority-options {
   display: flex;
   gap: 0.35rem;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
 }
 .priority-options label {
   position: relative;
@@ -1146,11 +1151,8 @@ main {
 .priority-options label[data-priority='critical'] {
   --priority-color: #a4242a;
 }
-.priority-clear {
-  padding-inline: 0.55rem;
-}
 .priority-filter-group > p {
-  flex-basis: 100%;
+  grid-column: 1 / -1;
   margin: 0.25rem 0 0;
 }
 .stack-workload-overview {
@@ -1435,6 +1437,11 @@ main {
   border-radius: 999px;
   background: white;
 }
+.date-filter-presets .quiet[aria-pressed='true'] {
+  border-color: var(--navy);
+  background: var(--navy);
+  color: white;
+}
 .filters input {
   width: 100%;
 }
@@ -1684,6 +1691,25 @@ main {
 .task-name-cell h2 {
   min-width: 0;
 }
+.task-parent-label {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  margin: 0.3rem 0 0;
+  color: #607168;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.task-parent-link {
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--navy);
+  font: inherit;
+  text-decoration: underline;
+  box-shadow: none;
+}
 .task-name-cell .task-link {
   max-width: 100%;
   overflow: hidden;
@@ -1794,6 +1820,9 @@ main {
   background: white;
   box-shadow: 0 10px 28px rgb(16 43 73 / 18%);
 }
+.task-list tbody tr:last-child .task-row-actions-menu > div {
+  inset-block-end: calc(100% + 0.35rem);
+}
 .task-row-actions-menu button {
   width: 100%;
 }
@@ -1822,7 +1851,7 @@ main {
 }
 .filter-fields .priority-options {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--button-gap);
 }
 .filter-fields .priority-options label[data-priority] {
@@ -1843,6 +1872,27 @@ main {
   border-radius: 10px;
   background: var(--surface);
   color: inherit;
+}
+.repeat-schedule-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.repeat-schedule-field > legend {
+  font-weight: 700;
+}
+.repeat-schedule-field > label:has(input) {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.6fr) minmax(4rem, 0.4fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+.repeat-schedule-field small {
+  color: #607168;
 }
 .task-list h2,
 .postit h2 {
@@ -2378,6 +2428,12 @@ dialog input {
     position: static;
     margin-top: 0.35rem;
   }
+  .task-list tbody tr:last-child .task-row-actions-menu > div {
+    inset-block-end: auto;
+  }
+  .task-list tbody tr:last-child {
+    scroll-margin-bottom: calc(1rem + var(--safe-bottom));
+  }
   .task-list .task-project-cell,
   .task-list .task-category-cell {
     grid-row: 2;
@@ -2445,6 +2501,9 @@ dialog input {
   .priority-filter-group,
   .priority-options {
     width: 100%;
+  }
+  .priority-filter-group {
+    align-items: flex-start;
   }
   .composer-actions,
   .update-prompt {

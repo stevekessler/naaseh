@@ -1,5 +1,5 @@
 import type { Urgency } from '@naaseh/domain';
-import { isValidElement, type ComponentType, type ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { filtersFromSearch } from '../../src/features/search/search-state.js';
@@ -27,22 +27,6 @@ const value = (urgencies: Urgency[] = []): UrgencyFilters => ({
   urgencies,
 });
 
-function findElement(
-  node: ReactNode,
-  predicate: (type: unknown, props: Record<string, unknown>) => boolean,
-): { type: unknown; props: Record<string, unknown> } | undefined {
-  if (!isValidElement(node)) return undefined;
-  const props = node.props as Record<string, unknown>;
-  if (predicate(node.type, props)) return { type: node.type, props };
-  const children = props.children;
-  const values = Array.isArray(children) ? children : [children];
-  for (const child of values) {
-    const match = findElement(child as ReactNode, predicate);
-    if (match) return match;
-  }
-  return undefined;
-}
-
 describe('TaskFilters urgency controls', () => {
   it('builds today, tomorrow, calendar-week, and calendar-month ranges', () => {
     const now = new Date(2026, 9, 6, 12);
@@ -57,6 +41,14 @@ describe('TaskFilters urgency controls', () => {
     expect(dateRangeForPreset('week', now)).toEqual({
       from: '2026-10-04',
       to: '2026-10-10',
+    });
+    expect(dateRangeForPreset('nextWeek', now)).toEqual({
+      from: '2026-10-11',
+      to: '2026-10-17',
+    });
+    expect(dateRangeForPreset('nextNextWeek', now)).toEqual({
+      from: '2026-10-18',
+      to: '2026-10-24',
     });
     expect(dateRangeForPreset('month', now)).toEqual({
       from: '2026-10-01',
@@ -82,25 +74,9 @@ describe('TaskFilters urgency controls', () => {
     expect(html).toContain('2 urgency levels selected: High, Critical');
   });
 
-  it('clears only urgency selections and preserves every other active filter', () => {
-    const change = vi.fn();
-    const selected: UrgencyFilters = {
-      ...value(['low', 'critical']),
-      from: '2026-08-01',
-      projectId: 'project-a',
-    };
-    const tree = PriorityFilter({
-      value: selected.urgencies,
-      change: (urgencies) => change({ ...selected, urgencies }),
-    }) as ReactNode;
-    const clear = findElement(
-      tree,
-      (type, props) => type === 'button' && props['aria-label'] === 'Clear urgency filters',
-    );
-
-    expect(clear).toBeDefined();
-    (clear?.props.onClick as (() => void) | undefined)?.();
-    expect(change).toHaveBeenCalledWith({ ...selected, urgencies: [] });
+  it('does not render a separate priority clear button', () => {
+    const html = renderToStaticMarkup(<PriorityFilter value={['low']} change={vi.fn()} />);
+    expect(html).not.toContain('Clear urgency filters');
   });
 
   it('restores checked urgency choices from saved URL state', () => {
@@ -118,6 +94,6 @@ describe('TaskFilters urgency controls', () => {
       <UrgencyTaskFilters value={value(['low'])} change={vi.fn()} resultCount={0} />,
     );
     expect(html).toContain('No work matches the selected urgency levels.');
-    expect(html).toContain('Clear urgency filters');
+    expect(html).not.toContain('Clear urgency filters');
   });
 });

@@ -107,6 +107,8 @@ describe('shared assignment controls', () => {
     }
     expect(form.indexOf('Priority')).toBeLessThan(form.indexOf('Task details'));
     expect(form.indexOf('Due date')).toBeLessThan(form.indexOf('Task details'));
+    expect(form).toContain('Repeat schedule');
+    expect(form).toContain('Every x days');
   });
 
   it('shows projects in list creation, including while a category is still hydrating', () => {

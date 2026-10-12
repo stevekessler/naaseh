@@ -16,6 +16,10 @@ export function taskEditPatch(input: TaskInput, task: Task): Partial<Task> {
     patch.dueAt = null;
     patch.dueTimeZone = null;
   }
+  if (!input.repeatUnit && task.repeatUnit) {
+    patch.repeatInterval = null;
+    patch.repeatUnit = null;
+  }
   return patch as Partial<Task>;
 }
 

@@ -64,6 +64,7 @@ export function TaskList({
   currentUserId,
   categories = [],
   projects = [],
+  relationshipTasks = tasks,
   visibleColumns,
 }: {
   tasks: Task[];
@@ -73,6 +74,7 @@ export function TaskList({
   currentUserId?: string;
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
+  relationshipTasks?: readonly Task[];
   visibleColumns: ReadonlySet<TaskColumnId>;
 }) {
   const [sort, setSort] = useState<TaskListSort>();
@@ -199,6 +201,7 @@ export function TaskList({
                 categoryName={categories.find((category) => category.id === categoryId)?.name}
                 categoryColor={categories.find((category) => category.id === categoryId)?.color}
                 projectName={project?.name}
+                parentTask={relationshipTasks.find((candidate) => candidate.id === task.parentId)}
                 {...(currentUserId ? { currentUserId } : {})}
               />
             );

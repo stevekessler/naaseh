@@ -90,6 +90,8 @@ const revisionFieldAllowlist = new Set<keyof Task>([
   'dueKind',
   'dueDate',
   'dueTimeZone',
+  'repeatInterval',
+  'repeatUnit',
   'assigneeId',
   'categoryId',
   'groupId',

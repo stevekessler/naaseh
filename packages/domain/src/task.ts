@@ -14,6 +14,8 @@ import { memoDocumentSchema, memoDocumentText } from './memo-document.js';
 export const visibilitySchema = z.enum(['public', 'private']);
 export const taskStatusSchema = z.enum(['open', 'completed', 'archived']);
 export const postItColorSchema = z.enum(['yellow', 'pink', 'blue', 'green', 'purple', 'orange']);
+export const taskRepeatUnitSchema = z.enum(['day', 'week', 'month']);
+export type TaskRepeatUnit = z.infer<typeof taskRepeatUnitSchema>;
 export type PostItColor = z.infer<typeof postItColorSchema>;
 const taskLinkSchema = z
   .string()
@@ -43,6 +45,8 @@ const taskObjectSchema = z
     dueKind: z.enum(['date', 'timed']).optional(),
     dueDate: dueCalendarDateSchema.optional(),
     dueTimeZone: z.string().min(1).optional(),
+    repeatInterval: z.number().int().min(1).max(999).optional(),
+    repeatUnit: taskRepeatUnitSchema.optional(),
     assigneeId: z.string().optional(),
     categoryId: z.string().optional(),
     projectId: ulidSchema.optional(),
@@ -79,6 +83,8 @@ function validateTaskInvariants(
     completionState?: string | undefined;
     completedAt?: string | undefined;
     completedBy?: string | undefined;
+    repeatInterval?: number | undefined;
+    repeatUnit?: TaskRepeatUnit | undefined;
   },
   context: z.RefinementCtx,
 ) {
@@ -97,6 +103,18 @@ function validateTaskInvariants(
       code: 'custom',
       path: ['dueKind'],
       message: 'Date-only and timed due values must use their matching fields.',
+    });
+  if (Boolean(task.repeatInterval) !== Boolean(task.repeatUnit))
+    context.addIssue({
+      code: 'custom',
+      path: ['repeatInterval'],
+      message: 'A repeat interval and unit must be provided together.',
+    });
+  if (task.repeatInterval && !task.dueKind)
+    context.addIssue({
+      code: 'custom',
+      path: ['repeatInterval'],
+      message: 'Repeating tasks require a due date.',
     });
   if (task.memoHidden && task.memo)
     context.addIssue({
@@ -251,6 +269,62 @@ export interface CompletionAttribution {
   projectName?: string;
   categoryId?: string;
   categoryName?: string;
+}
+
+function addCalendarMonths(value: Date, months: number) {
+  const day = value.getUTCDate();
+  value.setUTCDate(1);
+  value.setUTCMonth(value.getUTCMonth() + months);
+  const lastDay = new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  value.setUTCDate(Math.min(day, lastDay));
+}
+
+export function nextRecurringDue(task: Task) {
+  if (!task.repeatInterval || !task.repeatUnit || !task.dueKind)
+    throw new Error('Task does not have a repeating schedule.');
+  const advance = (value: Date) => {
+    if (task.repeatUnit === 'month') addCalendarMonths(value, task.repeatInterval!);
+    else
+      value.setUTCDate(
+        value.getUTCDate() + task.repeatInterval! * (task.repeatUnit === 'week' ? 7 : 1),
+      );
+    return value;
+  };
+  if (task.dueKind === 'date') {
+    const next = advance(new Date(`${task.dueDate}T00:00:00.000Z`));
+    return { dueKind: 'date' as const, dueDate: next.toISOString().slice(0, 10) };
+  }
+  const next = advance(new Date(task.dueAt!));
+  return { dueKind: 'timed' as const, dueAt: next.toISOString(), dueTimeZone: task.dueTimeZone };
+}
+
+export function completeRecurringTask(
+  task: Task,
+  actorId: string,
+  attribution: CompletionAttribution = {},
+  now = new Date(),
+): { task: Task; completionEvent: CompletionEvent } {
+  const completed = completeAndArchiveTask(task, actorId, attribution, now);
+  return {
+    completionEvent: completed.completionEvent,
+    task: taskSchema.parse({
+      ...completed.task,
+      ...nextRecurringDue(task),
+      status: 'open',
+      lifecycle: 'active',
+      completionState: 'open',
+      archiveReason: undefined,
+      archivedAt: undefined,
+      archivedBy: undefined,
+      completedAt: undefined,
+      completedBy: undefined,
+      currentCompletionEventId: undefined,
+      percentComplete: 0,
+      stackMembershipEpoch: now.toISOString(),
+    }),
+  };
 }
 
 export function archiveTask(task: Task, actorId: string, now = new Date()): Task {

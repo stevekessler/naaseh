@@ -65,6 +65,7 @@ export function TaskListPage({
         onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
         categories={categories}
         projects={projects}
+        relationshipTasks={parentTasks}
         visibleColumns={columns.visible}
         {...(currentUserId ? { currentUserId } : {})}
       />
@@ -98,7 +99,7 @@ export function TaskListPage({
                   update={(patch) => void onUpdate(selected, patch)}
                 />
                 <h3>Subtasks</h3>
-                <SubtaskTree parentId={selected.id} tasks={tasks} edit={onSelect} />
+                <SubtaskTree parentId={selected.id} tasks={parentTasks} edit={onSelect} />
                 <h3>Revision history</h3>
                 <RevisionLog revisions={revisions} />
               </section>

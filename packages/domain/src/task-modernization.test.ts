@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTask } from './task.js';
+import { completeRecurringTask, createTask } from './task.js';
 import { memoDocumentSchema, memoDocumentText, normalizeMemoDocument } from './memo-document.js';
 import { localDueToInstant } from './due-date.js';
 
@@ -34,6 +34,27 @@ describe('modern task memo and due values', () => {
         'u',
       ).dueAt,
     ).toBeTruthy();
+
+    const monthly = createTask(
+      {
+        label: 'Month end',
+        urgency: 'medium',
+        dueKind: 'date',
+        dueDate: '2027-01-31',
+        repeatInterval: 1,
+        repeatUnit: 'month',
+      },
+      'u',
+    );
+    const repeated = completeRecurringTask(monthly, 'u', {}, new Date('2027-01-31T12:00:00Z'));
+    expect(repeated.task).toMatchObject({
+      status: 'open',
+      lifecycle: 'active',
+      completionState: 'open',
+      percentComplete: 0,
+      dueDate: '2027-02-28',
+    });
+    expect(repeated.completionEvent.counted).toBe(true);
   });
 
   it('rejects nonexistent DST wall times and never rounds an off-grid value', () => {

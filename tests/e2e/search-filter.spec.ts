@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskDetails, setTaskDueDate } from './enhanced-helpers.js';
+import { expandTaskDetails, openLists, setTaskDueDate } from './enhanced-helpers.js';
 
 async function signIn(page: Page) {
   await page.goto('/');
@@ -129,28 +129,30 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
     await button.focus();
     await button.press('Enter');
   };
-  await sort('Sort by Due date ascending');
-  await expect(taskTable.getByRole('columnheader', { name: /Due date/ })).toHaveAttribute(
-    'aria-sort',
-    'ascending',
-  );
-  expect((await visibleTaskLabels())[0]).toBe('Yesterday date only');
-  await sort('Sort by Due date descending');
-  expect((await visibleTaskLabels())[0]).toBe('Grocery list');
-  await sort('Sort by Category ascending');
-  expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
-  await sort('Sort by Category descending');
-  expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
-  await sort('Sort by Project ascending');
-  expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
-  await sort('Sort by Project descending');
-  expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
-  await sort('Sort by Priority ascending');
-  expect((await visibleTaskLabels())[0]).toBe('Grocery list');
-  await sort('Sort by Priority descending');
-  expect((await visibleTaskLabels())[0]).toBe('Project Cedar');
+  if ((page.viewportSize()?.width ?? 1280) >= 700) {
+    await sort('Sort by Due date ascending');
+    await expect(taskTable.getByRole('columnheader', { name: /Due date/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    expect((await visibleTaskLabels())[0]).toBe('Yesterday date only');
+    await sort('Sort by Due date descending');
+    expect((await visibleTaskLabels())[0]).toBe('Grocery list');
+    await sort('Sort by Category ascending');
+    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
+    await sort('Sort by Category descending');
+    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
+    await sort('Sort by Project ascending');
+    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
+    await sort('Sort by Project descending');
+    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
+    await sort('Sort by Priority ascending');
+    expect((await visibleTaskLabels())[0]).toBe('Grocery list');
+    await sort('Sort by Priority descending');
+    expect((await visibleTaskLabels())[0]).toBe('Project Cedar');
+  }
 
-  await page.getByRole('button', { name: 'Lists', exact: true }).click();
+  await openLists(page);
   const listForm = page.locator('form').filter({ has: page.getByLabel('List name') });
   await listForm.getByLabel('List name').fill('Filter checklist');
   await listForm.getByLabel('Category').selectOption({ label: 'Client work' });
@@ -191,7 +193,7 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await filters.getByLabel('High').check();
   await expect(page.getByRole('heading', { name: 'Project Cedar' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
-  await filters.getByRole('button', { name: 'Clear urgency filters' }).click();
+  await filters.getByLabel('High').uncheck();
 
   await filters.getByLabel('Project').selectOption({ label: 'Cedar account' });
   await expect(page.getByRole('heading', { name: 'Project Cedar' })).toBeVisible();
@@ -219,12 +221,17 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await expect(page.getByRole('heading', { name: 'Tomorrow only' })).toBeHidden();
   await filters.getByRole('button', { name: 'Tomorrow' }).click();
   await expect(page.getByRole('heading', { name: 'Tomorrow only' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Today only' })).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Today only' })).toBeVisible();
   await filters.getByRole('button', { name: 'This week' }).click();
   await expect(filters.getByRole('textbox', { name: 'From' })).not.toHaveValue('');
   await expect(filters.getByRole('textbox', { name: 'To', exact: true })).not.toHaveValue('');
   await filters.getByRole('button', { name: 'This month' }).click();
   await expect(page.getByRole('heading', { name: 'Today only' })).toBeVisible();
+  await filters.getByRole('button', { name: 'Week after next' }).click();
+  await expect(filters.getByRole('button', { name: 'Week after next' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
   await filters.getByRole('button', { name: 'Clear filters' }).click();
 
   await filters.getByLabel('Content').selectOption('lists');

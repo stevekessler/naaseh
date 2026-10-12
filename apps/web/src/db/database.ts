@@ -13,6 +13,8 @@ export interface EncryptedTaskRecord {
   dueAt?: string;
   dueKind?: Task['dueKind'];
   dueDate?: string;
+  repeatInterval?: number;
+  repeatUnit?: Task['repeatUnit'];
   assigneeId?: string;
   categoryId?: string;
   projectId?: string;

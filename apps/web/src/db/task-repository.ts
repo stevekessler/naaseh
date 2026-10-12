@@ -3,6 +3,7 @@ import {
   createUlid,
   archiveTask,
   completeAndArchiveTask,
+  completeRecurringTask,
   restoreArchivedTask,
   transitionTask,
   matchesUrgencySet,
@@ -56,6 +57,8 @@ export async function taskToEncryptedRecord(task: Task) {
     ...(task.dueTimeZone ? { dueTimeZone: task.dueTimeZone } : {}),
     ...(task.dueKind ? { dueKind: task.dueKind } : {}),
     ...(task.dueDate ? { dueDate: task.dueDate } : {}),
+    ...(task.repeatInterval ? { repeatInterval: task.repeatInterval } : {}),
+    ...(task.repeatUnit ? { repeatUnit: task.repeatUnit } : {}),
     ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
     ...(task.categoryId ? { categoryId: task.categoryId } : {}),
     ...(task.projectId ? { projectId: task.projectId } : {}),
@@ -81,6 +84,8 @@ const safeRevisionFields = new Set<keyof Task>([
   'dueKind',
   'dueDate',
   'dueTimeZone',
+  'repeatInterval',
+  'repeatUnit',
   'assigneeId',
   'categoryId',
   'projectId',
@@ -255,7 +260,9 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
         }
       }
     }
-    const result = completeAndArchiveTask(task, actorId, attribution);
+    const result = task.repeatInterval
+      ? completeRecurringTask(task, actorId, attribution)
+      : completeAndArchiveTask(task, actorId, attribution);
     transitioned = result.task;
     completionEvent = result.completionEvent;
     operation = 'completeAndArchive';
