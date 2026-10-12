@@ -103,16 +103,25 @@ export function PostItNote({
       {visibleFields.has('category') && categoryName ? (
         <span className="postit-category">{categoryName}</span>
       ) : null}
-      {visibleFields.has('timer') && currentUserId ? (
-        <TaskTimerForTask ownerId={currentUserId} task={task} compact />
+      {(visibleFields.has('timer') && currentUserId) || edit ? (
+        <div className="postit-actions">
+          {visibleFields.has('timer') && currentUserId ? (
+            <TaskTimerForTask ownerId={currentUserId} task={task} compact />
+          ) : null}
+          {edit ? (
+            <button
+              type="button"
+              className="postit-edit"
+              aria-label={`Edit ${task.label}`}
+              onClick={edit}
+            >
+              Edit
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {visibleFields.has('link') && task.link ? (
         <CompactLink className="postit-link" href={task.link} />
-      ) : null}
-      {edit ? (
-        <button type="button" className="quiet" aria-label={`Edit ${task.label}`} onClick={edit}>
-          Edit
-        </button>
       ) : null}
       {visibleFields.has('memo') && task.memoHidden && (
         <span title="Private notes">🔒 Private notes</span>

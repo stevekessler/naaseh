@@ -210,41 +210,6 @@ export function TaskForm({
             if (next.dueKind === 'none') setRepeatUnit('');
           }}
         />
-        <fieldset className="repeat-schedule-field">
-          <legend>Repeat schedule</legend>
-          <label>
-            Repeat
-            <select
-              aria-label="Repeat schedule"
-              value={repeatUnit}
-              disabled={dueKind === 'none'}
-              onChange={(event) => setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '')}
-            >
-              <option value="">Does not repeat</option>
-              <option value="day">Every x days</option>
-              <option value="week">Every x weeks</option>
-              <option value="month">Every x months</option>
-            </select>
-          </label>
-          {repeatUnit ? (
-            <label>
-              Every
-              <input
-                aria-label="Repeat every"
-                type="number"
-                min="1"
-                max="999"
-                value={repeatInterval}
-                onChange={(event) => setRepeatInterval(event.currentTarget.valueAsNumber || 1)}
-              />
-              <span>
-                {repeatUnit}
-                {repeatInterval === 1 ? '' : 's'}
-              </span>
-            </label>
-          ) : null}
-          {dueKind === 'none' ? <small>Choose a due date to repeat this task.</small> : null}
-        </fieldset>
         <label>
           Category
           <CategoryPicker
@@ -285,6 +250,38 @@ export function TaskForm({
             }
           }}
         />
+        <fieldset className="repeat-schedule-field">
+          <legend>Repeat</legend>
+          <select
+            aria-label="Repeat schedule"
+            value={repeatUnit}
+            disabled={dueKind === 'none'}
+            onChange={(event) => setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '')}
+          >
+            <option value="">Does not repeat</option>
+            <option value="day">Every x days</option>
+            <option value="week">Every x weeks</option>
+            <option value="month">Every x months</option>
+          </select>
+          {repeatUnit ? (
+            <label>
+              Every
+              <input
+                aria-label="Repeat every"
+                type="number"
+                min="1"
+                max="999"
+                value={repeatInterval}
+                onChange={(event) => setRepeatInterval(event.currentTarget.valueAsNumber || 1)}
+              />
+              <span>
+                {repeatUnit}
+                {repeatInterval === 1 ? '' : 's'}
+              </span>
+            </label>
+          ) : null}
+          {dueKind === 'none' ? <small>Choose a due date to repeat this task.</small> : null}
+        </fieldset>
       </div>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
         <summary>Task details</summary>

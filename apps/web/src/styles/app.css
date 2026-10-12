@@ -2150,11 +2150,24 @@ main {
   font-size: 0.78rem;
   font-weight: 750;
 }
-.postit > .task-timer-trigger {
-  justify-self: start;
-  padding: 0.35rem 0.55rem;
+.postit-actions {
+  display: inline-flex;
+  align-items: stretch;
+  max-width: 100%;
 }
-.postit > .task-timer {
+.postit-actions > .task-timer-trigger,
+.postit-actions > .postit-edit {
+  padding: 0.35rem 0.55rem;
+  border-radius: 10px;
+}
+.postit-actions:has(> .task-timer-trigger):has(> .postit-edit) > .task-timer-trigger {
+  border-radius: 10px 0 0 10px;
+}
+.postit-actions:has(> .task-timer-trigger):has(> .postit-edit) > .postit-edit {
+  border-left: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 0 10px 10px 0;
+}
+.postit-actions > .task-timer {
   background: rgb(255 255 255 / 18%);
 }
 .postit p {

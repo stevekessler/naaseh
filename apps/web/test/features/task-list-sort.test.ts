@@ -46,6 +46,34 @@ const tasks = [
 ];
 
 describe('task list sorting', () => {
+  it('sorts timed tasks by their local due date before later date-only tasks', () => {
+    const mixedDueTasks = [
+      task('Later date only', {
+        dueKind: 'date',
+        dueDate: '2026-10-25',
+      }),
+      task('Today at 5 PM', {
+        dueKind: 'timed',
+        dueAt: '2026-10-12T23:00:00.000Z',
+        dueTimeZone: 'America/Denver',
+      }),
+      task('Today at 1 PM', {
+        dueKind: 'timed',
+        dueAt: '2026-10-12T19:00:00.000Z',
+        dueTimeZone: 'America/Denver',
+      }),
+    ];
+
+    expect(
+      sortTasksForTable(
+        mixedDueTasks,
+        { key: 'due', direction: 'ascending' },
+        categories,
+        projects,
+      ).map(({ label }) => label),
+    ).toEqual(['Today at 1 PM', 'Today at 5 PM', 'Later date only']);
+  });
+
   it.each([
     [
       'due',

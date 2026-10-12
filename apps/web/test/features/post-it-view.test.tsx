@@ -164,6 +164,22 @@ describe('post-it task view', () => {
     expect(html).toContain('Edit Editable note');
   });
 
+  it('groups the timer and edit actions on editable post-its', () => {
+    const task = createTask({ label: 'Timed note' }, 'steve');
+    const html = renderToStaticMarkup(
+      <PostItNote
+        task={task}
+        currentUserId="steve"
+        complete={() => undefined}
+        edit={() => undefined}
+      />,
+    );
+
+    expect(html).toMatch(
+      /class="postit-actions">[\s\S]*Start 10 min[\s\S]*aria-label="Edit Timed note"/u,
+    );
+  });
+
   it('shows only the selected post-it fields', () => {
     const task = createTask(
       {

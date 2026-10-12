@@ -62,7 +62,7 @@ export function sortTasksForTable(
   const value = (task: Task): string | number | undefined => {
     if (sort.key === 'due') {
       const date = taskDueDateKey(task);
-      return date ? `${date}${task.dueAt ?? ''}` : undefined;
+      return date ? `${date}|${task.dueAt ?? ''}` : undefined;
     }
     if (sort.key === 'project')
       return task.projectId ? projectNames.get(task.projectId) : undefined;
