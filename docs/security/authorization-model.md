@@ -22,10 +22,12 @@ security-epoch change, account disablement, expired cookie, or another browser r
 
 Every active user may see every non-private task. Group membership supports collaboration but does not narrow public visibility. Private tasks, their revisions, search terms, counts, reminders, feed changes, and cached copies are owner-only. APIs query the public or owner index directly and return not-found for unauthorized object IDs. A visibility change emits an atomic tombstone to the old audience and an upsert to the new audience. Offline clients purge revoked records on their next successful synchronization; until then, a previously authorized device may retain encrypted cached data.
 
-Groups are discoverable and explicitly self-joined. An active join is idempotent, while a
-revoked member cannot self-reactivate in v1. The owner role cannot be transferred or revoked;
-owners may change active non-owner memberships between manager and member. Group PINs are
-write-only request fields and neither PINs nor their verifiers appear in API responses or logs.
+Groups are discoverable and may be explicitly self-joined. An active join is idempotent, while a
+revoked member cannot self-reactivate. A group owner may add or restore an active user, revoke a
+non-owner membership, and archive the group; archiving revokes every active membership. The owner
+role cannot be transferred or revoked independently. Owners may change active non-owner
+memberships between manager and member. Group PINs are write-only request fields and neither PINs
+nor their verifiers appear in API responses or logs.
 
 ## Lists, directory items, and attachments
 

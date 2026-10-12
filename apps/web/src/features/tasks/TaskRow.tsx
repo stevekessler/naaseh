@@ -19,6 +19,7 @@ export function TaskRow({
   categoryName,
   categoryColor,
   projectName,
+  groupName,
   parentTask,
 }: {
   task: Task;
@@ -29,6 +30,7 @@ export function TaskRow({
   categoryName?: string | undefined;
   categoryColor?: string | undefined;
   projectName?: string | undefined;
+  groupName?: string | undefined;
   parentTask?: Task | undefined;
 }) {
   const feedback = useCompletionFeedback();
@@ -110,6 +112,7 @@ export function TaskRow({
         )}
       </td>
       <td className="task-project-cell">{projectName || <span aria-hidden="true">—</span>}</td>
+      <td className="task-group-cell">{groupName || <span aria-hidden="true">—</span>}</td>
       <td className="task-memo-cell">
         <div className="task-row-memo">
           {task.memoHidden ? (

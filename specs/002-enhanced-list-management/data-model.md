@@ -130,6 +130,8 @@ requires existing decryption authority.
 | uploaderId | User ID | Immutable |
 | status | AttachmentStatus | See transitions |
 | failureCode | safe enum or null | No scanner internals/content |
+| purgeAfter | timestamp or null | Thirty days after Task completion, archive, or deletion |
+| retentionReason | completed / archived / deleted or null | Restore clears non-deletion retention before purge |
 | createdAt / updatedAt | timestamp | Server-canonical |
 | version | integer | Optimistic version |
 
@@ -265,4 +267,3 @@ Search document identities:
 
 List-item hits are grouped by parent. Directory changes reindex linked items. Authorization
 tombstones purge entity stores and search documents atomically before cursor advancement.
-

@@ -21,15 +21,32 @@ test('@enhanced-lists encrypted attachment upload enters scanning and respects o
     updatedAt: '2026-01-01T00:00:00.000Z',
     version: 2,
   };
+  let uploadCount = 0;
+  const initiated = new Map<string, typeof attachment>();
   await page.route(/\/api\/v1\/attachments\/uploads$/, async (route) => {
-    const body = route.request().postDataJSON() as { parentId: string };
-    attachment.parentId = body.parentId;
+    const body = route.request().postDataJSON() as {
+      parentId: string;
+      originalFilename: string;
+      mediaType: string;
+      sizeBytes: number;
+    };
+    uploadCount += 1;
+    const next = {
+      ...attachment,
+      id: `01J0000000000000000000000${uploadCount}`,
+      blobId: `01J0000000000000000000001${uploadCount}`,
+      parentId: body.parentId,
+      originalFilename: body.originalFilename,
+      mediaType: body.mediaType,
+      sizeBytes: body.sizeBytes,
+    };
+    initiated.set(next.id, next);
     await route.fulfill({
       status: 201,
       contentType: 'application/json',
       body: JSON.stringify({
-        attachment: { ...attachment, status: 'pending_upload', version: 1 },
-        uploadSessionId: 'session',
+        attachment: { ...next, status: 'pending_upload', version: 1 },
+        uploadSessionId: `session-${uploadCount}`,
         uploadUrl: '/__test/upload',
         requiredHeaders: {},
       }),
@@ -45,21 +62,29 @@ test('@enhanced-lists encrypted attachment upload enters scanning and respects o
       },
     }),
   );
-  await page.route(/\/api\/v1\/attachments\/[^/]+\/complete$/, async (route) =>
-    route.fulfill({
+  await page.route(/\/api\/v1\/attachments\/[^/]+\/complete$/, async (route) => {
+    const id =
+      route
+        .request()
+        .url()
+        .match(/attachments\/([^/]+)\/complete/)?.[1] ?? '';
+    await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(attachment),
-    }),
-  );
+      body: JSON.stringify(initiated.get(id)),
+    });
+  });
   await signIn(page);
   const list = await createListWithItem(page, 'Receipts', 'Hardware');
   const panel = list.getByRole('heading', { name: 'Attachments' }).locator('..');
-  await panel
-    .getByLabel(/Attach a file/)
-    .setInputFiles({ name: 'receipt.txt', mimeType: 'text/plain', buffer: Buffer.from('receipt') });
+  await panel.getByLabel(/Attach a file/).setInputFiles([
+    { name: 'receipt.txt', mimeType: 'text/plain', buffer: Buffer.from('receipt') },
+    { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') },
+  ]);
   await expect(panel.getByText(/receipt\.txt — scanning/)).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Remove' })).toBeDisabled();
+  await expect(panel.getByText(/notes\.txt — scanning/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Remove' })).toHaveCount(2);
+  await expect(panel.getByRole('button', { name: 'Remove' }).first()).toBeDisabled();
   await context.setOffline(true);
   await expect(panel.getByLabel(/Attach a file/)).toBeDisabled();
   await expect(panel.getByText(/Connect to the internet/)).toBeVisible();

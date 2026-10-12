@@ -1595,6 +1595,7 @@ main {
 }
 .task-list.hide-project :is(.task-project-column, .task-project-cell),
 .task-list.hide-category :is(.task-category-column, .task-category-cell),
+.task-list.hide-group :is(.task-group-column, .task-group-cell),
 .task-list.hide-memo :is(.task-memo-column, .task-memo-cell),
 .task-list.hide-link :is(.task-link-column, .task-link-cell),
 .task-list.hide-due :is(.task-due-column, .task-due-cell),
@@ -1607,17 +1608,18 @@ main {
   width: 4%;
 }
 .task-list .task-name-column {
-  width: 18%;
+  width: 16%;
 }
 .task-list .task-project-column,
-.task-list .task-category-column {
-  width: 10%;
+.task-list .task-category-column,
+.task-list .task-group-column {
+  width: 8%;
 }
 .task-list .task-memo-column {
-  width: 13%;
+  width: 12%;
 }
 .task-list .task-link-column {
-  width: 11%;
+  width: 10%;
 }
 .task-list .task-due-column {
   width: 9%;
@@ -2150,6 +2152,9 @@ main {
   font-size: 0.78rem;
   font-weight: 750;
 }
+.postit-group {
+  font-size: 0.8rem;
+}
 .postit-actions {
   display: inline-flex;
   align-items: stretch;
@@ -2409,7 +2414,7 @@ dialog input {
   }
   .task-list .task-status-cell {
     grid-column: 1;
-    grid-row: 1 / 6;
+    grid-row: 1 / 7;
   }
   .task-list .task-name-cell {
     grid-column: 2;
@@ -2417,11 +2422,11 @@ dialog input {
   }
   .task-list .task-due-cell {
     grid-column: 2;
-    grid-row: 4;
+    grid-row: 5;
   }
   .task-list .task-priority-cell {
     grid-column: 3;
-    grid-row: 4;
+    grid-row: 5;
   }
   .task-list .task-assignee-cell {
     grid-column: 3;
@@ -2429,7 +2434,7 @@ dialog input {
   }
   .task-list .task-actions-cell {
     grid-column: 2 / 4;
-    grid-row: 5;
+    grid-row: 6;
   }
   .task-row-actions-menu,
   .task-row-actions-menu > div,
@@ -2448,7 +2453,8 @@ dialog input {
     scroll-margin-bottom: calc(1rem + var(--safe-bottom));
   }
   .task-list .task-project-cell,
-  .task-list .task-category-cell {
+  .task-list .task-category-cell,
+  .task-list .task-group-cell {
     grid-row: 2;
     color: #526879;
     font-size: 0.78rem;
@@ -2459,9 +2465,13 @@ dialog input {
   .task-list .task-category-cell {
     grid-column: 3;
   }
+  .task-list .task-group-cell {
+    grid-column: 2 / 4;
+    grid-row: 3;
+  }
   .task-list .task-memo-cell,
   .task-list .task-link-cell {
-    grid-row: 3;
+    grid-row: 4;
   }
   .task-list .task-memo-cell {
     grid-column: 2;

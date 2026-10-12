@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 export const taskColumns = [
   { id: 'category', label: 'Category' },
   { id: 'project', label: 'Project' },
+  { id: 'group', label: 'Group' },
   { id: 'memo', label: 'Memo' },
   { id: 'link', label: 'Link' },
   { id: 'due', label: 'Due date' },

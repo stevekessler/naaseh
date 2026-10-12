@@ -126,7 +126,7 @@ export const updateGroupRecord = (current: GroupRecord, next: GroupRecord) =>
             TableName: tableName,
             Item: {
               ...groupKey(next.id),
-              GSI1PK: 'GROUP#ACTIVE',
+              GSI1PK: `GROUP#${next.status.toUpperCase()}`,
               GSI1SK: `${next.name.toLocaleLowerCase()}#${next.id}`,
               data: next,
             },

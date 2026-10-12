@@ -158,6 +158,8 @@ describe('foundation infrastructure', () => {
       'POST /api/v1/tasks',
       'GET /api/v1/groups',
       'POST /api/v1/groups/{groupId}/join',
+      'POST /api/v1/groups/{groupId}/members',
+      'DELETE /api/v1/groups/{groupId}',
       'DELETE /api/v1/groups/{groupId}/members/{userId}',
       'POST /api/v1/tasks/{taskId}/hidden-memo/recovery',
       'GET /api/v1/categories',

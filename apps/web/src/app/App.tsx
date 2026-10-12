@@ -57,8 +57,12 @@ import { ViewSwitcher } from '../features/tasks/ViewSwitcher.js';
 import { loadView, saveView } from '../db/preferences-repository.js';
 import { listLocalGroups } from '../db/group-repository.js';
 import {
+  addRemoteGroupMember,
   createRemoteGroup,
+  deleteRemoteGroup,
   joinRemoteGroup,
+  readRemoteGroup,
+  removeRemoteGroupMember,
   renameRemoteGroup,
   refreshGroups,
 } from '../features/groups/group-client.js';
@@ -341,6 +345,13 @@ export function App() {
   const categories = useLiveQuery(() => listCategories(), []) ?? [];
   const projects = useLiveQuery(() => listLocalProjects(), []) ?? [];
   const groups = useLiveQuery(() => listLocalGroups(), []) ?? [];
+  const joinedGroupOptions = useMemo(
+    () =>
+      groups
+        .filter((group) => group.status === 'active' && group.joined)
+        .map((group) => ({ id: group.id, label: group.name })),
+    [groups],
+  );
   const lists = useLiveQuery(() => listLocalLists(), []) ?? [];
   const archive =
     useLiveQuery(() => listLocalArchive('', filters.urgencies), [filters.urgencies]) ?? [];
@@ -781,11 +792,11 @@ export function App() {
     };
   }, []);
   useEffect(() => {
-    if (section === 'groups' && session && navigator.onLine)
+    if (session && online)
       void refreshGroups(session.csrfToken).catch((error) =>
         setSyncError(error instanceof Error ? error.message : 'Unable to refresh groups.'),
       );
-  }, [section, session]);
+  }, [online, session]);
   useEffect(() => {
     if (session?.role !== 'admin') {
       setAdminUsers([]);
@@ -1219,6 +1230,7 @@ export function App() {
               categories={categories}
               assignees={assignees}
               parentTasks={tasks}
+              groupOptions={joinedGroupOptions}
               defaultAssigneeId={session.userId}
               workloadTree={workloadTree}
               createTask={addTask}
@@ -1441,6 +1453,7 @@ export function App() {
             <GroupPage
               groups={groups}
               online={online}
+              users={directoryUsers}
               create={async (name, pin) => {
                 await createRemoteGroup(name, pin, session.csrfToken);
               }}
@@ -1449,6 +1462,16 @@ export function App() {
               }}
               join={async (group, pin) => {
                 await joinRemoteGroup(group, pin, session.csrfToken);
+              }}
+              read={async (group) => (await readRemoteGroup(group, session.csrfToken)).members}
+              addMember={async (group, userId) => {
+                await addRemoteGroupMember(group, userId, session.csrfToken);
+              }}
+              removeMember={async (group, userId) => {
+                await removeRemoteGroupMember(group, userId, session.csrfToken);
+              }}
+              deleteGroup={async (group) => {
+                await deleteRemoteGroup(group, session.csrfToken);
               }}
             />
           ) : section === 'projects' ? (
@@ -1524,7 +1547,7 @@ export function App() {
               items={listItems}
               {...(selectedListId ? { selectedId: selectedListId } : {})}
               openList={(list) => navigate({ section: 'lists', listId: list.id })}
-              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              groups={joinedGroupOptions.map((group) => ({ id: group.id, name: group.label }))}
               categories={categories}
               projects={projects}
               createList={async (name, projectId, urgency, categoryId) => {
@@ -1585,6 +1608,7 @@ export function App() {
                 projects={projects}
                 assignees={assignees}
                 parentTasks={tasks}
+                groupOptions={joinedGroupOptions}
                 defaultAssigneeId={session.userId}
               />
               <div className="view-toggle" role="group" aria-label="Task browsing">
@@ -1644,6 +1668,8 @@ export function App() {
                   projects={projects}
                   assignees={assignees}
                   parentTasks={tasks}
+                  groupOptions={joinedGroupOptions}
+                  groups={groups.map((group) => ({ id: group.id, name: group.name }))}
                   defaultAssigneeId={session.userId}
                   currentUserId={session.userId}
                   tasks={visible}
@@ -1674,6 +1700,8 @@ export function App() {
                 <PostItBoard
                   tasks={visible}
                   parentTasks={tasks}
+                  groupOptions={joinedGroupOptions}
+                  groups={groups.map((group) => ({ id: group.id, name: group.name }))}
                   categories={categories}
                   projects={projects}
                   assignees={assignees}

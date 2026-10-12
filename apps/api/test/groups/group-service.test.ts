@@ -3,10 +3,12 @@ import type { GroupMembership, GroupRecord } from '@naaseh/domain';
 
 const repository = vi.hoisted(() => ({
   getMembership: vi.fn(),
+  listMemberships: vi.fn(),
   putGroupWithOwner: vi.fn(),
   putMembership: vi.fn(),
   revokeMembership: vi.fn(),
   updateMembership: vi.fn(),
+  updateGroupRecord: vi.fn(),
 }));
 const password = vi.hoisted(() => ({
   hashPassword: vi.fn(async () => '$argon2id$safe'),
@@ -17,7 +19,9 @@ vi.mock('../../src/groups/group-repository.js', () => repository);
 vi.mock('../../src/auth/password.js', () => password);
 
 import {
+  addGroupMember,
   changeGroupMemberRole,
+  deleteGroup,
   GroupPolicyError,
   joinGroup,
   removeGroupMember,
@@ -77,5 +81,25 @@ describe('group membership policy', () => {
     await expect(
       changeGroupMemberRole(group, 'different-user', member.userId, 'member'),
     ).rejects.toMatchObject({ reason: 'forbidden_membership_change' });
+
+    repository.getMembership.mockResolvedValue(undefined);
+    await expect(addGroupMember(group, 'different-user', 'new-member')).rejects.toMatchObject({
+      reason: 'forbidden_membership_change',
+    });
+    const added = await addGroupMember(group, group.ownerId, 'new-member');
+    expect(added).toMatchObject({ userId: 'new-member', joinedBy: group.ownerId, role: 'member' });
+    expect(repository.putMembership).toHaveBeenCalledWith(added);
+
+    repository.listMemberships.mockResolvedValue([
+      member,
+      { ...member, userId: group.ownerId, role: 'owner' },
+    ]);
+    await expect(deleteGroup(group, 'different-user')).rejects.toMatchObject({
+      reason: 'forbidden_membership_change',
+    });
+    const deleted = await deleteGroup(group, group.ownerId);
+    expect(deleted).toMatchObject({ status: 'archived', version: 2 });
+    expect(repository.updateGroupRecord).toHaveBeenCalledWith(group, deleted);
+    expect(repository.revokeMembership).toHaveBeenCalledTimes(2);
   });
 });

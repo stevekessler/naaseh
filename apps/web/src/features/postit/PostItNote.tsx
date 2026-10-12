@@ -16,6 +16,7 @@ export function PostItNote({
   animating = false,
   assigneeName,
   categoryName,
+  groupName,
   currentUserId,
   complete,
   edit,
@@ -25,6 +26,7 @@ export function PostItNote({
     'priority',
     'assignee',
     'category',
+    'group',
     'timer',
     'link',
     'memo',
@@ -35,6 +37,7 @@ export function PostItNote({
   animating?: boolean;
   assigneeName?: string | undefined;
   categoryName?: string | undefined;
+  groupName?: string | undefined;
   currentUserId?: string | undefined;
   complete: () => void;
   edit?: () => void;
@@ -102,6 +105,11 @@ export function PostItNote({
       ) : null}
       {visibleFields.has('category') && categoryName ? (
         <span className="postit-category">{categoryName}</span>
+      ) : null}
+      {visibleFields.has('group') && groupName ? (
+        <span className="postit-group">
+          <strong>Group:</strong> {groupName}
+        </span>
       ) : null}
       {(visibleFields.has('timer') && currentUserId) || edit ? (
         <div className="postit-actions">

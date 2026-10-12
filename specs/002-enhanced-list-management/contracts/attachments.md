@@ -59,9 +59,12 @@ window is accepted instead of proxying bytes through Lambda.
 
 ## Delete and Reconcile
 
-Delete marks Attachment deleted and releases BlobReference transactionally. When the last
-reference disappears, the blob enters deleting and receives an S3 delete marker. Noncurrent
-versions remain through the 35-day recovery boundary and backup policy.
+Removing an individual attachment marks it deleted and releases BlobReference transactionally.
+Completing, archiving, or permanently deleting a Task starts a 30-day retention window for its
+attachments. Restoring the Task before that deadline cancels completion/archive retention. After
+the deadline, reconciliation marks each retained Attachment deleted, releases its BlobReference,
+and deletes the exact S3 version when the last reference disappears. A permanently deleted Task
+cannot cancel its retention deadline.
 
 Scheduled reconciliation is idempotent:
 
@@ -98,4 +101,3 @@ content type supplied by user, checksum, object key/version, capability, tags, o
 Metrics/alarms cover threat findings, scan failures/latency, stale sessions, unauthorized
 attempts, missing objects, orphan objects, reconciliation failure, KMS/S3 denial, upload bytes,
 download bytes, and GuardDuty scanned bytes/object counts.
-

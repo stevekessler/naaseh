@@ -29,6 +29,7 @@ export function TaskEditDialog({
   projects,
   assignees,
   parentTasks,
+  groupOptions = [],
   save,
   close,
   primaryContent,
@@ -39,6 +40,7 @@ export function TaskEditDialog({
   projects: readonly Project[];
   assignees: readonly AssigneeOption[];
   parentTasks: readonly Task[];
+  groupOptions?: readonly { id: string; label: string; context?: string }[];
   save: (patch: Partial<Task>) => Promise<void>;
   close: () => void;
   primaryContent?: ReactNode;
@@ -105,6 +107,7 @@ export function TaskEditDialog({
             projects={projects}
             assignees={assignees}
             parentTasks={parentTasks}
+            groupOptions={groupOptions}
             submitLabel={busy ? 'Saving…' : 'Save changes'}
             cancel={requestClose}
             save={async (input: TaskInput) => {

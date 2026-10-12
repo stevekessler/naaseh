@@ -484,6 +484,8 @@ components:
         uploaderId: {type: string}
         status: {type: string, enum: [pending_upload, scanning, available, scan_failed, rejected, expired, cancelled, deleted]}
         failureCode: {type: string}
+        purgeAfter: {type: string, format: date-time}
+        retentionReason: {type: string, enum: [completed, archived, deleted]}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
         version: {type: integer, minimum: 1}
@@ -524,4 +526,3 @@ components:
         errorCode: {type: string}
         createdAt: {type: string, format: date-time}
         updatedAt: {type: string, format: date-time}
-

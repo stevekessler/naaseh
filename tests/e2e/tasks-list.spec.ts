@@ -47,6 +47,7 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   ).toHaveAttribute('href', 'https://memo.example/estimate');
   await expect(taskTable.getByRole('columnheader', { name: 'Priority' })).toBeVisible();
   await expect(taskTable.getByRole('columnheader', { name: 'Assignee' })).toBeVisible();
+  await expect(taskTable.getByRole('columnheader', { name: 'Group' })).toBeVisible();
   await expect(taskTable.locator('.task-assignee-cell .user-first-name')).toHaveText('Steve');
   await expect(taskTable.locator('tbody .task-assignee-cell')).not.toContainText('Kessler');
   if (test.info().project.name === 'iphone') {
@@ -66,7 +67,7 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   const columnSettings = page.getByRole('group', { name: 'Choose visible columns' });
   await expect(columnSettings).toBeVisible();
   const columnLabels = await columnSettings.locator('.task-column-options label').allTextContents();
-  expect(columnLabels.slice(0, 2)).toEqual(['Category', 'Project']);
+  expect(columnLabels.slice(0, 3)).toEqual(['Category', 'Project', 'Group']);
   await columnSettings.getByRole('button', { name: 'Close column settings' }).click();
 
   await taskTable

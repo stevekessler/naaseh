@@ -316,10 +316,11 @@ category, and verify authentication, default assignment, and category color beha
 - **FR-013**: The system MUST never silently discard conflicting changes and MUST preserve
   enough revision information to recover or resolve each version.
 - **FR-014**: Users MUST be able to create groups and set an optional group PIN. When set,
-  the PIN MUST be required for a non-member to join the group, but MUST NOT hide non-private
-  tasks or authorize group-administration actions. V1 groups MUST be discoverable self-join
-  groups with no targeted invitation workflow; an explicit successful join is membership
-  acceptance, and the group owner MUST be able to revoke membership.
+  the PIN MUST be required for a non-member to self-join the group, but MUST NOT hide non-private
+  tasks or authorize group-administration actions. Groups MUST be discoverable and support
+  explicit self-join. The group owner MUST be able to add an active user directly, revoke a
+  non-owner membership, and delete the group. Group deletion MUST archive the group, remove it
+  from active assignment choices, and revoke all active memberships.
 - **FR-015**: Group PINs MUST be stored only as one-way hashes with a unique random salt,
   MUST never be logged, and MUST be subject to rate limiting and access auditing.
 - **FR-016**: Every active user MUST be able to discover and view every non-private task,

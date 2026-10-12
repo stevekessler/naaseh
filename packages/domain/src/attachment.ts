@@ -26,6 +26,8 @@ export const attachmentSchema = z
     checksumSha256: z.string().regex(/^(?:[a-f0-9]{64}|[A-Za-z0-9+/]{43}=)$/i),
     uploaderId: z.string().min(1),
     status: attachmentStatusSchema,
+    purgeAfter: z.string().datetime().optional(),
+    retentionReason: z.enum(['completed', 'archived', 'deleted']).optional(),
     failureCode: z
       .enum(['malware', 'scan_error', 'policy', 'missing_object', 'checksum_mismatch'])
       .optional(),
