@@ -1,5 +1,6 @@
 import type { Filters } from '../../search/task-search.js';
 import { parseUrgencySet, serializeUrgencySet } from '@naaseh/domain';
+import type { DatePreset } from '../../search/task-filters.js';
 const allowed = [
   'from',
   'to',
@@ -9,10 +10,24 @@ const allowed = [
   'contentType',
   'lifecycle',
   'progress',
+  'datePresets',
 ] as const;
+const datePresets: readonly DatePreset[] = [
+  'today',
+  'tomorrow',
+  'week',
+  'nextWeek',
+  'nextNextWeek',
+  'month',
+];
 export function safeSearchState(_query: string, filters: Filters) {
   const params = new URLSearchParams();
-  for (const key of allowed) if (filters[key]) params.set(key, filters[key]);
+  for (const key of allowed) {
+    const current = filters[key];
+    if (Array.isArray(current)) {
+      if (current.length) params.set(key, current.join(','));
+    } else if (current) params.set(key, current);
+  }
   const urgencies = serializeUrgencySet(filters.urgencies);
   if (urgencies) params.set('urgencies', urgencies);
   return params.toString();
@@ -45,5 +60,8 @@ export function filtersFromSearch(search: string): Filters {
           ? 'todos'
           : 'all',
     urgencies: parseUrgencySet(params.get('urgencies')),
+    datePresets: (params.get('datePresets') ?? '')
+      .split(',')
+      .filter((preset): preset is DatePreset => datePresets.includes(preset as DatePreset)),
   };
 }

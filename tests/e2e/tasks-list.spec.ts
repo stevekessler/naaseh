@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { expandTaskDetails, openTaskSection, setTaskDueDate, signIn } from './enhanced-helpers.js';
+import { expectReachableInUsableViewport } from './responsive-assertions.js';
 
 test('creates, edits, completes, and inspects a responsive task with revisions and reminders', async ({
   page,
@@ -80,7 +81,9 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   ).toBeVisible();
 
   await taskTable.getByRole('button', { name: 'Actions for Call the contractor' }).click();
-  await expect(taskTable.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
+  const editAction = taskTable.getByRole('button', { name: 'Edit', exact: true });
+  await expect(editAction).toBeVisible();
+  await expectReachableInUsableViewport(editAction);
   await page.getByText('1 task', { exact: true }).click();
   await expect(
     taskTable
@@ -134,7 +137,9 @@ test('shows nested subtasks in task details', async ({ page }) => {
   await form.getByRole('combobox', { name: 'Parent task' }).fill('Parent task');
   await page.getByRole('option', { name: 'Parent task', exact: true }).click();
   await form.getByRole('button', { name: 'Add task' }).click();
-  await page.getByRole('button', { name: 'Parent task', exact: true }).click();
+  const childRow = page.getByRole('row').filter({ hasText: 'Child task' });
+  await expect(childRow.getByText('Subtask of')).toBeVisible();
+  await childRow.getByRole('button', { name: 'Open parent task Parent task' }).click();
   await expect(
     page.getByLabel('Task details').getByRole('listitem').filter({ hasText: 'Child task' }),
   ).toBeVisible();

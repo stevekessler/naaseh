@@ -36,20 +36,10 @@ export function PriorityFilter({
         ))}
       </div>
       {value.length ? (
-        <>
-          <span className="visually-hidden">
-            {value.length} urgency level{value.length === 1 ? '' : 's'} selected:{' '}
-            {value.map((priority) => urgencyLabels[priority]).join(', ')}
-          </span>
-          <button
-            type="button"
-            className="quiet priority-clear"
-            aria-label="Clear urgency filters"
-            onClick={() => change([])}
-          >
-            Clear
-          </button>
-        </>
+        <span className="visually-hidden">
+          {value.length} urgency level{value.length === 1 ? '' : 's'} selected:{' '}
+          {value.map((priority) => urgencyLabels[priority]).join(', ')}
+        </span>
       ) : null}
       {value.length > 0 && resultCount === 0 ? (
         <p role="status">No work matches the selected urgency levels.</p>

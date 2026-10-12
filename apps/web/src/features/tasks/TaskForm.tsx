@@ -11,6 +11,7 @@ import {
   type PostItColor,
   type Task,
   type TaskInput,
+  type TaskRepeatUnit,
   type Urgency,
 } from '@naaseh/domain';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
@@ -118,6 +119,8 @@ export function TaskForm({
   );
   const [dueDate, setDueDate] = useState(task?.dueDate ?? initialTimed?.localDate ?? '');
   const [dueTime, setDueTime] = useState(initialTimed?.localTime ?? '10:00');
+  const [repeatInterval, setRepeatInterval] = useState(task?.repeatInterval ?? 1);
+  const [repeatUnit, setRepeatUnit] = useState<TaskRepeatUnit | ''>(task?.repeatUnit ?? '');
   const [parentId, setParentId] = useState(task?.parentId ?? '');
   const [groupId, setGroupId] = useState(task?.groupId ?? '');
   const [postItColor, setPostItColor] = useState<PostItColor | ''>(task?.postItColor ?? '');
@@ -147,6 +150,7 @@ export function TaskForm({
         ...(dueKind === 'timed' && dueDate && dueTime
           ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
           : {}),
+        ...(dueKind !== 'none' && repeatUnit ? { repeatInterval, repeatUnit } : {}),
         assigneeId: canonicalAssigneeId(assignees, assigneeId) || undefined,
         ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
         ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
@@ -174,6 +178,8 @@ export function TaskForm({
       setDueKind('none');
       setDueDate('');
       setDueTime('10:00');
+      setRepeatInterval(1);
+      setRepeatUnit('');
       setParentId('');
       setGroupId('');
       setPostItColor('');
@@ -201,8 +207,44 @@ export function TaskForm({
             setDueKind(next.dueKind);
             setDueDate(next.dueDate);
             setDueTime(next.dueTime);
+            if (next.dueKind === 'none') setRepeatUnit('');
           }}
         />
+        <fieldset className="repeat-schedule-field">
+          <legend>Repeat schedule</legend>
+          <label>
+            Repeat
+            <select
+              aria-label="Repeat schedule"
+              value={repeatUnit}
+              disabled={dueKind === 'none'}
+              onChange={(event) => setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '')}
+            >
+              <option value="">Does not repeat</option>
+              <option value="day">Every x days</option>
+              <option value="week">Every x weeks</option>
+              <option value="month">Every x months</option>
+            </select>
+          </label>
+          {repeatUnit ? (
+            <label>
+              Every
+              <input
+                aria-label="Repeat every"
+                type="number"
+                min="1"
+                max="999"
+                value={repeatInterval}
+                onChange={(event) => setRepeatInterval(event.currentTarget.valueAsNumber || 1)}
+              />
+              <span>
+                {repeatUnit}
+                {repeatInterval === 1 ? '' : 's'}
+              </span>
+            </label>
+          ) : null}
+          {dueKind === 'none' ? <small>Choose a due date to repeat this task.</small> : null}
+        </fieldset>
         <label>
           Category
           <CategoryPicker

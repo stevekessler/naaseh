@@ -19,6 +19,7 @@ export function TaskRow({
   categoryName,
   categoryColor,
   projectName,
+  parentTask,
 }: {
   task: Task;
   onToggle: (task: Task) => void;
@@ -28,6 +29,7 @@ export function TaskRow({
   categoryName?: string | undefined;
   categoryColor?: string | undefined;
   projectName?: string | undefined;
+  parentTask?: Task | undefined;
 }) {
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
@@ -76,6 +78,19 @@ export function TaskRow({
           label={task.label}
           onChange={(percent) => onProgressChange(task, percent)}
         />
+        {parentTask ? (
+          <p className="task-parent-label">
+            <span>Subtask of </span>
+            <button
+              type="button"
+              className="task-parent-link"
+              aria-label={`Open parent task ${parentTask.label}`}
+              onClick={() => onSelect(parentTask)}
+            >
+              {parentTask.label}
+            </button>
+          </p>
+        ) : null}
       </th>
       <td className="task-category-cell">
         {categoryName ? (
@@ -115,6 +130,12 @@ export function TaskRow({
       </td>
       <td className="task-due-cell">
         {dueLabel ? <span>{dueLabel}</span> : <span aria-hidden="true">—</span>}
+        {task.repeatInterval && task.repeatUnit ? (
+          <small>
+            Repeats every {task.repeatInterval} {task.repeatUnit}
+            {task.repeatInterval === 1 ? '' : 's'}
+          </small>
+        ) : null}
         <ReminderStatus task={task} />
       </td>
       <td className="task-priority-cell">
@@ -124,7 +145,17 @@ export function TaskRow({
         <UserAvatar userId={task.assigneeId ?? task.ownerId} showName nameFormat="first" />
       </td>
       <td className="task-actions-cell">
-        <details ref={actions} className="task-row-actions-menu">
+        <details
+          ref={actions}
+          className="task-row-actions-menu"
+          onToggle={(event) => {
+            if (!event.currentTarget.open) return;
+            const details = event.currentTarget;
+            requestAnimationFrame(() =>
+              details.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+            );
+          }}
+        >
           <summary role="button" aria-label={`Actions for ${task.label}`}>
             Actions
           </summary>

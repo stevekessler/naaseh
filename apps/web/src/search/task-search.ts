@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch';
 import { matchesUrgencySet, type Task, type Urgency } from '@naaseh/domain';
-import { taskDueDateKey } from './task-filters.js';
+import { matchesDatePresets, taskDueDateKey, type DatePreset } from './task-filters.js';
 export interface Filters {
   query: string;
   assigneeId: string;
@@ -12,6 +12,7 @@ export interface Filters {
   lifecycle?: 'active' | 'archive' | 'all';
   urgencies: Urgency[];
   progress?: 'all' | 'not-started' | 'in-progress' | 'complete';
+  datePresets?: DatePreset[];
 }
 export function matchesProgressFilter(
   percentComplete: number | undefined,
@@ -65,6 +66,7 @@ export function filterTasks(tasks: Task[], filters: Filters): Task[] {
           : task.projectId === filters.projectId)) &&
       (!filters.from || Boolean(dueDate && dueDate >= filters.from)) &&
       (!filters.to || Boolean(dueDate && dueDate <= filters.to)) &&
+      matchesDatePresets(dueDate, filters.datePresets) &&
       matchesProgressFilter(task.percentComplete, filters.progress) &&
       matchesUrgencySet(task.urgency, filters.urgencies)
     );

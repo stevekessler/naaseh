@@ -3,6 +3,7 @@ import {
   archiveTask,
   ulidSchema,
   completeAndArchiveTask,
+  completeRecurringTask,
   restoreArchivedTask,
   type Task,
 } from '@naaseh/domain';
@@ -48,7 +49,9 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
           categoryName: category.name,
         };
     }
-    const result = completeAndArchiveTask(completionSource, request.actorId, attribution, now);
+    const result = completionSource.repeatInterval
+      ? completeRecurringTask(completionSource, request.actorId, attribution, now)
+      : completeAndArchiveTask(completionSource, request.actorId, attribution, now);
     if (request.completionEventId) {
       const id = ulidSchema.parse(request.completionEventId);
       if (await findCompletionEvent(id))
@@ -70,7 +73,12 @@ export async function changeTaskLifecycle(request: TaskLifecycleRequest): Promis
       result.completionEvent,
       request.sourceClientId,
     );
-    notifyStackMembershipWorkChange('task', current, result.task, 'archive');
+    notifyStackMembershipWorkChange(
+      'task',
+      current,
+      result.task,
+      result.task.lifecycle === 'archived' ? 'archive' : undefined,
+    );
     return result.task;
   }
   if (request.action === 'archive') {

@@ -4,31 +4,9 @@ import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePi
 import { CategoryPicker } from '../../components/CategoryPicker.js';
 import { PriorityFilter } from '../../components/PriorityFilter.js';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
+import { dateRangeForPresets } from '../../search/task-filters.js';
 
-export type DatePreset = 'today' | 'tomorrow' | 'week' | 'month';
-
-const localDate = (value: Date) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, '0');
-  const day = String(value.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
-export function dateRangeForPreset(preset: DatePreset, now = new Date()) {
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const end = new Date(start);
-  if (preset === 'tomorrow') {
-    start.setDate(start.getDate() + 1);
-    end.setDate(end.getDate() + 1);
-  } else if (preset === 'week') {
-    start.setDate(start.getDate() - start.getDay());
-    end.setDate(start.getDate() + 6);
-  } else if (preset === 'month') {
-    start.setDate(1);
-    end.setMonth(start.getMonth() + 1, 0);
-  }
-  return { from: localDate(start), to: localDate(end) };
-}
+export { dateRangeForPreset } from '../../search/task-filters.js';
 
 export function TaskFilters({
   value,
@@ -134,7 +112,7 @@ export function TaskFilters({
         <input
           type="date"
           value={value.from}
-          onChange={(event) => change({ ...value, from: event.target.value })}
+          onChange={(event) => change({ ...value, from: event.target.value, datePresets: [] })}
         />
       </label>
       <label>
@@ -142,7 +120,7 @@ export function TaskFilters({
         <input
           type="date"
           value={value.to}
-          onChange={(event) => change({ ...value, to: event.target.value })}
+          onChange={(event) => change({ ...value, to: event.target.value, datePresets: [] })}
         />
       </label>
       <div className="date-filter-presets" role="group" aria-label="Due date shortcuts">
@@ -151,6 +129,8 @@ export function TaskFilters({
             ['today', 'Today'],
             ['tomorrow', 'Tomorrow'],
             ['week', 'This week'],
+            ['nextWeek', 'Next week'],
+            ['nextNextWeek', 'Week after next'],
             ['month', 'This month'],
           ] as const
         ).map(([preset, label]) => (
@@ -158,7 +138,14 @@ export function TaskFilters({
             type="button"
             className="quiet"
             key={preset}
-            onClick={() => change({ ...value, ...dateRangeForPreset(preset) })}
+            aria-pressed={value.datePresets?.includes(preset) ?? false}
+            onClick={() => {
+              const selected = value.datePresets ?? [];
+              const datePresets = selected.includes(preset)
+                ? selected.filter((item) => item !== preset)
+                : [...selected, preset];
+              change({ ...value, datePresets, ...dateRangeForPresets(datePresets) });
+            }}
           >
             {label}
           </button>

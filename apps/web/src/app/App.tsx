@@ -205,6 +205,7 @@ const emptyFilters: Filters = {
   lifecycle: 'active',
   urgencies: [],
   progress: 'all',
+  datePresets: [],
 };
 
 export const protectedSessionRevalidationAfterMs = 15 * 60 * 1_000;
@@ -1616,6 +1617,7 @@ export function App() {
                     {(filters.query ||
                       filters.from ||
                       filters.to ||
+                      filters.datePresets?.length ||
                       filters.assigneeId ||
                       filters.categoryId ||
                       filters.projectId ||
