@@ -88,6 +88,12 @@ it('shows group member avatars from the shared directory', async () => {
         online
         create={vi.fn()}
         join={vi.fn()}
+        rename={vi.fn()}
+        users={[]}
+        read={vi.fn().mockResolvedValue([{ userId: 'alex' }])}
+        addMember={vi.fn()}
+        removeMember={vi.fn()}
+        deleteGroup={vi.fn()}
       />
     </UserDirectoryContext.Provider>,
   );

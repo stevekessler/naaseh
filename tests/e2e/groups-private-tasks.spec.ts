@@ -19,6 +19,16 @@ test.describe('mocked group API', () => {
     context,
   }) => {
     let joinAttempts = 0;
+    let addedMember = false;
+    await page.route('**/api/v1/users/directory', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [{ id: 'alex', displayName: 'Alex Rivera', username: 'alex' }],
+        }),
+      }),
+    );
     await page.route('**/api/v1/groups', async (route) => {
       if (route.request().method() === 'GET')
         return route.fulfill({
@@ -33,6 +43,16 @@ test.describe('mocked group API', () => {
                 status: 'active',
                 hasJoinPin: true,
                 joined: false,
+                version: 1,
+              },
+              {
+                id: 'team',
+                name: 'Team',
+                ownerId: 'alex',
+                status: 'active',
+                hasJoinPin: false,
+                joined: true,
+                role: 'member',
                 version: 1,
               },
             ],
@@ -63,8 +83,75 @@ test.describe('mocked group API', () => {
         body: JSON.stringify({ code: 'group_join_failed', message: 'Unable to join group.' }),
       });
     });
+    await page.route('**/api/v1/groups/work/members', async (route) => {
+      expect(route.request().postDataJSON()).toEqual({ userId: 'alex', role: 'member' });
+      addedMember = true;
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groupId: 'work',
+          userId: 'alex',
+          role: 'member',
+          status: 'active',
+          joinedAt: '2026-10-12T16:00:00.000Z',
+          joinedBy: 'local-steve',
+          version: 1,
+        }),
+      });
+    });
+    await page.route('**/api/v1/groups/work', async (route) => {
+      if (route.request().method() === 'DELETE') return route.fulfill({ status: 204 });
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          group: {
+            id: 'work',
+            name: 'Work',
+            ownerId: 'local-steve',
+            status: 'active',
+            hasJoinPin: true,
+            joined: true,
+            role: 'owner',
+            version: 1,
+          },
+          members: [
+            {
+              groupId: 'work',
+              userId: 'local-steve',
+              role: 'owner',
+              status: 'active',
+              joinedAt: '2026-10-12T15:00:00.000Z',
+              joinedBy: 'local-steve',
+              version: 1,
+            },
+            ...(addedMember
+              ? [
+                  {
+                    groupId: 'work',
+                    userId: 'alex',
+                    role: 'member',
+                    status: 'active',
+                    joinedAt: '2026-10-12T16:00:00.000Z',
+                    joinedBy: 'local-steve',
+                    version: 1,
+                  },
+                ]
+              : []),
+          ],
+        }),
+      });
+    });
 
     await signIn(page);
+    const taskForm = page.locator('.task-form').first();
+    await taskForm.getByText('Task details', { exact: true }).click();
+    const groupPicker = taskForm.getByRole('combobox', { name: 'Group', exact: true });
+    await groupPicker.fill('Team');
+    await page.getByRole('option', { name: 'Team' }).click();
+    await expect(groupPicker).toHaveValue('Team');
+
     await page.getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
@@ -88,13 +175,25 @@ test.describe('mocked group API', () => {
     await expect(page.getByRole('heading', { name: 'Work' })).toBeVisible();
     await expect(page.getByText('Active owner')).toBeVisible();
 
+    await page.getByRole('button', { name: 'Add user' }).click();
+    const addUserDialog = page.getByRole('dialog', { name: 'Add user to Work' });
+    await addUserDialog.getByLabel('User').selectOption('alex');
+    await addUserDialog.getByRole('button', { name: 'Add user' }).click();
+    await expect(addUserDialog).not.toBeVisible();
+    expect(addedMember).toBe(true);
+    await expect(page.getByRole('list', { name: 'Work members' })).toContainText('Alex Rivera');
+
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: 'Delete group' }).click();
+    await expect(page.getByRole('heading', { name: 'Work' })).not.toBeVisible();
+
     await context.setOffline(true);
     await openTaskSection(page, 'My Tasks');
     await page.getByRole('button', { name: 'Admin', exact: true }).click();
     await page.getByRole('button', { name: 'Groups', exact: true }).click();
     await expect(page.getByText(/Offline: showing saved group status/)).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Family' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Work' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Work' })).not.toBeVisible();
     await expect(page.getByRole('button', { name: 'Create group' })).toBeDisabled();
     await context.setOffline(false);
   });

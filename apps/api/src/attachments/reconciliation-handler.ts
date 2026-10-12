@@ -1,15 +1,18 @@
 import { DeleteObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { ScheduledHandler } from 'aws-lambda';
-import { attachmentBlobSchema, transitionAttachment } from '@naaseh/domain';
+import { attachmentBlobSchema, attachmentSchema, transitionAttachment } from '@naaseh/domain';
 import { log, metric } from '@naaseh/observability';
 import {
   listAllAttachmentBlobs,
   listAllAttachments,
   listBlobReferences,
+  releaseBlobReference,
   saveAttachment,
   saveAttachmentBlob,
 } from './attachment-repository.js';
 import { publishAttachmentChange } from './attachment-audience.js';
+import { taskAttachmentRetention } from './retention-service.js';
+import { findTask } from '../tasks/task-repository.js';
 
 const s3 = new S3Client({});
 const bucket = process.env.NAASEH_ATTACHMENT_BUCKET ?? '';
@@ -22,15 +25,58 @@ export const handler: ScheduledHandler = async (event) => {
   let stalledScans = 0;
   let missingObjects = 0;
   let orphanBlobs = 0;
+  let retentionScheduled = 0;
+  let retentionCleared = 0;
+  let purgedAttachments = 0;
 
   const attachments = await listAllAttachments();
-  const attachmentsById = new Map(attachments.map((attachment) => [attachment.id, attachment]));
-  for (const attachment of attachments) {
+  const tasks = new Map<string, Awaited<ReturnType<typeof findTask>>>();
+  const attachmentsById = new Map();
+  for (const storedAttachment of attachments) {
+    let attachment = storedAttachment;
+    if (attachment.status !== 'deleted' && attachment.parentType === 'task') {
+      if (!tasks.has(attachment.parentId))
+        tasks.set(attachment.parentId, await findTask(attachment.parentId));
+      const desired =
+        attachment.retentionReason === 'deleted'
+          ? { purgeAfter: attachment.purgeAfter, retentionReason: attachment.retentionReason }
+          : taskAttachmentRetention(tasks.get(attachment.parentId));
+      const changed =
+        desired?.purgeAfter !== attachment.purgeAfter ||
+        desired?.retentionReason !== attachment.retentionReason;
+      if (changed) {
+        attachment = attachmentSchema.parse({
+          ...attachment,
+          purgeAfter: desired?.purgeAfter,
+          retentionReason: desired?.retentionReason,
+          updatedAt: now.toISOString(),
+          version: attachment.version + 1,
+        });
+        await saveAttachment(attachment, storedAttachment.version);
+        await publishAttachmentChange(attachment);
+        if (desired) retentionScheduled += 1;
+        else retentionCleared += 1;
+      }
+    }
+    if (
+      attachment.status !== 'deleted' &&
+      attachment.purgeAfter &&
+      Date.parse(attachment.purgeAfter) <= now.getTime()
+    ) {
+      const deleted = transitionAttachment(attachment, 'deleted', now);
+      await saveAttachment(deleted, attachment.version);
+      await publishAttachmentChange(deleted);
+      await releaseBlobReference(attachment.blobId, attachment.id);
+      attachment = deleted;
+      purgedAttachments += 1;
+    }
+    attachmentsById.set(attachment.id, attachment);
     const age = now.getTime() - new Date(attachment.updatedAt).getTime();
     if (attachment.status === 'pending_upload' && age >= uploadTimeoutMs) {
       const expired = transitionAttachment(attachment, 'expired', now);
       await saveAttachment(expired, attachment.version);
       await publishAttachmentChange(expired);
+      attachmentsById.set(expired.id, expired);
       expiredUploads += 1;
     } else if (attachment.status === 'scanning' && age >= scanTimeoutMs) {
       const failed = {
@@ -39,6 +85,7 @@ export const handler: ScheduledHandler = async (event) => {
       };
       await saveAttachment(failed, attachment.version);
       await publishAttachmentChange(failed);
+      attachmentsById.set(failed.id, failed);
       stalledScans += 1;
     }
   }
@@ -101,10 +148,16 @@ export const handler: ScheduledHandler = async (event) => {
     stalledScans,
     missingObjects,
     orphanBlobs,
+    retentionScheduled,
+    retentionCleared,
+    purgedAttachments,
   });
   metric('AttachmentReconciliations', 1);
   metric('AttachmentExpiredUploads', expiredUploads);
   metric('AttachmentStalledScans', stalledScans);
   metric('AttachmentMissingObjects', missingObjects);
   metric('AttachmentOrphanBlobs', orphanBlobs);
+  metric('AttachmentRetentionScheduled', retentionScheduled);
+  metric('AttachmentRetentionCleared', retentionCleared);
+  metric('AttachmentRetentionPurged', purgedAttachments);
 };

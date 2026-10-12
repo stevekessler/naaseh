@@ -13,6 +13,7 @@ import {
 const configurableColumns: TaskColumnId[] = [
   'category',
   'project',
+  'group',
   'memo',
   'link',
   'due',
@@ -64,6 +65,7 @@ export function TaskList({
   currentUserId,
   categories = [],
   projects = [],
+  groups = [],
   relationshipTasks = tasks,
   visibleColumns,
 }: {
@@ -74,6 +76,7 @@ export function TaskList({
   currentUserId?: string;
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
+  groups?: readonly { id: string; name: string }[];
   relationshipTasks?: readonly Task[];
   visibleColumns: ReadonlySet<TaskColumnId>;
 }) {
@@ -136,6 +139,7 @@ export function TaskList({
           <col className="task-name-column" />
           <col className="task-category-column" />
           <col className="task-project-column" />
+          <col className="task-group-column" />
           <col className="task-memo-column" />
           <col className="task-link-column" />
           <col className="task-due-column" />
@@ -161,6 +165,9 @@ export function TaskList({
               change={changeSort}
               className="task-project-cell"
             />
+            <th className="task-group-cell" scope="col">
+              Group
+            </th>
             <th className="task-memo-cell" scope="col">
               Memo
             </th>
@@ -201,6 +208,7 @@ export function TaskList({
                 categoryName={categories.find((category) => category.id === categoryId)?.name}
                 categoryColor={categories.find((category) => category.id === categoryId)?.color}
                 projectName={project?.name}
+                groupName={groups.find((group) => group.id === task.groupId)?.name}
                 parentTask={relationshipTasks.find((candidate) => candidate.id === task.parentId)}
                 {...(currentUserId ? { currentUserId } : {})}
               />

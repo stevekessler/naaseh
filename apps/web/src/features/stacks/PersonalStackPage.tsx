@@ -19,6 +19,7 @@ export interface PersonalStackPageProps {
   categories?: readonly CategoryRecord[];
   assignees?: readonly AssigneeOption[];
   parentTasks?: readonly Task[];
+  groupOptions?: readonly { id: string; label: string; context?: string }[];
   defaultAssigneeId?: string;
   items: readonly StackDisplayItem[];
   announcement: string;
@@ -70,6 +71,7 @@ export function PersonalStackPage({
   categories = [],
   assignees = [],
   parentTasks = [],
+  groupOptions = [],
   defaultAssigneeId,
   items,
   announcement,
@@ -166,6 +168,7 @@ export function PersonalStackPage({
             projects={projectRecords}
             assignees={assignees}
             parentTasks={parentTasks}
+            groupOptions={groupOptions}
             {...(defaultAssigneeId ? { defaultAssigneeId } : {})}
             submitLabel="Add to stack"
           />
@@ -252,6 +255,7 @@ export function PersonalStackPage({
           projects={projectRecords}
           assignees={assignees}
           parentTasks={parentTasks}
+          groupOptions={groupOptions}
           save={(patch) => updateTask(editing, patch)}
           close={() => setEditingId(undefined)}
         />

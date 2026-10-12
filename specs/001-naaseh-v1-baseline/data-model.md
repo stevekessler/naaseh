@@ -93,9 +93,9 @@ Archived categories remain on existing tasks but cannot be selected for new task
 
 Group membership controls participation and group-targeted behavior. It never hides a
 non-private task and never grants access to another owner's private task.
-All active users may discover active groups and choose to self-join. V1 has no targeted
-invitation records: an explicit join is acceptance, and a configured join PIN is verified
-before membership becomes active.
+All active users may discover active groups and choose to self-join. A group owner may also add an
+active user directly. A configured join PIN is verified before self-joined membership becomes
+active; owner-added membership does not require the member to know the PIN.
 
 ### GroupMembership
 
@@ -105,13 +105,13 @@ before membership becomes active.
 | role                 | enum      | `owner`, `manager`, or `member`; exactly one immutable v1 owner |
 | state                | enum      | `active`, `revoked`                                             |
 | joinedAt / revokedAt | timestamp | Server controlled; records acceptance and revocation            |
-| joinedBy             | ULID      | The self-joining user in v1                                     |
+| joinedBy             | ULID      | The self-joining user or group owner who added the user          |
 | version              | integer   | Optimistic concurrency                                          |
 
-An active membership join is idempotent. Revocation is terminal in v1: a revoked user
-cannot self-reactivate, and restoration requires a future administrator workflow. Owners may
-promote or demote active non-owner memberships between `manager` and `member`; ownership
-transfer and owner revocation are not supported in v1.
+An active membership join is idempotent. A revoked user cannot self-reactivate, but the group
+owner may restore that user's membership. Owners may promote or demote active non-owner
+memberships between `manager` and `member`; ownership transfer and independent owner revocation
+are not supported in v1. Deleting a group archives it and revokes every active membership.
 
 ### Task
 

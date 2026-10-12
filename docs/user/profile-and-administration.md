@@ -11,3 +11,7 @@ last active administrator.
 Group fields show only active groups already authorized for the signed-in user. Type to filter the
 dropdown, choose **No group** or **Everyone** to clear it, and expect cached options to be identified
 while offline. The Join Group dialog is unchanged: it accepts a PIN only after a group is selected.
+
+Group owners can use **Add user** to select an active account from the user directory. They can
+remove non-owner members or delete the group. Deleting a group removes it from group pickers and
+revokes every membership; the archived record is retained for audit and data-integrity purposes.

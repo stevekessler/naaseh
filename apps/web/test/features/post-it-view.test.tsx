@@ -32,7 +32,10 @@ describe('post-it task view', () => {
     expect(html).toContain('example.com/a/very/long/task/link');
   });
   it('renders readable category colors and the completion animation state', () => {
-    const open = createTask({ label: 'Open task', categoryId: 'calls' }, 'steve');
+    const open = createTask(
+      { label: 'Open task', categoryId: 'calls', groupId: 'family' },
+      'steve',
+    );
     const completed = transitionTask(open, 'completed', 'steve');
     const html = renderToStaticMarkup(
       <PostItBoard
@@ -46,6 +49,7 @@ describe('post-it task view', () => {
             version: 1,
           },
         ]}
+        groups={[{ id: 'family', name: 'Family' }]}
         currentUserId="steve"
         onToggle={async () => undefined}
       />,
@@ -55,6 +59,8 @@ describe('post-it task view', () => {
     expect(html).toContain('aria-label="Reopen Open task"');
     expect(html).toContain('postit-category');
     expect(html).toContain('Calls');
+    expect(html).toContain('postit-group');
+    expect(html).toContain('<strong>Group:</strong> Family');
     expect(html).toContain('Start 10 minute timer for Open task');
     expect(html).toContain('Start 10 min');
   });

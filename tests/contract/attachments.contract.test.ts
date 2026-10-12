@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import {
   attachmentCompleteSchema,
   attachmentInitiateSchema,
@@ -6,7 +8,11 @@ import {
   attachmentUploadGrantSchema,
 } from '@naaseh/contracts';
 import { attachmentSchema } from '@naaseh/domain';
-import { requiredAttachmentUploadHeaders } from '../../apps/api/src/attachments/upload-service.js';
+import {
+  attachmentUploadSignableHeaders,
+  attachmentUploadUnhoistableHeaders,
+  requiredAttachmentUploadHeaders,
+} from '../../apps/api/src/attachments/upload-service.js';
 const attachment = attachmentSchema.parse({
   id: '01J00000000000000000000000',
   parentType: 'task',
@@ -23,7 +29,7 @@ const attachment = attachmentSchema.parse({
   version: 1,
 });
 describe('attachment contracts', () => {
-  it('validates initiation, completion, metadata, and a five-minute no-store grant shape', () => {
+  it('validates initiation, completion, metadata, and a five-minute no-store grant shape', async () => {
     expect(
       requiredAttachmentUploadHeaders({
         mediaType: 'text/plain',
@@ -40,6 +46,37 @@ describe('attachment contracts', () => {
       'x-amz-meta-attachmentid': 'attachment-id',
       'x-amz-meta-sessionid': 'session-id',
     });
+    expect([...attachmentUploadUnhoistableHeaders]).toEqual([
+      'x-amz-checksum-sha256',
+      'x-amz-meta-attachmentid',
+      'x-amz-meta-sessionid',
+    ]);
+    expect([...attachmentUploadSignableHeaders]).toEqual(['content-type']);
+    const signedUrl = await getSignedUrl(
+      new S3Client({
+        region: 'us-west-2',
+        credentials: { accessKeyId: 'test', secretAccessKey: 'test' },
+      }),
+      new PutObjectCommand({
+        Bucket: 'attachment-test',
+        Key: 'attachments/blob',
+        ContentLength: 7,
+        ContentType: 'text/plain',
+        ChecksumSHA256: 'checksum',
+        Metadata: { attachmentid: 'attachment-id', sessionid: 'session-id' },
+        ServerSideEncryption: 'aws:kms',
+        SSEKMSKeyId: 'key-arn',
+      }),
+      {
+        expiresIn: 300,
+        signableHeaders: attachmentUploadSignableHeaders,
+        unhoistableHeaders: attachmentUploadUnhoistableHeaders,
+      },
+    );
+    const signed = new URL(signedUrl);
+    expect(signed.searchParams.has('x-amz-checksum-sha256')).toBe(false);
+    expect(signed.searchParams.get('X-Amz-SignedHeaders')).toContain('content-type');
+    expect(signed.searchParams.get('X-Amz-SignedHeaders')).toContain('x-amz-meta-attachmentid');
     expect(
       attachmentInitiateSchema.parse({
         parentType: 'task',

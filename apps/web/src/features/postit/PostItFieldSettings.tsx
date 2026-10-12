@@ -6,6 +6,7 @@ export const postItFields = [
   { id: 'priority', label: 'Priority' },
   { id: 'assignee', label: 'Assignee' },
   { id: 'category', label: 'Category' },
+  { id: 'group', label: 'Group' },
   { id: 'timer', label: 'Timer' },
   { id: 'link', label: 'Link' },
   { id: 'memo', label: 'Memo' },

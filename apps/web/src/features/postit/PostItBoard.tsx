@@ -13,6 +13,8 @@ export function PostItBoard({
   projects = [],
   assignees = [],
   parentTasks = tasks,
+  groupOptions = [],
+  groups = [],
   onToggle,
   onUpdate,
   currentUserId,
@@ -23,6 +25,8 @@ export function PostItBoard({
   projects?: Project[];
   assignees?: AssigneeOption[];
   parentTasks?: Task[];
+  groupOptions?: readonly { id: string; label: string; context?: string }[];
+  groups?: readonly { id: string; name: string }[];
   onToggle: (task: Task) => Promise<void>;
   onUpdate?: (task: Task, patch: Partial<Task>) => Promise<void>;
   currentUserId?: string;
@@ -61,6 +65,7 @@ export function PostItBoard({
                   ?.displayName
               }
               categoryName={categories.find((category) => category.id === categoryId)?.name}
+              groupName={groups.find((group) => group.id === task.groupId)?.name}
               visibleFields={fields.visible}
               complete={() => void complete(task)}
               {...(currentUserId ? { currentUserId } : {})}
@@ -76,6 +81,7 @@ export function PostItBoard({
           projects={projects}
           assignees={assignees}
           parentTasks={parentTasks}
+          groupOptions={groupOptions}
           save={(patch) => onUpdate(editing, patch)}
           close={() => setEditingId(undefined)}
           primaryContent={

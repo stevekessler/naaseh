@@ -1,6 +1,6 @@
 import type { DeletionJob } from '@naaseh/domain';
 import { deletionLedgerEntrySchema, listSchema, taskSchema } from '@naaseh/domain';
-import { purgeAttachmentsForParent } from '../attachments/deletion-service.js';
+import { retainAttachmentsForDeletedParent } from '../attachments/deletion-service.js';
 import { findList, listItemsForList } from '../lists/list-repository.js';
 import { keys } from '../shared/keys.js';
 import { putRecord } from '../shared/store.js';
@@ -133,10 +133,11 @@ export async function executeDeletionStep(job: DeletionJob): Promise<DeletionJob
         await deletePartition(keys.task(job.resourceId).PK, 'COMPLETION#');
       break;
     case 'attachments':
-      if (job.resourceType === 'task') await purgeAttachmentsForParent('task', job.resourceId);
+      if (job.resourceType === 'task')
+        await retainAttachmentsForDeletedParent('task', job.resourceId);
       else {
         const items = await listItemsForList(job.resourceId);
-        for (const item of items) await purgeAttachmentsForParent('listItem', item.id);
+        for (const item of items) await retainAttachmentsForDeletedParent('listItem', item.id);
         for (const item of items) await deletePartition(keys.listItem(item.id).PK);
       }
       break;

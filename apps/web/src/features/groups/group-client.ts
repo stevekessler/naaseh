@@ -1,5 +1,5 @@
 import type { GroupMembershipView, GroupView } from '@naaseh/domain';
-import { saveLocalGroup, saveLocalGroups } from '../../db/group-repository.js';
+import { removeLocalGroup, saveLocalGroup, saveLocalGroups } from '../../db/group-repository.js';
 
 async function request<T>(path: string, csrfToken: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -15,6 +15,7 @@ async function request<T>(path: string, csrfToken: string, init?: RequestInit): 
     const retryable = response.status === 429;
     throw new Error(retryable ? 'Too many attempts. Try again later.' : 'Unable to update group.');
   }
+  if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
@@ -59,4 +60,31 @@ export async function joinRemoteGroup(
   const joined: GroupView = { ...group, joined: true, role: membership.role };
   await saveLocalGroup(joined);
   return joined;
+}
+
+export const readRemoteGroup = (group: GroupView, csrfToken: string) =>
+  request<{ group: GroupView; members: GroupMembershipView[] }>(
+    `/groups/${encodeURIComponent(group.id)}`,
+    csrfToken,
+    { cache: 'no-store' },
+  );
+
+export const addRemoteGroupMember = (group: GroupView, userId: string, csrfToken: string) =>
+  request<GroupMembershipView>(`/groups/${encodeURIComponent(group.id)}/members`, csrfToken, {
+    method: 'POST',
+    body: JSON.stringify({ userId, role: 'member' }),
+  });
+
+export const removeRemoteGroupMember = (group: GroupView, userId: string, csrfToken: string) =>
+  request<void>(
+    `/groups/${encodeURIComponent(group.id)}/members/${encodeURIComponent(userId)}`,
+    csrfToken,
+    { method: 'DELETE' },
+  );
+
+export async function deleteRemoteGroup(group: GroupView, csrfToken: string) {
+  await request<void>(`/groups/${encodeURIComponent(group.id)}`, csrfToken, {
+    method: 'DELETE',
+  });
+  await removeLocalGroup(group.id);
 }

@@ -61,19 +61,42 @@ export function AttachmentPanel({
     <section className="attachments">
       <h3>Attachments</h3>
       <label>
-        Attach a file (PDF, image, text, or CSV; up to 25 MiB)
+        Attach a file or multiple files (PDF, image, text, or CSV; up to 25 MiB each)
         <input
           type="file"
+          multiple
           accept="application/pdf,image/jpeg,image/png,text/plain,text/csv"
           disabled={!online || awaitingParentSync || active.length >= 10}
           onChange={(event) => {
             const input = event.currentTarget;
-            const file = event.target.files?.[0];
-            if (!file) return;
+            const files = Array.from(event.target.files ?? []);
+            if (!files.length) return;
+            const availableSlots = 10 - active.length;
+            if (files.length > availableSlots) {
+              setError(
+                `This item can have up to 10 attachments. Select ${availableSlots} or fewer files.`,
+              );
+              input.value = '';
+              return;
+            }
             setError(undefined);
             setProgress(0);
-            void uploadAttachment(file, parentType, parentId, csrfToken, setProgress)
-              .then(changed)
+            let uploaded = 0;
+            void files
+              .reduce(
+                (previous, file) =>
+                  previous.then(() =>
+                    uploadAttachment(file, parentType, parentId, csrfToken, (fileProgress) =>
+                      setProgress(
+                        Math.round(((uploaded + fileProgress / 100) / files.length) * 100),
+                      ),
+                    ).then(() => {
+                      uploaded += 1;
+                      changed();
+                    }),
+                  ),
+                Promise.resolve(),
+              )
               .catch((reason) =>
                 setError(reason instanceof Error ? reason.message : 'Upload failed.'),
               )

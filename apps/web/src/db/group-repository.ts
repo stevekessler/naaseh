@@ -2,21 +2,26 @@ import type { GroupView } from '@naaseh/domain';
 import { db } from './database.js';
 import { decryptLocalValue, encryptLocalValue } from './task-repository.js';
 
+const localGroupRecord = async (group: GroupView) => ({
+  id: group.id,
+  updatedAt: String(group.version),
+  value: await encryptLocalValue('group', group.id, group),
+});
+
 export async function saveLocalGroups(groups: GroupView[]) {
-  const records = await Promise.all(
-    groups.map(async (group) => ({
-      id: group.id,
-      updatedAt: String(group.version),
-      value: await encryptLocalValue('group', group.id, group),
-    })),
-  );
+  const records = await Promise.all(groups.map(localGroupRecord));
   await db.transaction('rw', db.secureGroups, async () => {
+    await db.secureGroups.clear();
     await db.secureGroups.bulkPut(records);
   });
 }
 
 export async function saveLocalGroup(group: GroupView) {
-  await saveLocalGroups([group]);
+  await db.secureGroups.put(await localGroupRecord(group));
+}
+
+export async function removeLocalGroup(groupId: string) {
+  await db.secureGroups.delete(groupId);
 }
 
 export async function listLocalGroups(): Promise<GroupView[]> {

@@ -1,4 +1,4 @@
-import { attachmentBlobSchema, transitionAttachment } from '@naaseh/domain';
+import { attachmentBlobSchema, attachmentSchema, transitionAttachment } from '@naaseh/domain';
 import { DeleteObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { authorizeAttachmentParent, type AttachmentActor } from './attachment-authorization.js';
 import {
@@ -11,6 +11,7 @@ import {
   listParentAttachments,
 } from './attachment-repository.js';
 import { publishAttachmentChange } from './attachment-audience.js';
+import { attachmentPurgeAfter } from './retention-service.js';
 
 export async function purgeAttachmentVersions(
   blobs: readonly { objectKey: string; objectVersionId: string }[],
@@ -52,6 +53,30 @@ export async function purgeAttachmentsForParent(
   }
   await purgeAttachmentVersions(blobs, remove);
   return { attachments: attachments.length, objectVersions: blobs.length };
+}
+
+export async function retainAttachmentsForDeletedParent(
+  parentType: 'task' | 'listItem',
+  parentId: string,
+  now = new Date(),
+) {
+  const attachments = await listParentAttachments(parentType, parentId);
+  const purgeAfter = attachmentPurgeAfter(now);
+  let retained = 0;
+  for (const attachment of attachments) {
+    if (attachment.status === 'deleted') continue;
+    const next = attachmentSchema.parse({
+      ...attachment,
+      purgeAfter,
+      retentionReason: 'deleted',
+      updatedAt: now.toISOString(),
+      version: attachment.version + 1,
+    });
+    await saveAttachment(next, attachment.version);
+    await publishAttachmentChange(next);
+    retained += 1;
+  }
+  return { attachments: retained, purgeAfter };
 }
 export async function deleteAttachment(id: string, actor: AttachmentActor) {
   const current = await findAttachment(id);

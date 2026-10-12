@@ -15,6 +15,12 @@ import { metric } from '@naaseh/observability';
 const s3 = new S3Client({});
 const bucket = process.env.NAASEH_ATTACHMENT_BUCKET ?? '';
 const keyArn = process.env.NAASEH_ATTACHMENT_KMS_KEY_ARN ?? '';
+export const attachmentUploadUnhoistableHeaders = new Set([
+  'x-amz-checksum-sha256',
+  'x-amz-meta-attachmentid',
+  'x-amz-meta-sessionid',
+]);
+export const attachmentUploadSignableHeaders = new Set(['content-type']);
 export function requiredAttachmentUploadHeaders(input: {
   mediaType: string;
   checksumSha256: string;
@@ -110,7 +116,14 @@ export async function initiateUpload(
   const grant = {
     attachment,
     uploadSessionId: sessionId,
-    uploadUrl: await getSignedUrl(s3, command, { expiresIn: 300 }),
+    uploadUrl: await getSignedUrl(s3, command, {
+      expiresIn: 300,
+      signableHeaders: attachmentUploadSignableHeaders,
+      // The presigner normally moves checksum and metadata values into the query string.
+      // The browser also sends these values as required headers, so keep them in the signed
+      // header set to avoid duplicate query/header values that S3 rejects with SignatureDoesNotMatch.
+      unhoistableHeaders: attachmentUploadUnhoistableHeaders,
+    }),
     requiredHeaders: requiredAttachmentUploadHeaders({
       mediaType: policy.mediaType,
       checksumSha256: input.checksumSha256,

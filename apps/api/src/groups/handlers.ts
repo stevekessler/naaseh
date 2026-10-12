@@ -1,7 +1,7 @@
 import type { APIGatewayProxyHandlerV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { randomUUID } from 'node:crypto';
 import { createUlid, publicGroup, publicMembership } from '@naaseh/domain';
-import { groupCreateSchema, groupJoinSchema } from '@naaseh/contracts';
+import { groupCreateSchema, groupJoinSchema, groupMemberAddSchema } from '@naaseh/contracts';
 import { errorResponse, json, problem } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
 import { loadPepper } from '../auth/password.js';
@@ -12,7 +12,9 @@ import {
 } from '../auth/rate-limit.js';
 import { putRecord } from '../shared/store.js';
 import {
+  addGroupMember,
   createGroup,
+  deleteGroup,
   GroupPolicyError,
   joinGroup,
   removeGroupMember,
@@ -25,6 +27,7 @@ import {
   listMemberships,
   listUserMemberships,
 } from './group-repository.js';
+import { userById } from '../auth/user-repository.js';
 
 type AuthContext = { authorizer?: { lambda?: { userId?: string; csrfToken?: string } } };
 
@@ -147,6 +150,20 @@ async function handleGroupRequest(
     }
   }
 
+  if (method === 'POST' && event.rawPath.endsWith('/members')) {
+    const input = groupMemberAddSchema.parse(JSON.parse(event.body ?? '{}'));
+    const user = await userById(input.userId);
+    if (!user?.active) return problem(404, 'not_found', 'User not found.', correlationId);
+    try {
+      const membership = await addGroupMember(group, actorId, input.userId, input.role);
+      await audit('group.member_added', actorId, { groupId: group.id, memberId: input.userId });
+      return json(201, publicMembership(membership));
+    } catch (error) {
+      if (!(error instanceof GroupPolicyError)) throw error;
+      return problem(403, 'forbidden', 'Unable to add this group member.', correlationId);
+    }
+  }
+
   const memberId = event.pathParameters?.userId;
   if (method === 'DELETE' && memberId) {
     try {
@@ -156,6 +173,21 @@ async function handleGroupRequest(
       return problem(403, 'forbidden', 'Unable to revoke group membership.', correlationId);
     }
     await audit('group.member_revoked', actorId, { groupId: group.id, memberId });
+    return json(204, undefined);
+  }
+  if (method === 'DELETE' && groupId) {
+    try {
+      await deleteGroup(group, actorId);
+    } catch (error) {
+      if (!(error instanceof GroupPolicyError)) throw error;
+      return problem(
+        403,
+        'forbidden',
+        'Only the group owner can delete this group.',
+        correlationId,
+      );
+    }
+    await audit('group.deleted', actorId, { groupId });
     return json(204, undefined);
   }
   return problem(405, 'method_not_allowed', 'Method not allowed.', correlationId);

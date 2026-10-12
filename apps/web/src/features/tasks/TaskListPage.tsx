@@ -22,6 +22,8 @@ export function TaskListPage({
   projects = [],
   assignees = [],
   parentTasks = tasks,
+  groupOptions = [],
+  groups = [],
   currentUserId,
 }: {
   tasks: Task[];
@@ -38,6 +40,8 @@ export function TaskListPage({
   projects?: Project[];
   assignees?: AssigneeOption[];
   parentTasks?: Task[];
+  groupOptions?: readonly { id: string; label: string; context?: string }[];
+  groups?: readonly { id: string; name: string }[];
   defaultAssigneeId?: string;
   currentUserId?: string;
 }) {
@@ -65,6 +69,7 @@ export function TaskListPage({
         onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
         categories={categories}
         projects={projects}
+        groups={groups}
         relationshipTasks={parentTasks}
         visibleColumns={columns.visible}
         {...(currentUserId ? { currentUserId } : {})}
@@ -77,6 +82,7 @@ export function TaskListPage({
             projects={projects}
             assignees={assignees}
             parentTasks={parentTasks}
+            groupOptions={groupOptions}
             save={(patch) => onUpdate(selected, patch)}
             close={onClose}
             primaryContent={

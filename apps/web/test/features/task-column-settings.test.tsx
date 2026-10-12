@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from '@testing-library/react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { TaskColumnSettings, useTaskColumns } from '../../src/features/tasks/TaskColumnSettings.js';
+import { createTask } from '@naaseh/domain';
+import {
+  TaskColumnSettings,
+  taskColumns,
+  useTaskColumns,
+} from '../../src/features/tasks/TaskColumnSettings.js';
+import { TaskList } from '../../src/features/tasks/TaskList.js';
 
 function Harness() {
   const columns = useTaskColumns();
@@ -29,6 +36,7 @@ describe('task column settings', () => {
     expect(view.getByText('Category').compareDocumentPosition(view.getByText('Project'))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    expect((view.getByLabelText('Show Group column') as HTMLInputElement).checked).toBe(true);
 
     fireEvent.pointerDown(document.body);
     expect(settings.open).toBe(false);
@@ -51,5 +59,21 @@ describe('task column settings', () => {
     setWidth(500);
     expect((view.getByLabelText('Memo') as HTMLInputElement).checked).toBe(false);
     expect((view.getByLabelText('Link') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('renders a configured group column with the task group name', () => {
+    const task = createTask({ label: 'Grouped task', groupId: 'family' }, 'steve');
+    const html = renderToStaticMarkup(
+      <TaskList
+        tasks={[task]}
+        groups={[{ id: 'family', name: 'Family' }]}
+        visibleColumns={new Set(taskColumns.map(({ id }) => id))}
+        onToggle={() => undefined}
+        onProgressChange={() => undefined}
+      />,
+    );
+
+    expect(html).toContain('class="task-group-cell" scope="col">Group</th>');
+    expect(html).toContain('class="task-group-cell">Family</td>');
   });
 });

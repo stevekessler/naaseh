@@ -22,6 +22,7 @@ describe('post-it field settings', () => {
     const view = render(<Harness />);
     const settings = view.container.querySelector('details')!;
     fireEvent.click(view.getByText('Fields'));
+    expect((view.getByLabelText('Show Group on post-its') as HTMLInputElement).checked).toBe(true);
     fireEvent.click(view.getByLabelText('Show Memo on post-its'));
 
     expect((view.getByLabelText('Show Memo on post-its') as HTMLInputElement).checked).toBe(false);

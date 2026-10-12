@@ -3,6 +3,7 @@ import { groupPinSchema, groupSchema, membershipSchema, type GroupRecord } from 
 import { hashPassword, verifyPassword } from '../auth/password.js';
 import {
   getMembership,
+  listMemberships,
   putGroupWithOwner,
   putMembership,
   revokeMembership,
@@ -115,6 +116,35 @@ export async function joinGroup(
   return membership;
 }
 
+export async function addGroupMember(
+  group: GroupRecord,
+  actorId: string,
+  userId: string,
+  role: 'manager' | 'member' = 'member',
+) {
+  if (group.status !== 'active') throw new GroupPolicyError('group_inactive');
+  if (group.ownerId !== actorId || group.ownerId === userId)
+    throw new GroupPolicyError('forbidden_membership_change');
+  const existing = await getMembership(group.id, userId);
+  if (existing?.status === 'active') {
+    return existing.role === role ? existing : changeGroupMemberRole(group, actorId, userId, role);
+  }
+  const joinedAt = new Date().toISOString();
+  const membership = membershipSchema.parse({
+    groupId: group.id,
+    userId,
+    role,
+    status: 'active',
+    joinedAt,
+    joinedBy: actorId,
+    ...(existing ? { version: existing.version + 1 } : {}),
+  });
+  if (existing) await updateMembership(existing, membership);
+  else await putMembership(membership);
+  notifyStackAuthorizationChange({ userId, groupId: group.id, active: true, changedAt: joinedAt });
+  return membership;
+}
+
 export async function removeGroupMember(group: GroupRecord, actorId: string, userId: string) {
   if (group.ownerId !== actorId || group.ownerId === userId)
     throw new GroupPolicyError('forbidden_membership_change');
@@ -148,4 +178,37 @@ export async function changeGroupMemberRole(
   const next = membershipSchema.parse({ ...current, role, version: current.version + 1 });
   await updateMembership(current, next);
   return next;
+}
+
+export async function deleteGroup(group: GroupRecord, actorId: string) {
+  if (group.ownerId !== actorId) throw new GroupPolicyError('forbidden_membership_change');
+  const now = new Date().toISOString();
+  const archived =
+    group.status === 'archived'
+      ? group
+      : groupSchema.parse({
+          ...group,
+          status: 'archived',
+          updatedAt: now,
+          version: group.version + 1,
+        });
+  if (group.status !== 'archived') await updateGroupRecord(group, archived);
+  for (const membership of await listMemberships(group.id)) {
+    if (membership.status !== 'active') continue;
+    await revokeMembership(membership, {
+      audience: `ACCESS#${membership.userId}`,
+      entityType: 'accessControl',
+      entityId: group.id,
+      operation: 'tombstone',
+      payload: { kind: 'group-revoked', groupId: group.id },
+      changedAt: now,
+    });
+    notifyStackAuthorizationChange({
+      userId: membership.userId,
+      groupId: group.id,
+      active: false,
+      changedAt: now,
+    });
+  }
+  return archived;
 }

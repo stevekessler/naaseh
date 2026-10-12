@@ -25,11 +25,13 @@ const rateLimit = vi.hoisted(() => ({
   registerDurableFailure: vi.fn(async () => 1_000),
 }));
 const store = vi.hoisted(() => ({ putRecord: vi.fn() }));
+const users = vi.hoisted(() => ({ userById: vi.fn() }));
 
 vi.mock('../../src/groups/group-repository.js', () => repository);
 vi.mock('../../src/auth/password.js', () => password);
 vi.mock('../../src/auth/rate-limit.js', () => rateLimit);
 vi.mock('../../src/shared/store.js', () => store);
+vi.mock('../../src/auth/user-repository.js', () => users);
 
 import { handler } from '../../src/groups/handlers.js';
 
@@ -106,6 +108,7 @@ beforeEach(() => {
   repository.listActiveGroups.mockResolvedValue([group]);
   repository.listMemberships.mockResolvedValue([membership]);
   repository.listUserMemberships.mockResolvedValue([membership]);
+  users.userById.mockResolvedValue({ id: 'other', active: true });
 });
 
 describe('group HTTP lifecycle', () => {
@@ -202,6 +205,51 @@ describe('group HTTP lifecycle', () => {
       }),
     );
     expect(response.statusCode).toBe(204);
+    expect(repository.revokeMembership).toHaveBeenCalledOnce();
+  });
+
+  it('lets an owner add an active user to a group', async () => {
+    const ownerGroup = {
+      ...group,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      ownerId: 'member',
+    };
+    repository.getGroup.mockResolvedValue(ownerGroup);
+    repository.getMembership.mockResolvedValue(undefined);
+    const response = await invoke(
+      event('POST', `/api/v1/groups/${ownerGroup.id}/members`, {
+        body: { userId: 'other', role: 'member' },
+        pathParameters: { groupId: ownerGroup.id },
+      }),
+    );
+    expect(response.statusCode).toBe(201);
+    expect(JSON.parse(response.body ?? '{}')).toMatchObject({
+      groupId: ownerGroup.id,
+      userId: 'other',
+      role: 'member',
+      status: 'active',
+    });
+    expect(repository.putMembership).toHaveBeenCalledOnce();
+  });
+
+  it('archives an owner group and revokes its active memberships', async () => {
+    const ownerGroup = {
+      ...group,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      ownerId: 'member',
+    };
+    repository.getGroup.mockResolvedValue(ownerGroup);
+    repository.listMemberships.mockResolvedValue([{ ...membership, groupId: ownerGroup.id }]);
+    const response = await invoke(
+      event('DELETE', `/api/v1/groups/${ownerGroup.id}`, {
+        pathParameters: { groupId: ownerGroup.id },
+      }),
+    );
+    expect(response.statusCode).toBe(204);
+    expect(repository.updateGroupRecord).toHaveBeenCalledWith(
+      ownerGroup,
+      expect.objectContaining({ status: 'archived', version: 2 }),
+    );
     expect(repository.revokeMembership).toHaveBeenCalledOnce();
   });
 

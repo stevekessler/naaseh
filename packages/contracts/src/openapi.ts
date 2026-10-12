@@ -339,6 +339,12 @@ export const groupCreateSchema = z
   })
   .strict();
 export const groupJoinSchema = z.object({ pin: groupPinSchema.optional() }).strict();
+export const groupMemberAddSchema = z
+  .object({
+    userId: z.string().min(1),
+    role: z.enum(['manager', 'member']).default('member'),
+  })
+  .strict();
 export const groupViewSchema = z
   .object({
     id: z.string().min(1),
