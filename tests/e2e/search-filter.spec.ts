@@ -37,7 +37,11 @@ async function addTask(
       await form.getByRole('slider', { name: 'Progress' }).fill(String(task.progress));
   }
   await form.getByRole('button', { name: 'Add task' }).click();
-  await expect(page.getByRole('heading', { name: task.label })).toBeVisible();
+  const heading = page.getByRole('heading', { name: task.label });
+  const viewMore = page.getByRole('button', { name: /View \d+ more tasks?/ });
+  await expect(heading.or(viewMore)).toBeVisible();
+  if (await viewMore.isVisible()) await viewMore.click();
+  await expect(heading).toBeVisible();
 }
 
 test('all task filters and date shortcuts narrow the rendered browser results', async ({
@@ -168,6 +172,7 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
   await expect(page).not.toHaveURL(/estim|roof/i);
   await page.getByRole('button', { name: 'All tasks', exact: true }).click();
+  await page.getByRole('button', { name: /View \d+ more tasks?/ }).click();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeVisible();
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();

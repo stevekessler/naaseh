@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createTask } from '@naaseh/domain';
+
+vi.mock('../../src/db/database.js', () => ({
+  db: {
+    settings: {
+      get: vi.fn().mockResolvedValue(undefined),
+      put: vi.fn().mockResolvedValue(undefined),
+      delete: vi.fn().mockResolvedValue(undefined),
+    },
+  },
+}));
 import {
   TaskColumnSettings,
   taskColumns,
@@ -75,5 +85,36 @@ describe('task column settings', () => {
 
     expect(html).toContain('class="task-group-cell" scope="col">Group</th>');
     expect(html).toContain('class="task-group-cell">Family</td>');
+  });
+
+  it('hides tasks more than three months ahead until the user asks to view them', () => {
+    const dateKey = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    const nearDate = new Date();
+    nearDate.setMonth(nearDate.getMonth() + 2);
+    const farDate = new Date();
+    farDate.setMonth(farDate.getMonth() + 4);
+    const near = createTask(
+      { label: 'Near task', dueKind: 'date', dueDate: dateKey(nearDate) },
+      'steve',
+    );
+    const far = createTask(
+      { label: 'Far task', dueKind: 'date', dueDate: dateKey(farDate) },
+      'steve',
+    );
+    const view = render(
+      <TaskList
+        tasks={[near, far]}
+        collapseFutureTasks
+        visibleColumns={new Set(taskColumns.map(({ id }) => id))}
+        onToggle={() => undefined}
+        onProgressChange={() => undefined}
+      />,
+    );
+
+    expect(view.getByText('Near task')).toBeTruthy();
+    expect(view.queryByText('Far task')).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'View 1 more task' }));
+    expect(view.getByText('Far task')).toBeTruthy();
   });
 });

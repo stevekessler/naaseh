@@ -307,6 +307,9 @@ export function App() {
     period: 'day',
     categoryId: '',
     projectId: '',
+    groupId: '',
+    assigneeId: '',
+    visibility: 'all',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     weekStartsOn: 0,
     urgencies: [],
@@ -1503,6 +1506,8 @@ export function App() {
               tasks={tasks}
               categories={categories}
               projects={projects}
+              groups={joinedGroupOptions.map((group) => ({ id: group.id, name: group.label }))}
+              assignees={assignees}
               pending={pending}
               {...(completionReport
                 ? { urgencyCounts: completionReport.urgencyCounts, remoteReport: completionReport }
@@ -1673,6 +1678,7 @@ export function App() {
                   defaultAssigneeId={session.userId}
                   currentUserId={session.userId}
                   tasks={visible}
+                  collapseFutureTasks={taskTab === 'all'}
                   loading={taskResult === undefined}
                   {...(!tasks.length && taskResult?.unreadable.length
                     ? { error: 'Saved tasks need recovery.' }
