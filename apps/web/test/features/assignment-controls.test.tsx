@@ -110,6 +110,9 @@ describe('shared assignment controls', () => {
     expect(form.match(/>Repeat</gu)).toHaveLength(1);
     expect(form.indexOf('Project')).toBeLessThan(form.indexOf('>Repeat<'));
     expect(form).toContain('Every x days');
+    expect(form).toMatch(/aria-label="Repeat schedule"[^>]*><option/);
+    expect(form).not.toMatch(/aria-label="Repeat schedule"[^>]*disabled/);
+    expect(form).toContain('Choose a repeat schedule, then add the due date when it should start.');
   });
 
   it('shows projects in list creation, including while a category is still hydrating', () => {
