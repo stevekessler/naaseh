@@ -1,12 +1,19 @@
 import { type CategoryRecord, type Project, type Urgency } from '@naaseh/domain';
 import type { CompletionPeriod } from './completion-bucketing.js';
 import { PriorityFilter } from '../../components/PriorityFilter.js';
+import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
 import type { TaskReportState, TaskTimeliness } from './task-reporting.js';
+
+export type TaskVisibilityFilter = 'all' | 'public' | 'private';
+export type ReportDatePreset = 'today' | 'this-week' | 'last-week' | 'this-month' | 'this-quarter';
 
 export interface CompletionFilterValue {
   period: CompletionPeriod;
   categoryId: string;
   projectId: string;
+  groupId: string;
+  assigneeId: string;
+  visibility: TaskVisibilityFilter;
   timeZone: string;
   weekStartsOn: number;
   urgencies: Urgency[];
@@ -16,23 +23,99 @@ export interface CompletionFilterValue {
   timeliness: TaskTimeliness;
 }
 
+const localDateKey = (value: Date) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export function reportDateRange(preset: ReportDatePreset, weekStartsOn: number, now = new Date()) {
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const to = new Date(from);
+  if (preset === 'this-week' || preset === 'last-week') {
+    const offset = (from.getDay() - weekStartsOn + 7) % 7;
+    from.setDate(from.getDate() - offset - (preset === 'last-week' ? 7 : 0));
+    to.setTime(from.getTime());
+    to.setDate(to.getDate() + 6);
+  } else if (preset === 'this-month') {
+    from.setDate(1);
+    to.setMonth(from.getMonth() + 1, 0);
+  } else if (preset === 'this-quarter') {
+    from.setMonth(Math.floor(from.getMonth() / 3) * 3, 1);
+    to.setFullYear(from.getFullYear(), from.getMonth() + 3, 0);
+  }
+  return { from: localDateKey(from), to: localDateKey(to) };
+}
+
 export function CompletionFilters({
   value,
   categories,
   projects,
+  groups = [],
+  assignees = [],
   change,
 }: {
   value: CompletionFilterValue;
   categories: readonly CategoryRecord[];
   projects: readonly Project[];
+  groups?: readonly { id: string; name: string }[];
+  assignees?: readonly AssigneeOption[];
   change: (value: CompletionFilterValue) => void;
 }) {
   const categoryProjects = value.categoryId
     ? projects.filter((project) => project.categoryId === value.categoryId)
     : projects;
+  const datePresets = [
+    ['today', 'Today'],
+    ['this-week', 'This week'],
+    ['last-week', 'Last week'],
+    ['this-month', 'This month'],
+    ['this-quarter', 'This quarter'],
+  ] as const;
   return (
     <fieldset className="completion-filters">
-      <legend>Task report filters</legend>
+      <legend className="visually-hidden">Task report filters</legend>
+      <div className="completion-filter-heading">
+        <strong>Task report filters</strong>
+        <button
+          type="button"
+          className="quiet"
+          onClick={() =>
+            change({
+              ...value,
+              period: 'day',
+              categoryId: '',
+              projectId: '',
+              groupId: '',
+              assigneeId: '',
+              visibility: 'all',
+              urgencies: [],
+              from: '',
+              to: '',
+              taskState: 'all',
+              timeliness: 'all',
+            })
+          }
+        >
+          Clear filters
+        </button>
+      </div>
+      <div className="completion-date-presets" role="group" aria-label="Report date shortcuts">
+        {datePresets.map(([preset, label]) => {
+          const range = reportDateRange(preset, value.weekStartsOn);
+          return (
+            <button
+              type="button"
+              key={preset}
+              aria-pressed={value.from === range.from && value.to === range.to}
+              onClick={() => change({ ...value, ...range })}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
       <label>
         Task state
         <select
@@ -105,6 +188,43 @@ export function CompletionFilters({
               {project.lifecycle === 'archived' ? ' (archived)' : ''}
             </option>
           ))}
+        </select>
+      </label>
+      <label>
+        Group
+        <select
+          value={value.groupId}
+          onChange={(event) => change({ ...value, groupId: event.target.value })}
+        >
+          <option value="">All groups</option>
+          <option value="unassigned">No group</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>
+              {group.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Assignee
+        <AssigneePicker
+          assignees={assignees}
+          value={value.assigneeId}
+          allLabel="All assignees"
+          onChange={(assigneeId) => change({ ...value, assigneeId })}
+        />
+      </label>
+      <label>
+        Privacy
+        <select
+          value={value.visibility}
+          onChange={(event) =>
+            change({ ...value, visibility: event.target.value as TaskVisibilityFilter })
+          }
+        >
+          <option value="all">Public and private</option>
+          <option value="private">Private tasks</option>
+          <option value="public">Public tasks</option>
         </select>
       </label>
       {value.period === 'week' && (

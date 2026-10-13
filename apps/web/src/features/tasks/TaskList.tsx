@@ -10,6 +10,7 @@ import {
   type TaskListSort,
   type TaskListSortKey,
 } from './task-list-sort.js';
+import { taskDueDateKey } from '../../search/task-filters.js';
 const configurableColumns: TaskColumnId[] = [
   'category',
   'project',
@@ -68,6 +69,7 @@ export function TaskList({
   groups = [],
   relationshipTasks = tasks,
   visibleColumns,
+  collapseFutureTasks = false,
 }: {
   tasks: Task[];
   onToggle: (task: Task) => void;
@@ -79,8 +81,10 @@ export function TaskList({
   groups?: readonly { id: string; name: string }[];
   relationshipTasks?: readonly Task[];
   visibleColumns: ReadonlySet<TaskColumnId>;
+  collapseFutureTasks?: boolean;
 }) {
   const [sort, setSort] = useState<TaskListSort>();
+  const [showAllFutureTasks, setShowAllFutureTasks] = useState(false);
   useEffect(() => {
     let active = true;
     void loadTaskListSort()
@@ -100,7 +104,27 @@ export function TaskList({
     setSort(next);
     void saveTaskListSort(next).catch(() => undefined);
   };
-  const displayedTasks = sortTasksForTable(tasks, sort, categories, projects);
+  const sortedTasks = sortTasksForTable(tasks, sort, categories, projects);
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  const cutoffDay = cutoff.getDate();
+  cutoff.setDate(1);
+  cutoff.setMonth(cutoff.getMonth() + 3);
+  cutoff.setDate(
+    Math.min(cutoffDay, new Date(cutoff.getFullYear(), cutoff.getMonth() + 1, 0).getDate()),
+  );
+  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, '0')}-${String(cutoff.getDate()).padStart(2, '0')}`;
+  const hiddenFutureTasks = collapseFutureTasks
+    ? sortedTasks.filter((task) => {
+        const dueDate = taskDueDateKey(task);
+        return Boolean(dueDate && dueDate > cutoffKey);
+      })
+    : [];
+  const hiddenFutureTaskIds = new Set(hiddenFutureTasks.map((task) => task.id));
+  const displayedTasks =
+    collapseFutureTasks && !showAllFutureTasks
+      ? sortedTasks.filter((task) => !hiddenFutureTaskIds.has(task.id))
+      : sortedTasks;
   if (!tasks.length)
     return (
       <div className="empty">
@@ -216,6 +240,23 @@ export function TaskList({
           })}
         </tbody>
       </table>
+      {hiddenFutureTasks.length ? (
+        <div className="task-list-more">
+          <button
+            type="button"
+            className="quiet"
+            aria-expanded={showAllFutureTasks}
+            onClick={() => setShowAllFutureTasks((current) => !current)}
+          >
+            {showAllFutureTasks
+              ? 'Show fewer tasks'
+              : `View ${hiddenFutureTasks.length} more task${hiddenFutureTasks.length === 1 ? '' : 's'}`}
+          </button>
+          {!showAllFutureTasks ? (
+            <span>Tasks due more than three months from now are hidden.</span>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

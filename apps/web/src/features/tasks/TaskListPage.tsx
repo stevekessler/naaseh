@@ -25,6 +25,7 @@ export function TaskListPage({
   groupOptions = [],
   groups = [],
   currentUserId,
+  collapseFutureTasks = false,
 }: {
   tasks: Task[];
   loading?: boolean;
@@ -44,6 +45,7 @@ export function TaskListPage({
   groups?: readonly { id: string; name: string }[];
   defaultAssigneeId?: string;
   currentUserId?: string;
+  collapseFutureTasks?: boolean;
 }) {
   const columns = useTaskColumns();
   if (loading) return <p role="status">Loading tasks…</p>;
@@ -72,6 +74,7 @@ export function TaskListPage({
         groups={groups}
         relationshipTasks={parentTasks}
         visibleColumns={columns.visible}
+        collapseFutureTasks={collapseFutureTasks}
         {...(currentUserId ? { currentUserId } : {})}
       />
       {selected && (

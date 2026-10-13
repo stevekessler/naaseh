@@ -1453,6 +1453,19 @@ main {
   background: white;
   overscroll-behavior-inline: contain;
 }
+.task-list-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+.task-list-more button {
+  font-weight: 750;
+}
 .task-list-toolbar {
   position: relative;
   z-index: 10;
@@ -3287,21 +3300,82 @@ details:not([open]) > summary.project-workload-heading::after {
 }
 .completion-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: 0.75rem;
-  margin-block: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.8rem;
+  margin-block: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface, #fff);
 }
 
 .completion-filters label {
   display: grid;
-  gap: 0.3rem;
+  gap: 0.4rem;
   min-width: 0;
+  font-weight: 650;
 }
 
 .completion-filters input,
 .completion-filters select {
   width: 100%;
   min-width: 0;
+  border: 1px solid #afbeb5;
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: white;
+  color: #102b49;
+}
+
+.completion-filter-heading,
+.completion-date-presets,
+.completion-filters > .priority-filter-group {
+  grid-column: 1 / -1;
+}
+
+.completion-filter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.completion-filter-heading strong {
+  color: var(--navy);
+  font-size: 1.05rem;
+}
+
+.completion-date-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.completion-date-presets button {
+  min-height: var(--control-min-size);
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #afbeb5;
+  border-radius: 999px;
+  background: white;
+  color: var(--navy);
+}
+
+.completion-date-presets button[aria-pressed='true'] {
+  border-color: var(--navy);
+  color: white;
+  background: var(--navy);
+}
+
+.completion-filters > .priority-filter-group {
+  grid-template-columns: auto minmax(0, 1fr);
+  padding-top: 0.2rem;
+}
+
+.completion-filters > .priority-filter-group .priority-options {
+  flex-wrap: wrap;
+  overflow: visible;
 }
 
 .task-report-summary {

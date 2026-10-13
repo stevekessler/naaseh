@@ -19,6 +19,7 @@ import { projectCompletionChart } from './completion-presentation.js';
 import { CompletionFilters, type CompletionFilterValue } from './CompletionFilters.js';
 import { useBrowserTimeZone } from '../tasks/due-value.js';
 import { buildTaskReport, downloadTaskReportCsv, type TaskReport } from './task-reporting.js';
+import type { AssigneeOption } from '../../components/AssigneePicker.js';
 
 const dateOffset = (days: number) => {
   const date = new Date();
@@ -54,6 +55,8 @@ export interface CompletionDashboardProps {
   tasks?: readonly Task[];
   categories: readonly CategoryRecord[];
   projects: readonly Project[];
+  groups?: readonly { id: string; name: string }[];
+  assignees?: readonly AssigneeOption[];
   pending: number;
   urgencyCounts?: UrgencyCounts;
   selectedUrgencies?: readonly string[];
@@ -87,6 +90,8 @@ export function CompletionDashboard({
   tasks,
   categories,
   projects,
+  groups = [],
+  assignees = [],
   pending,
   urgencyCounts,
   selectedUrgencies = [],
@@ -112,6 +117,9 @@ export function CompletionDashboard({
     period: 'day',
     categoryId: '',
     projectId: '',
+    groupId: '',
+    assigneeId: '',
+    visibility: 'all',
     timeZone: browserTimeZone,
     weekStartsOn: 0,
     urgencies: initialUrgencies,
@@ -149,11 +157,8 @@ export function CompletionDashboard({
   );
   const displayedBuckets = remoteReport?.buckets ?? report.buckets;
   const taskReport = useMemo<TaskReport | undefined>(
-    () =>
-      tasks && (tasks.length > 0 || !remoteReport)
-        ? buildTaskReport(tasks, categories, projects, filters)
-        : undefined,
-    [tasks, categories, projects, filters, remoteReport],
+    () => (tasks ? buildTaskReport(tasks, categories, projects, filters) : undefined),
+    [tasks, categories, projects, filters],
   );
   const displayedTotal = taskReport?.total ?? remoteReport?.total ?? report.total;
   const chart = projectCompletionChart(
@@ -162,6 +167,9 @@ export function CompletionDashboard({
     Boolean(
       filters.categoryId ||
         filters.projectId ||
+        filters.groupId ||
+        filters.assigneeId ||
+        filters.visibility !== 'all' ||
         filters.urgencies.length ||
         filters.taskState !== 'all' ||
         filters.timeliness !== 'all',
@@ -185,6 +193,9 @@ export function CompletionDashboard({
             ...filters,
             categoryId: '',
             projectId: '',
+            groupId: '',
+            assigneeId: '',
+            visibility: 'all' as const,
             urgencies: [],
             from: '',
             to: '',
@@ -221,6 +232,8 @@ export function CompletionDashboard({
         value={filters}
         categories={categories}
         projects={projects}
+        groups={groups}
+        assignees={assignees}
         change={(next) => {
           setFilters(next);
           changeUrgencies?.(next.urgencies);

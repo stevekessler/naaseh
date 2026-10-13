@@ -11,6 +11,7 @@ import {
   taskTimeliness,
 } from '../../src/features/reports/task-reporting.js';
 import type { CompletionFilterValue } from '../../src/features/reports/CompletionFilters.js';
+import { reportDateRange } from '../../src/features/reports/CompletionFilters.js';
 
 const categoryId = '01J00000000000000000000001';
 const projectId = '01J00000000000000000000002';
@@ -36,6 +37,9 @@ const filters: CompletionFilterValue = {
   period: 'day',
   categoryId: '',
   projectId: '',
+  groupId: '',
+  assigneeId: '',
+  visibility: 'all',
   timeZone: 'UTC',
   weekStartsOn: 0,
   urgencies: [],
@@ -104,5 +108,52 @@ describe('task reporting', () => {
     expect(
       taskReportCsv([{ ...report.rows[0]!, task: { ...delayed, label: '=unsafe' } }]),
     ).toContain("'=unsafe");
+  });
+
+  it('filters by group, assignee, and privacy', () => {
+    const privateGroupTask = createTask(
+      {
+        label: 'Private group task',
+        groupId: 'family',
+        assigneeId: 'alex',
+        visibility: 'private',
+      },
+      'owner',
+      new Date('2026-10-05T12:00:00.000Z'),
+    );
+
+    const report = buildTaskReport([open, privateGroupTask], [category], [project], {
+      ...filters,
+      groupId: 'family',
+      assigneeId: 'alex',
+      visibility: 'private',
+    });
+
+    expect(report.rows.map((row) => row.task.label)).toEqual(['Private group task']);
+  });
+
+  it('builds the requested calendar shortcuts', () => {
+    const now = new Date(2026, 9, 12, 14, 30);
+
+    expect(reportDateRange('today', 0, now)).toEqual({
+      from: '2026-10-12',
+      to: '2026-10-12',
+    });
+    expect(reportDateRange('this-week', 0, now)).toEqual({
+      from: '2026-10-11',
+      to: '2026-10-17',
+    });
+    expect(reportDateRange('last-week', 0, now)).toEqual({
+      from: '2026-10-04',
+      to: '2026-10-10',
+    });
+    expect(reportDateRange('this-month', 0, now)).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-31',
+    });
+    expect(reportDateRange('this-quarter', 0, now)).toEqual({
+      from: '2026-10-01',
+      to: '2026-12-31',
+    });
   });
 });

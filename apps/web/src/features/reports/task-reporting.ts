@@ -80,6 +80,13 @@ export function buildTaskReport(
     if (filters.taskState !== 'all' && state !== filters.taskState) return [];
     if (filters.timeliness !== 'all' && timeliness !== filters.timeliness) return [];
     if (!matchesUrgencySet(task.urgency, filters.urgencies)) return [];
+    if (filters.assigneeId && task.assigneeId !== filters.assigneeId) return [];
+    if (
+      filters.groupId &&
+      (filters.groupId === 'unassigned' ? Boolean(task.groupId) : task.groupId !== filters.groupId)
+    )
+      return [];
+    if (filters.visibility !== 'all' && task.visibility !== filters.visibility) return [];
     if (
       filters.projectId &&
       (filters.projectId === 'unassigned'

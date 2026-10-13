@@ -59,7 +59,11 @@ async function createFilteredTask(
   await form.getByLabel('Assignee').selectOption('local-steve');
   await setTaskDueDate(form, input.dueAt.slice(0, 10), input.dueAt.slice(11));
   await form.getByRole('button', { name: 'Add task' }).click();
-  await expect(page.getByRole('heading', { name: input.label })).toBeVisible();
+  const heading = page.getByRole('heading', { name: input.label });
+  const viewMore = page.getByRole('button', { name: /View \d+ more tasks?/ });
+  await expect(heading.or(viewMore)).toBeVisible();
+  if (await viewMore.isVisible()) await viewMore.click();
+  await expect(heading).toBeVisible();
 }
 
 async function selectUrgencies(page: Page, labels: string[]) {
