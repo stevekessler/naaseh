@@ -107,12 +107,21 @@ describe('shared assignment controls', () => {
     }
     expect(form.indexOf('Priority')).toBeLessThan(form.indexOf('Task details'));
     expect(form.indexOf('Due date')).toBeLessThan(form.indexOf('Task details'));
-    expect(form.match(/>Repeat</gu)).toHaveLength(1);
-    expect(form.indexOf('Project')).toBeLessThan(form.indexOf('>Repeat<'));
-    expect(form).toContain('Every x days');
-    expect(form).toMatch(/aria-label="Repeat schedule"[^>]*><option/);
-    expect(form).not.toMatch(/aria-label="Repeat schedule"[^>]*disabled/);
-    expect(form).toContain('Choose a repeat schedule, then add the due date when it should start.');
+    expect(form).not.toContain('>Repeat<');
+
+    const formWithDueDate = renderToStaticMarkup(
+      <TaskForm
+        save={vi.fn()}
+        task={createTask(
+          { label: 'Scheduled task', dueKind: 'date', dueDate: '2026-08-11' },
+          'user-steve',
+          new Date('2026-08-10T00:00:00.000Z'),
+        )}
+      />,
+    );
+    expect(formWithDueDate.match(/>Repeat</gu)).toHaveLength(1);
+    expect(formWithDueDate).toContain('Every x days');
+    expect(formWithDueDate).toMatch(/aria-label="Repeat schedule"[^>]*><option/);
   });
 
   it('shows projects in list creation, including while a category is still hydrating', () => {
