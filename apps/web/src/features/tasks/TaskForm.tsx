@@ -128,11 +128,17 @@ export function TaskForm({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const progressId = useId();
+  const repeatHelpId = useId();
   const openParentTasks = eligibleParentTasks(task, parentTasks);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
     const form = event.currentTarget;
+    if (repeatUnit && dueKind === 'none') {
+      setSaveError('Choose a due date to start this repeating task.');
+      form.querySelector<HTMLButtonElement>('.due-date-trigger')?.focus();
+      return;
+    }
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
     const submittedProjectId = value('projectId');
@@ -254,9 +260,12 @@ export function TaskForm({
           <legend>Repeat</legend>
           <select
             aria-label="Repeat schedule"
+            aria-describedby={dueKind === 'none' ? repeatHelpId : undefined}
             value={repeatUnit}
-            disabled={dueKind === 'none'}
-            onChange={(event) => setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '')}
+            onChange={(event) => {
+              setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '');
+              setSaveError('');
+            }}
           >
             <option value="">Does not repeat</option>
             <option value="day">Every x days</option>
@@ -280,7 +289,11 @@ export function TaskForm({
               </span>
             </label>
           ) : null}
-          {dueKind === 'none' ? <small>Choose a due date to repeat this task.</small> : null}
+          {dueKind === 'none' ? (
+            <small id={repeatHelpId}>
+              Choose a repeat schedule, then add the due date when it should start.
+            </small>
+          ) : null}
         </fieldset>
       </div>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
