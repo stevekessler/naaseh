@@ -68,6 +68,7 @@ export function TaskListPage({
         tasks={tasks}
         onToggle={onToggle}
         onSelect={onSelect}
+        onDueDateChange={onUpdate}
         onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
         categories={categories}
         projects={projects}

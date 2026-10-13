@@ -62,6 +62,7 @@ export function TaskList({
   tasks,
   onToggle,
   onSelect = () => {},
+  onDueDateChange,
   onProgressChange,
   currentUserId,
   categories = [],
@@ -74,6 +75,7 @@ export function TaskList({
   tasks: Task[];
   onToggle: (task: Task) => void;
   onSelect?: (task: Task) => void;
+  onDueDateChange?: (task: Task, patch: Partial<Task>) => void | Promise<void>;
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
   categories?: readonly CategoryRecord[];
@@ -228,6 +230,7 @@ export function TaskList({
                 task={task}
                 onToggle={onToggle}
                 onSelect={onSelect}
+                {...(onDueDateChange ? { onDueDateChange } : {})}
                 onProgressChange={onProgressChange}
                 categoryName={categories.find((category) => category.id === categoryId)?.name}
                 categoryColor={categories.find((category) => category.id === categoryId)?.color}

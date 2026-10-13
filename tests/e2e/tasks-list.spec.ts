@@ -55,7 +55,7 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   } else await expect(taskTable.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Call the contractor' })).toBeVisible();
   const dueFontSize = await taskTable
-    .locator('.task-due-cell > span')
+    .locator('.task-due-trigger')
     .first()
     .evaluate((element) => getComputedStyle(element).fontSize);
   const taskFontSize = await taskTable
@@ -63,6 +63,19 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
     .first()
     .evaluate((element) => getComputedStyle(element).fontSize);
   expect(dueFontSize).toBe(taskFontSize);
+  const dueDateTrigger = taskTable.getByRole('button', {
+    name: /Edit due date for Call the contractor/,
+  });
+  await dueDateTrigger.click();
+  const dueDateDialog = page.getByRole('dialog', { name: 'Set due date' });
+  await expect(dueDateDialog).toBeVisible();
+  const dueDateInput = dueDateDialog.getByLabel('Due date', { exact: true });
+  await dueDateInput.fill('2020-01-02');
+  const saveDueDate = dueDateDialog.getByRole('button', { name: 'Set due date' });
+  await saveDueDate.focus();
+  await saveDueDate.press('Enter');
+  await expect(dueDateDialog).toBeHidden();
+  await expect(dueDateTrigger).toContainText('1/2/2020');
   await page.locator('.task-column-settings > summary').click();
   const columnSettings = page.getByRole('group', { name: 'Choose visible columns' });
   await expect(columnSettings).toBeVisible();
