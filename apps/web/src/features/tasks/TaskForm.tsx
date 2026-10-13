@@ -128,17 +128,11 @@ export function TaskForm({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const progressId = useId();
-  const repeatHelpId = useId();
   const openParentTasks = eligibleParentTasks(task, parentTasks);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
     const form = event.currentTarget;
-    if (repeatUnit && dueKind === 'none') {
-      setSaveError('Choose a due date to start this repeating task.');
-      form.querySelector<HTMLButtonElement>('.due-date-trigger')?.focus();
-      return;
-    }
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
     const submittedProjectId = value('projectId');
@@ -256,45 +250,38 @@ export function TaskForm({
             }
           }}
         />
-        <fieldset className="repeat-schedule-field">
-          <legend>Repeat</legend>
-          <select
-            aria-label="Repeat schedule"
-            aria-describedby={dueKind === 'none' ? repeatHelpId : undefined}
-            value={repeatUnit}
-            onChange={(event) => {
-              setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '');
-              setSaveError('');
-            }}
-          >
-            <option value="">Does not repeat</option>
-            <option value="day">Every x days</option>
-            <option value="week">Every x weeks</option>
-            <option value="month">Every x months</option>
-          </select>
-          {repeatUnit ? (
-            <label>
-              Every
-              <input
-                aria-label="Repeat every"
-                type="number"
-                min="1"
-                max="999"
-                value={repeatInterval}
-                onChange={(event) => setRepeatInterval(event.currentTarget.valueAsNumber || 1)}
-              />
-              <span>
-                {repeatUnit}
-                {repeatInterval === 1 ? '' : 's'}
-              </span>
-            </label>
-          ) : null}
-          {dueKind === 'none' ? (
-            <small id={repeatHelpId}>
-              Choose a repeat schedule, then add the due date when it should start.
-            </small>
-          ) : null}
-        </fieldset>
+        {dueKind !== 'none' ? (
+          <fieldset className="repeat-schedule-field">
+            <legend>Repeat</legend>
+            <select
+              aria-label="Repeat schedule"
+              value={repeatUnit}
+              onChange={(event) => setRepeatUnit(event.currentTarget.value as TaskRepeatUnit | '')}
+            >
+              <option value="">Does not repeat</option>
+              <option value="day">Every x days</option>
+              <option value="week">Every x weeks</option>
+              <option value="month">Every x months</option>
+            </select>
+            {repeatUnit ? (
+              <label>
+                Every
+                <input
+                  aria-label="Repeat every"
+                  type="number"
+                  min="1"
+                  max="999"
+                  value={repeatInterval}
+                  onChange={(event) => setRepeatInterval(event.currentTarget.valueAsNumber || 1)}
+                />
+                <span>
+                  {repeatUnit}
+                  {repeatInterval === 1 ? '' : 's'}
+                </span>
+              </label>
+            ) : null}
+          </fieldset>
+        ) : null}
       </div>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
         <summary>Task details</summary>
