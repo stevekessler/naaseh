@@ -17,21 +17,21 @@ describe('enhanced encrypted database migration', () => {
     );
     expect(planEnhancedSchemaMigration(6)).toMatchObject({
       from: 6,
-      to: 14,
+      to: 15,
       preserveOutbox: true,
       storesToDelete: ['secureGoogleSync'],
     });
   });
 
   it('is idempotent and blocks unsupported future schemas', () => {
-    expect(planEnhancedSchemaMigration(14)).toEqual({
-      from: 14,
-      to: 14,
+    expect(planEnhancedSchemaMigration(15)).toEqual({
+      from: 15,
+      to: 15,
       preserveOutbox: true,
       preservedStores: ['settings', 'cryptoKeys', 'outbox', 'secureConflicts'],
       storesToAdd: [],
       storesToDelete: [],
     });
-    expect(() => planEnhancedSchemaMigration(15)).toThrow('newer');
+    expect(() => planEnhancedSchemaMigration(16)).toThrow('newer');
   });
 });

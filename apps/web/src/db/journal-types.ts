@@ -10,7 +10,7 @@ export interface JournalMutation {
   id: string;
   entityId: string;
   entityType: 'journalEntry' | 'journalProfile';
-  operation: 'upsert';
+  operation: 'upsert' | 'recycle' | 'restore';
   baseVersion: number;
   dateToken?: string;
   priorDateToken?: string;

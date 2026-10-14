@@ -119,12 +119,35 @@ describe('journal domain', () => {
     ).toBe(false);
   });
 
-  it('defaults both private preferences on and exposes no delete operation', () => {
+  it('defaults both private preferences on and exposes recoverable lifecycle operations only', () => {
     expect(journalProfileSchema.parse({ schemaVersion: 1, ownerId: 'owner-1' })).toMatchObject({
       suicidalSelfHarmEnabled: true,
       dbtSkillsEnabled: true,
     });
     expect(journalMutationOperationSchema.safeParse('upsert').success).toBe(true);
+    expect(journalMutationOperationSchema.safeParse('recycle').success).toBe(true);
+    expect(journalMutationOperationSchema.safeParse('restore').success).toBe(true);
     expect(journalMutationOperationSchema.safeParse('delete').success).toBe(false);
+  });
+
+  it('loads projection v1 as active and validates projection v2 recycle metadata', () => {
+    expect(journalEntryProjectionSchema.parse(baseProjection)).toMatchObject({
+      schemaVersion: 1,
+      lifecycle: 'active',
+    });
+    const recycled = journalEntryProjectionSchema.parse({
+      ...baseProjection,
+      schemaVersion: 2,
+      lifecycle: 'recycled',
+      recycledAt: '2026-10-14T12:00:00.000Z',
+    });
+    expect(recycled.lifecycle).toBe('recycled');
+    expect(
+      journalEntryProjectionSchema.safeParse({
+        ...baseProjection,
+        schemaVersion: 2,
+        lifecycle: 'recycled',
+      }).success,
+    ).toBe(false);
   });
 });

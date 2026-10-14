@@ -1,4 +1,4 @@
-export const currentSchemaVersion = 14;
+export const currentSchemaVersion = 15;
 
 const storeIntroductions = [
   {

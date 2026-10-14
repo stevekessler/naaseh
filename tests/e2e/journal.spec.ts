@@ -42,4 +42,12 @@ test('owner creates a Crisis Plan, journals, sees it for a crisis answer, and re
   await page.getByRole('spinbutton', { name: 'Hours of sleep' }).fill('7.5');
   await page.getByRole('button', { name: 'Save encrypted entry' }).click();
   await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+  await page.getByRole('button', { name: /Read or edit entry/u }).click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Move to recycle bin' }).click();
+  await expect(page.getByRole('heading', { name: 'Recycle bin' })).toBeVisible();
+  await expect(page.getByText(/moved/u)).toBeVisible();
+  await page.getByRole('button', { name: 'Restore' }).click();
+  await expect(page.getByRole('heading', { name: 'Entries' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Read or edit entry/u })).toBeVisible();
 });

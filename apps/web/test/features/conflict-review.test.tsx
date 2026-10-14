@@ -45,3 +45,22 @@ it('identifies a conflicted list item and its parent list by name', () => {
   expect(stale).toContain('more than seven days old');
   expect(stale).toContain('It will not expire automatically');
 });
+
+it('offers encrypted-only choices for a Journal lifecycle conflict', () => {
+  const html = renderToStaticMarkup(
+    <ConflictItem
+      conflict={{
+        id: 'journal:entry',
+        reason: 'journal_version_mismatch',
+        source: 'journal',
+        message: 'This encrypted Journal entry changed elsewhere.',
+      }}
+      synchronize={async () => undefined}
+    />,
+  );
+  expect(html).toContain('Journal entry conflict');
+  expect(html).toContain('Keep my encrypted version');
+  expect(html).toContain('Keep server version');
+  expect(html).not.toContain('ciphertext');
+  expect(html).not.toContain('Item reference');
+});

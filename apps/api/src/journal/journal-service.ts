@@ -64,6 +64,18 @@ export class JournalService {
         version: current?.version ?? 0,
         conflictKind: 'version' as const,
       };
+    const currentLifecycle = current?.lifecycleState ?? 'active';
+    const validTransition =
+      (mutation.operation === 'upsert' && currentLifecycle === 'active') ||
+      (mutation.operation === 'recycle' && Boolean(current) && currentLifecycle === 'active') ||
+      (mutation.operation === 'restore' && currentLifecycle === 'recycled');
+    if (!validTransition)
+      return {
+        mutationId: mutation.id,
+        status: 'rejected' as const,
+        version: current?.version ?? 0,
+        conflictKind: 'lifecycle' as const,
+      };
     const existingDateEntry = await this.repository.dateOwner(ownerId, payload.dateToken);
     if (existingDateEntry && existingDateEntry !== mutation.entityId)
       return {

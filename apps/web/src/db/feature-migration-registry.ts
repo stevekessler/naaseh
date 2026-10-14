@@ -35,8 +35,11 @@ export const journalBrowserMigration = Object.freeze({
   ...defineFeatureVersion({
     feature: 'private-journal-browser',
     minimumVersion: 11,
-    currentVersion: 12,
-    migrations: [{ id: 'add-encrypted-journal-stores', from: 11, to: 12 }],
+    currentVersion: 13,
+    migrations: [
+      { id: 'add-encrypted-journal-stores', from: 11, to: 12 },
+      { id: 'add-journal-lifecycle-index', from: 12, to: 13 },
+    ],
   }),
   ownerBoundStores: journalOwnerBoundStores,
   indexedPlaintextFields: [] as const,

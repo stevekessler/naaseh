@@ -21,6 +21,7 @@ export interface JournalCiphertextRecord {
   entryId: string;
   dateToken: string;
   version: number;
+  lifecycleState?: 'active' | 'recycled' | 'deleting';
   payload: JournalEntryCiphertext;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +39,7 @@ export interface JournalFeedRow {
   entityType: 'journalEntry' | 'journalProfile';
   entityId: string;
   entityVersion: number;
+  operation: 'upsert' | 'recycle' | 'restore';
   payload: JournalEntryCiphertext | CiphertextEnvelope;
 }
 
@@ -70,6 +72,7 @@ export interface JournalRepository {
       entityType: 'journalEntry' | 'journalProfile';
       entityId: string;
       entityVersion: number;
+      operation: 'upsert' | 'recycle' | 'restore';
       payload: JournalEntryCiphertext | CiphertextEnvelope;
     }>
   >;
@@ -97,6 +100,7 @@ export class InMemoryJournalRepository {
     entityType: 'journalEntry' | 'journalProfile';
     entityId: string;
     entityVersion: number;
+    operation: 'upsert' | 'recycle' | 'restore';
     payload: JournalEntryCiphertext | CiphertextEnvelope;
   }> = [];
   private key(ownerId: string, entryId: string) {
@@ -137,6 +141,7 @@ export class InMemoryJournalRepository {
       entityType: 'journalProfile',
       entityId: 'journal-profile',
       entityVersion: version,
+      operation: 'upsert',
       payload,
     });
     return record;
@@ -166,12 +171,14 @@ export class InMemoryJournalRepository {
     entityType: 'journalEntry' | 'journalProfile';
     entityId: string;
     entityVersion: number;
+    operation: 'upsert' | 'recycle' | 'restore';
     payload: JournalEntryCiphertext | CiphertextEnvelope;
   }> {
     const records: Array<{
       entityType: 'journalEntry' | 'journalProfile';
       entityId: string;
       entityVersion: number;
+      operation: 'upsert' | 'recycle' | 'restore';
       payload: JournalEntryCiphertext | CiphertextEnvelope;
     }> = [...this.records.values()]
       .filter((row) => row.ownerId === ownerId)
@@ -179,6 +186,7 @@ export class InMemoryJournalRepository {
         entityType: 'journalEntry',
         entityId: row.entryId,
         entityVersion: row.version,
+        operation: row.lifecycleState === 'recycled' ? 'recycle' : 'upsert',
         payload: row.payload,
       }));
     const profile = this.profile(ownerId);
@@ -187,6 +195,7 @@ export class InMemoryJournalRepository {
         entityType: 'journalProfile',
         entityId: 'journal-profile',
         entityVersion: profile.version,
+        operation: 'upsert',
         payload: profile.payload,
       });
     return records;
@@ -206,6 +215,12 @@ export class InMemoryJournalRepository {
       entryId: payload.entryId,
       dateToken: payload.dateToken,
       version,
+      lifecycleState:
+        mutation.operation === 'recycle'
+          ? 'recycled'
+          : mutation.operation === 'restore'
+            ? 'active'
+            : (current?.lifecycleState ?? 'active'),
       payload,
       createdAt: current?.createdAt ?? now,
       updatedAt: now,
@@ -224,6 +239,7 @@ export class InMemoryJournalRepository {
       entityType: 'journalEntry',
       entityId: payload.entryId,
       entityVersion: version,
+      operation: mutation.operation,
       payload,
     });
     return record;
@@ -289,7 +305,7 @@ export class DynamoJournalRepository implements JournalRepository {
                 entityType: row.entityType,
                 entityId: row.entityId,
                 version: row.entityVersion,
-                operation: 'upsert',
+                operation: row.operation,
                 payload: row.payload,
                 changedAt,
               },
@@ -336,6 +352,7 @@ export class DynamoJournalRepository implements JournalRepository {
       entityType: 'journalProfile',
       entityId: 'journal-profile',
       entityVersion: version,
+      operation: 'upsert',
       payload,
     });
     await this.client.send(
@@ -410,6 +427,10 @@ export class DynamoJournalRepository implements JournalRepository {
           entityType: data.entityType,
           entityId: String(data.entityId),
           entityVersion: Number(data.version),
+          operation:
+            data.operation === 'recycle' || data.operation === 'restore'
+              ? data.operation
+              : 'upsert',
           payload: data.payload,
         }),
       );
@@ -430,6 +451,7 @@ export class DynamoJournalRepository implements JournalRepository {
       entityType: 'journalEntry' | 'journalProfile';
       entityId: string;
       entityVersion: number;
+      operation: 'upsert' | 'recycle' | 'restore';
       payload: JournalEntryCiphertext | CiphertextEnvelope;
     }> = [];
     for (const item of (result.Items ?? []) as Array<{ SK?: string; data?: unknown }>) {
@@ -440,6 +462,7 @@ export class DynamoJournalRepository implements JournalRepository {
           entityType: 'journalEntry',
           entityId: record.entryId,
           entityVersion: record.version,
+          operation: record.lifecycleState === 'recycled' ? 'recycle' : 'upsert',
           payload: record.payload,
         });
       } else if (sk === 'PROFILE') {
@@ -448,6 +471,7 @@ export class DynamoJournalRepository implements JournalRepository {
           entityType: 'journalProfile',
           entityId: 'journal-profile',
           entityVersion: record.version,
+          operation: 'upsert',
           payload: record.payload,
         });
       }
@@ -468,6 +492,12 @@ export class DynamoJournalRepository implements JournalRepository {
       entryId: payload.entryId,
       dateToken: payload.dateToken,
       version,
+      lifecycleState:
+        mutation.operation === 'recycle'
+          ? 'recycled'
+          : mutation.operation === 'restore'
+            ? 'active'
+            : (current?.lifecycleState ?? 'active'),
       payload,
       createdAt: current?.createdAt ?? now,
       updatedAt: now,
@@ -477,6 +507,7 @@ export class DynamoJournalRepository implements JournalRepository {
       entityType: 'journalEntry',
       entityId: payload.entryId,
       entityVersion: version,
+      operation: mutation.operation,
       payload,
     });
     const items: NonNullable<TransactWriteCommandInput['TransactItems']> = [

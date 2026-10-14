@@ -77,4 +77,29 @@ describe('journal owner service', () => {
       ),
     ).rejects.toThrow();
   });
+
+  it('recycles and restores idempotently while reserving the original date', async () => {
+    const repository = new InMemoryJournalRepository();
+    const service = new JournalService(repository);
+    await service.apply('owner', mutation());
+    const recycle = mutation({ operation: 'recycle', baseVersion: 1 });
+    expect(await service.apply('owner', recycle)).toMatchObject({ status: 'applied', version: 2 });
+    expect(await service.apply('owner', recycle)).toMatchObject({
+      status: 'alreadyApplied',
+      version: 2,
+    });
+    expect(await service.read('owner', recycle.entityId)).toMatchObject({
+      lifecycleState: 'recycled',
+      dateToken: 'A'.repeat(43),
+    });
+    expect(
+      await service.apply('owner', mutation({ operation: 'upsert', baseVersion: 2 })),
+    ).toMatchObject({ status: 'rejected', conflictKind: 'lifecycle' });
+    expect(
+      await service.apply('owner', mutation({ operation: 'restore', baseVersion: 2 })),
+    ).toMatchObject({ status: 'applied', version: 3 });
+    expect(await service.read('owner', recycle.entityId)).toMatchObject({
+      lifecycleState: 'active',
+    });
+  });
 });

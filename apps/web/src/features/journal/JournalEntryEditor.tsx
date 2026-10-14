@@ -19,7 +19,7 @@ export function emptyJournalEntry(
   const now = new Date().toISOString();
   return {
     projection: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       id: crypto.randomUUID(),
       ownerId,
       date,
@@ -48,6 +48,7 @@ export function emptyJournalEntry(
         contentment: null,
       },
       dbt: null,
+      lifecycle: 'active',
       createdAt: now,
       updatedAt: now,
     },
@@ -95,12 +96,14 @@ export function JournalEntryEditor({
   tasks = [],
   crisisPlan = null,
   onSave,
+  onRecycle,
 }: {
   initial: JournalEntryDraft;
   profile: JournalProfile;
   tasks?: Task[];
   crisisPlan?: JournalDocument | null;
   onSave: (draft: JournalEntryDraft) => Promise<void>;
+  onRecycle?: (draft: JournalEntryDraft) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(initial);
   const [status, setStatus] = useState('');
@@ -232,6 +235,27 @@ export function JournalEntryEditor({
         onChange={(generalNotes) => setDraft((current) => ({ ...current, generalNotes }))}
       />
       <button type="submit">Save encrypted entry</button>
+      {onRecycle && (
+        <button
+          type="button"
+          onClick={() => {
+            if (!window.confirm('Move this entry to the recycle bin? You can restore it later.'))
+              return;
+            setStatus('Moving encrypted entry to the recycle bin…');
+            void onRecycle(draft)
+              .then(() => setStatus('Moved to the recycle bin; synchronization pending.'))
+              .catch((error) =>
+                setStatus(
+                  error instanceof Error
+                    ? error.message
+                    : 'The entry could not be recycled. Your entry is preserved.',
+                ),
+              );
+          }}
+        >
+          Move to recycle bin
+        </button>
+      )}
       <p aria-live="polite">{status}</p>
     </form>
   );

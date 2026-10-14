@@ -7,11 +7,11 @@ import {
   ownerRecoveryViewSchema,
 } from '@naaseh/domain';
 
-export const journalContractVersion = 5 as const;
+export const journalContractVersion = 7 as const;
 export const journalMutationRequestSchema = journalMutationSchema;
 export const journalPushRequestSchema = z
   .object({
-    version: z.literal(5),
+    version: z.literal(journalContractVersion),
     clientId: z.string().min(1).max(128),
     mutations: z.array(journalMutationSchema).max(100),
   })
@@ -21,11 +21,14 @@ export const journalMutationResultSchema = z
     mutationId: z.string().uuid(),
     status: z.enum(['applied', 'alreadyApplied', 'conflict', 'rejected']),
     version: z.number().int().positive().optional(),
-    conflictKind: z.enum(['version', 'dateToken']).optional(),
+    conflictKind: z.enum(['version', 'dateToken', 'lifecycle']).optional(),
   })
   .strict();
 export const journalPushResponseSchema = z
-  .object({ version: z.literal(5), results: z.array(journalMutationResultSchema) })
+  .object({
+    version: z.literal(journalContractVersion),
+    results: z.array(journalMutationResultSchema),
+  })
   .strict();
 export const journalKeyEnvelopeResponseSchema = journalKeyEnvelopeSchema;
 export const journalRecoveryViewSchema = ownerRecoveryViewSchema;
@@ -35,12 +38,13 @@ export const journalChangeSchema = z
     entityType: z.enum(['journalEntry', 'journalProfile']),
     entityId: z.string().min(1).max(128),
     entityVersion: z.number().int().positive(),
+    operation: z.enum(['upsert', 'recycle', 'restore']).default('upsert'),
     payload: z.union([journalEntryCiphertextSchema, ciphertextEnvelopeSchema]),
   })
   .strict();
 export const journalPullResponseSchema = z
   .object({
-    version: z.literal(5),
+    version: z.literal(journalContractVersion),
     changes: z.array(journalChangeSchema).max(100),
     journalCursor: z.number().int().nonnegative(),
     hasMore: z.boolean(),
@@ -48,7 +52,7 @@ export const journalPullResponseSchema = z
   .strict();
 export const journalBootstrapResponseSchema = z
   .object({
-    version: z.literal(5),
+    version: z.literal(journalContractVersion),
     records: z.array(journalChangeSchema).max(100),
     nextPageCursor: z.string().max(2048).optional(),
     journalCursor: z.number().int().nonnegative(),

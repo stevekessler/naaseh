@@ -100,6 +100,7 @@ export async function savePendingJournalEntry(input: {
   ownerId: string;
   entry: JournalEntryCiphertext;
   mutation: JournalMutation;
+  lifecycle?: 'active' | 'recycled';
 }) {
   assertCiphertextOnlyJournalRecord(input.entry);
   const existing = await db.secureJournalEntries
@@ -107,13 +108,18 @@ export async function savePendingJournalEntry(input: {
     .equals([input.ownerId, input.entry.dateToken])
     .first();
   if (existing && existing.id !== input.entry.entryId)
-    throw new Error('A journal entry already exists for that date.');
+    throw new Error(
+      existing.lifecycle === 'recycled'
+        ? 'A recycled journal entry still reserves that date. Open the recycle bin to restore it.'
+        : 'A journal entry already exists for that date.',
+    );
   const updatedAt = new Date().toISOString();
   const record: EncryptedJournalRecord = {
     id: input.entry.entryId,
     ownerId: input.ownerId,
     entityType: 'journalEntry',
     dateToken: input.entry.dateToken,
+    lifecycle: input.lifecycle ?? 'active',
     version: input.mutation.baseVersion,
     updatedAt,
     value: input.entry,

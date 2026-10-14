@@ -29,8 +29,8 @@ describe('durable local outbox rules', () => {
       owner: 7,
     }));
   it('recognizes only the current encrypted database schema', () => {
-    expect(supportedLocalSchema(14)).toBe(true);
-    expect(supportedLocalSchema(13)).toBe(false);
+    expect(supportedLocalSchema(15)).toBe(true);
+    expect(supportedLocalSchema(14)).toBe(false);
   });
   it('blocks saves before quota exhaustion and uses bounded jittered retries', () => {
     expect(() => assertStorageCapacity(96, 100, 1)).toThrow('cannot be saved safely');

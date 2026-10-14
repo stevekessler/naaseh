@@ -72,6 +72,7 @@ export interface EncryptedJournalRecord {
     | 'journalConflict'
     | 'journalMutation';
   dateToken?: string;
+  lifecycle?: 'active' | 'recycled' | 'deleting';
   version?: number;
   mutationId?: string;
   updatedAt: string;
@@ -367,6 +368,9 @@ class NaasehDatabase extends Dexie {
     // Remove the retired Google Tasks cache during upgrade. Dexie deletes the object store and
     // its encrypted contents atomically as part of the version change.
     this.version(14).stores({ secureGoogleSync: null });
+    this.version(15).stores({
+      secureJournalEntries: 'id,ownerId,lifecycle,&[ownerId+dateToken],updatedAt',
+    });
   }
 }
 

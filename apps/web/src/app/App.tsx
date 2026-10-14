@@ -40,7 +40,7 @@ import {
 } from '../features/sync/sync-activity.js';
 import { drainSequentially } from '../sync/sync-engine.js';
 import { dismissObsoleteConflicts } from '../sync/conflict-review.js';
-import { drainJournalOutbox } from '../sync/journal-sync.js';
+import { drainJournalOutbox, synchronizeJournalCiphertext } from '../sync/journal-sync.js';
 import { drainJournalDataInDependencyOrder } from '../sync/crisis-plan-sync.js';
 import { zeroizeJournalKey } from '../crypto/journal-crypto.js';
 import { useJournalRelock } from '../features/journal/useJournalRelock.js';
@@ -852,6 +852,7 @@ export function App() {
           session.csrfToken,
           drainJournalOutbox,
         );
+        await synchronizeJournalCiphertext(session.userId);
       } catch (error) {
         journalError = error;
       }

@@ -1,5 +1,5 @@
 import { journalKeyEnvelopeResponseSchema, journalPullResponseSchema } from '@naaseh/contracts';
-import type { JournalKeyEnvelope } from '@naaseh/domain';
+import { journalSyncContractVersion, type JournalKeyEnvelope } from '@naaseh/domain';
 
 export class JournalClientError extends Error {
   constructor(
@@ -54,7 +54,7 @@ export async function pullJournalChanges(journalCursor: number) {
     await journalFetch('/sync/pull', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ version: 5, journalCursor }),
+      body: JSON.stringify({ version: journalSyncContractVersion, journalCursor }),
     }),
   );
 }

@@ -22,6 +22,7 @@ export interface ReviewConflict {
   code?: string;
   currentVersion?: number;
   display?: ConflictDisplayContext;
+  source?: 'standard' | 'journal';
 }
 
 export interface ConflictDisplayContext {
@@ -77,7 +78,7 @@ export async function readConflictDisplayContext(
 }
 
 export async function listReviewConflicts(): Promise<ReviewConflict[]> {
-  return Promise.all(
+  const standard = await Promise.all(
     (await db.secureConflicts.toArray()).map(async (record) => {
       try {
         const saved = await decryptLocalValue<{
@@ -101,6 +102,7 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
           ...(saved.result?.problem?.code ? { code: saved.result.problem.code } : {}),
           ...(currentVersion !== undefined ? { currentVersion } : {}),
           ...(display ? { display } : {}),
+          source: 'standard' as const,
         };
       } catch {
         // Timer and legacy access-revocation records use other encryption namespaces.
@@ -109,9 +111,78 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
           id: record.id,
           createdAt: record.updatedAt,
           reason: record.ownerId ? 'timer_changed' : 'unavailable',
+          source: 'standard' as const,
         };
       }
     }),
+  );
+  // Partial legacy/test databases may not expose the v15 Journal conflict table yet.
+  // Treat that state as an empty conflict set while Dexie's upgrade opens the full schema.
+  const journalRows = db.secureJournalConflicts ? await db.secureJournalConflicts.toArray() : [];
+  const journal = journalRows.map((record) => ({
+    id: record.id,
+    createdAt: record.updatedAt,
+    reason: 'journal_version_mismatch',
+    message:
+      'This encrypted Journal entry changed elsewhere. Choose which encrypted version to keep.',
+    source: 'journal' as const,
+  }));
+  return [...standard, ...journal];
+}
+
+async function resolveJournalConflict(conflict: ReviewConflict, choice: 'local' | 'remote') {
+  const row = await db.secureJournalConflicts.get(conflict.id);
+  if (!row) throw new Error('This Journal conflict was already resolved.');
+  const value = row.value as {
+    entityId?: string;
+    remoteVersion?: number;
+    remoteOperation?: 'upsert' | 'recycle' | 'restore';
+    remoteCiphertext?: import('../db/journal-types.js').JournalEntryCiphertext;
+    localMutationIds?: string[];
+  };
+  if (!value.entityId) throw new Error('This Journal conflict cannot be resolved safely.');
+  const mutationIds = value.localMutationIds ?? (row.mutationId ? [row.mutationId] : []);
+  if (choice === 'local') {
+    if (value.remoteVersion === undefined)
+      throw new Error('Synchronize again to load the current encrypted server version.');
+    await db.transaction('rw', db.secureJournalConflicts, db.secureJournalOutbox, async () => {
+      for (const id of mutationIds) {
+        const pending = await db.secureJournalOutbox.get(id);
+        if (!pending) continue;
+        await db.secureJournalOutbox.put({
+          ...pending,
+          updatedAt: new Date().toISOString(),
+          value: {
+            ...(pending.value as Record<string, unknown>),
+            baseVersion: value.remoteVersion,
+          },
+        });
+      }
+      await db.secureJournalConflicts.delete(conflict.id);
+    });
+    return;
+  }
+  if (!value.remoteCiphertext || value.remoteVersion === undefined)
+    throw new Error('Synchronize again to load the encrypted server version.');
+  await db.transaction(
+    'rw',
+    db.secureJournalEntries,
+    db.secureJournalConflicts,
+    db.secureJournalOutbox,
+    async () => {
+      await db.secureJournalEntries.put({
+        id: value.entityId!,
+        ownerId: row.ownerId,
+        entityType: 'journalEntry',
+        dateToken: value.remoteCiphertext!.dateToken,
+        lifecycle: value.remoteOperation === 'recycle' ? 'recycled' : 'active',
+        version: value.remoteVersion!,
+        updatedAt: new Date().toISOString(),
+        value: value.remoteCiphertext!,
+      });
+      await db.secureJournalOutbox.bulkDelete(mutationIds);
+      await db.secureJournalConflicts.delete(conflict.id);
+    },
   );
 }
 
@@ -173,6 +244,10 @@ export async function resolveReviewedConflict(
   choice: 'local' | 'remote',
   reviewed: Task | null | undefined,
 ) {
+  if (conflict.source === 'journal') {
+    await resolveJournalConflict(conflict, choice);
+    return;
+  }
   const action = async () => {
     const mutation = conflict.mutation;
     if (mutation?.entityType !== 'task') {

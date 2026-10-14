@@ -71,7 +71,11 @@ import {
 } from '../timers/task-timer-repository.js';
 import { recordTaskTimerEvent } from '../timers/telemetry.js';
 import { applyCrisisPlanSyncMutation } from '../journal/crisis-plan-handler.js';
-import { journalMutationSchema } from '@naaseh/domain';
+import {
+  compatibleJournalSyncContractVersions,
+  journalMutationSchema,
+  journalSyncContractVersion,
+} from '@naaseh/domain';
 import { DynamoJournalRepository } from '../journal/journal-repository.js';
 import { JournalService } from '../journal/journal-service.js';
 import { recordSyncMutationAttempt, recordSyncMutationOutcome } from './sync-telemetry.js';
@@ -126,14 +130,17 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       event.requestContext.requestId,
     );
   if (event.rawPath.endsWith('/bootstrap')) {
-    const [shared, owned, taskTimer, categories, projects, lists] = await Promise.all([
-      listPublicTasks(),
-      listOwnerTasks(actorId),
-      getTaskTimer(actorId),
-      listCategories(),
-      listProjects(),
-      listOwnerLists(actorId),
-    ]);
+    const [shared, owned, taskTimer, categories, projects, lists, journalRecords, journalFeed] =
+      await Promise.all([
+        listPublicTasks(),
+        listOwnerTasks(actorId),
+        getTaskTimer(actorId),
+        listCategories(),
+        listProjects(),
+        listOwnerLists(actorId),
+        journalRepository.bootstrap(actorId),
+        journalRepository.changes(actorId, 0),
+      ]);
     const listItems = (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat();
     const keyRegistry = await loadPublicKeyRegistry();
     return json(200, {
@@ -145,6 +152,9 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       ...(taskTimer ? { taskTimer } : {}),
       keyRegistry,
       cursor: { public: 0, owner: 0 },
+      journalContractVersion: journalSyncContractVersion,
+      journalRecords,
+      journalCursor: journalFeed.cursor,
     });
   }
   let parsed: unknown;
@@ -158,6 +168,27 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     });
   }
   if (event.rawPath.endsWith('/pull')) {
+    const journalRequest = parsed as { version?: number; journalCursor?: number };
+    if (journalRequest.journalCursor !== undefined) {
+      if (
+        !compatibleJournalSyncContractVersions.includes(
+          journalRequest.version as (typeof compatibleJournalSyncContractVersions)[number],
+        )
+      )
+        return problem(
+          426,
+          'journal_client_upgrade_required',
+          'Refresh Naaseh before synchronizing Journal data.',
+          event.requestContext.requestId,
+        );
+      const feed = await journalRepository.changes(actorId, journalRequest.journalCursor, 100);
+      return json(200, {
+        version: journalSyncContractVersion,
+        changes: feed.rows,
+        journalCursor: feed.cursor,
+        hasMore: feed.hasMore,
+      });
+    }
     const cursor = (parsed as { cursor?: Record<string, number> }).cursor ?? {};
     const memberships = (await listUserMemberships(actorId)).filter(
       (item) => item.status === 'active',
@@ -204,6 +235,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     event.headers['x-csrf-token'],
   );
   const body = parsed as {
+    version?: number;
     contractVersion?: number;
     mutations?: Mutation[];
     backlog?: { depth?: number; oldestAgeSeconds?: number };
@@ -228,6 +260,23 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   const includesTaskTimer = body.mutations.some(
     (mutation) => (mutation as { entityType?: string }).entityType === 'taskTimer',
   );
+  const includesJournalMutation = body.mutations.some((mutation) =>
+    ['journalEntry', 'journalProfile'].includes(
+      String((mutation as { entityType?: unknown }).entityType ?? ''),
+    ),
+  );
+  if (
+    includesJournalMutation &&
+    !compatibleJournalSyncContractVersions.includes(
+      body.version as (typeof compatibleJournalSyncContractVersions)[number],
+    )
+  )
+    return problem(
+      426,
+      'journal_client_upgrade_required',
+      'Refresh Naaseh before synchronizing Journal data.',
+      event.requestContext.requestId,
+    );
   if (includesPersonalStackOperation || includesTaskTimer) pushRequestSchema.parse(parsed);
   const results = [];
   const serverRecordPresence = new Map<number, boolean>();
