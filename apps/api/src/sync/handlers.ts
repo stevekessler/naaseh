@@ -1,4 +1,5 @@
 import {
+  journalSyncContractVersion,
   journalKeyEnvelopeSchema,
   type JournalKeyEnvelope,
   type JournalMutation,
@@ -11,14 +12,14 @@ export function createJournalSyncHandlers(repository: JournalRepository) {
   return {
     async push(ownerId: string, mutations: JournalMutation[]) {
       return {
-        version: 5 as const,
+        version: journalSyncContractVersion,
         results: await Promise.all(mutations.map((mutation) => service.apply(ownerId, mutation))),
       };
     },
     async pull(ownerId: string, cursor: number, limit = 100) {
       const feed = await repository.changes(ownerId, cursor, limit);
       return {
-        version: 5 as const,
+        version: journalSyncContractVersion,
         changes: feed.rows,
         journalCursor: feed.cursor,
         hasMore: feed.hasMore,
@@ -30,7 +31,7 @@ export function createJournalSyncHandlers(repository: JournalRepository) {
         repository.changes(ownerId, 0),
       ]);
       return {
-        version: 5 as const,
+        version: journalSyncContractVersion,
         records,
         journalCursor: changes.cursor,
       };

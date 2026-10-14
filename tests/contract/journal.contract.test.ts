@@ -9,7 +9,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 describe('journal API contract', () => {
-  it('publishes ciphertext-only sync v5 and no-store key/recovery routes', () => {
+  it('publishes lifecycle-aware ciphertext-only sync v7 and no-store key/recovery routes', () => {
     expect(
       journalRoutes.every(
         (route) =>
@@ -23,8 +23,8 @@ describe('journal API contract', () => {
         .filter((route) => route.sensitive)
         .every((route) => route.cacheControl === 'no-store'),
     ).toBe(true);
-    expect(journalPullResponseSchema.shape.version.value).toBe(5);
-    expect(journalBootstrapResponseSchema.shape.version.value).toBe(5);
+    expect(journalPullResponseSchema.shape.version.value).toBe(7);
+    expect(journalBootstrapResponseSchema.shape.version.value).toBe(7);
   });
 
   it('strictly rejects plaintext mutation fields', () => {

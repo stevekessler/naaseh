@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
-export const journalSyncContractVersion = 6 as const;
-export const compatibleJournalSyncContractVersions = Object.freeze([5, 6] as const);
+export const journalSyncContractVersion = 7 as const;
+export const compatibleJournalSyncContractVersions = Object.freeze([7] as const);
 
-export const journalMutationOperationSchema = z.literal('upsert');
+export const journalMutationOperationSchema = z.enum(['upsert', 'recycle', 'restore']);
 export const journalLocalDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const uniqueEnumArray = <T extends readonly [string, ...string[]]>(values: T) =>
@@ -137,7 +137,7 @@ const emotionSchema = z
 
 export const journalEntryProjectionSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     id: z.string().uuid(),
     ownerId: z.string().min(1),
     date: journalLocalDateSchema,
@@ -162,10 +162,32 @@ export const journalEntryProjectionSchema = z
     otherTargetBehavior: z.string().max(10_000).nullable().optional(),
     emotions: emotionSchema,
     dbt: dbtSkillsResponseSchema.nullable(),
+    lifecycle: z.enum(['active', 'recycled']).default('active'),
+    recycledAt: z.string().datetime().optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
-  .strict();
+  .strict()
+  .superRefine((entry, context) => {
+    if (entry.schemaVersion === 1 && entry.lifecycle !== 'active')
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['lifecycle'],
+        message: 'Projection v1 entries are active.',
+      });
+    if (entry.lifecycle === 'recycled' && !entry.recycledAt)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['recycledAt'],
+        message: 'Recycled entries require a removal timestamp.',
+      });
+    if (entry.lifecycle === 'active' && entry.recycledAt)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['recycledAt'],
+        message: 'Active entries cannot have a removal timestamp.',
+      });
+  });
 export type JournalEntryProjection = z.infer<typeof journalEntryProjectionSchema>;
 
 export const taskReflectionSchema = z

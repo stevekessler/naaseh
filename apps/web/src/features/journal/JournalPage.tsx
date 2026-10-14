@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { CrisisPlanRecord, JournalDocument, JournalProfile, Task } from '@naaseh/domain';
+import {
+  journalEntryProjectionSchema,
+  type CrisisPlanRecord,
+  type JournalDocument,
+  type JournalProfile,
+  type Task,
+} from '@naaseh/domain';
 import {
   changeJournalPin,
   decryptJournalRecord,
@@ -28,6 +34,7 @@ import { JournalSettings } from './JournalSettings.js';
 import { JournalUnlock } from './JournalUnlock.js';
 import { JournalListPage } from './JournalListPage.js';
 import { JournalDashboardPage } from './JournalDashboardPage.js';
+import { JournalRecycleBinPage } from './JournalRecycleBinPage.js';
 import { eligibleJournalTasks } from './journal-task-options.js';
 import { readLocalCrisisPlan } from '../../db/crisis-plan-repository.js';
 import { CrisisPlanPage } from './CrisisPlanPage.js';
@@ -66,19 +73,22 @@ export function JournalPage({
     dbtSkillsEnabled: true,
   });
   const [section, setSection] = useState<
-    'entries' | 'new' | 'settings' | 'dashboard' | 'crisis-plans'
+    'entries' | 'new' | 'settings' | 'dashboard' | 'crisis-plans' | 'recycle-bin'
   >(() =>
     location.pathname === '/journal/new'
       ? 'new'
       : location.pathname === '/journal/settings'
         ? 'settings'
-        : location.pathname === '/journal/dashboard'
-          ? 'dashboard'
-          : location.pathname === '/journal/crisis-plans'
-            ? 'crisis-plans'
-            : 'entries',
+        : location.pathname === '/journal/recycle-bin'
+          ? 'recycle-bin'
+          : location.pathname === '/journal/dashboard'
+            ? 'dashboard'
+            : location.pathname === '/journal/crisis-plans'
+              ? 'crisis-plans'
+              : 'entries',
   );
   const [projections, setProjections] = useState<JournalEntryDraft[]>([]);
+  const [entryLoadWarning, setEntryLoadWarning] = useState('');
   const [selectedDraft, setSelectedDraft] = useState<JournalEntryDraft>();
   const [crisisPlanDocument, setCrisisPlanDocument] = useState<JournalDocument | null>(null);
   const [enrollmentLookupComplete, setEnrollmentLookupComplete] = useState(false);
@@ -132,7 +142,7 @@ export function JournalPage({
       return;
     }
     let active = true;
-    void Promise.all(
+    void Promise.allSettled(
       encryptedEntries.map(async (record) => {
         const payload = record.value as import('../../db/journal-types.js').JournalEntryCiphertext;
         const aad = {
@@ -142,24 +152,38 @@ export function JournalPage({
           keyVersion: payload.projection.keyVersion,
           dateToken: payload.dateToken,
         };
-        const projection = await decryptJournalRecord<JournalEntryDraft['projection']>(
-          payload.projection,
-          jmk,
-          { ...aad, recordKind: 'projection' },
+        const projection = journalEntryProjectionSchema.parse(
+          await decryptJournalRecord<JournalEntryDraft['projection']>(payload.projection, jmk, {
+            ...aad,
+            schemaVersion: payload.projection.schemaVersion,
+            recordKind: 'projection',
+          }),
         );
         const body = await decryptJournalRecord<{
           generalNotes: JournalEntryDraft['generalNotes'];
           taskReflection: JournalEntryDraft['taskReflection'];
-        }>(payload.body, jmk, { ...aad, recordKind: 'body' });
+        }>(payload.body, jmk, {
+          ...aad,
+          schemaVersion: payload.body.schemaVersion,
+          recordKind: 'body',
+        });
         return { projection, generalNotes: body.generalNotes, taskReflection: body.taskReflection };
       }),
-    )
-      .then((next) => {
-        if (active) setProjections(next);
-      })
-      .catch(() => {
-        if (active) setProjections([]);
-      });
+    ).then((results) => {
+      if (!active) return;
+      const next = results
+        .filter(
+          (result): result is PromiseFulfilledResult<JournalEntryDraft> =>
+            result.status === 'fulfilled',
+        )
+        .map((result) => result.value);
+      setProjections(next);
+      setEntryLoadWarning(
+        next.length === results.length
+          ? ''
+          : 'One encrypted Journal entry could not be opened. Other entries remain available.',
+      );
+    });
     return () => {
       active = false;
     };
@@ -212,7 +236,7 @@ export function JournalPage({
   useEffect(() => {
     const match = location.pathname.match(/^\/journal\/([^/]+)$/u);
     const id = match?.[1];
-    if (!id || ['new', 'settings', 'dashboard'].includes(id)) return;
+    if (!id || ['new', 'settings', 'dashboard', 'recycle-bin'].includes(id)) return;
     const selected = projections.find((entry) => entry.projection.id === decodeURIComponent(id));
     if (selected) {
       setSelectedDraft(selected);
@@ -261,12 +285,12 @@ export function JournalPage({
     const aad = {
       ownerId,
       recordId: entry.projection.id,
-      schemaVersion: 1,
       keyVersion: 1,
       dateToken,
     };
     const projection = await encryptJournalRecord(entry.projection, jmk, {
       ...aad,
+      schemaVersion: entry.projection.schemaVersion,
       recordKind: 'projection',
     });
     const body = await encryptJournalRecord(
@@ -277,16 +301,26 @@ export function JournalPage({
         taskReflection: entry.taskReflection,
       },
       jmk,
-      { ...aad, recordKind: 'body' },
+      { ...aad, schemaVersion: 1, recordKind: 'body' },
     );
+    const currentProjection = projections.find(
+      (candidate) => candidate.projection.id === entry.projection.id,
+    )?.projection;
+    const operation =
+      currentProjection?.lifecycle === 'active' && entry.projection.lifecycle === 'recycled'
+        ? 'recycle'
+        : currentProjection?.lifecycle === 'recycled' && entry.projection.lifecycle === 'active'
+          ? 'restore'
+          : 'upsert';
     await savePendingJournalEntry({
       ownerId,
       entry: { entryId: entry.projection.id, dateToken, projection, body },
+      lifecycle: entry.projection.lifecycle,
       mutation: {
         id: crypto.randomUUID(),
         entityId: entry.projection.id,
         entityType: 'journalEntry',
-        operation: 'upsert',
+        operation,
         baseVersion: current?.version ?? 0,
         dateToken,
         ...(current?.dateToken && current.dateToken !== dateToken
@@ -299,7 +333,9 @@ export function JournalPage({
     setSection('entries');
   };
   const openEntry = (id: string) => {
-    const selected = projections.find((entry) => entry.projection.id === id);
+    const selected = projections.find(
+      (entry) => entry.projection.id === id && entry.projection.lifecycle === 'active',
+    );
     if (selected) {
       setSelectedDraft(selected);
       setSection('new');
@@ -358,6 +394,13 @@ export function JournalPage({
           </button>
           <button
             type="button"
+            aria-current={section === 'recycle-bin' ? 'page' : undefined}
+            onClick={() => setSection('recycle-bin')}
+          >
+            Recycle bin
+          </button>
+          <button
+            type="button"
             aria-current={section === 'settings' ? 'page' : undefined}
             onClick={() => setSection('settings')}
           >
@@ -374,13 +417,39 @@ export function JournalPage({
           </button>
         </nav>
       </header>
+      {entryLoadWarning && <p role="alert">{entryLoadWarning}</p>}
       {section === 'entries' ? (
-        <JournalListPage entries={projections.map((entry) => entry.projection)} open={openEntry} />
+        <JournalListPage
+          entries={projections
+            .filter((entry) => entry.projection.lifecycle === 'active')
+            .map((entry) => entry.projection)}
+          open={openEntry}
+        />
+      ) : section === 'recycle-bin' ? (
+        <JournalRecycleBinPage
+          entries={projections.filter((entry) => entry.projection.lifecycle === 'recycled')}
+          restore={async (entry) => {
+            const projection = { ...entry.projection };
+            delete projection.recycledAt;
+            await save({
+              ...entry,
+              projection: {
+                ...projection,
+                schemaVersion: 2,
+                lifecycle: 'active',
+                updatedAt: new Date().toISOString(),
+              },
+            });
+            setSection('entries');
+          }}
+        />
       ) : section === 'crisis-plans' ? (
         <CrisisPlanPage ownerId={ownerId} csrfToken={csrfToken} jmk={jmk} />
       ) : section === 'dashboard' ? (
         <JournalDashboardPage
-          entries={projections.map((entry) => entry.projection)}
+          entries={projections
+            .filter((entry) => entry.projection.lifecycle === 'active')
+            .map((entry) => entry.projection)}
           suicidalSelfHarmEnabled={profile.suicidalSelfHarmEnabled}
           openEntry={openEntry}
         />
@@ -411,6 +480,24 @@ export function JournalPage({
           tasks={eligibleJournalTasks(tasks, ownerId, new Date().toLocaleDateString('en-CA'))}
           crisisPlan={crisisPlanDocument}
           onSave={save}
+          {...(selectedDraft
+            ? {
+                onRecycle: async (entry: JournalEntryDraft) => {
+                  await save({
+                    ...entry,
+                    projection: {
+                      ...entry.projection,
+                      schemaVersion: 2,
+                      lifecycle: 'recycled',
+                      recycledAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                    },
+                  });
+                  setSelectedDraft(undefined);
+                  setSection('recycle-bin');
+                },
+              }
+            : {})}
         />
       )}
     </section>

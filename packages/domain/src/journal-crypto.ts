@@ -63,7 +63,7 @@ export const journalMutationSchema = z
   .object({
     id: z.string().uuid(),
     entityType: z.enum(['journalEntry', 'journalProfile']),
-    operation: z.literal('upsert'),
+    operation: z.enum(['upsert', 'recycle', 'restore']),
     entityId: z.string().min(1).max(128),
     baseVersion: z.number().int().nonnegative(),
     dateToken: opaqueDateTokenSchema.optional(),
@@ -71,7 +71,15 @@ export const journalMutationSchema = z
     payload: z.union([journalEntryCiphertextSchema, ciphertextEnvelopeSchema]),
     createdAt: z.string().datetime(),
   })
-  .strict();
+  .strict()
+  .superRefine((mutation, context) => {
+    if (mutation.entityType === 'journalProfile' && mutation.operation !== 'upsert')
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['operation'],
+        message: 'Journal profiles only support upsert.',
+      });
+  });
 export type JournalMutation = z.infer<typeof journalMutationSchema>;
 export interface JournalAadInput {
   ownerId: string;

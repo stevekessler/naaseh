@@ -6,7 +6,7 @@ describe('Dexie archive/project migration through the current schema', () => {
     const plan = planEnhancedSchemaMigration(7);
     expect(plan).toMatchObject({
       from: 7,
-      to: 14,
+      to: 15,
       preserveOutbox: true,
       storesToDelete: ['secureGoogleSync'],
     });

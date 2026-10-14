@@ -54,6 +54,7 @@ export function ConflictItem({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const isTask = conflict.mutation?.entityType === 'task';
+  const isJournal = conflict.source === 'journal';
   const stale = isStaleConflict(conflict);
   const payload = conflict.mutation?.payload as Record<string, unknown> | undefined;
   const savedFields =
@@ -66,8 +67,9 @@ export function ConflictItem({
       ([field]) => !protectedFields.has(field) && (!isTask || field in fieldLabels),
     ),
   );
-  const title =
-    typeof fields?.label === 'string'
+  const title = isJournal
+    ? 'Journal entry conflict'
+    : typeof fields?.label === 'string'
       ? fields.label
       : (remote?.label ??
         conflict.display?.entityLabel ??
@@ -178,7 +180,7 @@ export function ConflictItem({
           </div>
         </>
       )}
-      {!isTask && (
+      {!isTask && !isJournal && (
         <p>
           {conflict.message ??
             (conflict.reason === 'timer_changed'
@@ -192,6 +194,13 @@ export function ConflictItem({
                   : 'This saved change is unavailable or access has changed. Its protected content cannot be displayed. You can discard this notice.')}
         </p>
       )}
+      {isJournal && (
+        <p>
+          Journal content stays encrypted in this comparison. Keeping your version retries the saved
+          lifecycle change against the latest version; keeping the server version discards only this
+          device’s pending change.
+        </p>
+      )}
       {!isTask &&
         Object.keys(fields).length > 0 &&
         !['authorization_changed', 'hard_deleted'].includes(conflict.reason) && (
@@ -202,6 +211,11 @@ export function ConflictItem({
         )}
       {error && <p role="alert">{error}</p>}
       <div className="sync-conflict-actions">
+        {isJournal && (
+          <button disabled={busy} onClick={() => void resolve('local')}>
+            Keep my encrypted version
+          </button>
+        )}
         {!isTask &&
           ((['category', 'project'].includes(conflict.mutation?.entityType ?? '') &&
             conflict.reason === 'project_unavailable') ||
@@ -228,7 +242,11 @@ export function ConflictItem({
           disabled={busy || (isTask && remote === undefined)}
           onClick={() => void resolve('remote')}
         >
-          {isTask && remote ? 'Keep Server Version' : 'Discard saved change'}
+          {isJournal
+            ? 'Keep server version'
+            : isTask && remote
+              ? 'Keep Server Version'
+              : 'Discard saved change'}
         </button>
       </div>
     </article>
