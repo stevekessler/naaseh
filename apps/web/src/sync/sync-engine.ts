@@ -153,7 +153,11 @@ export const shouldBootstrapOrganizationSnapshot = (
   const hydratedAt = Date.parse(lastHydratedAt ?? '');
   return !Number.isFinite(hydratedAt) || now - hydratedAt >= refreshAfterMs;
 };
-export const shouldBootstrapListSnapshot = (bootstrapComplete: boolean) => !bootstrapComplete;
+export const shouldBootstrapListSnapshot = (
+  lastHydratedAt: string | undefined,
+  now = Date.now(),
+  refreshAfterMs = 60_000,
+) => shouldBootstrapOrganizationSnapshot(lastHydratedAt, now, refreshAfterMs);
 
 async function recoverMissingSnapshots(): Promise<void> {
   const [snapshot, bootstrapState, organizationBootstrapState, listBootstrapState, pendingCount] =
@@ -174,7 +178,7 @@ async function recoverMissingSnapshots(): Promise<void> {
   const shouldRecoverOrganization = shouldBootstrapOrganizationSnapshot(
     organizationBootstrapState?.value,
   );
-  const shouldRecoverLists = shouldBootstrapListSnapshot(listBootstrapState?.value === 'true');
+  const shouldRecoverLists = shouldBootstrapListSnapshot(listBootstrapState?.value);
   if (shouldRecoverTasks || shouldRecoverOrganization || shouldRecoverLists) {
     const response = await fetch('/api/v1/sync/bootstrap', {
       credentials: 'include',
@@ -340,7 +344,10 @@ async function recoverMissingSnapshots(): Promise<void> {
             value: new Date().toISOString(),
           });
         if (shouldRecoverLists && listSnapshotAvailable)
-          await db.settings.put({ key: 'list-snapshot-bootstrapped-v1', value: 'true' });
+          await db.settings.put({
+            key: 'list-snapshot-bootstrapped-v1',
+            value: new Date().toISOString(),
+          });
       },
     );
   }

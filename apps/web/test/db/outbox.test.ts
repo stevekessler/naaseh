@@ -57,8 +57,11 @@ describe('durable local outbox rules', () => {
     expect(shouldBootstrapOrganizationSnapshot('2026-09-22T12:00:30.000Z', now)).toBe(false);
     expect(shouldBootstrapOrganizationSnapshot('2026-09-22T12:00:00.000Z', now)).toBe(true);
   });
-  it('hydrates existing owned lists once for established accounts', () => {
-    expect(shouldBootstrapListSnapshot(false)).toBe(true);
-    expect(shouldBootstrapListSnapshot(true)).toBe(false);
+  it('refreshes list snapshots and invalidates the legacy permanent marker', () => {
+    const now = Date.parse('2026-10-15T01:00:00.000Z');
+    expect(shouldBootstrapListSnapshot(undefined, now)).toBe(true);
+    expect(shouldBootstrapListSnapshot('true', now)).toBe(true);
+    expect(shouldBootstrapListSnapshot('2026-10-15T00:59:30.000Z', now)).toBe(false);
+    expect(shouldBootstrapListSnapshot('2026-10-15T00:59:00.000Z', now)).toBe(true);
   });
 });
