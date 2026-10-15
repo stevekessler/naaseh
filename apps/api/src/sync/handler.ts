@@ -76,7 +76,10 @@ import {
   journalMutationSchema,
   journalSyncContractVersion,
 } from '@naaseh/domain';
-import { DynamoJournalRepository } from '../journal/journal-repository.js';
+import {
+  DynamoJournalRepository,
+  serializeJournalSyncChange,
+} from '../journal/journal-repository.js';
 import { JournalService } from '../journal/journal-service.js';
 import { recordSyncMutationAttempt, recordSyncMutationOutcome } from './sync-telemetry.js';
 const MAX_BODY_BYTES = 1_000_000;
@@ -184,7 +187,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       const feed = await journalRepository.changes(actorId, journalRequest.journalCursor, 100);
       return json(200, {
         version: journalSyncContractVersion,
-        changes: feed.rows,
+        changes: feed.rows.map(serializeJournalSyncChange),
         journalCursor: feed.cursor,
         hasMore: feed.hasMore,
       });
