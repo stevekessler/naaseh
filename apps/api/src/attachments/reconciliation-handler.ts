@@ -1,4 +1,9 @@
-import { DeleteObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectTaggingCommand,
+  HeadObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import type { ScheduledHandler } from 'aws-lambda';
 import { attachmentBlobSchema, attachmentSchema, transitionAttachment } from '@naaseh/domain';
 import { log, metric } from '@naaseh/observability';
@@ -28,8 +33,11 @@ export const handler: ScheduledHandler = async (event) => {
   let retentionScheduled = 0;
   let retentionCleared = 0;
   let purgedAttachments = 0;
+  let recoveredScans = 0;
 
   const attachments = await listAllAttachments();
+  const blobs = await listAllAttachmentBlobs();
+  const blobsByAttachmentId = new Map(blobs.map((blob) => [blob.attachmentId, blob]));
   const tasks = new Map<string, Awaited<ReturnType<typeof findTask>>>();
   const attachmentsById = new Map();
   for (const storedAttachment of attachments) {
@@ -78,31 +86,86 @@ export const handler: ScheduledHandler = async (event) => {
       await publishAttachmentChange(expired);
       attachmentsById.set(expired.id, expired);
       expiredUploads += 1;
-    } else if (attachment.status === 'scanning' && age >= scanTimeoutMs) {
-      const failed = {
-        ...transitionAttachment(attachment, 'scan_failed', now),
-        failureCode: 'scan_error' as const,
-      };
-      await saveAttachment(failed, attachment.version);
-      await publishAttachmentChange(failed);
-      attachmentsById.set(failed.id, failed);
-      stalledScans += 1;
+    } else if (attachment.status === 'scanning') {
+      const blob = blobsByAttachmentId.get(attachment.id);
+      let taggedResult: string | undefined;
+      if (blob?.objectVersionId) {
+        try {
+          const tags = await s3.send(
+            new GetObjectTaggingCommand({
+              Bucket: bucket,
+              Key: blob.objectKey,
+              VersionId: blob.objectVersionId,
+            }),
+          );
+          taggedResult = tags.TagSet?.find(
+            (tag) => tag.Key === 'GuardDutyMalwareScanStatus',
+          )?.Value;
+        } catch {
+          // A transient tag lookup must not turn a healthy upload into a failed scan.
+        }
+      }
+      if (blob && taggedResult) {
+        const status =
+          taggedResult === 'NO_THREATS_FOUND'
+            ? 'available'
+            : taggedResult === 'THREATS_FOUND'
+              ? 'rejected'
+              : 'scan_failed';
+        const recovered = {
+          ...transitionAttachment(attachment, status, now),
+          ...(status === 'rejected'
+            ? { failureCode: 'malware' as const }
+            : status === 'scan_failed'
+              ? { failureCode: 'scan_error' as const }
+              : {}),
+        };
+        await saveAttachmentBlob(
+          attachmentBlobSchema.parse({
+            ...blob,
+            scanStatus:
+              status === 'available' ? 'clean' : status === 'rejected' ? 'threat' : 'failed',
+            lifecycle: status === 'available' ? 'clean' : 'quarantined',
+            updatedAt: now.toISOString(),
+          }),
+        );
+        await saveAttachment(recovered, attachment.version);
+        await publishAttachmentChange(recovered);
+        attachment = recovered;
+        attachmentsById.set(recovered.id, recovered);
+        recoveredScans += 1;
+      } else if (age >= scanTimeoutMs) {
+        const failed = {
+          ...transitionAttachment(attachment, 'scan_failed', now),
+          failureCode: 'scan_error' as const,
+        };
+        await saveAttachment(failed, attachment.version);
+        await publishAttachmentChange(failed);
+        attachment = failed;
+        attachmentsById.set(failed.id, failed);
+        stalledScans += 1;
+      }
     }
   }
 
-  for (const blob of await listAllAttachmentBlobs()) {
+  for (const blob of blobs) {
     if (blob.lifecycle === 'deleted') continue;
     let exists = true;
-    try {
-      await s3.send(
-        new HeadObjectCommand({
-          Bucket: bucket,
-          Key: blob.objectKey,
-          ...(blob.objectVersionId ? { VersionId: blob.objectVersionId } : {}),
-        }),
-      );
-    } catch {
-      exists = false;
+    // The bucket deliberately denies GetObject/HeadObject until the clean tag is present, and it
+    // permanently denies reads for quarantined versions. A denied head is therefore not evidence
+    // that either kind of object is missing.
+    if (blob.lifecycle !== 'scanning' && blob.lifecycle !== 'quarantined') {
+      try {
+        await s3.send(
+          new HeadObjectCommand({
+            Bucket: bucket,
+            Key: blob.objectKey,
+            ...(blob.objectVersionId ? { VersionId: blob.objectVersionId } : {}),
+          }),
+        );
+      } catch {
+        exists = false;
+      }
     }
     if (!exists) {
       const attachment = attachmentsById.get(blob.attachmentId);
@@ -151,6 +214,7 @@ export const handler: ScheduledHandler = async (event) => {
     retentionScheduled,
     retentionCleared,
     purgedAttachments,
+    recoveredScans,
   });
   metric('AttachmentReconciliations', 1);
   metric('AttachmentExpiredUploads', expiredUploads);
@@ -160,4 +224,5 @@ export const handler: ScheduledHandler = async (event) => {
   metric('AttachmentRetentionScheduled', retentionScheduled);
   metric('AttachmentRetentionCleared', retentionCleared);
   metric('AttachmentRetentionPurged', purgedAttachments);
+  metric('AttachmentRecoveredScans', recoveredScans);
 };

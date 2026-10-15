@@ -492,8 +492,11 @@
 .list-item-table thead th:nth-child(3) {
   width: 10rem;
 }
+.list-item-table thead th:nth-child(5) {
+  width: 18%;
+}
 .list-item-table thead th:last-child {
-  width: 28rem;
+  width: 22rem;
 }
 .list-item-table .list-item-status-cell {
   text-align: center;
@@ -504,6 +507,20 @@
 .list-item-table .list-item-memo-cell p {
   margin: 0;
   white-space: pre-wrap;
+}
+.list-item-file-links {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.list-item-file-links a {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .list-item-table td.list-item-actions {
   display: table-cell;
@@ -2630,7 +2647,7 @@ dialog input {
   }
   .list-item-table .list-item-status-cell {
     grid-column: 1;
-    grid-row: 1 / 4;
+    grid-row: 1 / 5;
   }
   .list-item-table .list-item-name-cell {
     grid-column: 2;
@@ -2644,10 +2661,14 @@ dialog input {
     grid-column: 2;
     grid-row: 3;
   }
+  .list-item-table .list-item-file-links-cell {
+    grid-column: 2;
+    grid-row: 4;
+  }
   .list-item-table td.list-item-actions {
     display: flex;
     grid-column: 1 / 3;
-    grid-row: 4;
+    grid-row: 5;
     justify-content: flex-start;
   }
   .list-item-table tbody tr.list-item-expanded-row {

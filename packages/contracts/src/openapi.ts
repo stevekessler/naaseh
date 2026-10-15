@@ -14,7 +14,9 @@ import {
   memoDocumentSchema,
   postItColorSchema,
   listItemSchema,
+  listItemFileLinkSchema,
   listSchema,
+  calendarDateSchema,
   ulidSchema,
 } from '@naaseh/domain';
 import {
@@ -181,6 +183,9 @@ export const listItemCreateSchema = z
     amountMinor: z.number().int().safe().nullable().optional(),
     directoryItemId: ulidSchema.optional(),
     directoryVersion: z.number().int().positive().optional(),
+    dueDate: calendarDateSchema.optional(),
+    memo: z.string().max(2000).optional(),
+    fileLinks: z.array(listItemFileLinkSchema).max(10).optional(),
   })
   .strict();
 export const listItemPatchSchema = z
@@ -194,6 +199,9 @@ export const listItemPatchSchema = z
       .nullable()
       .optional(),
     orderKey: z.string().min(1).max(128).optional(),
+    dueDate: calendarDateSchema.nullable().optional(),
+    memo: z.string().max(2000).nullable().optional(),
+    fileLinks: z.array(listItemFileLinkSchema).max(10).optional(),
   })
   .strict();
 export const listItemResponseSchema = listItemSchema;
