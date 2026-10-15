@@ -159,6 +159,10 @@ for (const brokenCache of [false, true]) {
             key: 'organization-snapshot-bootstrapped-v1',
             value: 'true',
           });
+          tx.objectStore('settings').put({
+            key: 'list-snapshot-bootstrapped-v1',
+            value: 'true',
+          });
           tx.objectStore('outbox').put({
             id: 'independent-change',
             entityId: 'independent-category',
