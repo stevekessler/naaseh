@@ -5,7 +5,10 @@ import {
   type JournalMutation,
 } from '@naaseh/domain';
 import { JournalService } from '../journal/journal-service.js';
-import type { JournalRepository } from '../journal/journal-repository.js';
+import {
+  serializeJournalSyncChange,
+  type JournalRepository,
+} from '../journal/journal-repository.js';
 
 export function createJournalSyncHandlers(repository: JournalRepository) {
   const service = new JournalService(repository);
@@ -20,7 +23,7 @@ export function createJournalSyncHandlers(repository: JournalRepository) {
       const feed = await repository.changes(ownerId, cursor, limit);
       return {
         version: journalSyncContractVersion,
-        changes: feed.rows,
+        changes: feed.rows.map(serializeJournalSyncChange),
         journalCursor: feed.cursor,
         hasMore: feed.hasMore,
       };

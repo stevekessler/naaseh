@@ -43,6 +43,19 @@ export interface JournalFeedRow {
   payload: JournalEntryCiphertext | CiphertextEnvelope;
 }
 
+export type JournalSyncChange = Omit<JournalFeedRow, 'ownerId'>;
+
+export function serializeJournalSyncChange(row: JournalFeedRow): JournalSyncChange {
+  return {
+    sequence: row.sequence,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    entityVersion: row.entityVersion,
+    operation: row.operation,
+    payload: row.payload,
+  };
+}
+
 export interface JournalRepository {
   read(ownerId: string, entryId: string): MaybePromise<JournalCiphertextRecord | undefined>;
   receipt(ownerId: string, mutationId: string): MaybePromise<JournalMutationReceipt | undefined>;
