@@ -19,9 +19,23 @@ test('completed work moves to the archive and can be restored after an offline r
   await expect(page.getByRole('heading', { name: 'Archive journey' })).toBeHidden();
 });
 
-test('finishing a list archives the parent and retains nested items', async ({ page }) => {
+test('list items are recoverable and finishing a list retains nested items', async ({ page }) => {
   await signIn(page);
-  const list = await createListWithItem(page, 'Archived list', 'Retained item');
+  let list = await createListWithItem(page, 'Archived list', 'Retained item');
+  await list.getByRole('button', { name: 'Archive Retained item' }).click();
+  await openTaskSection(page, 'Archive');
+  await expect(page.getByRole('heading', { name: 'Retained item' })).toBeVisible();
+  await expect(page.getByText('List item · Archived list')).toBeVisible();
+  await page.getByRole('button', { name: 'Restore item' }).click();
+  await expect(page.getByRole('heading', { name: 'Retained item' })).toBeHidden();
+
+  await page.getByRole('button', { name: 'Lists', exact: true }).click();
+  await page
+    .getByRole('row', { name: /Archived list/ })
+    .getByRole('button', { name: 'Open' })
+    .click();
+  list = page.locator('.named-list').filter({ hasText: 'Archived list' });
+  await expect(list.getByText('Retained item', { exact: true })).toBeVisible();
   await list.getByRole('button', { name: 'Finish and archive list' }).click();
   await openTaskSection(page, 'Archive');
   await expect(page.getByRole('heading', { name: 'Archived list' })).toBeVisible();

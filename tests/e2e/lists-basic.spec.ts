@@ -8,7 +8,7 @@ import {
 test('@enhanced-lists creates, completes, and retains a lightweight list item offline', async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
   await page.getByLabel('Password').fill('local');
@@ -23,10 +23,23 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByText('List settings', { exact: true }).click();
   await page.getByLabel('Add an item').fill('Milk');
   await page.getByRole('button', { name: 'Add item' }).click();
+  await expect(page.getByLabel('Add an item')).toHaveValue('');
+  await page.getByLabel('Add an item').fill('Eggs');
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await expect(page.getByText('Eggs', { exact: true })).toBeVisible();
   await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Item' })).toBeVisible();
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
+  const eggs = page.locator('.list-item').filter({ hasText: 'Eggs' });
+  if (testInfo.project.name === 'chromium') {
+    await eggs.getByRole('button', { name: 'Drag Eggs' }).dragTo(item);
+  } else {
+    await eggs.getByRole('button', { name: 'Move Eggs up' }).click();
+  }
+  await expect(page.locator('.list-item-name-cell')).toHaveText(['Eggs', 'Milk']);
   const complete = item.getByRole('button', { name: 'Complete Milk' });
+  await expect(item.getByRole('button', { name: 'Drag Milk' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Attachments' })).toBeHidden();
   await expectMinimumTarget(complete);
   await expect
     .poll(() => complete.evaluate((element) => getComputedStyle(element, '::before').width))
@@ -39,6 +52,7 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await item.getByRole('button', { name: 'Edit', exact: true }).click();
   const editor = page.getByRole('table', { name: 'List items' }).locator('.list-item-editor');
   await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Attachments' })).toBeVisible();
   await expectContained(editor.getByLabel('Item name'), editor);
   await expect(editor.getByLabel('Amount')).toHaveCount(0);
   await expectNoIntersection(

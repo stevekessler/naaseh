@@ -159,6 +159,7 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await openLists(page);
   const listForm = page.locator('form').filter({ has: page.getByLabel('List name') });
   await listForm.getByLabel('List name').fill('Filter checklist');
+  await listForm.getByText('Priority and organization', { exact: true }).click();
   await listForm.getByLabel('Category').selectOption({ label: 'Client work' });
   await listForm.getByRole('button', { name: 'Create list' }).click();
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();

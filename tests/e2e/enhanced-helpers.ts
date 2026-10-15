@@ -81,6 +81,18 @@ export async function openLists(page: Page) {
   await expect(page.getByRole('heading', { name: 'Lists', exact: true })).toBeVisible();
 }
 
+export async function openNamedList(page: Page, name: string) {
+  await openLists(page);
+  const open = page
+    .getByRole('row', { name: new RegExp(name, 'u') })
+    .getByRole('button', { name: 'Open' });
+  await open.focus();
+  await open.press('Enter');
+  const list = page.locator('.named-list').filter({ hasText: name });
+  await expect(list.getByRole('heading', { name })).toBeVisible();
+  return list;
+}
+
 export async function createListWithItem(page: Page, listName: string, itemName: string) {
   await openLists(page);
   await page.getByLabel('List name').fill(listName);

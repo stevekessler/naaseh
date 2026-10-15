@@ -31,6 +31,7 @@ export function ListPage({
   openList,
   categories,
   projects,
+  openArchive,
 }: {
   lists: List[];
   items: Map<string, ListItem[]>;
@@ -39,7 +40,7 @@ export function ListPage({
     projectId?: string,
     urgency?: import('@naaseh/domain').Urgency,
     categoryId?: string,
-  ) => Promise<void>;
+  ) => Promise<List>;
   addItem: (listId: string, input: NewListItem) => Promise<void>;
   toggle: (item: ListItem) => void;
   remove: (item: ListItem) => void;
@@ -55,6 +56,7 @@ export function ListPage({
   openList: (list: List) => void;
   categories: import('@naaseh/domain').CategoryRecord[];
   projects: import('@naaseh/domain').Project[];
+  openArchive: () => void;
 }) {
   const directory = useLiveQuery(() => listLocalDirectoryItems(), []) ?? [];
   return (
@@ -64,14 +66,24 @@ export function ListPage({
           <p className="eyebrow">My lists</p>
           <h1>Lists</h1>
         </div>
+        <button type="button" className="quiet" onClick={openArchive}>
+          Archived lists and items
+        </button>
       </header>
-      <ListForm save={createList} categories={categories} projects={projects} />
+      <ListForm
+        save={async (name, projectId, urgency, categoryId) => {
+          const created = await createList(name, projectId, urgency, categoryId);
+          openList(created);
+        }}
+        categories={categories}
+        projects={projects}
+      />
       <ListIndexPage lists={lists} {...(selectedId ? { selectedId } : {})} open={openList} />
       {lists.length === 0 ? (
         <p>No lists yet. Create one above.</p>
       ) : (
         lists
-          .filter((list) => !selectedId || list.id === selectedId)
+          .filter((list) => list.id === selectedId)
           .map((list) => (
             <article className="named-list" key={list.id}>
               <header className="named-list-header">

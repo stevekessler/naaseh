@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createListWithItem, signIn } from './enhanced-helpers.js';
+import { createListWithItem, openNamedList, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 test('@enhanced-lists lock precedence, deep links, copy readiness, and responsive controls', async ({
@@ -20,10 +20,7 @@ test('@enhanced-lists lock precedence, deep links, copy readiness, and responsiv
   await expect(list.getByLabel('Group')).toHaveCount(0);
   await list.getByRole('button', { name: 'Copy list' }).click();
   await expect(list.getByText('The copied list is ready.')).toBeVisible();
-  await page
-    .getByRole('navigation', { name: 'Authorized lists' })
-    .getByRole('button', { name: /Shared packing/ })
-    .click();
+  await openNamedList(page, 'Shared packing');
   await expect(page).toHaveURL(/\/lists\//);
   await expect(page.locator('body')).not.toHaveCSS('overflow-x', 'scroll');
 });

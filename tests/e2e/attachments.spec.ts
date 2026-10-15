@@ -76,7 +76,15 @@ test('@enhanced-lists encrypted attachment upload enters scanning and respects o
   });
   await signIn(page);
   const list = await createListWithItem(page, 'Receipts', 'Hardware');
-  const panel = list.getByRole('heading', { name: 'Attachments' }).locator('..');
+  await list
+    .locator('.list-item')
+    .filter({ hasText: 'Hardware' })
+    .getByRole('button', { name: 'Edit', exact: true })
+    .click();
+  const panel = list
+    .locator('.list-item-editor')
+    .getByRole('heading', { name: 'Attachments' })
+    .locator('..');
   await panel.getByLabel(/Attach a file/).setInputFiles([
     { name: 'receipt.txt', mimeType: 'text/plain', buffer: Buffer.from('receipt') },
     { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('notes') },

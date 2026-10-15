@@ -1536,6 +1536,8 @@ export function App() {
                   await completionUndo.save(entry.task, { status: 'open' }, session.userId);
                 if (entry.list)
                   await updateLocalList(entry.list, { status: 'active', lifecycle: 'active' });
+                if (entry.listItem)
+                  await updateLocalListItem(entry.listItem, { status: 'open' }, session.userId);
               }}
             />
           ) : section === 'directory' ? (
@@ -1553,11 +1555,12 @@ export function App() {
               items={listItems}
               {...(selectedListId ? { selectedId: selectedListId } : {})}
               openList={(list) => navigate({ section: 'lists', listId: list.id })}
+              openArchive={() => navigate({ section: 'archive' })}
               groups={joinedGroupOptions.map((group) => ({ id: group.id, name: group.label }))}
               categories={categories}
               projects={projects}
               createList={async (name, projectId, urgency, categoryId) => {
-                await saveNewList(name, session.userId, projectId, urgency, categoryId);
+                return saveNewList(name, session.userId, projectId, urgency, categoryId);
               }}
               addItem={async (listId, input) => {
                 await addLocalListItem(listId, input, session.userId);
