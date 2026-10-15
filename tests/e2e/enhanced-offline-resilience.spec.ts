@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openLists, signIn } from './enhanced-helpers.js';
+import { openLists, openNamedList, signIn } from './enhanced-helpers.js';
 
 test('@enhanced-lists offline creation survives restart and reports pending work without silent loss', async ({
   page,
@@ -16,6 +16,6 @@ test('@enhanced-lists offline creation survives restart and reports pending work
   await expect(page.getByText(/pending/i).first()).toBeVisible();
   await context.setOffline(false);
   await page.reload();
-  await openLists(page);
-  await expect(page.getByRole('heading', { name: 'Offline supplies' })).toBeVisible();
+  const list = await openNamedList(page, 'Offline supplies');
+  await expect(list.getByRole('heading', { name: 'Offline supplies' })).toBeVisible();
 });

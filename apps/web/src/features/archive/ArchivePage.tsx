@@ -32,18 +32,22 @@ export function matchesArchiveFilters(
 ) {
   const task = entry.task;
   const list = entry.list;
+  const listItem = entry.listItem;
+  const parentList = entry.parentList;
   const normalized = query.normalize('NFKC').trim().toLocaleLowerCase();
   const searchable = task
     ? `${task.label} ${task.memoHidden ? '' : task.memo}`
-    : `${list?.name ?? ''} ${(entry.items ?? [])
-        .map((item) => item.directorySnapshot.name)
-        .join(' ')}`;
+    : listItem
+      ? `${listItem.nameOverride ?? listItem.directorySnapshot.name} ${parentList?.name ?? ''}`
+      : `${list?.name ?? ''} ${(entry.items ?? [])
+          .map((item) => item.nameOverride ?? item.directorySnapshot.name)
+          .join(' ')}`;
   if (normalized && !searchable.toLocaleLowerCase().includes(normalized)) return false;
   if (!filters) return true;
-  const value = task ?? list!;
+  const value = task ?? list ?? parentList!;
   if (!matchesUrgencySet(value.urgency, filters.urgencies)) return false;
   if (filters.contentType === 'todos' && !task) return false;
-  if (filters.contentType === 'lists' && !list) return false;
+  if (filters.contentType === 'lists' && !list && !listItem) return false;
   if (
     filters.projectId &&
     (filters.projectId === 'unassigned'
@@ -52,7 +56,10 @@ export function matchesArchiveFilters(
   )
     return false;
   if (filters.assigneeId && task?.assigneeId !== filters.assigneeId) return false;
-  if (filters.categoryId && task?.categoryId !== filters.categoryId) return false;
+  if (filters.categoryId) {
+    const categoryId = task?.categoryId ?? list?.categoryId ?? parentList?.categoryId;
+    if (categoryId !== filters.categoryId) return false;
+  }
   if (filters.from && (!task?.dueAt || task.dueAt < filters.from)) return false;
   if (filters.to && (!task?.dueAt || task.dueAt > `${filters.to}T23:59:59.999Z`)) return false;
   if (filters.progress && filters.progress !== 'all') {
@@ -94,7 +101,7 @@ export function ArchivePage({
   const projectsById = new Map(projects.map((project) => [project.id, project]));
   const categoriesById = new Map(categories.map((category) => [category.id, category]));
   const calculatedUrgencyCounts = visible.reduce((counts, entry) => {
-    counts[(entry.task ?? entry.list!).urgency] += 1;
+    counts[(entry.task ?? entry.list ?? entry.parentList!).urgency] += 1;
     return counts;
   }, zeroUrgencyCounts());
   return (
@@ -161,18 +168,31 @@ export function ArchivePage({
             </thead>
             <tbody>
               {visible.map((entry) => {
-                const value = entry.task ?? entry.list!;
+                const value = entry.task ?? entry.list ?? entry.parentList!;
                 const project = value.projectId ? projectsById.get(value.projectId) : undefined;
-                const categoryId = entry.task?.categoryId ?? project?.categoryId;
+                const categoryId =
+                  entry.task?.categoryId ??
+                  entry.list?.categoryId ??
+                  entry.parentList?.categoryId ??
+                  project?.categoryId;
                 const category = categoryId ? categoriesById.get(categoryId) : undefined;
-                const archivedAt = value.archivedAt;
-                const label = entry.task?.label ?? entry.list?.name ?? 'work';
+                const archivedAt = entry.listItem?.updatedAt ?? value.archivedAt;
+                const label =
+                  entry.task?.label ??
+                  entry.list?.name ??
+                  entry.listItem?.nameOverride ??
+                  entry.listItem?.directorySnapshot.name ??
+                  'work';
                 return (
-                  <tr key={`${entry.kind}:${value.id}`}>
+                  <tr key={`${entry.kind}:${entry.listItem?.id ?? value.id}`}>
                     <th className="archive-work-cell" scope="row">
                       <h2>{label}</h2>
                       <span className="archive-kind">
-                        {entry.kind === 'task' ? 'To-do' : 'List'}
+                        {entry.kind === 'task'
+                          ? 'To-do'
+                          : entry.kind === 'listItem'
+                            ? `List item · ${entry.parentList?.name ?? 'Unknown list'}`
+                            : 'List'}
                         {entry.task?.memoHidden ? ' · Private notes' : ''}
                         {entry.pending ? ' · Sync pending' : ''}
                         {entry.conflicted ? ' · Needs attention' : ''}
@@ -185,7 +205,9 @@ export function ArchivePage({
                       ) : null}
                       {entry.items?.length ? (
                         <span className="archive-list-items">
-                          {entry.items.map((item) => item.directorySnapshot.name).join(', ')}
+                          {entry.items
+                            .map((item) => item.nameOverride ?? item.directorySnapshot.name)
+                            .join(', ')}
                         </span>
                       ) : null}
                     </th>
@@ -209,18 +231,20 @@ export function ArchivePage({
                     <td>
                       <div className="archive-actions">
                         <button type="button" onClick={() => void restore(entry)}>
-                          Restore
+                          {entry.kind === 'listItem' ? 'Restore item' : 'Restore'}
                         </button>
-                        <PermanentDeleteDialog
-                          target={{
-                            resourceType: entry.kind,
-                            resourceId: value.id,
-                            version: value.version,
-                          }}
-                          label={label}
-                          csrfToken={csrfToken}
-                          disabled={value.lifecycle === 'deleting'}
-                        />
+                        {entry.kind !== 'listItem' ? (
+                          <PermanentDeleteDialog
+                            target={{
+                              resourceType: entry.kind,
+                              resourceId: value.id,
+                              version: value.version,
+                            }}
+                            label={label}
+                            csrfToken={csrfToken}
+                            disabled={value.lifecycle === 'deleting'}
+                          />
+                        ) : null}
                       </div>
                     </td>
                   </tr>

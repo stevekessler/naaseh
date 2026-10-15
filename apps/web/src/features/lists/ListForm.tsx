@@ -21,9 +21,10 @@ export function ListForm({
   const [projectId, setProjectId] = useState('');
   return (
     <form
-      className="task-form"
+      className="task-form list-create-form"
       onSubmit={(event) => {
         event.preventDefault();
+        const form = event.currentTarget;
         setBusy(true);
         void save(name, projectId || undefined, urgency, categoryId || undefined)
           .then(() => {
@@ -31,52 +32,61 @@ export function ListForm({
             setUrgency(defaultUrgency);
             setCategoryId('');
             setProjectId('');
+            form.querySelector<HTMLDetailsElement>('.list-create-options')?.removeAttribute('open');
           })
           .finally(() => setBusy(false));
       }}
     >
-      <label>
-        List name
-        <input
-          required
-          maxLength={300}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
-      <label>
-        Priority
-        <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
-      </label>
-      <label>
-        Category
-        <CategoryPicker
-          categories={categories}
-          value={categoryId}
-          onChange={(nextCategoryId) => {
-            setCategoryId(nextCategoryId);
-            if (
-              projectId &&
-              projects.find((project) => project.id === projectId)?.categoryId !== nextCategoryId
-            )
-              setProjectId('');
-          }}
-        />
-      </label>
-      <ProjectPicker
-        categories={categories}
-        projects={projects}
-        value={projectId}
-        categoryId={categoryId}
-        onChange={(nextProjectId) => {
-          setProjectId(nextProjectId);
-          const projectCategoryId = projects.find(
-            (project) => project.id === nextProjectId,
-          )?.categoryId;
-          if (projectCategoryId) setCategoryId(projectCategoryId);
-        }}
-      />
-      <button disabled={busy}>{busy ? 'Saving…' : label}</button>
+      <div className="list-create-primary">
+        <label>
+          List name
+          <input
+            required
+            maxLength={300}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <button disabled={busy}>{busy ? 'Saving…' : label}</button>
+      </div>
+      <details className="task-form-details list-create-options">
+        <summary>Priority and organization</summary>
+        <div className="task-quick-fields list-create-option-fields">
+          <label>
+            Priority
+            <UrgencyField value={urgency} onChange={setUrgency} label="Priority" />
+          </label>
+          <label>
+            Category
+            <CategoryPicker
+              categories={categories}
+              value={categoryId}
+              onChange={(nextCategoryId) => {
+                setCategoryId(nextCategoryId);
+                if (
+                  projectId &&
+                  projects.find((project) => project.id === projectId)?.categoryId !==
+                    nextCategoryId
+                )
+                  setProjectId('');
+              }}
+            />
+          </label>
+          <ProjectPicker
+            categories={categories}
+            projects={projects}
+            value={projectId}
+            categoryId={categoryId}
+            onChange={(nextProjectId) => {
+              setProjectId(nextProjectId);
+              const projectCategoryId = projects.find(
+                (project) => project.id === nextProjectId,
+              )?.categoryId;
+              if (projectCategoryId) setCategoryId(projectCategoryId);
+            }}
+          />
+        </div>
+      </details>
     </form>
   );
 }

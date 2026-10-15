@@ -10,9 +10,11 @@ import { listLocalListItems, listLocalLists } from './list-repository.js';
 import { listLocalTasks } from './task-repository.js';
 
 export interface LocalArchiveEntry {
-  kind: 'task' | 'list';
+  kind: 'task' | 'list' | 'listItem';
   task?: Task;
   list?: List;
+  listItem?: ListItem;
+  parentList?: List;
   items?: ListItem[];
   pending: boolean;
   conflicted: boolean;
@@ -68,9 +70,39 @@ export async function listLocalArchive(
         };
       }),
   );
-  return [...taskEntries, ...listEntries.filter((entry) => entry !== undefined)].sort((a, b) => {
-    const aDate = a.task?.archivedAt ?? a.list?.archivedAt ?? '';
-    const bDate = b.task?.archivedAt ?? b.list?.archivedAt ?? '';
+  const removedItemEntries = (
+    await Promise.all(
+      lists.map(async (list) => {
+        const items = await listLocalListItems(list.id, { includeRemoved: true });
+        return items
+          .filter((item) => item.status === 'removed')
+          .filter(
+            (item) =>
+              !normalized ||
+              list.name.toLocaleLowerCase().includes(normalized) ||
+              (item.nameOverride ?? item.directorySnapshot.name)
+                .toLocaleLowerCase()
+                .includes(normalized),
+          )
+          .map(
+            (listItem): LocalArchiveEntry => ({
+              kind: 'listItem',
+              listItem,
+              parentList: list,
+              pending: pending.has(listItem.id),
+              conflicted: conflicted.has(listItem.id),
+            }),
+          );
+      }),
+    )
+  ).flat();
+  return [
+    ...taskEntries,
+    ...listEntries.filter((entry) => entry !== undefined),
+    ...removedItemEntries,
+  ].sort((a, b) => {
+    const aDate = a.task?.archivedAt ?? a.list?.archivedAt ?? a.listItem?.updatedAt ?? '';
+    const bDate = b.task?.archivedAt ?? b.list?.archivedAt ?? b.listItem?.updatedAt ?? '';
     return bDate.localeCompare(aDate);
   });
 }

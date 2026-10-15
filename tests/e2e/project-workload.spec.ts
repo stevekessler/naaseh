@@ -32,6 +32,7 @@ test('shows exact Category/Project/Unassigned counts and date state online and o
   await page.getByRole('button', { name: 'Lists', exact: true }).click();
   const listForm = page.locator('.task-form').first();
   await listForm.getByLabel('List name').fill('Assigned list');
+  await listForm.getByText('Priority and organization', { exact: true }).click();
   await listForm.getByLabel('Project').selectOption({ label: 'API' });
   await listForm.getByRole('button', { name: 'Create list' }).click();
 

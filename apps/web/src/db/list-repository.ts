@@ -109,13 +109,18 @@ export async function listLocalListsByUrgency(urgencies: readonly List['urgency'
   const lists = await listLocalLists();
   return lists.filter((list) => matchesUrgencySet(list.urgency, urgencies));
 }
-export async function listLocalListItems(listId: string): Promise<ListItem[]> {
+export async function listLocalListItems(
+  listId: string,
+  options: { includeRemoved?: boolean } = {},
+): Promise<ListItem[]> {
   const rows = await db.secureListItems.toArray();
   const values = await Promise.all(
     rows.map((row) => decryptLocalValue<ListItem>('listItem', row.id, row.value)),
   );
   return values
-    .filter((item) => item.listId === listId && item.status !== 'removed')
+    .filter(
+      (item) => item.listId === listId && (options.includeRemoved || item.status !== 'removed'),
+    )
     .sort((a, b) => a.orderKey.localeCompare(b.orderKey) || a.id.localeCompare(b.id));
 }
 export async function saveNewList(

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { addTask, createListWithItem, signIn } from './enhanced-helpers.js';
+import { addTask, createListWithItem, openNamedList, signIn } from './enhanced-helpers.js';
 
 test.use({ reducedMotion: 'reduce' });
 test('@enhanced-lists pointer and keyboard completion survives blocked audio with shared announcements', async ({
@@ -21,7 +21,7 @@ test('@enhanced-lists pointer and keyboard completion survives blocked audio wit
   await page.getByRole('button', { name: /^Signed in as .+\. Open profile$/u }).click();
   await page.locator('summary').filter({ hasText: 'Reminders and sounds' }).click();
   await page.getByLabel('Completion sounds').uncheck();
-  await page.getByRole('button', { name: 'Lists' }).click();
-  await list.getByRole('button', { name: 'Reopen Pointer item' }).click();
-  await expect(list.getByText('Pointer item reopened.')).toBeAttached();
+  const reopenedList = await openNamedList(page, 'Done today');
+  await reopenedList.getByRole('button', { name: 'Reopen Pointer item' }).click();
+  await expect(reopenedList.getByText('Pointer item reopened.')).toBeAttached();
 });

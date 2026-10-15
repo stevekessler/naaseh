@@ -15,6 +15,10 @@ export function ListItemRow({
   moveUp,
   moveDown,
   attachments,
+  rowRef,
+  handleRef,
+  dragging = false,
+  dropTarget = false,
 }: {
   item: ListItem;
   name: string;
@@ -26,6 +30,10 @@ export function ListItemRow({
   moveUp?: () => void;
   moveDown?: () => void;
   attachments?: import('react').ReactNode;
+  rowRef?: (element: Element | null) => void;
+  handleRef?: (element: Element | null) => void;
+  dragging?: boolean;
+  dropTarget?: boolean;
 }) {
   const done = item.status === 'completed';
   const feedback = useCompletionFeedback();
@@ -36,7 +44,10 @@ export function ListItemRow({
   useEffect(() => setDraftName(name), [name]);
   return (
     <Fragment>
-      <tr className={`list-item ${done ? 'completed' : ''}`}>
+      <tr
+        ref={rowRef}
+        className={`list-item ${done ? 'completed' : ''}${dragging ? ' list-item--dragging' : ''}${dropTarget ? ' list-item--drop-target' : ''}`}
+      >
         <td className="list-item-status-cell">
           <button
             className="check"
@@ -59,6 +70,17 @@ export function ListItemRow({
           {item.memo ? <p>{item.memo}</p> : <span aria-hidden="true">—</span>}
         </td>
         <td className="list-item-actions" aria-label={`Actions for ${name}`}>
+          {handleRef ? (
+            <button
+              ref={handleRef}
+              className="stack-drag-handle"
+              type="button"
+              aria-label={`Drag ${name}`}
+              aria-describedby="list-item-drag-instructions"
+            >
+              <span aria-hidden="true">⋮⋮</span>
+            </button>
+          ) : null}
           <button
             className="quiet"
             type="button"
@@ -85,9 +107,12 @@ export function ListItemRow({
               Add to global directory
             </button>
           )}
-          <button className="quiet" aria-label={`Remove ${name}`} onClick={onRemove}>
-            Remove
+          <button className="quiet" aria-label={`Archive ${name}`} onClick={onRemove}>
+            Archive
           </button>
+          <span className="visually-hidden" role="status" aria-live="polite">
+            {feedback.announcement}
+          </span>
         </td>
       </tr>
       {editing && (
@@ -133,17 +158,8 @@ export function ListItemRow({
               >
                 Save item
               </button>
+              {attachments}
             </div>
-          </td>
-        </tr>
-      )}
-      {(feedback.announcement || attachments) && (
-        <tr className="list-item-expanded-row">
-          <td colSpan={5}>
-            <span className="visually-hidden" role="status" aria-live="polite">
-              {feedback.announcement}
-            </span>
-            {attachments}
           </td>
         </tr>
       )}

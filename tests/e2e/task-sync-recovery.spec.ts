@@ -208,8 +208,11 @@ for (const brokenCache of [false, true]) {
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Recovered server task' })).toBeVisible();
     await page.getByRole('button', { name: 'Lists', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Recovered owned list' })).toBeVisible();
-    await page.getByRole('button', { name: 'Recovered owned list' }).click();
+    const recoveredListRow = page.getByRole('row', { name: /Recovered owned list/u });
+    await expect(recoveredListRow).toBeVisible();
+    const openRecoveredList = recoveredListRow.getByRole('button', { name: 'Open' });
+    await openRecoveredList.focus();
+    await openRecoveredList.press('Enter');
     await expect(page.getByText('Recovered list item', { exact: true })).toBeVisible();
     await openTaskSection(page, 'Personal Stack');
     const filters = page.getByRole('region', { name: 'Search and filters' });
@@ -224,7 +227,11 @@ for (const brokenCache of [false, true]) {
     await categoryFilter.selectOption('');
     await projectFilter.selectOption('');
     await page.getByRole('button', { name: 'Lists', exact: true }).click();
-    const listProject = page.locator('.task-form').first().getByLabel('Project');
+    const listForm = page.locator('.task-form').first();
+    const organizationDetails = listForm.getByText('Priority and organization', { exact: true });
+    await organizationDetails.focus();
+    await organizationDetails.press('Enter');
+    const listProject = listForm.getByLabel('Project');
     await expect(listProject).toContainText(project.name);
     await listProject.selectOption(project.id);
     await expect(listProject).toHaveValue(project.id);

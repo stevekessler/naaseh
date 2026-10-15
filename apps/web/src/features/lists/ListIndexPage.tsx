@@ -13,22 +13,34 @@ export function ListIndexPage({
   const active = lists.filter((list) => list.status === 'active');
   if (!active.length) return null;
   return (
-    <nav aria-label="Authorized lists">
-      <ul>
-        {active.map((list) => (
-          <li key={list.id}>
-            <button
-              className="quiet"
-              aria-current={list.id === selectedId ? 'page' : undefined}
-              onClick={() => open(list)}
-            >
-              {list.locked ? '🔒 ' : ''}
-              {list.name}
-            </button>
-            <UrgencyBadge urgency={list.urgency} />
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <div className="task-table-wrap list-index-table-wrap">
+      <table className="task-list list-index-table" aria-label="Authorized lists">
+        <thead>
+          <tr>
+            <th scope="col">List</th>
+            <th scope="col">Priority</th>
+            <th scope="col" aria-label="Open list" />
+          </tr>
+        </thead>
+        <tbody>
+          {active.map((list) => (
+            <tr key={list.id} aria-current={list.id === selectedId ? 'page' : undefined}>
+              <th scope="row">
+                {list.locked ? <span aria-label="Locked">{'🔒 '}</span> : null}
+                {list.name}
+              </th>
+              <td>
+                <UrgencyBadge urgency={list.urgency} />
+              </td>
+              <td>
+                <button className="quiet" onClick={() => open(list)}>
+                  Open
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

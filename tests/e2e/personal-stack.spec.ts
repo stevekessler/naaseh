@@ -24,6 +24,7 @@ async function createList(page: Page, name: string, urgency: string) {
   await openLists(page);
   const form = page.locator('form').filter({ has: page.getByLabel('List name') });
   await form.getByLabel('List name').fill(name);
+  await form.getByText('Priority and organization', { exact: true }).click();
   await form.getByLabel('Priority', { exact: true }).selectOption(urgency);
   await form.getByRole('button', { name: 'Create list' }).click();
 }
