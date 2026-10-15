@@ -8,6 +8,11 @@ import {
 import { defaultUrgency, urgencySchema } from './urgency.js';
 import { calendarDateSchema } from './project.js';
 
+export const listItemFileLinkSchema = z
+  .string()
+  .url()
+  .refine((value) => new URL(value).protocol === 'https:', 'File links must use HTTPS.');
+
 export const listSchema = z
   .object({
     id: ulidSchema,
@@ -54,6 +59,7 @@ export const listItemSchema = z
     valueOverride: valueOverrideSchema.optional(),
     dueDate: calendarDateSchema.optional(),
     memo: z.string().max(2000).optional(),
+    fileLinks: z.array(listItemFileLinkSchema).max(10).optional(),
     completedAt: z.string().datetime().optional(),
     completedBy: z.string().min(1).optional(),
     createdAt: z.string().datetime(),
@@ -105,6 +111,7 @@ export function createListItem(
     amountMinor?: number | null;
     dueDate?: string;
     memo?: string;
+    fileLinks?: string[];
     directoryItemId?: string;
     directoryVersion?: number;
   },
@@ -126,6 +133,7 @@ export function createListItem(
     },
     ...(input.dueDate ? { dueDate: input.dueDate } : {}),
     ...(input.memo ? { memo: input.memo } : {}),
+    ...(input.fileLinks?.length ? { fileLinks: input.fileLinks } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,
     version: 1,

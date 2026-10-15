@@ -8,7 +8,7 @@ import {
 test('@enhanced-lists creates, completes, and retains a lightweight list item offline', async ({
   page,
   context,
-}, testInfo) => {
+}) => {
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
   await page.getByLabel('Password').fill('local');
@@ -22,6 +22,10 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await expect(page.getByText('Visibility', { exact: true })).toBeVisible();
   await page.getByText('List settings', { exact: true }).click();
   await page.getByLabel('Add an item').fill('Milk');
+  await page.getByText('Optional details', { exact: true }).click();
+  await page
+    .getByLabel('File links (optional; one HTTPS link per line)')
+    .fill('https://files.example.test/milk.pdf');
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByLabel('Add an item')).toHaveValue('');
   await page.getByLabel('Add an item').fill('Eggs');
@@ -29,16 +33,18 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await expect(page.getByText('Eggs', { exact: true })).toBeVisible();
   await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Item' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'File links' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'files.example.test/milk.pdf' })).toHaveAttribute(
+    'href',
+    'https://files.example.test/milk.pdf',
+  );
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
   const eggs = page.locator('.list-item').filter({ hasText: 'Eggs' });
-  if (testInfo.project.name === 'chromium') {
-    await eggs.getByRole('button', { name: 'Drag Eggs' }).dragTo(item);
-  } else {
-    await eggs.getByRole('button', { name: 'Move Eggs up' }).click();
-  }
+  await eggs.getByRole('button', { name: 'Drag Eggs' }).dragTo(item);
   await expect(page.locator('.list-item-name-cell')).toHaveText(['Eggs', 'Milk']);
   const complete = item.getByRole('button', { name: 'Complete Milk' });
   await expect(item.getByRole('button', { name: 'Drag Milk' })).toBeVisible();
+  await expect(item.getByRole('button', { name: /Move Milk (?:up|down)/ })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Attachments' })).toBeHidden();
   await expectMinimumTarget(complete);
   await expect

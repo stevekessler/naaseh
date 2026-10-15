@@ -26,6 +26,15 @@ describe('list HTTP contracts', () => {
       amountMinor: -499,
     });
     expect(
+      listItemCreateSchema.parse({
+        name: 'Research',
+        fileLinks: ['https://drive.example.test/document'],
+      }),
+    ).toMatchObject({ fileLinks: ['https://drive.example.test/document'] });
+    expect(() =>
+      listItemCreateSchema.parse({ name: 'Unsafe', fileLinks: ['file:///tmp/private.pdf'] }),
+    ).toThrow('File links must use HTTPS.');
+    expect(
       listItemPatchSchema.parse({
         orderKey: '000000000020',
         valueOverride: { kind: 'amount', amountMinor: 250 },

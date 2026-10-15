@@ -196,7 +196,7 @@ export async function updateLocalList(current: List, patch: LocalListPatch): Pro
 }
 export async function addLocalListItem(
   listId: string,
-  input: { name: string; dueDate?: string; memo?: string },
+  input: { name: string; dueDate?: string; memo?: string; fileLinks?: string[] },
   actorId: string,
   directory?: { id: string; amountMinor: number | null; version: number },
 ): Promise<ListItem> {
@@ -208,6 +208,7 @@ export async function addLocalListItem(
       amountMinor: null,
       ...(input.dueDate ? { dueDate: input.dueDate } : {}),
       ...(input.memo ? { memo: input.memo } : {}),
+      ...(input.fileLinks?.length ? { fileLinks: input.fileLinks } : {}),
       ...(directory
         ? {
             directoryItemId: directory.id,
@@ -289,7 +290,7 @@ async function updateLocalListItemNow(
 
 export async function editLocalListItem(
   item: ListItem,
-  input: { name: string; dueDate?: string; memo?: string },
+  input: { name: string; dueDate?: string; memo?: string; fileLinks?: string[] },
   actorId: string,
 ): Promise<ListItem> {
   return updateLocalListItem(
@@ -309,6 +310,7 @@ export async function editLocalListItem(
           }),
       dueDate: input.dueDate || undefined,
       memo: input.memo || undefined,
+      fileLinks: input.fileLinks?.length ? input.fileLinks : undefined,
     },
     actorId,
   );

@@ -3,7 +3,9 @@ import { useEffect, useState } from 'react';
 import { Fragment } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
 import type { NewListItem } from './ListItems.js';
+import { parseFileLinks } from './file-links.js';
 import { formatCalendarDate } from '../tasks/due-value.js';
+import { CompactLink } from '../../components/CompactLink.js';
 export function ListItemRow({
   item,
   name,
@@ -12,8 +14,6 @@ export function ListItemRow({
   onEdit,
   onReset,
   onPromote,
-  moveUp,
-  moveDown,
   attachments,
   rowRef,
   handleRef,
@@ -27,8 +27,6 @@ export function ListItemRow({
   onEdit: (input: NewListItem) => void;
   onReset?: () => void;
   onPromote: () => void;
-  moveUp?: () => void;
-  moveDown?: () => void;
   attachments?: import('react').ReactNode;
   rowRef?: (element: Element | null) => void;
   handleRef?: (element: Element | null) => void;
@@ -41,6 +39,8 @@ export function ListItemRow({
   const [draftName, setDraftName] = useState(name);
   const [draftDueDate, setDraftDueDate] = useState(item.dueDate ?? '');
   const [draftMemo, setDraftMemo] = useState(item.memo ?? '');
+  const [draftFileLinks, setDraftFileLinks] = useState((item.fileLinks ?? []).join('\n'));
+  const [editorError, setEditorError] = useState('');
   useEffect(() => setDraftName(name), [name]);
   return (
     <Fragment>
@@ -69,6 +69,19 @@ export function ListItemRow({
         <td className="list-item-memo-cell">
           {item.memo ? <p>{item.memo}</p> : <span aria-hidden="true">—</span>}
         </td>
+        <td className="list-item-file-links-cell">
+          {item.fileLinks?.length ? (
+            <ul className="list-item-file-links">
+              {item.fileLinks.map((link) => (
+                <li key={link}>
+                  <CompactLink href={link} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span aria-hidden="true">—</span>
+          )}
+        </td>
         <td className="list-item-actions" aria-label={`Actions for ${name}`}>
           {handleRef ? (
             <button
@@ -81,24 +94,6 @@ export function ListItemRow({
               <span aria-hidden="true">⋮⋮</span>
             </button>
           ) : null}
-          <button
-            className="quiet"
-            type="button"
-            disabled={!moveUp}
-            onClick={moveUp}
-            aria-label={`Move ${name} up`}
-          >
-            ↑
-          </button>
-          <button
-            className="quiet"
-            type="button"
-            disabled={!moveDown}
-            onClick={moveDown}
-            aria-label={`Move ${name} down`}
-          >
-            ↓
-          </button>
           <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
             {editing ? 'Close editor' : 'Edit'}
           </button>
@@ -117,7 +112,7 @@ export function ListItemRow({
       </tr>
       {editing && (
         <tr className="list-item-expanded-row">
-          <td colSpan={5}>
+          <td colSpan={6}>
             <div className="list-item-editor">
               <label>
                 Item name
@@ -144,20 +139,39 @@ export function ListItemRow({
                   onChange={(event) => setDraftMemo(event.target.value)}
                 />
               </label>
+              <label>
+                File links (one HTTPS link per line)
+                <textarea
+                  value={draftFileLinks}
+                  onChange={(event) => setDraftFileLinks(event.target.value)}
+                />
+              </label>
               <button
                 type="button"
                 disabled={!draftName.trim()}
                 onClick={() => {
+                  let fileLinks: string[];
+                  try {
+                    fileLinks = parseFileLinks(draftFileLinks);
+                  } catch (cause) {
+                    setEditorError(
+                      cause instanceof Error ? cause.message : 'Enter valid HTTPS file links.',
+                    );
+                    return;
+                  }
+                  setEditorError('');
                   onEdit({
                     name: draftName.trim(),
                     ...(draftDueDate ? { dueDate: draftDueDate } : {}),
                     ...(draftMemo.trim() ? { memo: draftMemo.trim() } : {}),
+                    fileLinks,
                   });
                   setEditing(false);
                 }}
               >
                 Save item
               </button>
+              {editorError && <p role="alert">{editorError}</p>}
               {attachments}
             </div>
           </td>

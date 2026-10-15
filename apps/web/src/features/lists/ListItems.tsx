@@ -1,14 +1,16 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { DragDropProvider, PointerSensor, type DragEndEvent } from '@dnd-kit/react';
+import { DragDropProvider, KeyboardSensor, PointerSensor, type DragEndEvent } from '@dnd-kit/react';
 import { useSortable } from '@dnd-kit/react/sortable';
 import { effectiveDirectoryFields, type GlobalDirectoryItem, type ListItem } from '@naaseh/domain';
 import { ListItemRow } from './ListItemRow.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
+import { parseFileLinks } from './file-links.js';
 
 export type NewListItem = {
   name: string;
   dueDate?: string;
   memo?: string;
+  fileLinks?: string[];
 };
 
 export const parseInitialListItem = (name: string): NewListItem => ({ name: name.trim() });
@@ -17,6 +19,7 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
   const [name, setName] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [memo, setMemo] = useState('');
+  const [fileLinks, setFileLinks] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
 
@@ -30,6 +33,7 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
         ...parseInitialListItem(name),
         ...(dueDate ? { dueDate } : {}),
         ...(memo.trim() ? { memo: memo.trim() } : {}),
+        ...(fileLinks.trim() ? { fileLinks: parseFileLinks(fileLinks) } : {}),
       };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Enter a valid amount.');
@@ -42,6 +46,7 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
       setName('');
       setDueDate('');
       setMemo('');
+      setFileLinks('');
     } catch {
       setError('The item was not saved. Your entry is still here; try again.');
     } finally {
@@ -73,6 +78,10 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
               value={memo}
               onChange={(event) => setMemo(event.target.value)}
             />
+          </label>
+          <label>
+            File links (optional; one HTTPS link per line)
+            <textarea value={fileLinks} onChange={(event) => setFileLinks(event.target.value)} />
           </label>
         </div>
       </details>
@@ -125,7 +134,7 @@ export function ListItems({
   };
   return (
     <DragDropProvider
-      sensors={[PointerSensor]}
+      sensors={[PointerSensor, KeyboardSensor]}
       onDragStart={() => {
         lastDragTarget.current = undefined;
       }}
@@ -139,7 +148,8 @@ export function ListItems({
     >
       <div className="task-table-wrap list-item-table-wrap">
         <p id="list-item-drag-instructions" className="visually-hidden">
-          Drag to reorder. Use the move buttons for keyboard reordering.
+          Drag to reorder. With a keyboard, press Space on the handle, use the arrow keys, then
+          press Space again to drop.
         </p>
         <table className="task-list list-item-table" aria-label="List items">
           <thead>
@@ -148,6 +158,7 @@ export function ListItems({
               <th scope="col">Item</th>
               <th scope="col">Due</th>
               <th scope="col">Memo</th>
+              <th scope="col">File links</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -164,13 +175,6 @@ export function ListItems({
                 },
                 current,
               );
-              const move = (offset: number) => {
-                const ordered = [...items];
-                const [selected] = ordered.splice(index, 1);
-                if (!selected) return;
-                ordered.splice(index + offset, 0, selected);
-                reorder(ordered);
-              };
               return (
                 <SortableListItemRow
                   key={item.id}
@@ -183,8 +187,6 @@ export function ListItems({
                   onEdit={(input) => edit(item, input)}
                   {...(item.directoryItemId ? { onReset: () => reset(item) } : {})}
                   onPromote={() => promote(item, effective.name)}
-                  {...(index > 0 ? { moveUp: () => move(-1) } : {})}
-                  {...(index < items.length - 1 ? { moveDown: () => move(1) } : {})}
                   attachments={
                     <AttachmentPanelForParent
                       parentType="listItem"

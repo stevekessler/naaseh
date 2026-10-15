@@ -1,6 +1,6 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { UserAvatar } from '../profile/user-directory.js';
-import type { Task } from '@naaseh/domain';
+import { instantToLocalDue, localDueToInstant, type Task } from '@naaseh/domain';
 import { ReminderStatus } from '../reminders/ReminderStatus.js';
 import { useCompletionFeedback } from './useCompletionFeedback.js';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
@@ -10,10 +10,39 @@ import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { categoryForeground } from '../../styles/category-color.js';
+import { DueDateDialog, type DueDateValue } from './DueDateField.js';
+
+export function taskDueDatePatch(task: Task, value: DueDateValue): Partial<Task> {
+  let patch: Record<string, unknown>;
+  if (value.dueKind === 'timed') {
+    patch = {
+      dueKind: 'timed',
+      dueAt: localDueToInstant(value.dueDate, value.dueTime).dueAt,
+      ...(task.dueDate ? { dueDate: null } : {}),
+    };
+  } else if (value.dueKind === 'date') {
+    patch = {
+      dueKind: 'date',
+      dueDate: value.dueDate,
+      ...(task.dueAt ? { dueAt: null } : {}),
+      ...(task.dueTimeZone ? { dueTimeZone: null } : {}),
+    };
+  } else {
+    patch = {
+      dueKind: null,
+      dueDate: null,
+      dueAt: null,
+      dueTimeZone: null,
+    };
+  }
+  return patch as Partial<Task>;
+}
+
 export function TaskRow({
   task,
   onToggle,
   onSelect,
+  onDueDateChange,
   onProgressChange,
   currentUserId,
   categoryName,
@@ -25,6 +54,7 @@ export function TaskRow({
   task: Task;
   onToggle: (task: Task) => void;
   onSelect: (task: Task) => void;
+  onDueDateChange?: (task: Task, patch: Partial<Task>) => void | Promise<void>;
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
   categoryName?: string | undefined;
@@ -36,6 +66,13 @@ export function TaskRow({
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
   const dueLabel = formatDueValue(task.dueAt, task.dueDate);
+  const timedDue = task.dueAt ? instantToLocalDue(task.dueAt) : undefined;
+  const dueValue: DueDateValue = {
+    dueKind: task.dueKind ?? (task.dueDate ? 'date' : task.dueAt ? 'timed' : 'none'),
+    dueDate: task.dueDate ?? timedDue?.localDate ?? '',
+    dueTime: timedDue?.localTime ?? '10:00',
+  };
+  const [editingDueDate, setEditingDueDate] = useState(false);
   const actions = useRef<HTMLDetailsElement>(null);
   const categoryPalette = categoryForeground(categoryColor ?? '#fff2a8');
   useEffect(() => {
@@ -132,7 +169,27 @@ export function TaskRow({
         {task.link ? <CompactLink href={task.link} /> : <span aria-hidden="true">—</span>}
       </td>
       <td className="task-due-cell">
-        {dueLabel ? <span>{dueLabel}</span> : <span aria-hidden="true">—</span>}
+        {onDueDateChange ? (
+          <button
+            type="button"
+            className="quiet task-due-trigger"
+            aria-label={`${dueLabel ? 'Edit' : 'Add'} due date for ${task.label}${dueLabel ? `, currently ${dueLabel}` : ''}`}
+            onClick={() => setEditingDueDate(true)}
+          >
+            {dueLabel || <span aria-hidden="true">—</span>}
+          </button>
+        ) : dueLabel ? (
+          <span>{dueLabel}</span>
+        ) : (
+          <span aria-hidden="true">—</span>
+        )}
+        {editingDueDate && onDueDateChange ? (
+          <DueDateDialog
+            value={dueValue}
+            onChange={(value) => onDueDateChange(task, taskDueDatePatch(task, value))}
+            onClose={() => setEditingDueDate(false)}
+          />
+        ) : null}
         {task.repeatInterval && task.repeatUnit ? (
           <small>
             Repeats every {task.repeatInterval} {task.repeatUnit}
