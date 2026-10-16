@@ -20,6 +20,8 @@ export default defineConfig({
         // Current clients choose when to reload; IndexedDB is independent of shell caches.
         skipWaiting: true,
         navigateFallback: '/index.html',
+        // This recovery route must reach the network instead of the cached app shell.
+        navigateFallbackDenylist: [/^\/force-update\/?$/],
         globPatterns: ['**/*.{js,css,html,png,svg}'],
         importScripts: ['/push-sw.js'],
       },
