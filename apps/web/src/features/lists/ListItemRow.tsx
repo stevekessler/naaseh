@@ -1,14 +1,22 @@
-import type { ListItem } from '@naaseh/domain';
+import {
+  memoDocumentText,
+  plainMemoDocument,
+  type ListItem,
+  type MemoDocument,
+} from '@naaseh/domain';
 import { useEffect, useState } from 'react';
 import { Fragment } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
 import type { NewListItem } from './ListItems.js';
-import { parseFileLinks } from './file-links.js';
 import { formatCalendarDate } from '../tasks/due-value.js';
 import { CompactLink } from '../../components/CompactLink.js';
+import { MemoEditor } from '../memos/MemoEditor.js';
+import { MemoDocumentView } from '../memos/MemoDocumentView.js';
+import type { ListColumnId } from './ListColumnSettings.js';
 export function ListItemRow({
   item,
   name,
+  visibleColumns,
   onToggle,
   onRemove,
   onEdit,
@@ -22,6 +30,7 @@ export function ListItemRow({
 }: {
   item: ListItem;
   name: string;
+  visibleColumns: ReadonlySet<ListColumnId>;
   onToggle: () => void;
   onRemove: () => void;
   onEdit: (input: NewListItem) => void;
@@ -38,8 +47,9 @@ export function ListItemRow({
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftDueDate, setDraftDueDate] = useState(item.dueDate ?? '');
-  const [draftMemo, setDraftMemo] = useState(item.memo ?? '');
-  const [draftFileLinks, setDraftFileLinks] = useState((item.fileLinks ?? []).join('\n'));
+  const [draftMemoDocument, setDraftMemoDocument] = useState<MemoDocument>(
+    item.memoDocument ?? plainMemoDocument(item.memo ?? ''),
+  );
   const [editorError, setEditorError] = useState('');
   useEffect(() => setDraftName(name), [name]);
   return (
@@ -63,56 +73,70 @@ export function ListItemRow({
         <th className="list-item-name-cell" scope="row">
           <span className="completion-label">{name}</span>
         </th>
-        <td className="list-item-due-cell">
-          {item.dueDate ? formatCalendarDate(item.dueDate) : <span aria-hidden="true">—</span>}
-        </td>
-        <td className="list-item-memo-cell">
-          {item.memo ? <p>{item.memo}</p> : <span aria-hidden="true">—</span>}
-        </td>
-        <td className="list-item-file-links-cell">
-          {item.fileLinks?.length ? (
-            <ul className="list-item-file-links">
-              {item.fileLinks.map((link) => (
-                <li key={link}>
-                  <CompactLink href={link} />
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <span aria-hidden="true">—</span>
-          )}
-        </td>
-        <td className="list-item-actions" aria-label={`Actions for ${name}`}>
-          {handleRef ? (
-            <button
-              ref={handleRef}
-              className="stack-drag-handle"
-              type="button"
-              aria-label={`Drag ${name}`}
-              aria-describedby="list-item-drag-instructions"
-            >
-              <span aria-hidden="true">⋮⋮</span>
+        {visibleColumns.has('due') && (
+          <td className="list-item-due-cell" data-label="Due">
+            {item.dueDate ? formatCalendarDate(item.dueDate) : <span aria-hidden="true">—</span>}
+          </td>
+        )}
+        {visibleColumns.has('memo') && (
+          <td className="list-item-memo-cell" data-label="Memo">
+            {item.memoDocument ? (
+              <MemoDocumentView document={item.memoDocument} />
+            ) : item.memo ? (
+              <p>{item.memo}</p>
+            ) : (
+              <span aria-hidden="true">—</span>
+            )}
+          </td>
+        )}
+        {visibleColumns.has('fileLinks') && (
+          <td className="list-item-file-links-cell" data-label="Saved links">
+            {item.fileLinks?.length ? (
+              <ul className="list-item-file-links">
+                {item.fileLinks.map((link) => (
+                  <li key={link}>
+                    <CompactLink href={link} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span aria-hidden="true">—</span>
+            )}
+          </td>
+        )}
+        {visibleColumns.has('actions') && (
+          <td className="list-item-actions" aria-label={`Actions for ${name}`}>
+            {handleRef ? (
+              <button
+                ref={handleRef}
+                className="stack-drag-handle"
+                type="button"
+                aria-label={`Drag ${name}`}
+                aria-describedby="list-item-drag-instructions"
+              >
+                <span aria-hidden="true">⋮⋮</span>
+              </button>
+            ) : null}
+            <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
+              {editing ? 'Close editor' : 'Edit'}
             </button>
-          ) : null}
-          <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
-            {editing ? 'Close editor' : 'Edit'}
-          </button>
-          {!item.directoryItemId && (
-            <button className="quiet" type="button" onClick={onPromote}>
-              Add to global directory
+            {!item.directoryItemId && (
+              <button className="quiet" type="button" onClick={onPromote}>
+                Add to global directory
+              </button>
+            )}
+            <button className="quiet" aria-label={`Archive ${name}`} onClick={onRemove}>
+              Archive
             </button>
-          )}
-          <button className="quiet" aria-label={`Archive ${name}`} onClick={onRemove}>
-            Archive
-          </button>
-          <span className="visually-hidden" role="status" aria-live="polite">
-            {feedback.announcement}
-          </span>
-        </td>
+            <span className="visually-hidden" role="status" aria-live="polite">
+              {feedback.announcement}
+            </span>
+          </td>
+        )}
       </tr>
       {editing && (
         <tr className="list-item-expanded-row">
-          <td colSpan={6}>
+          <td colSpan={2 + visibleColumns.size}>
             <div className="list-item-editor">
               <label>
                 Item name
@@ -131,40 +155,25 @@ export function ListItemRow({
                   onChange={(event) => setDraftDueDate(event.target.value)}
                 />
               </label>
-              <label>
-                Memo
-                <textarea
-                  maxLength={2000}
-                  value={draftMemo}
-                  onChange={(event) => setDraftMemo(event.target.value)}
-                />
-              </label>
-              <label>
-                File links (one HTTPS link per line)
-                <textarea
-                  value={draftFileLinks}
-                  onChange={(event) => setDraftFileLinks(event.target.value)}
-                />
-              </label>
+              <div className="list-item-memo-editor">
+                <span>Memo</span>
+                <MemoEditor value={draftMemoDocument} onChange={setDraftMemoDocument} />
+              </div>
               <button
                 type="button"
                 disabled={!draftName.trim()}
                 onClick={() => {
-                  let fileLinks: string[];
-                  try {
-                    fileLinks = parseFileLinks(draftFileLinks);
-                  } catch (cause) {
-                    setEditorError(
-                      cause instanceof Error ? cause.message : 'Enter valid HTTPS file links.',
-                    );
+                  const memo = memoDocumentText(draftMemoDocument);
+                  if (memo.length > 2000) {
+                    setEditorError('List item memos cannot exceed 2,000 characters.');
                     return;
                   }
                   setEditorError('');
                   onEdit({
                     name: draftName.trim(),
                     ...(draftDueDate ? { dueDate: draftDueDate } : {}),
-                    ...(draftMemo.trim() ? { memo: draftMemo.trim() } : {}),
-                    fileLinks,
+                    ...(memo ? { memo, memoDocument: draftMemoDocument } : {}),
+                    ...(item.fileLinks?.length ? { fileLinks: item.fileLinks } : {}),
                   });
                   setEditing(false);
                 }}

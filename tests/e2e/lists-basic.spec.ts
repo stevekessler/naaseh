@@ -8,7 +8,7 @@ import {
 test('@enhanced-lists creates, completes, and retains a lightweight list item offline', async ({
   page,
   context,
-}) => {
+}, testInfo) => {
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
   await page.getByLabel('Password').fill('local');
@@ -23,25 +23,39 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByText('List settings', { exact: true }).click();
   await page.getByLabel('Add an item').fill('Milk');
   await page.getByText('Optional details', { exact: true }).click();
-  await page
-    .getByLabel('File links (optional; one HTTPS link per line)')
-    .fill('https://files.example.test/milk.pdf');
+  await expect(page.getByLabel('File links (optional; one HTTPS link per line)')).toHaveCount(0);
+  await expect(page.getByRole('toolbar', { name: 'Memo formatting' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Memo' }).fill('Keep cold');
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByLabel('Add an item')).toHaveValue('');
   await page.getByLabel('Add an item').fill('Eggs');
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByText('Eggs', { exact: true })).toBeVisible();
   await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
+  await expect(page.getByText('2 items', { exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Item' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'File links' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'files.example.test/milk.pdf' })).toHaveAttribute(
-    'href',
-    'https://files.example.test/milk.pdf',
+  const phoneLayout = (page.viewportSize()?.width ?? 1441) <= 640;
+  const supportsSyntheticDrag = testInfo.project.name === 'chromium';
+  await expect(page.getByRole('columnheader', { name: 'Saved links' })).toHaveCount(
+    phoneLayout ? 0 : 1,
   );
+  await expect(page.getByText('Keep cold', { exact: true })).toHaveCount(phoneLayout ? 0 : 1);
+  await page.getByText('Columns', { exact: true }).click();
+  if (phoneLayout) {
+    await page.getByLabel('Show Memo column').check();
+    await page.getByLabel('Show Saved links column').check();
+    await expect(page.getByText('Keep cold', { exact: true })).toBeVisible();
+  }
+  await page.getByLabel('Show Saved links column').uncheck();
+  await expect(page.getByRole('columnheader', { name: 'Saved links' })).toHaveCount(0);
+  await page.getByLabel('Show Saved links column').check();
+  await page.getByRole('button', { name: 'Close column settings' }).click();
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
   const eggs = page.locator('.list-item').filter({ hasText: 'Eggs' });
-  await eggs.getByRole('button', { name: 'Drag Eggs' }).dragTo(item);
-  await expect(page.locator('.list-item-name-cell')).toHaveText(['Eggs', 'Milk']);
+  if (supportsSyntheticDrag) await eggs.getByRole('button', { name: 'Drag Eggs' }).dragTo(item);
+  await expect(page.locator('.list-item-name-cell')).toHaveText(
+    supportsSyntheticDrag ? ['Eggs', 'Milk'] : ['Milk', 'Eggs'],
+  );
   const complete = item.getByRole('button', { name: 'Complete Milk' });
   await expect(item.getByRole('button', { name: 'Drag Milk' })).toBeVisible();
   await expect(item.getByRole('button', { name: /Move Milk (?:up|down)/ })).toHaveCount(0);

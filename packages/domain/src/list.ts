@@ -7,6 +7,7 @@ import {
 } from './directory-item.js';
 import { defaultUrgency, urgencySchema } from './urgency.js';
 import { calendarDateSchema } from './project.js';
+import { memoDocumentSchema, memoDocumentText } from './memo-document.js';
 
 export const listItemFileLinkSchema = z
   .string()
@@ -59,6 +60,7 @@ export const listItemSchema = z
     valueOverride: valueOverrideSchema.optional(),
     dueDate: calendarDateSchema.optional(),
     memo: z.string().max(2000).optional(),
+    memoDocument: memoDocumentSchema.optional(),
     fileLinks: z.array(listItemFileLinkSchema).max(10).optional(),
     completedAt: z.string().datetime().optional(),
     completedBy: z.string().min(1).optional(),
@@ -73,6 +75,12 @@ export const listItemSchema = z
         code: 'custom',
         path: ['completedAt'],
         message: 'Completion metadata must match status.',
+      });
+    if (item.memoDocument && memoDocumentText(item.memoDocument) !== (item.memo ?? ''))
+      context.addIssue({
+        code: 'custom',
+        path: ['memo'],
+        message: 'Memo text must match the document projection.',
       });
   });
 export type ListItem = z.infer<typeof listItemSchema>;
@@ -111,6 +119,7 @@ export function createListItem(
     amountMinor?: number | null;
     dueDate?: string;
     memo?: string;
+    memoDocument?: z.input<typeof memoDocumentSchema>;
     fileLinks?: string[];
     directoryItemId?: string;
     directoryVersion?: number;
@@ -133,6 +142,7 @@ export function createListItem(
     },
     ...(input.dueDate ? { dueDate: input.dueDate } : {}),
     ...(input.memo ? { memo: input.memo } : {}),
+    ...(input.memoDocument ? { memoDocument: input.memoDocument } : {}),
     ...(input.fileLinks?.length ? { fileLinks: input.fileLinks } : {}),
     createdAt: timestamp,
     updatedAt: timestamp,

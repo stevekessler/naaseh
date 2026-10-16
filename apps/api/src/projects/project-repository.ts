@@ -14,23 +14,31 @@ export async function getProject(id: string) {
 }
 
 export async function listProjects(categoryId?: string) {
-  const result = categoryId
-    ? await dynamodb.send(
-        new QueryCommand({
-          TableName: tableName,
-          IndexName: 'GSI1',
-          KeyConditionExpression: 'GSI1PK=:pk',
-          ExpressionAttributeValues: { ':pk': `PROJECT#CATEGORY#${categoryId}` },
-        }),
-      )
-    : await dynamodb.send(
-        new ScanCommand({
-          TableName: tableName,
-          FilterExpression: 'begins_with(PK,:prefix) AND SK=:current',
-          ExpressionAttributeValues: { ':prefix': 'PROJECT#', ':current': 'CURRENT' },
-        }),
-      );
-  return (result.Items ?? []).map((item) => item.data as Project);
+  const projects: Project[] = [];
+  let exclusiveStartKey: Record<string, unknown> | undefined;
+  do {
+    const result = categoryId
+      ? await dynamodb.send(
+          new QueryCommand({
+            TableName: tableName,
+            IndexName: 'GSI1',
+            KeyConditionExpression: 'GSI1PK=:pk',
+            ExpressionAttributeValues: { ':pk': `PROJECT#CATEGORY#${categoryId}` },
+            ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+          }),
+        )
+      : await dynamodb.send(
+          new ScanCommand({
+            TableName: tableName,
+            FilterExpression: 'begins_with(PK,:prefix) AND SK=:current',
+            ExpressionAttributeValues: { ':prefix': 'PROJECT#', ':current': 'CURRENT' },
+            ...(exclusiveStartKey ? { ExclusiveStartKey: exclusiveStartKey } : {}),
+          }),
+        );
+    projects.push(...(result.Items ?? []).map((item) => item.data as Project));
+    exclusiveStartKey = result.LastEvaluatedKey;
+  } while (exclusiveStartKey);
+  return projects;
 }
 
 export async function createProjectRecord(project: Project) {
