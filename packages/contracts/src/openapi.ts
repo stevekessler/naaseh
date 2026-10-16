@@ -185,6 +185,7 @@ export const listItemCreateSchema = z
     directoryVersion: z.number().int().positive().optional(),
     dueDate: calendarDateSchema.optional(),
     memo: z.string().max(2000).optional(),
+    memoDocument: memoDocumentSchema.optional(),
     fileLinks: z.array(listItemFileLinkSchema).max(10).optional(),
   })
   .strict();
@@ -201,6 +202,7 @@ export const listItemPatchSchema = z
     orderKey: z.string().min(1).max(128).optional(),
     dueDate: calendarDateSchema.nullable().optional(),
     memo: z.string().max(2000).nullable().optional(),
+    memoDocument: memoDocumentSchema.nullable().optional(),
     fileLinks: z.array(listItemFileLinkSchema).max(10).optional(),
   })
   .strict();

@@ -457,7 +457,43 @@
   gap: 0.5rem;
 }
 .list-item-table-wrap {
+  margin-top: 0;
+  border-radius: 0 0 14px 14px;
+}
+.list-table-tools {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   margin-top: 1rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
+  background: #eef2ef;
+}
+.list-table-tools > p {
+  margin: 0;
+}
+.list-item-count {
+  color: #526359;
+  font-size: 0.9rem;
+  font-weight: 750;
+}
+.list-empty-state {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8faf8;
+}
+.list-empty-state > p {
+  margin: 0;
 }
 .list-index-table-wrap {
   margin-block: 1rem;
@@ -489,13 +525,13 @@
 .list-item-table thead th:nth-child(2) {
   width: 24%;
 }
-.list-item-table thead th:nth-child(3) {
+.list-item-table .list-item-due-cell {
   width: 10rem;
 }
-.list-item-table thead th:nth-child(5) {
+.list-item-table .list-item-file-links-cell {
   width: 18%;
 }
-.list-item-table thead th:last-child {
+.list-item-table .list-item-actions {
   width: 22rem;
 }
 .list-item-table .list-item-status-cell {
@@ -503,6 +539,8 @@
 }
 .list-item-table .list-item-name-cell {
   font-weight: 750;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .list-item-table .list-item-memo-cell p {
   margin: 0;
@@ -521,6 +559,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.list-item-memo-editor {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 0.35rem;
+  min-width: 0;
+}
+.list-item-memo-editor > span {
+  color: var(--navy);
+}
+.list-item-memo-editor .memo-editor {
+  min-height: 7rem;
 }
 .list-item-table td.list-item-actions {
   display: table-cell;
@@ -603,6 +653,32 @@
 }
 .list-item-editor > .attachments {
   grid-column: 1 / -1;
+}
+.attachments > label {
+  display: grid;
+  gap: 0.6rem;
+}
+.attachments > ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.attachments > ul > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #f8faf8;
+}
+.attachments > ul > li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .value-editor {
   display: grid;
@@ -2644,6 +2720,10 @@ dialog input {
   }
   .list-item-table tbody tr.list-item {
     grid-template-columns: 2.8rem minmax(0, 1fr);
+    padding: 0.8rem 0.65rem;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
   }
   .list-item-table .list-item-status-cell {
     grid-column: 1;
@@ -2652,10 +2732,14 @@ dialog input {
   .list-item-table .list-item-name-cell {
     grid-column: 2;
     grid-row: 1;
+    padding-inline: 0.4rem;
+    font-size: 1rem;
+    line-height: 1.25;
   }
   .list-item-table .list-item-due-cell {
     grid-column: 2;
     grid-row: 2;
+    width: auto;
   }
   .list-item-table .list-item-memo-cell {
     grid-column: 2;
@@ -2664,15 +2748,53 @@ dialog input {
   .list-item-table .list-item-file-links-cell {
     grid-column: 2;
     grid-row: 4;
+    width: auto;
   }
   .list-item-table td.list-item-actions {
     display: flex;
     grid-column: 1 / 3;
     grid-row: 5;
     justify-content: flex-start;
+    width: auto;
+    padding-top: 0.7rem;
+    border-top: 1px solid var(--line);
   }
   .list-item-table tbody tr.list-item-expanded-row {
-    display: table-row;
+    display: block;
+    width: 100%;
+    border-bottom: 1px solid var(--line);
+  }
+  .list-item-table tbody tr.list-item-expanded-row > td {
+    display: block;
+    width: 100%;
+    padding: 0.8rem;
+  }
+  .list-item-table
+    :is(.list-item-due-cell, .list-item-memo-cell, .list-item-file-links-cell)::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.15rem;
+    color: #607168;
+    font-size: 0.72rem;
+    font-weight: 750;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .list-table-tools {
+    align-items: center;
+  }
+  .list-column-settings .task-column-settings-panel {
+    position: fixed;
+    inset: auto 1rem calc(1rem + var(--safe-bottom));
+    width: auto;
+    max-height: calc(var(--usable-viewport-height) - 2rem - var(--safe-bottom));
+    overflow-y: auto;
+  }
+  .attachments > ul > li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .attachments > ul > li > span {
+    grid-column: 1 / -1;
   }
 }
 .archive-results,

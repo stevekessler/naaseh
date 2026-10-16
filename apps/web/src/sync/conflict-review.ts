@@ -1,7 +1,9 @@
 import {
+  categorySchema,
   createUlid,
   listItemSchema,
   listSchema,
+  projectSchema,
   taskSchema,
   type Mutation,
   type Task,
@@ -68,6 +70,34 @@ export async function readConflictDisplayContext(
         ? listSchema.parse(await decryptLocalValue('list', mutation.entityId, row.value))
         : mutation.operation === 'create'
           ? listSchema.safeParse(mutation.payload).data
+          : undefined;
+      return parsed ? { entityLabel: parsed.name } : undefined;
+    }
+    if (mutation.entityType === 'project') {
+      const row = await db.secureProjects.get(mutation.entityId);
+      const parsed = row
+        ? projectSchema.parse(await decryptLocalValue('project', mutation.entityId, row.value))
+        : mutation.operation === 'create'
+          ? projectSchema.safeParse(mutation.payload).data
+          : undefined;
+      if (!parsed) return undefined;
+      const categoryRow = await db.secureCategories.get(parsed.categoryId);
+      const category = categoryRow
+        ? categorySchema.parse(
+            await decryptLocalValue('category', parsed.categoryId, categoryRow.value),
+          )
+        : undefined;
+      return {
+        entityLabel: parsed.name,
+        ...(category ? { parentLabel: category.name } : {}),
+      };
+    }
+    if (mutation.entityType === 'category') {
+      const row = await db.secureCategories.get(mutation.entityId);
+      const parsed = row
+        ? categorySchema.parse(await decryptLocalValue('category', mutation.entityId, row.value))
+        : mutation.operation === 'create'
+          ? categorySchema.safeParse(mutation.payload).data
           : undefined;
       return parsed ? { entityLabel: parsed.name } : undefined;
     }

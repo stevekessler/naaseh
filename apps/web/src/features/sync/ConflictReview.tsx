@@ -115,7 +115,10 @@ export function ConflictItem({
     <article className="sync-conflict-item">
       <h3>{title}</h3>
       {conflict.display?.parentLabel && (
-        <p className="sync-conflict-context">List: {conflict.display.parentLabel}</p>
+        <p className="sync-conflict-context">
+          {conflict.mutation?.entityType === 'project' ? 'Category' : 'List'}:{' '}
+          {conflict.display.parentLabel}
+        </p>
       )}
       {!isTask && !conflict.display?.entityLabel && conflict.mutation?.entityId && (
         <p className="sync-conflict-context">Item reference: {conflict.mutation.entityId}</p>
