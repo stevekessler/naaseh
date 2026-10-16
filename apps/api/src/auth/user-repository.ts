@@ -10,15 +10,18 @@ import { z } from 'zod';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { keys } from '../shared/keys.js';
 export interface StoredUser extends UserRecord {
-  passwordHash: string;
-  pinHash: string;
-  pepperVersion: string;
+  passwordHash?: string;
+  pinHash?: string;
+  pepperVersion?: string;
 }
 const storedUserSchema = userSchema
   .extend({
-    passwordHash: z.string().min(1),
-    pinHash: z.string().min(1),
-    pepperVersion: z.string().min(1),
+    // Accounts imported before browser authentication was introduced may not
+    // have credentials yet. They still need to be readable so an administrator
+    // can establish a password or a PIN-backed reset can establish one.
+    passwordHash: z.string().min(1).optional(),
+    pinHash: z.string().min(1).optional(),
+    pepperVersion: z.string().min(1).optional(),
   })
   .passthrough();
 const storedUser = (value: unknown): StoredUser => storedUserSchema.parse(value) as StoredUser;
@@ -183,7 +186,8 @@ export async function commitPasswordReset(change: {
       Key: keys.user(change.userId),
       UpdateExpression:
         'SET #data.passwordHash=:passwordHash, #data.credentialVersion=:credentialVersion, #data.sessionEpoch=:sessionEpoch, #data.tfaStatus=:tfaStatus, #data.securityUpdatedAt=:now, #data.#version=:nextVersion',
-      ConditionExpression: '#data.#version=:expectedVersion',
+      ConditionExpression:
+        '(attribute_not_exists(#data.#version) AND :expectedVersion = :legacyVersion) OR #data.#version=:expectedVersion',
       ExpressionAttributeNames: { '#data': 'data', '#version': 'version' },
       ExpressionAttributeValues: {
         ':passwordHash': change.passwordHash,
@@ -193,6 +197,7 @@ export async function commitPasswordReset(change: {
         ':now': new Date().toISOString(),
         ':nextVersion': change.expectedVersion + 1,
         ':expectedVersion': change.expectedVersion,
+        ':legacyVersion': 1,
       },
     }),
   );

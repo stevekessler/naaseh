@@ -66,7 +66,9 @@ async function handle(event: APIGatewayProxyEventV2) {
       const user = await userById(userId);
       if (!user?.active) return false;
       const pepper = await loadPepper(process.env.PASSWORD_PEPPER_SECRET_ID, user.pepperVersion);
-      const valid = await verifyPassword(user.passwordHash, password, pepper.value);
+      const valid = user.passwordHash
+        ? await verifyPassword(user.passwordHash, password, pepper.value)
+        : false;
       if (valid) await clearDurableFailures(attemptKey);
       else await registerDurableFailure(attemptKey);
       return valid;

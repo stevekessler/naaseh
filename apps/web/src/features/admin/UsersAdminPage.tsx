@@ -17,6 +17,7 @@ export function UsersAdminPage({
   currentUserId,
   toggle,
   create,
+  update,
   online,
   nextCursor,
   loadMore,
@@ -31,6 +32,17 @@ export function UsersAdminPage({
     pin: string;
     role: 'user' | 'admin';
   }) => Promise<void>;
+  update: (
+    id: string,
+    input: {
+      username: string;
+      displayName: string;
+      role: 'user' | 'admin';
+      password?: string;
+      confirmPassword?: string;
+    },
+    version?: number,
+  ) => Promise<void>;
   online: boolean;
   nextCursor?: string;
   loadMore?: () => Promise<void>;
@@ -38,6 +50,7 @@ export function UsersAdminPage({
   const [busy, setBusy] = useState<string>();
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<AdminUser>();
   return (
     <section aria-labelledby="users-admin-heading">
       <h1 id="users-admin-heading">Users</h1>
@@ -164,6 +177,9 @@ export function UsersAdminPage({
                     >
                       {busy === user.id ? 'Saving…' : user.active ? 'Disable' : 'Reactivate'}
                     </button>
+                    <button type="button" onClick={() => setEditing(user)}>
+                      Edit {user.displayName}
+                    </button>
                     {self && user.active && (
                       <small>Your active administrator account cannot disable itself.</small>
                     )}
@@ -185,6 +201,74 @@ export function UsersAdminPage({
         >
           {busy === 'page' ? 'Loading users…' : 'Load more users'}
         </button>
+      ) : null}
+      {editing ? (
+        <dialog open aria-labelledby="edit-user-heading">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!online) return;
+              const form = event.currentTarget;
+              const data = new FormData(form);
+              const password = String(data.get('password') ?? '');
+              const confirmPassword = String(data.get('confirmPassword') ?? '');
+              if (password !== confirmPassword) {
+                setError('Passwords must match.');
+                return;
+              }
+              setBusy(editing.id);
+              setError('');
+              void update(
+                editing.id,
+                {
+                  username: String(data.get('username') ?? ''),
+                  displayName: String(data.get('displayName') ?? ''),
+                  role: data.get('role') === 'admin' ? 'admin' : 'user',
+                  ...(password ? { password, confirmPassword } : {}),
+                },
+                editing.version,
+              )
+                .then(() => setEditing(undefined))
+                .catch(() => setError('The user information could not be changed.'))
+                .finally(() => setBusy(undefined));
+            }}
+          >
+            <h2 id="edit-user-heading">Edit {editing.displayName}</h2>
+            <p>Leave the password blank to keep the current password.</p>
+            <label>
+              Username <input name="username" defaultValue={editing.username} required />
+            </label>
+            <label>
+              Display name <input name="displayName" defaultValue={editing.displayName} required />
+            </label>
+            <label>
+              Role
+              <select name="role" defaultValue={editing.role}>
+                <option value="user">User</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </label>
+            <label>
+              New password
+              <input name="password" type="password" minLength={12} autoComplete="new-password" />
+            </label>
+            <label>
+              Confirm new password
+              <input
+                name="confirmPassword"
+                type="password"
+                minLength={12}
+                autoComplete="new-password"
+              />
+            </label>
+            <button type="submit" disabled={!online || busy === editing.id}>
+              {busy === editing.id ? 'Saving…' : 'Save changes'}
+            </button>
+            <button type="button" onClick={() => setEditing(undefined)}>
+              Cancel
+            </button>
+          </form>
+        </dialog>
       ) : null}
     </section>
   );

@@ -6,6 +6,7 @@ const store = vi.hoisted(() => ({ send: vi.fn() }));
 vi.mock('../../src/shared/dynamodb.js', () => ({ dynamodb: store, tableName: 'test-table' }));
 
 import {
+  commitPasswordReset,
   putUser,
   syncBrokerActiveProjection,
   userByUsername,
@@ -39,6 +40,46 @@ describe('stored user compatibility', () => {
       version: 1,
     });
     expect(user && requiredTfaNextStep(user)).toBe('tfa_enrollment');
+  });
+
+  it('reads an imported account that does not have browser credentials yet', async () => {
+    store.send.mockResolvedValue({
+      Item: {
+        data: {
+          id: 'user-without-password',
+          username: 'heather',
+          displayName: 'Heather',
+          role: 'user',
+          active: true,
+          sessionEpoch: 0,
+        },
+      },
+    });
+
+    await expect(userByUsername('heather')).resolves.toMatchObject({
+      id: 'user-without-password',
+      username: 'heather',
+      credentialVersion: 0,
+      version: 1,
+    });
+  });
+
+  it('can commit a password reset to a legacy row without an explicit version', async () => {
+    store.send.mockResolvedValue({});
+    await commitPasswordReset({
+      userId: 'legacy-user',
+      passwordHash: 'new-hash',
+      expectedVersion: 1,
+      nextCredentialVersion: 1,
+      nextSessionEpoch: 1,
+      retainedTfaStatus: 'disabled',
+    });
+    const command = store.send.mock.calls[0]![0] as { input: Record<string, unknown> };
+    expect(command.input.ConditionExpression).toContain('attribute_not_exists');
+    expect(command.input.ExpressionAttributeValues).toMatchObject({
+      ':expectedVersion': 1,
+      ':legacyVersion': 1,
+    });
   });
 
   it('writes only a top-level active projection for broker authorization', async () => {

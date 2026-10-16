@@ -1,4 +1,9 @@
-import { GetCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  QueryCommand,
+  TransactWriteCommand,
+  UpdateCommand,
+} from '@aws-sdk/lib-dynamodb';
 import type { UserRecord } from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { keys } from '../shared/keys.js';
@@ -31,6 +36,18 @@ export interface UserAdminRepository {
     active: boolean,
     expectedEpoch: number,
     expectedVersion?: number,
+  ): Promise<UserRecord>;
+  update?(
+    current: UserRecord,
+    change: {
+      username: string;
+      displayName: string;
+      role: 'admin' | 'user';
+      tfaStatus: UserRecord['tfaStatus'];
+      passwordHash?: string;
+      pepperVersion?: string;
+    },
+    expectedVersion: number,
   ): Promise<UserRecord>;
 }
 
@@ -135,6 +152,44 @@ export function createUserAdminService(repository: UserAdminRepository) {
         await repository.setStatus(targetId, active, current.sessionEpoch, current.version ?? 1),
       );
     },
+    async updateUser(
+      actorId: string,
+      targetId: string,
+      change: {
+        username: string;
+        displayName: string;
+        role: 'admin' | 'user';
+        passwordHash?: string;
+        pepperVersion?: string;
+      },
+      expectedVersion?: number,
+    ) {
+      const current = await repository.get(targetId);
+      if (!current) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
+      const version = current.version ?? 1;
+      if (expectedVersion !== undefined && version !== expectedVersion)
+        throw Object.assign(new Error('The user changed before this action was saved.'), {
+          statusCode: 409,
+        });
+      if (current.role === 'admin' && change.role !== 'admin' && current.active) {
+        const activeAdmins = (await repository.list()).filter(
+          (user) => user.active && user.role === 'admin',
+        );
+        if (actorId === targetId || activeAdmins.length <= 1)
+          throw Object.assign(new Error('The active administrator cannot remove its own access.'), {
+            statusCode: 409,
+          });
+      }
+      const tfaStatus =
+        change.role === 'admin' && current.tfaStatus !== 'enabled'
+          ? ('enrollment_required' as const)
+          : (current.tfaStatus ?? 'disabled');
+      if (!repository.update)
+        throw Object.assign(new Error('User editing is unavailable.'), { statusCode: 503 });
+      return view(
+        await repository.update(current, { ...change, tfaStatus }, expectedVersion ?? version),
+      );
+    },
   };
 }
 
@@ -216,6 +271,95 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
       }),
     );
     return result.Attributes?.data as UserRecord;
+  },
+  async update(current, change, expectedVersion) {
+    const usernameChanged = current.username !== change.username;
+    const names: Record<string, string> = {
+      '#data': 'data',
+      '#username': 'username',
+      '#displayName': 'displayName',
+      '#role': 'role',
+      '#tfaStatus': 'tfaStatus',
+      '#sessionEpoch': 'sessionEpoch',
+      '#credentialVersion': 'credentialVersion',
+      '#securityUpdatedAt': 'securityUpdatedAt',
+      '#version': 'version',
+    };
+    const values: Record<string, unknown> = {
+      ':username': change.username,
+      ':displayName': change.displayName,
+      ':role': change.role,
+      ':tfaStatus': change.tfaStatus,
+      ':one': 1,
+      ':zero': 0,
+      ':now': new Date().toISOString(),
+      ':expectedVersion': expectedVersion,
+      ':legacyVersion': 1,
+      ':nextVersion': expectedVersion + 1,
+    };
+    let updateExpression =
+      'SET #data.#username=:username, #data.#displayName=:displayName, #data.#role=:role, #data.#tfaStatus=:tfaStatus, #data.#sessionEpoch=if_not_exists(#data.#sessionEpoch,:zero)+:one, #data.#securityUpdatedAt=:now, #data.#version=:nextVersion';
+    if (usernameChanged) {
+      names['#gsi1sk'] = 'GSI1SK';
+      values[':gsi1sk'] = `${change.username}#${current.id}`;
+      updateExpression += ', #gsi1sk=:gsi1sk';
+    }
+    if (change.passwordHash && change.pepperVersion) {
+      names['#passwordHash'] = 'passwordHash';
+      names['#pepperVersion'] = 'pepperVersion';
+      values[':passwordHash'] = change.passwordHash;
+      values[':pepperVersion'] = change.pepperVersion;
+      updateExpression +=
+        ', #data.#passwordHash=:passwordHash, #data.#pepperVersion=:pepperVersion, #data.#credentialVersion=if_not_exists(#data.#credentialVersion,:zero)+:one';
+    }
+    const update = {
+      TableName: tableName,
+      Key: keys.user(current.id),
+      UpdateExpression: updateExpression,
+      ConditionExpression:
+        '(attribute_not_exists(#data.#version) AND :expectedVersion = :legacyVersion) OR #data.#version=:expectedVersion',
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+    };
+    if (usernameChanged) {
+      await dynamodb.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: tableName,
+                Item: {
+                  ...keys.username(change.username),
+                  data: { userId: current.id, canonicalUsername: change.username },
+                },
+                ConditionExpression: 'attribute_not_exists(PK)',
+              },
+            },
+            { Update: update },
+            {
+              Delete: {
+                TableName: tableName,
+                Key: keys.username(current.username),
+              },
+            },
+          ],
+        }),
+      );
+    } else {
+      await dynamodb.send(new UpdateCommand(update));
+    }
+    return {
+      ...current,
+      username: change.username,
+      displayName: change.displayName,
+      role: change.role,
+      tfaStatus: change.tfaStatus,
+      sessionEpoch: (current.sessionEpoch ?? 0) + 1,
+      credentialVersion:
+        (current.credentialVersion ?? 0) + (change.passwordHash && change.pepperVersion ? 1 : 0),
+      securityUpdatedAt: values[':now'] as string,
+      version: expectedVersion + 1,
+    };
   },
 };
 

@@ -10,7 +10,7 @@ describe('admin API contract', () => {
     const contract = readFileSync('specs/001-naaseh-v1-baseline/contracts/openapi.yaml', 'utf8');
     expect(contract).toContain('operationId: listUsers');
     expect(contract).toContain('operationId: provisionUser');
-    expect(contract).toContain('operationId: setUserStatus');
+    expect(contract).toContain('operationId: updateUser');
     expect(contract).toContain('operationId: createProfilePictureUpload');
   });
 

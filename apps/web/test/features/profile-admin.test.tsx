@@ -23,6 +23,7 @@ describe('profile, administration, and authorized group controls', () => {
         currentUserId="other"
         toggle={vi.fn()}
         create={vi.fn()}
+        update={vi.fn()}
         online
       />,
     );
