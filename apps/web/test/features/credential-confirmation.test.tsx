@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { JournalUnlock } from '../../src/features/journal/JournalUnlock.js';
 import { JournalSettings } from '../../src/features/journal/JournalSettings.js';
@@ -46,7 +46,14 @@ it('prevents changing a Journal PIN until confirmation matches', async () => {
 it('requires both password and account PIN confirmation before creating a user', async () => {
   const create = vi.fn().mockResolvedValue(undefined);
   const view = render(
-    <UsersAdminPage users={[]} currentUserId="steve" online create={create} toggle={vi.fn()} />,
+    <UsersAdminPage
+      users={[]}
+      currentUserId="steve"
+      online
+      create={create}
+      toggle={vi.fn()}
+      update={vi.fn()}
+    />,
   );
   const fill = (label: string, value: string) =>
     fireEvent.change(view.getByLabelText(label), { target: { value } });
@@ -68,6 +75,50 @@ it('requires both password and account PIN confirmation before creating a user',
   await waitFor(() =>
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ password: 'long-password', pin: '246810' }),
+    ),
+  );
+});
+it('lets an administrator edit user information and set a password', async () => {
+  const update = vi.fn().mockResolvedValue(undefined);
+  const view = render(
+    <UsersAdminPage
+      users={[
+        {
+          id: 'heather',
+          username: 'heather',
+          displayName: 'Heather',
+          role: 'user',
+          active: true,
+          sessionEpoch: 0,
+          version: 1,
+        },
+      ]}
+      currentUserId="steve"
+      online
+      create={vi.fn()}
+      toggle={vi.fn()}
+      update={update}
+    />,
+  );
+  fireEvent.click(view.getByRole('button', { name: 'Edit Heather' }));
+  const dialog = within(view.getByRole('dialog'));
+  fireEvent.change(dialog.getByLabelText('Display name'), { target: { value: 'Heather K' } });
+  fireEvent.change(dialog.getByLabelText('New password'), {
+    target: { value: 'new secure password' },
+  });
+  fireEvent.change(dialog.getByLabelText('Confirm new password'), {
+    target: { value: 'new secure password' },
+  });
+  fireEvent.click(dialog.getByRole('button', { name: 'Save changes' }));
+  await waitFor(() =>
+    expect(update).toHaveBeenCalledWith(
+      'heather',
+      expect.objectContaining({
+        username: 'heather',
+        displayName: 'Heather K',
+        password: 'new secure password',
+      }),
+      1,
     ),
   );
 });

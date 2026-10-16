@@ -8,10 +8,25 @@ import { createProfilePictureUpload } from './profile-picture.js';
 import { requireAdminMutation } from './admin-authorization.js';
 import { provisionUserWithConfiguredPepper } from './provision-user.js';
 import { userAdminService } from './user-admin-service.js';
+import { hashPassword, loadPepper } from '../auth/password.js';
+import { canonicalUsername } from '../auth/user-repository.js';
 import { putRecord } from '../shared/store.js';
 import { createLogger } from '@naaseh/observability';
 
 const statusSchema = z.object({ active: z.boolean() }).strict();
+const userUpdateSchema = z
+  .object({
+    username: z.string().trim().min(1).max(100),
+    displayName: z.string().trim().min(1).max(200),
+    role: z.enum(['user', 'admin']),
+    password: z.string().min(12).max(256).optional(),
+    confirmPassword: z.string().min(12).max(256).optional(),
+  })
+  .strict()
+  .refine((value) => value.password === value.confirmPassword, {
+    message: 'Passwords must match.',
+    path: ['confirmPassword'],
+  });
 const pageSchema = z
   .object({
     limit: z.coerce.number().int().min(1).max(100).default(100),
@@ -105,31 +120,60 @@ async function handle(event: APIGatewayProxyEventV2) {
     return json(result.created ? 201 : 200, result);
   }
   if (method === 'PATCH' && event.pathParameters?.userId) {
-    const body = statusSchema.parse(JSON.parse(event.body ?? '{}'));
-    const value = await userAdminService.setUserActive(
-      auth.userId,
-      event.pathParameters.userId,
-      body.active,
-      event.headers['if-match'] ? Number(event.headers['if-match']) : undefined,
-    );
+    const input = JSON.parse(event.body ?? '{}');
+    const status = statusSchema.safeParse(input);
+    const expectedVersion = event.headers['if-match']
+      ? Number(event.headers['if-match'])
+      : undefined;
+    let value;
+    let eventName: 'user.reactivated' | 'user.disabled' | 'user.updated';
+    if (status.success) {
+      value = await userAdminService.setUserActive(
+        auth.userId,
+        event.pathParameters.userId,
+        status.data.active,
+        expectedVersion,
+      );
+      eventName = status.data.active ? 'user.reactivated' : 'user.disabled';
+    } else {
+      const body = userUpdateSchema.parse(input);
+      const pepper = body.password ? await loadPepper() : undefined;
+      value = await userAdminService.updateUser(
+        auth.userId,
+        event.pathParameters.userId,
+        {
+          username: canonicalUsername(body.username),
+          displayName: body.displayName,
+          role: body.role,
+          ...(body.password && pepper
+            ? {
+                passwordHash: await hashPassword(body.password, pepper.value),
+                pepperVersion: pepper.version,
+              }
+            : {}),
+        },
+        expectedVersion,
+      );
+      eventName = 'user.updated';
+    }
     await putRecord(
       {
         PK: `AUDIT#${randomUUID()}`,
         SK: 'EVENT',
-        event: body.active ? 'user.reactivated' : 'user.disabled',
+        event: eventName,
         actorId: auth.userId,
         userId: value.id,
         at: new Date().toISOString(),
       },
       'attribute_not_exists(PK)',
     );
-    logger.admin(body.active ? 'user.reactivated' : 'user.disabled', {
+    logger.admin(eventName, {
       correlationId,
       actorId: auth.userId,
       resourceId: value.id,
       outcome: 'success',
     });
-    logger.metric('UserStatusChanges', 1);
+    logger.metric(status.success ? 'UserStatusChanges' : 'UserProfileChanges', 1);
     return json(200, value);
   }
   if (method === 'POST' && event.rawPath.endsWith('/admin/profile-pictures/upload')) {

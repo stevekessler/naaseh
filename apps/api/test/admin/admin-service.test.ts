@@ -22,6 +22,18 @@ function repository(seed: UserRecord[]): UserAdminRepository {
       users.set(id, next);
       return next;
     },
+    update: async (current, change, expectedVersion) => {
+      if ((current.version ?? 1) !== expectedVersion) throw new Error('conflict');
+      const next = {
+        ...current,
+        ...change,
+        sessionEpoch: current.sessionEpoch + 1,
+        credentialVersion: current.credentialVersion + (change.passwordHash ? 1 : 0),
+        version: expectedVersion + 1,
+      };
+      users.set(current.id, next);
+      return next;
+    },
   };
 }
 
@@ -89,6 +101,30 @@ describe('administration rules', () => {
     await expect(service.setUserActive(user.id, admin.id, false)).rejects.toMatchObject({
       statusCode: 409,
     });
+  });
+
+  it('lets an administrator edit a user and establish a missing password', async () => {
+    const service = createUserAdminService(repository([admin, user]));
+    const updated = await service.updateUser(
+      admin.id,
+      user.id,
+      {
+        username: 'heather',
+        displayName: 'Heather K',
+        role: 'user',
+        passwordHash: 'new-password-hash',
+        pepperVersion: 'pepper-2',
+      },
+      1,
+    );
+    expect(updated).toMatchObject({
+      username: 'heather',
+      displayName: 'Heather K',
+      role: 'user',
+      sessionEpoch: 5,
+      version: 2,
+    });
+    expect(updated).not.toHaveProperty('passwordHash');
   });
 
   it('provisions through one idempotent service without returning credential hashes', async () => {

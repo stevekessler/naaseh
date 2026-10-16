@@ -8,6 +8,7 @@ export type AdminAuditEvent =
   | 'user.provision_failed'
   | 'user.disabled'
   | 'user.reactivated'
+  | 'user.updated'
   | 'category.created'
   | 'category.updated'
   | 'category.archived';

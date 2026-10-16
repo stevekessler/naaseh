@@ -71,6 +71,7 @@ import type { AdminUser } from '../features/admin/UsersAdminPage.js';
 import {
   changeAdminUserStatus,
   createAdminUser,
+  updateAdminUser,
   listAdminUsersPage,
 } from '../features/admin/admin-client.js';
 import {
@@ -1416,6 +1417,18 @@ export function App() {
                     const updated = await changeAdminUserStatus(
                       userId,
                       active,
+                      session.csrfToken,
+                      version,
+                    );
+                    void refreshUsers().catch(() => undefined);
+                    setAdminUsers((users) =>
+                      users.map((user) => (user.id === userId ? updated : user)),
+                    );
+                  }}
+                  update={async (userId, input, version) => {
+                    const updated = await updateAdminUser(
+                      userId,
+                      input,
                       session.csrfToken,
                       version,
                     );

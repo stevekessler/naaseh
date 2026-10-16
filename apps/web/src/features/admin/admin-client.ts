@@ -41,6 +41,27 @@ export function changeAdminUserStatus(
   });
 }
 
+export interface UpdateAdminUserInput {
+  username: string;
+  displayName: string;
+  role: 'user' | 'admin';
+  password?: string;
+  confirmPassword?: string;
+}
+
+export function updateAdminUser(
+  userId: string,
+  input: UpdateAdminUserInput,
+  csrfToken: string,
+  version?: number,
+) {
+  return adminRequest<AdminUser>(`/admin/users/${encodeURIComponent(userId)}`, csrfToken, {
+    method: 'PATCH',
+    ...(version ? { headers: { 'if-match': String(version) } } : {}),
+    body: JSON.stringify(input),
+  });
+}
+
 export interface CreateAdminUserInput {
   username: string;
   displayName: string;
