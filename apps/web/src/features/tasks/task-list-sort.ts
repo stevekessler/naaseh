@@ -60,10 +60,6 @@ export function sortTasksForTable(
   const projectRecords = new Map(projects.map((project) => [project.id, project]));
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));
   const value = (task: Task): string | number | undefined => {
-    if (sort.key === 'due') {
-      const date = taskDueDateKey(task);
-      return date ? `${date}|${task.dueAt ?? ''}` : undefined;
-    }
     if (sort.key === 'project')
       return task.projectId ? projectNames.get(task.projectId) : undefined;
     if (sort.key === 'category') {
@@ -74,10 +70,27 @@ export function sortTasksForTable(
   };
   return tasks
     .map((task, index) => ({ task, index }))
-    .sort(
-      (left, right) =>
+    .sort((left, right) => {
+      if (sort.key === 'due') {
+        const leftDate = taskDueDateKey(left.task);
+        const rightDate = taskDueDateKey(right.task);
+        const dateOrder = compareOptional(leftDate, rightDate, sort.direction);
+        if (dateOrder) return dateOrder;
+        if (leftDate && rightDate) {
+          const leftIsTimed = Boolean(left.task.dueAt);
+          const rightIsTimed = Boolean(right.task.dueAt);
+          if (leftIsTimed !== rightIsTimed) return leftIsTimed ? -1 : 1;
+          if (left.task.dueAt && right.task.dueAt) {
+            const timeOrder = compareOptional(left.task.dueAt, right.task.dueAt, sort.direction);
+            if (timeOrder) return timeOrder;
+          }
+        }
+        return left.index - right.index;
+      }
+      return (
         compareOptional(value(left.task), value(right.task), sort.direction) ||
-        left.index - right.index,
-    )
+        left.index - right.index
+      );
+    })
     .map(({ task }) => task);
 }

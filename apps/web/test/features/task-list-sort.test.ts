@@ -74,6 +74,28 @@ describe('task list sorting', () => {
     ).toEqual(['Today at 1 PM', 'Today at 5 PM', 'Later date only']);
   });
 
+  it('puts timed tasks ahead of date-only tasks on the same day', () => {
+    const sameDay = [
+      task('Date only', { dueKind: 'date', dueDate: '2026-10-12' }),
+      task('At 5 PM', {
+        dueKind: 'timed',
+        dueAt: '2026-10-12T23:00:00.000Z',
+        dueTimeZone: 'America/Denver',
+      }),
+      task('At 1 PM', {
+        dueKind: 'timed',
+        dueAt: '2026-10-12T19:00:00.000Z',
+        dueTimeZone: 'America/Denver',
+      }),
+    ];
+
+    expect(
+      sortTasksForTable(sameDay, { key: 'due', direction: 'ascending' }, categories, projects).map(
+        ({ label }) => label,
+      ),
+    ).toEqual(['At 1 PM', 'At 5 PM', 'Date only']);
+  });
+
   it.each([
     [
       'due',

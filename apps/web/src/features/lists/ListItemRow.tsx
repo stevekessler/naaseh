@@ -47,6 +47,7 @@ export function ListItemRow({
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(name);
   const [draftDueDate, setDraftDueDate] = useState(item.dueDate ?? '');
+  const [draftLink, setDraftLink] = useState(item.fileLinks?.[0] ?? '');
   const [draftMemoDocument, setDraftMemoDocument] = useState<MemoDocument>(
     item.memoDocument ?? plainMemoDocument(item.memo ?? ''),
   );
@@ -90,15 +91,9 @@ export function ListItemRow({
           </td>
         )}
         {visibleColumns.has('fileLinks') && (
-          <td className="list-item-file-links-cell" data-label="Saved links">
-            {item.fileLinks?.length ? (
-              <ul className="list-item-file-links">
-                {item.fileLinks.map((link) => (
-                  <li key={link}>
-                    <CompactLink href={link} />
-                  </li>
-                ))}
-              </ul>
+          <td className="list-item-file-links-cell" data-label="Link">
+            {item.fileLinks?.[0] ? (
+              <CompactLink href={item.fileLinks[0]} />
             ) : (
               <span aria-hidden="true">—</span>
             )}
@@ -106,28 +101,30 @@ export function ListItemRow({
         )}
         {visibleColumns.has('actions') && (
           <td className="list-item-actions" aria-label={`Actions for ${name}`}>
-            {handleRef ? (
-              <button
-                ref={handleRef}
-                className="stack-drag-handle"
-                type="button"
-                aria-label={`Drag ${name}`}
-                aria-describedby="list-item-drag-instructions"
-              >
-                <span aria-hidden="true">⋮⋮</span>
+            <div className="list-item-action-buttons">
+              {handleRef ? (
+                <button
+                  ref={handleRef}
+                  className="stack-drag-handle"
+                  type="button"
+                  aria-label={`Drag ${name}`}
+                  aria-describedby="list-item-drag-instructions"
+                >
+                  <span aria-hidden="true">⋮⋮</span>
+                </button>
+              ) : null}
+              <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
+                {editing ? 'Close editor' : 'Edit'}
               </button>
-            ) : null}
-            <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
-              {editing ? 'Close editor' : 'Edit'}
-            </button>
-            {!item.directoryItemId && (
-              <button className="quiet" type="button" onClick={onPromote}>
-                Add to global directory
+              {!item.directoryItemId && (
+                <button className="quiet" type="button" onClick={onPromote}>
+                  Add to directory
+                </button>
+              )}
+              <button className="quiet" aria-label={`Archive ${name}`} onClick={onRemove}>
+                Archive
               </button>
-            )}
-            <button className="quiet" aria-label={`Archive ${name}`} onClick={onRemove}>
-              Archive
-            </button>
+            </div>
             <span className="visually-hidden" role="status" aria-live="polite">
               {feedback.announcement}
             </span>
@@ -155,11 +152,25 @@ export function ListItemRow({
                   onChange={(event) => setDraftDueDate(event.target.value)}
                 />
               </label>
+              <label>
+                Link
+                <input
+                  type="url"
+                  inputMode="url"
+                  pattern="https://.*"
+                  title="Use an HTTPS link."
+                  placeholder="https://example.com"
+                  value={draftLink}
+                  onChange={(event) => setDraftLink(event.target.value)}
+                />
+              </label>
               <div className="list-item-memo-editor">
                 <span>Memo</span>
                 <MemoEditor value={draftMemoDocument} onChange={setDraftMemoDocument} />
               </div>
+              {attachments}
               <button
+                className="list-item-save"
                 type="button"
                 disabled={!draftName.trim()}
                 onClick={() => {
@@ -173,7 +184,7 @@ export function ListItemRow({
                     name: draftName.trim(),
                     ...(draftDueDate ? { dueDate: draftDueDate } : {}),
                     ...(memo ? { memo, memoDocument: draftMemoDocument } : {}),
-                    ...(item.fileLinks?.length ? { fileLinks: item.fileLinks } : {}),
+                    ...(draftLink ? { fileLinks: [draftLink] } : {}),
                   });
                   setEditing(false);
                 }}
@@ -181,7 +192,6 @@ export function ListItemRow({
                 Save item
               </button>
               {editorError && <p role="alert">{editorError}</p>}
-              {attachments}
             </div>
           </td>
         </tr>

@@ -16,6 +16,6 @@ describe('list item create form', () => {
     expect(html).not.toContain('Archive');
     expect(html).toContain('Memo (optional)');
     expect(html).toContain('Memo formatting');
-    expect(html).not.toContain('File links');
+    expect(html).toContain('Link (optional)');
   });
 });

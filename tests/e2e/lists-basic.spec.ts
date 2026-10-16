@@ -23,7 +23,8 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByText('List settings', { exact: true }).click();
   await page.getByLabel('Add an item').fill('Milk');
   await page.getByText('Optional details', { exact: true }).click();
-  await expect(page.getByLabel('File links (optional; one HTTPS link per line)')).toHaveCount(0);
+  await expect(page.getByLabel('Link (optional)')).toBeVisible();
+  await page.getByLabel('Link (optional)').fill('https://example.com/milk');
   await expect(page.getByRole('toolbar', { name: 'Memo formatting' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Memo' }).fill('Keep cold');
   await page.getByRole('button', { name: 'Add item' }).click();
@@ -31,24 +32,42 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByLabel('Add an item').fill('Eggs');
   await page.getByRole('button', { name: 'Add item' }).click();
   await expect(page.getByText('Eggs', { exact: true })).toBeVisible();
-  await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
-  await expect(page.getByText('2 items', { exact: true })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: 'Item' })).toBeVisible();
   const phoneLayout = (page.viewportSize()?.width ?? 1441) <= 640;
-  const supportsSyntheticDrag = testInfo.project.name === 'chromium';
-  await expect(page.getByRole('columnheader', { name: 'Saved links' })).toHaveCount(
+  const listDirectory = page.getByRole('table', { name: 'Authorized lists' });
+  await expect(listDirectory.getByRole('columnheader', { name: 'Category' })).toHaveCount(
     phoneLayout ? 0 : 1,
   );
+  await expect(listDirectory.getByRole('columnheader', { name: 'Project' })).toHaveCount(
+    phoneLayout ? 0 : 1,
+  );
+  await expect(listDirectory.getByRole('columnheader', { name: 'Items' })).toBeVisible();
+  await expect(listDirectory.getByRole('row').filter({ hasText: 'Groceries' })).toContainText('2');
+  await page.locator('.list-index').getByText('Columns', { exact: true }).click();
+  const listColumnSettings = page.getByRole('group', { name: 'List table columns' });
+  if (phoneLayout) {
+    await listColumnSettings.getByLabel('Show list Category column').check();
+    await listColumnSettings.getByLabel('Show list Project column').check();
+    await expect(listDirectory.getByRole('columnheader', { name: 'Category' })).toBeVisible();
+    await expect(listDirectory.getByRole('columnheader', { name: 'Project' })).toBeVisible();
+  }
+  await listColumnSettings.getByLabel('Show list Project column').uncheck();
+  await expect(listDirectory.getByRole('columnheader', { name: 'Project' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close list table column settings' }).click();
+  await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
+  await expect(page.getByText('2 items', { exact: true })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Item', exact: true })).toBeVisible();
+  const supportsSyntheticDrag = testInfo.project.name === 'chromium';
+  await expect(page.getByRole('columnheader', { name: 'Link' })).toHaveCount(phoneLayout ? 0 : 1);
   await expect(page.getByText('Keep cold', { exact: true })).toHaveCount(phoneLayout ? 0 : 1);
-  await page.getByText('Columns', { exact: true }).click();
+  await page.locator('.list-table-tools').getByText('Columns', { exact: true }).click();
   if (phoneLayout) {
     await page.getByLabel('Show Memo column').check();
-    await page.getByLabel('Show Saved links column').check();
+    await page.getByLabel('Show Link column').check();
     await expect(page.getByText('Keep cold', { exact: true })).toBeVisible();
   }
-  await page.getByLabel('Show Saved links column').uncheck();
-  await expect(page.getByRole('columnheader', { name: 'Saved links' })).toHaveCount(0);
-  await page.getByLabel('Show Saved links column').check();
+  await page.getByLabel('Show Link column').uncheck();
+  await expect(page.getByRole('columnheader', { name: 'Link' })).toHaveCount(0);
+  await page.getByLabel('Show Link column').check();
   await page.getByRole('button', { name: 'Close column settings' }).click();
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
   const eggs = page.locator('.list-item').filter({ hasText: 'Eggs' });

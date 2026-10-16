@@ -15,6 +15,7 @@ export function TaskFilters({
   categories = [],
   projects = [],
   assignees = [],
+  contentType = 'all',
 }: {
   value: Filters;
   change: (next: Filters) => void;
@@ -22,6 +23,7 @@ export function TaskFilters({
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
   assignees?: readonly AssigneeOption[];
+  contentType?: 'all' | 'tasks';
 }) {
   const selectedUrgencies = value.urgencies ?? [];
   const active = [
@@ -77,19 +79,21 @@ export function TaskFilters({
           <option value="all">Active and archive</option>
         </select>
       </label>
-      <label>
-        <span>Content</span>
-        <select
-          value={value.contentType ?? 'all'}
-          onChange={(event) =>
-            change({ ...value, contentType: event.target.value as 'all' | 'lists' | 'todos' })
-          }
-        >
-          <option value="all">All</option>
-          <option value="lists">Lists</option>
-          <option value="todos">To-do lists</option>
-        </select>
-      </label>
+      {contentType === 'all' ? (
+        <label>
+          <span>Content</span>
+          <select
+            value={value.contentType ?? 'all'}
+            onChange={(event) =>
+              change({ ...value, contentType: event.target.value as 'all' | 'lists' | 'todos' })
+            }
+          >
+            <option value="all">All</option>
+            <option value="lists">Lists</option>
+            <option value="todos">To-do lists</option>
+          </select>
+        </label>
+      ) : null}
       <label>
         <span>Progress</span>
         <select

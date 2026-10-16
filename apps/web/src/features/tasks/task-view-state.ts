@@ -24,21 +24,32 @@ export function isTaskDueTodayOrPast(task: Pick<Task, 'dueAt' | 'dueDate'>, now 
   return dueDate !== undefined && dueDate <= localDateKey(now);
 }
 
+function compareSameDayDueTime(left: Task, right: Task) {
+  const leftIsTimed = Boolean(left.dueAt);
+  const rightIsTimed = Boolean(right.dueAt);
+  if (leftIsTimed !== rightIsTimed) return leftIsTimed ? -1 : 1;
+  if (left.dueAt && right.dueAt) return left.dueAt.localeCompare(right.dueAt);
+  return 0;
+}
+
 export function orderTasksForList(
   tasks: readonly Task[],
   storedTaskIds: ReadonlySet<string>,
   ranks: ReadonlyMap<string, number>,
   now = new Date(),
 ) {
+  const today = localDateKey(now);
   return [...tasks].sort((left, right) => {
-    const leftIsDue = isTaskDueTodayOrPast(left, now);
-    const rightIsDue = isTaskDueTodayOrPast(right, now);
-    if (leftIsDue !== rightIsDue) return leftIsDue ? -1 : 1;
     const leftDueDate = taskDueDateKey(left);
     const rightDueDate = taskDueDateKey(right);
-    if (leftIsDue && rightIsDue) {
+    const leftIsOverdue = leftDueDate !== undefined && leftDueDate < today;
+    const rightIsOverdue = rightDueDate !== undefined && rightDueDate < today;
+    if (leftIsOverdue !== rightIsOverdue) return leftIsOverdue ? -1 : 1;
+    if (leftIsOverdue && rightIsOverdue) {
       const dueDateOrder = (leftDueDate ?? '').localeCompare(rightDueDate ?? '');
       if (dueDateOrder) return dueDateOrder;
+      const dueTimeOrder = compareSameDayDueTime(left, right);
+      if (dueTimeOrder) return dueTimeOrder;
     }
     const leftIsRanked = storedTaskIds.has(left.id);
     const rightIsRanked = storedTaskIds.has(right.id);
@@ -52,6 +63,10 @@ export function orderTasksForList(
       if (!leftDueDate) return 1;
       if (!rightDueDate) return -1;
       return leftDueDate.localeCompare(rightDueDate);
+    }
+    if (leftDueDate) {
+      const dueTimeOrder = compareSameDayDueTime(left, right);
+      if (dueTimeOrder) return dueTimeOrder;
     }
     return right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id);
   });

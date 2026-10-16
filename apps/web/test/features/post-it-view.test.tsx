@@ -86,7 +86,7 @@ describe('post-it task view', () => {
     ).toEqual(['Ranked', 'Newer', 'Older']);
   });
 
-  it('puts due tasks first, followed by stack-ranked and then unstacked tasks', () => {
+  it('puts overdue tasks first, followed by stack-ranked and then unstacked tasks', () => {
     const now = new Date(2026, 9, 5, 15, 15);
     const rankedFirst = createTask(
       { label: 'Ranked first' },
@@ -122,7 +122,37 @@ describe('post-it task view', () => {
         ranks,
         now,
       ).map((task) => task.label),
-    ).toEqual(['Overdue', 'Due today', 'Ranked first', 'New future']);
+    ).toEqual(['Overdue', 'Ranked first', 'Due today', 'New future']);
+  });
+
+  it('puts overdue work first and timed work before date-only work on the same day', () => {
+    const now = new Date(2026, 9, 5, 15, 15);
+    const dueToday = createTask(
+      { label: 'Date only today', dueKind: 'date', dueDate: '2026-10-05' },
+      'steve',
+      new Date('2026-01-01T00:00:00Z'),
+    );
+    const timedToday = createTask(
+      {
+        label: 'Timed today',
+        dueKind: 'timed',
+        dueAt: '2026-10-05T18:00:00.000Z',
+        dueTimeZone: 'America/Denver',
+      },
+      'steve',
+      new Date('2026-01-02T00:00:00Z'),
+    );
+    const overdue = createTask(
+      { label: 'Overdue', dueKind: 'date', dueDate: '2026-10-04' },
+      'steve',
+      new Date('2026-01-03T00:00:00Z'),
+    );
+
+    expect(
+      orderTasksForList([dueToday, timedToday, overdue], new Set(), new Map(), now).map(
+        ({ label }) => label,
+      ),
+    ).toEqual(['Overdue', 'Timed today', 'Date only today']);
   });
 
   it('orders unstacked work by due date and then newest creation time', () => {

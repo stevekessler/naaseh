@@ -27,6 +27,7 @@ export const parseInitialListItem = (name: string): NewListItem => ({ name: name
 export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promise<void> }) {
   const [name, setName] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [link, setLink] = useState('');
   const [memoDocument, setMemoDocument] = useState(() => plainMemoDocument(''));
   const [memoEditorKey, setMemoEditorKey] = useState(0);
   const [error, setError] = useState('');
@@ -44,6 +45,7 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
         ...parseInitialListItem(name),
         ...(dueDate ? { dueDate } : {}),
         ...(memo ? { memo, memoDocument } : {}),
+        ...(link ? { fileLinks: [link] } : {}),
       };
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Enter a valid amount.');
@@ -55,6 +57,7 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
       await add(input);
       setName('');
       setDueDate('');
+      setLink('');
       setMemoDocument(plainMemoDocument(''));
       setMemoEditorKey((value) => value + 1);
     } catch {
@@ -79,6 +82,18 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
               type="date"
               value={dueDate}
               onChange={(event) => setDueDate(event.target.value)}
+            />
+          </label>
+          <label>
+            Link (optional)
+            <input
+              type="url"
+              inputMode="url"
+              pattern="https://.*"
+              title="Use an HTTPS link."
+              placeholder="https://example.com"
+              value={link}
+              onChange={(event) => setLink(event.target.value)}
             />
           </label>
           <div className="list-item-memo-editor">
@@ -173,7 +188,7 @@ export function ListItems({
               <th scope="col">Item</th>
               {columns.visible.has('due') && <th scope="col">Due</th>}
               {columns.visible.has('memo') && <th scope="col">Memo</th>}
-              {columns.visible.has('fileLinks') && <th scope="col">Saved links</th>}
+              {columns.visible.has('fileLinks') && <th scope="col">Link</th>}
               {columns.visible.has('actions') && <th scope="col">Actions</th>}
             </tr>
           </thead>

@@ -462,8 +462,8 @@ export function App() {
     void dismissObsoleteConflicts({ expiredOnly: true }).catch(() => undefined);
   }, [session, sessionValidation]);
   const eligibleStackWork = useMemo(
-    () => [
-      ...tasks
+    () =>
+      tasks
         .filter(
           (task) =>
             task.status === 'open' &&
@@ -485,24 +485,7 @@ export function App() {
           ...(taskDueDateKey(task) ? { dueDate: taskDueDateKey(task) } : {}),
           contentType: 'todos' as const,
         })),
-      ...lists
-        .filter((list) => list.status === 'active' && (list.lifecycle ?? 'active') === 'active')
-        .map((list) => ({
-          reference: {
-            workType: 'list' as const,
-            workId: list.id,
-            membershipEpoch: stackMembershipEpochFor(list),
-          },
-          label: list.name,
-          urgency: list.urgency,
-          ...(list.projectId ? { projectId: list.projectId } : {}),
-          ...(list.categoryId ? { categoryId: list.categoryId } : {}),
-          assigneeId: undefined,
-          dueDate: undefined,
-          contentType: 'lists' as const,
-        })),
-    ],
-    [tasks, lists],
+    [tasks],
   );
   const allRankedStackItems =
     useLiveQuery(
@@ -582,7 +565,7 @@ export function App() {
       return;
     }
     let active = true;
-    void readFilteredStack(stackScope, filters, localStackLabels)
+    void readFilteredStack(stackScope, { ...filters, contentType: 'todos' }, localStackLabels)
       .then((items) => {
         if (!active) return;
         setRemoteStackItems(items);
@@ -1259,8 +1242,8 @@ export function App() {
               pendingOperationIds={pendingStackOperations.map((operation) => operation.operationId)}
               conflictCount={stackConflicts.length}
               {...(lastStackSyncedAt ? { lastSyncedAt: lastStackSyncedAt } : {})}
-              filters={filters}
-              changeFilters={setFilters}
+              filters={{ ...filters, contentType: 'todos' }}
+              changeFilters={(next) => setFilters({ ...next, contentType: 'todos' })}
               changeScope={setStackScope}
               {...(stackReadError ? { readError: stackReadError } : {})}
               retryRead={() => setStackReadAttempt((value) => value + 1)}
@@ -1327,7 +1310,7 @@ export function App() {
                             ? { progress: filters.progress }
                             : {}),
                           lifecycle: 'active',
-                          contentType: filters.contentType ?? 'all',
+                          contentType: 'todos',
                           ...(queryHash ? { searchBasisHash: queryHash } : {}),
                         },
                       }

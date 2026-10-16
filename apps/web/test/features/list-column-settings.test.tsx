@@ -26,9 +26,7 @@ describe('list column settings', () => {
 
     expect((view.getByLabelText('Show Due date column') as HTMLInputElement).checked).toBe(true);
     expect((view.getByLabelText('Show Memo column') as HTMLInputElement).checked).toBe(false);
-    expect((view.getByLabelText('Show Saved links column') as HTMLInputElement).checked).toBe(
-      false,
-    );
+    expect((view.getByLabelText('Show Link column') as HTMLInputElement).checked).toBe(false);
     fireEvent.click(view.getByLabelText('Show Memo column'));
 
     setWidth(1600);

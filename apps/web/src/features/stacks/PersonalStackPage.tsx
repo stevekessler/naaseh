@@ -115,7 +115,7 @@ export function PersonalStackPage({
         <div>
           <p className="eyebrow">My priorities</p>
           <h1>Personal Stack</h1>
-          <p>View and order your active tasks and lists in one place.</p>
+          <p>View and order your active tasks in one place.</p>
         </div>
         <StackScopePicker scope={scope} projects={projects} change={changeScope} />
       </header>
@@ -184,6 +184,7 @@ export function PersonalStackPage({
             categories={categories}
             projects={projectRecords}
             assignees={assignees}
+            contentType="tasks"
           />
         </section>
       ) : null}

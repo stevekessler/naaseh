@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 export const listColumns = [
   { id: 'due', label: 'Due date' },
   { id: 'memo', label: 'Memo' },
-  { id: 'fileLinks', label: 'Saved links' },
+  { id: 'fileLinks', label: 'Link' },
   { id: 'actions', label: 'Actions' },
 ] as const;
 

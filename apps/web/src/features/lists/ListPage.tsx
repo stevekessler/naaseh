@@ -78,7 +78,14 @@ export function ListPage({
         categories={categories}
         projects={projects}
       />
-      <ListIndexPage lists={lists} {...(selectedId ? { selectedId } : {})} open={openList} />
+      <ListIndexPage
+        lists={lists}
+        items={items}
+        categories={categories}
+        projects={projects}
+        {...(selectedId ? { selectedId } : {})}
+        open={openList}
+      />
       {lists.length === 0 ? (
         <p>No lists yet. Create one above.</p>
       ) : (
