@@ -39,8 +39,12 @@ export async function userByUsername(username: string): Promise<StoredUser | und
   if (!data) return undefined;
   const pointer = usernameLookupSchema.safeParse(data);
   if (pointer.success) return userById(pointer.data.userId);
-  // Compatibility read only; the migration replaces legacy duplicated user rows with pointers.
-  return storedUser(data);
+  // Legacy username rows contain a duplicated user snapshot. Prefer the canonical
+  // profile when it exists so credential changes cannot be hidden by a stale
+  // password hash in that snapshot. The fallback keeps partially migrated
+  // accounts readable until their canonical profile has been created.
+  const legacy = storedUser(data);
+  return (await userById(legacy.id)) ?? legacy;
 }
 export async function userById(id: string): Promise<StoredUser | undefined> {
   const result = await dynamodb.send(

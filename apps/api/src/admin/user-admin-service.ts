@@ -346,7 +346,25 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
         }),
       );
     } else {
-      await dynamodb.send(new UpdateCommand(update));
+      // Some production accounts still have a duplicated legacy user record at
+      // the username key. Replace it with the canonical pointer in the same
+      // transaction as the profile update so login observes the new password.
+      await dynamodb.send(
+        new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: tableName,
+                Item: {
+                  ...keys.username(change.username),
+                  data: { userId: current.id, canonicalUsername: change.username },
+                },
+              },
+            },
+            { Update: update },
+          ],
+        }),
+      );
     }
     return {
       ...current,
