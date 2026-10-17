@@ -4,6 +4,7 @@ import {
   type Task,
   type TaskRevision,
   contentAudienceFor,
+  taskSchema,
 } from '@naaseh/domain';
 import { commitTask, getRecord } from '../shared/store.js';
 import { QueryCommand } from '@aws-sdk/lib-dynamodb';
@@ -29,15 +30,10 @@ const projectedTask = (task: Task | undefined): ProjectedWorkView | undefined =>
         audience: contentAudienceFor({
           ownerId: task.ownerId,
           locked: task.visibility === 'private',
-          ...(task.groupId ? { groupId: task.groupId } : {}),
         }).ordinary,
         audiences: [
           `OWNER#${task.ownerId}`,
-          task.visibility === 'private'
-            ? `OWNER#${task.ownerId}`
-            : task.groupId
-              ? `GROUP#${task.groupId}`
-              : 'PUBLIC',
+          task.visibility === 'private' ? `OWNER#${task.ownerId}` : 'PUBLIC',
         ],
         lifecycle: task.lifecycle ?? (task.status === 'archived' ? 'archived' : 'active'),
         ...(task.projectId ? { projectId: task.projectId } : {}),
@@ -80,7 +76,9 @@ const defaultDependencies: TaskMutationDependencies = {
   administratorFeed: true,
 };
 export const findTask = (id: string) =>
-  getRecord<{ data: Task }>(`TASK#${id}`, 'CURRENT').then((item) => item?.data);
+  getRecord<{ data: Task }>(`TASK#${id}`, 'CURRENT').then((item) =>
+    item ? taskSchema.parse(item.data) : undefined,
+  );
 
 const revisionFieldAllowlist = new Set<keyof Task>([
   'memo',

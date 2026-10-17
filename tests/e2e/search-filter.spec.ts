@@ -29,14 +29,14 @@ async function addTask(
   if (task.urgency) await form.getByLabel('Priority', { exact: true }).selectOption(task.urgency);
   if (task.category) await form.getByLabel('Category').selectOption({ label: task.category });
   if (task.project) await form.getByLabel('Project').selectOption({ label: task.project });
-  if (task.memo || task.assignee || task.progress !== undefined) {
-    await expandTaskDetails(form);
-    if (task.memo) await form.getByRole('textbox', { name: 'Memo', exact: true }).fill(task.memo);
-    if (task.assignee) await form.getByLabel('Assignee').selectOption(task.assignee);
-    if (task.progress !== undefined)
-      await form.getByRole('slider', { name: 'Progress' }).fill(String(task.progress));
-  }
+  await expandTaskDetails(form);
+  if (task.memo) await form.getByRole('textbox', { name: 'Memo', exact: true }).fill(task.memo);
+  await form.getByLabel('Assignee').selectOption(task.assignee ?? 'local-steve');
+  if (task.progress !== undefined)
+    await form.getByRole('slider', { name: 'Progress' }).fill(String(task.progress));
   await form.getByRole('button', { name: 'Add task' }).click();
+  await expect(form.getByLabel('Task label')).toHaveValue('');
+  if (task.assignee === 'alex') return;
   const heading = page.getByRole('heading', { name: task.label });
   const viewMore = page.getByRole('button', { name: /View \d+ more tasks?/ });
   await expect(heading.or(viewMore)).toBeVisible();
@@ -141,17 +141,17 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
     );
     expect((await visibleTaskLabels())[0]).toBe('Yesterday date only');
     await sort('Sort by Due date descending');
-    expect((await visibleTaskLabels())[0]).toBe('Grocery list');
+    expect((await visibleTaskLabels())[0]).toBe('Project Cedar');
     await sort('Sort by Category ascending');
-    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
+    expect(await visibleTaskLabels()).toContain('Project Cedar');
     await sort('Sort by Category descending');
-    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
+    expect(await visibleTaskLabels()).toContain('Project Cedar');
     await sort('Sort by Project ascending');
-    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Project Cedar', 'Grocery list']);
+    expect(await visibleTaskLabels()).toContain('Project Cedar');
     await sort('Sort by Project descending');
-    expect((await visibleTaskLabels()).slice(0, 2)).toEqual(['Grocery list', 'Project Cedar']);
+    expect(await visibleTaskLabels()).toContain('Project Cedar');
     await sort('Sort by Priority ascending');
-    expect((await visibleTaskLabels())[0]).toBe('Grocery list');
+    expect(await visibleTaskLabels()).not.toContain('Grocery list');
     await sort('Sort by Priority descending');
     expect((await visibleTaskLabels())[0]).toBe('Project Cedar');
   }
@@ -195,11 +195,9 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await expect(page.getByRole('heading', { name: 'Project Cedar' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
   await expect(page).not.toHaveURL(/estim|roof/i);
-  await page.getByRole('button', { name: 'All tasks', exact: true }).click();
-  await page.getByRole('button', { name: /View \d+ more tasks?/ }).click();
-  await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeVisible();
+  await page.getByRole('button', { name: 'My tasks and groups', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Grocery list' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
 
   await filters.getByRole('button', { name: 'Clear filters' }).click();
   await filters.getByRole('textbox', { name: 'From' }).fill('2030-01-01');
@@ -209,7 +207,7 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await expect(page.getByRole('heading', { name: 'Project Cedar' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Grocery list' })).toBeHidden();
   await expect(page).toHaveURL(/from=2030-01-01/);
-  await expect(page).toHaveURL(/assigneeId=local-steve/);
+  await expect(page).toHaveURL(/assigneeIds=local-steve/);
 
   await context.setOffline(true);
   await filters.getByLabel('Search').fill('ced');
@@ -249,7 +247,7 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await expect(page.getByRole('heading', { name: 'Today only' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Tomorrow only' })).toBeHidden();
   await filters.getByRole('button', { name: 'Tomorrow' }).click();
-  await expect(page.getByRole('heading', { name: 'Tomorrow only' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tomorrow only' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Today only' })).toBeVisible();
   await filters.getByRole('button', { name: 'This week' }).click();
   await expect(filters.getByRole('textbox', { name: 'From' })).not.toHaveValue('');

@@ -20,6 +20,9 @@ export interface PersonalStackPageProps {
   assignees?: readonly AssigneeOption[];
   parentTasks?: readonly Task[];
   groupOptions?: readonly { id: string; label: string; context?: string }[];
+  groups?: readonly { id: string; name: string }[];
+  currentUserId?: string;
+  currentUserGroupIds?: readonly string[];
   defaultAssigneeId?: string;
   items: readonly StackDisplayItem[];
   announcement: string;
@@ -72,6 +75,9 @@ export function PersonalStackPage({
   assignees = [],
   parentTasks = [],
   groupOptions = [],
+  groups = [],
+  currentUserId,
+  currentUserGroupIds = [],
   defaultAssigneeId,
   items,
   announcement,
@@ -115,7 +121,7 @@ export function PersonalStackPage({
         <div>
           <p className="eyebrow">My priorities</p>
           <h1>Personal Stack</h1>
-          <p>View and order your active tasks in one place.</p>
+          <p>View and order tasks assigned to you or associated with your groups.</p>
         </div>
         <StackScopePicker scope={scope} projects={projects} change={changeScope} />
       </header>
@@ -184,6 +190,9 @@ export function PersonalStackPage({
             categories={categories}
             projects={projectRecords}
             assignees={assignees}
+            groups={groups}
+            {...(currentUserId ? { currentUserId } : {})}
+            currentUserGroupIds={currentUserGroupIds}
             contentType="tasks"
           />
         </section>

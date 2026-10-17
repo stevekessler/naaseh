@@ -47,7 +47,7 @@ const taskObjectSchema = z
     dueTimeZone: z.string().min(1).optional(),
     repeatInterval: z.number().int().min(1).max(999).optional(),
     repeatUnit: taskRepeatUnitSchema.optional(),
-    assigneeId: z.string().optional(),
+    assigneeId: z.string().min(1),
     categoryId: z.string().optional(),
     projectId: ulidSchema.optional(),
     groupId: z.string().optional(),
@@ -156,7 +156,24 @@ function validateTaskInvariants(
     });
 }
 
-export const taskSchema = taskObjectSchema.superRefine(validateTaskInvariants);
+/**
+ * Records created before assignees became mandatory are deterministically
+ * assigned to their owner when they cross a validation boundary. Callers that
+ * persist the normalized value can complete the migration without inventing a
+ * system-owned "unassigned" account.
+ */
+export function normalizeTaskAssignee(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const task = value as Record<string, unknown>;
+  if (typeof task.assigneeId === 'string' && task.assigneeId.trim()) return value;
+  return typeof task.ownerId === 'string' && task.ownerId
+    ? { ...task, assigneeId: task.ownerId }
+    : value;
+}
+
+export const taskSchema = z
+  .preprocess(normalizeTaskAssignee, taskObjectSchema)
+  .superRefine(validateTaskInvariants);
 export const taskInputSchema = taskObjectSchema
   .omit({
     id: true,
@@ -196,7 +213,6 @@ export function canReadTaskAs(
     actor: { ...actor, groupIds: actor.groupIds ?? [] },
     ownerId: task.ownerId,
     locked: task.visibility === 'private',
-    ...(task.groupId ? { groupId: task.groupId } : {}),
   });
 }
 export function setTaskLocked(
@@ -219,6 +235,7 @@ export function createTask(input: TaskInput, actorId: string, now = new Date()):
     ...input,
     id: createUlid(now.getTime()),
     ownerId: actorId,
+    assigneeId: input.assigneeId ?? actorId,
     createdAt: timestamp,
     updatedAt: timestamp,
     stackMembershipEpoch: timestamp,

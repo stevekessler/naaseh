@@ -16,7 +16,7 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(page.getByRole('region', { name: 'Search and filters' })).toBeHidden();
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Search and filters' })).toBeVisible();
-  await page.getByRole('button', { name: 'All tasks', exact: true }).click();
+  await page.getByRole('button', { name: 'My tasks and groups', exact: true }).click();
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Call the contractor');
   await expect(form.locator('.task-form-details')).not.toHaveAttribute('open', '');

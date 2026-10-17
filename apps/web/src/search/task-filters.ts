@@ -59,6 +59,9 @@ export interface TaskFilters {
   from?: string;
   to?: string;
   assigneeId?: string;
+  assigneeIds?: string[];
+  groupIds?: string[];
+  match?: 'all' | 'any';
   categoryId?: string;
   projectId?: string;
   status?: Task['status'];
@@ -80,7 +83,10 @@ export function matchesFilters(task: Task, filters: TaskFilters) {
     (!filters.from || Boolean(dueDate && dueDate >= filters.from)) &&
     (!filters.to || Boolean(dueDate && dueDate <= filters.to)) &&
     matchesDatePresets(dueDate, filters.datePresets) &&
+    (!(filters.assigneeIds?.length ?? 0) || filters.assigneeIds!.includes(task.assigneeId)) &&
     (!filters.assigneeId || task.assigneeId === filters.assigneeId) &&
+    (!(filters.groupIds?.length ?? 0) ||
+      Boolean(task.groupId && filters.groupIds!.includes(task.groupId))) &&
     (!filters.categoryId || task.categoryId === filters.categoryId) &&
     (!filters.projectId ||
       (filters.projectId === 'unassigned'

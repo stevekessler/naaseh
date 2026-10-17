@@ -6,6 +6,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import {
   canReadTaskAs,
+  taskSchema,
   urgencyValues,
   workloadScopes,
   type ContentActor,
@@ -222,7 +223,7 @@ export async function listProjectedWork(input: {
     const prefix = pointer.workType === 'task' ? 'TASK' : 'LIST';
     const value = await getRecord<{ data: Task | List }>(`${prefix}#${pointer.workId}`, 'CURRENT');
     if (!value?.data) continue;
-    if (pointer.workType === 'task') tasks.push(value.data as Task);
+    if (pointer.workType === 'task') tasks.push(taskSchema.parse(value.data));
     else lists.push(value.data as List);
   }
   return { tasks, lists };
@@ -274,8 +275,11 @@ async function batchGetItems(pointers: readonly ProjectedPointer[]) {
       new BatchGetCommand({ RequestItems: { [tableName]: { Keys: batch } } }),
     );
     for (const item of response.Responses?.[tableName] ?? []) {
-      const value = item.data as Task | List | undefined;
-      if (value) records.set(`${item.PK}:${value.id}`, value);
+      const raw = item.data as Task | List | undefined;
+      if (raw) {
+        const value = item.PK.startsWith('TASK#') ? taskSchema.parse(raw) : raw;
+        records.set(`${item.PK}:${value.id}`, value);
+      }
     }
     const unprocessed = (response.UnprocessedKeys?.[tableName]?.Keys ?? []) as Array<{
       PK: string;

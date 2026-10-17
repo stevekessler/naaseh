@@ -97,6 +97,6 @@ it('shows group member avatars from the shared directory', async () => {
       />
     </UserDirectoryContext.Provider>,
   );
-  fireEvent.click(view.getByRole('button', { name: 'Show members' }));
+  expect(view.queryByRole('button', { name: 'Show members' })).toBeNull();
   await waitFor(() => expect(view.getByRole('img', { name: 'Alex' })).toBeTruthy());
 });

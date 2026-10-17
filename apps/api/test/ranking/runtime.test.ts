@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createDurableStackRepository, type DurableStackStore } from '../../src/ranking/runtime.js';
+import {
+  createDurableStackRepository,
+  eligibleProjectedStackTasks,
+  type DurableStackStore,
+} from '../../src/ranking/runtime.js';
+import { createTask } from '@naaseh/domain';
 
 const scope = { userId: 'owner', scopeType: 'overall' as const };
 const first = {
@@ -26,6 +31,19 @@ function store(overrides: Partial<DurableStackStore> = {}): DurableStackStore {
 }
 
 describe('durable personal stack runtime', () => {
+  it('admits only directly assigned tasks or tasks in the viewer groups', () => {
+    const mine = createTask({ label: 'Mine', assigneeId: 'viewer' }, 'owner');
+    const group = createTask({ label: 'Family', assigneeId: 'other', groupId: 'family' }, 'owner');
+    const unrelated = createTask({ label: 'Public', assigneeId: 'other' }, 'owner');
+    expect(
+      eligibleProjectedStackTasks([mine, group, unrelated], {
+        id: 'viewer',
+        role: 'user',
+        active: true,
+        groupIds: ['family'],
+      }),
+    ).toEqual([mine, group]);
+  });
   it('reconstructs canonical order from durable metadata and operations after a cold start', async () => {
     const repository = createDurableStackRepository(
       store({

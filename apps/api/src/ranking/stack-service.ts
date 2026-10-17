@@ -19,6 +19,7 @@ export interface EligibleStackWork extends WorkReference {
   projectId?: string | undefined;
   categoryId?: string | undefined;
   assigneeId?: string | undefined;
+  groupId?: string | undefined;
   dueDate?: string | undefined;
   percentComplete?: number | undefined;
   lifecycle?: string | undefined;
@@ -169,30 +170,42 @@ function hydrateOrder(
 }
 
 function matchesFilter(work: EligibleStackWork, basis: PersonalStackFilterBasis): boolean {
-  if (basis.urgencies !== undefined && !basis.urgencies.includes(work.urgency)) return false;
-  if (
-    basis.projectId !== undefined &&
-    (basis.projectId === 'unassigned'
-      ? work.projectId !== undefined
-      : work.projectId !== basis.projectId)
-  )
-    return false;
-  if (basis.categoryId !== undefined && work.categoryId !== basis.categoryId) return false;
-  if (basis.assigneeId !== undefined && work.assigneeId !== basis.assigneeId) return false;
   if (basis.contentType === 'todos' && work.workType !== 'task') return false;
   if (basis.contentType === 'lists' && work.workType !== 'list') return false;
+  const conditions: boolean[] = [];
+  if (basis.urgencies !== undefined) conditions.push(basis.urgencies.includes(work.urgency));
+  if (basis.projectId !== undefined)
+    conditions.push(
+      basis.projectId === 'unassigned'
+        ? work.projectId === undefined
+        : work.projectId === basis.projectId,
+    );
+  if (basis.categoryId !== undefined) conditions.push(work.categoryId === basis.categoryId);
+  const assigneeIds = basis.assigneeIds?.length
+    ? basis.assigneeIds
+    : basis.assigneeId
+      ? [basis.assigneeId]
+      : [];
+  if (assigneeIds.length)
+    conditions.push(Boolean(work.assigneeId && assigneeIds.includes(work.assigneeId)));
+  if (basis.groupIds?.length)
+    conditions.push(Boolean(work.groupId && basis.groupIds.includes(work.groupId)));
   if (basis.progress !== undefined) {
-    if (work.workType !== 'task') return false;
+    if (work.workType !== 'task') conditions.push(false);
     const percent = work.percentComplete ?? 0;
-    if (basis.progress === 'not-started' && percent !== 0) return false;
-    if (basis.progress === 'in-progress' && (percent <= 0 || percent >= 100)) return false;
-    if (basis.progress === 'complete' && percent !== 100) return false;
+    conditions.push(
+      (basis.progress === 'not-started' && percent === 0) ||
+        (basis.progress === 'in-progress' && percent > 0 && percent < 100) ||
+        (basis.progress === 'complete' && percent === 100),
+    );
   }
-  if (basis.from !== undefined && (work.dueDate === undefined || work.dueDate < basis.from))
-    return false;
-  if (basis.to !== undefined && (work.dueDate === undefined || work.dueDate > basis.to))
-    return false;
-  return true;
+  if (basis.from !== undefined)
+    conditions.push(Boolean(work.dueDate && work.dueDate >= basis.from));
+  if (basis.to !== undefined) conditions.push(Boolean(work.dueDate && work.dueDate <= basis.to));
+  return (
+    !conditions.length ||
+    (basis.match === 'any' ? conditions.some(Boolean) : conditions.every(Boolean))
+  );
 }
 
 function validateMoveEligibility(
@@ -232,7 +245,10 @@ function validateMoveEligibility(
       const work = eligibleByIdentity.get(workReferenceIdentity(reference));
       return (
         work === undefined ||
-        !matchesFilter(work, move.filterBasis ?? { lifecycle: 'active', contentType: 'all' })
+        !matchesFilter(
+          work,
+          move.filterBasis ?? { lifecycle: 'active', contentType: 'all', match: 'all' },
+        )
       );
     })
   ) {

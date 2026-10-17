@@ -5,6 +5,10 @@ const allowed = [
   'from',
   'to',
   'assigneeId',
+  'assigneeIds',
+  'groupIds',
+  'match',
+  'scope',
   'categoryId',
   'projectId',
   'contentType',
@@ -39,6 +43,12 @@ export function filtersFromSearch(search: string): Filters {
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
     assigneeId: params.get('assigneeId') ?? '',
+    assigneeIds: (params.get('assigneeIds') ?? params.get('assigneeId') ?? '')
+      .split(',')
+      .filter(Boolean),
+    groupIds: (params.get('groupIds') ?? '').split(',').filter(Boolean),
+    match: params.get('match') === 'any' ? 'any' : 'all',
+    scope: params.get('scope') === 'all' ? 'all' : 'default',
     categoryId: params.get('categoryId') ?? '',
     projectId: params.get('projectId') ?? '',
     progress:

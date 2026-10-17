@@ -156,7 +156,7 @@ export function ListPage({
                     <ListVisibilityControl
                       list={list}
                       groups={groups}
-                      change={(patch) => void changeList(list, patch)}
+                      change={(patch) => changeList(list, patch)}
                     />
                     <button type="button" className="quiet" onClick={openGroups}>
                       Manage sharing groups

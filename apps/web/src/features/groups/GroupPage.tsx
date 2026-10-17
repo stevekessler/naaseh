@@ -1,5 +1,5 @@
 import { UserAvatar, type DirectoryUser } from '../profile/user-directory.js';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { GroupMembershipView, GroupView } from '@naaseh/domain';
 import { CreateGroupDialog } from './CreateGroupDialog.js';
 import { JoinGroupDialog } from './JoinGroupDialog.js';
@@ -29,7 +29,8 @@ export function GroupPage({
 }) {
   const [members, setMembers] = useState<Record<string, GroupMembershipView[]>>({});
   const [memberError, setMemberError] = useState('');
-  const [loadingGroup, setLoadingGroup] = useState('');
+  const [memberErrors, setMemberErrors] = useState<Record<string, string>>({});
+  const [loadingGroups, setLoadingGroups] = useState<Record<string, boolean>>({});
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState<GroupView>();
   const [editing, setEditing] = useState<GroupView>();
@@ -41,17 +42,57 @@ export function GroupPage({
   const [memberBusy, setMemberBusy] = useState(false);
   const [deletingId, setDeletingId] = useState('');
   const loadMembers = async (group: GroupView) => {
-    setLoadingGroup(group.id);
+    setLoadingGroups((current) => ({ ...current, [group.id]: true }));
     setMemberError('');
     try {
       const result = await read(group);
       setMembers((current) => ({ ...current, [group.id]: result }));
+      setMemberErrors((current) => {
+        const next = { ...current };
+        delete next[group.id];
+        return next;
+      });
     } catch {
       setMemberError('Group members could not be loaded.');
+      setMemberErrors((current) => ({ ...current, [group.id]: 'Members could not be loaded.' }));
     } finally {
-      setLoadingGroup('');
+      setLoadingGroups((current) => ({ ...current, [group.id]: false }));
     }
   };
+  const joinedGroupIds = groups
+    .filter((group) => group.joined)
+    .map((group) => group.id)
+    .join(',');
+  useEffect(() => {
+    if (!online) return;
+    let active = true;
+    for (const group of groups.filter((candidate) => candidate.joined)) {
+      setLoadingGroups((current) => ({ ...current, [group.id]: true }));
+      void read(group)
+        .then((result) => {
+          if (!active) return;
+          setMembers((current) => ({ ...current, [group.id]: result }));
+          setMemberErrors((current) => {
+            const next = { ...current };
+            delete next[group.id];
+            return next;
+          });
+        })
+        .catch(() => {
+          if (active)
+            setMemberErrors((current) => ({
+              ...current,
+              [group.id]: 'Members could not be loaded.',
+            }));
+        })
+        .finally(() => {
+          if (active) setLoadingGroups((current) => ({ ...current, [group.id]: false }));
+        });
+    }
+    return () => {
+      active = false;
+    };
+  }, [joinedGroupIds, online, read]);
   return (
     <section className="groups-page" aria-labelledby="groups-title">
       <div className="section-heading">
@@ -124,12 +165,17 @@ export function GroupPage({
                       </button>
                     </>
                   )}
-                  <button
-                    disabled={!online || loadingGroup === group.id}
-                    onClick={() => void loadMembers(group)}
-                  >
-                    Show members
-                  </button>
+                  {loadingGroups[group.id] && !members[group.id] ? (
+                    <p role="status">Loading members…</p>
+                  ) : null}
+                  {memberErrors[group.id] ? (
+                    <p role="alert">
+                      {memberErrors[group.id]}{' '}
+                      <button disabled={!online} onClick={() => void loadMembers(group)}>
+                        Retry
+                      </button>
+                    </p>
+                  ) : null}
                   {members[group.id] && (
                     <ul aria-label={`${group.name} members`}>
                       {members[group.id]!.map((member) => (

@@ -16,6 +16,7 @@ describe('task domain lifecycle', () => {
       'owner',
     );
     expect(task.label).toBe('Do');
+    expect(task.assigneeId).toBe('owner');
     expect(task.percentComplete).toBe(0);
     expect(createTask({ label: 'Halfway', percentComplete: 50 }, 'owner').percentComplete).toBe(50);
     expect(() => createTask({ label: 'Too far', percentComplete: 101 }, 'owner')).toThrow();

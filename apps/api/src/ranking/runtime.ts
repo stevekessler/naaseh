@@ -8,6 +8,7 @@ import {
   stackMembershipEpochFor,
   type ContentActor,
   type PersonalStackScope,
+  type Task,
   type WorkReference,
 } from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
@@ -251,32 +252,29 @@ export async function listEligibleStackWork(
       ? { scopeType: 'project' as const, scopeId: scope.scopeId }
       : {}),
   });
-  return [
-    ...projected.tasks.map((work) => ({
-      workType: 'task' as const,
-      workId: work.id,
-      membershipEpoch: stackMembershipEpochFor(work),
-      urgency: work.urgency,
-      projectId: work.projectId,
-      categoryId: work.categoryId,
-      assigneeId: work.assigneeId,
-      dueDate: work.dueAt?.slice(0, 10),
-      percentComplete: work.percentComplete,
-      lifecycle: work.lifecycle ?? (work.status === 'open' ? 'active' : work.status),
-      active: true,
-      authorized: true,
-    })),
-    ...projected.lists.map((work) => ({
-      workType: 'list' as const,
-      workId: work.id,
-      membershipEpoch: stackMembershipEpochFor(work),
-      urgency: work.urgency,
-      projectId: work.projectId,
-      lifecycle: work.lifecycle ?? (work.status === 'active' ? 'active' : 'archived'),
-      active: true,
-      authorized: true,
-    })),
-  ];
+  return eligibleProjectedStackTasks(projected.tasks, actor).map((work) => ({
+    workType: 'task' as const,
+    workId: work.id,
+    membershipEpoch: stackMembershipEpochFor(work),
+    urgency: work.urgency,
+    projectId: work.projectId,
+    categoryId: work.categoryId,
+    assigneeId: work.assigneeId,
+    groupId: work.groupId,
+    dueDate: work.dueAt?.slice(0, 10),
+    percentComplete: work.percentComplete,
+    lifecycle: work.lifecycle ?? (work.status === 'open' ? 'active' : work.status),
+    active: true,
+    authorized: true,
+  }));
+}
+
+export function eligibleProjectedStackTasks(tasks: readonly Task[], actor: ContentActor): Task[] {
+  return tasks.filter(
+    (task) =>
+      task.assigneeId === actor.id ||
+      Boolean(task.groupId && actor.groupIds.includes(task.groupId)),
+  );
 }
 
 export const durablePersonalStackRepository = createDurableStackRepository(dynamoStore);

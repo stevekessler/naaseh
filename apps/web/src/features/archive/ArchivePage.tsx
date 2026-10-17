@@ -14,7 +14,11 @@ import { TaskFilters } from '../search/TaskFilters.js';
 import type { Filters } from '../../search/task-search.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
-import { matchesProgressFilter } from '../../search/task-search.js';
+import {
+  filtersExpandToAllReadable,
+  taskMatchesExpression,
+  type TaskFilterViewer,
+} from '../../search/task-search.js';
 
 const archiveDate = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
@@ -29,6 +33,7 @@ export function matchesArchiveFilters(
   entry: LocalArchiveEntry,
   filters: Filters | undefined,
   query: string,
+  viewer?: TaskFilterViewer,
 ) {
   const task = entry.task;
   const list = entry.list;
@@ -45,27 +50,42 @@ export function matchesArchiveFilters(
   if (normalized && !searchable.toLocaleLowerCase().includes(normalized)) return false;
   if (!filters) return true;
   const value = task ?? list ?? parentList!;
-  if (!matchesUrgencySet(value.urgency, filters.urgencies)) return false;
-  if (filters.contentType === 'todos' && !task) return false;
-  if (filters.contentType === 'lists' && !list && !listItem) return false;
   if (
-    filters.projectId &&
-    (filters.projectId === 'unassigned'
-      ? value.projectId !== undefined
-      : value.projectId !== filters.projectId)
+    viewer &&
+    !filtersExpandToAllReadable(filters, viewer) &&
+    (task
+      ? task.assigneeId !== viewer.userId &&
+        !(task.groupId && viewer.groupIds.includes(task.groupId))
+      : value.ownerId !== viewer.userId &&
+        !(value.groupId && viewer.groupIds.includes(value.groupId)))
   )
     return false;
-  if (filters.assigneeId && task?.assigneeId !== filters.assigneeId) return false;
-  if (filters.categoryId) {
-    const categoryId = task?.categoryId ?? list?.categoryId ?? parentList?.categoryId;
-    if (categoryId !== filters.categoryId) return false;
-  }
-  if (filters.from && (!task?.dueAt || task.dueAt < filters.from)) return false;
-  if (filters.to && (!task?.dueAt || task.dueAt > `${filters.to}T23:59:59.999Z`)) return false;
-  if (filters.progress && filters.progress !== 'all') {
-    if (!task || !matchesProgressFilter(task.percentComplete, filters.progress)) return false;
-  }
-  return true;
+  if (task) return taskMatchesExpression(task, filters);
+  if (filters.contentType === 'todos' && !task) return false;
+  const conditions: boolean[] = [];
+  const assigneeIds = filters.assigneeIds?.length
+    ? filters.assigneeIds
+    : filters.assigneeId
+      ? [filters.assigneeId]
+      : [];
+  if (assigneeIds.length) conditions.push(false);
+  if (filters.groupIds?.length)
+    conditions.push(Boolean(value.groupId && filters.groupIds.includes(value.groupId)));
+  if (filters.urgencies?.length)
+    conditions.push(matchesUrgencySet(value.urgency, filters.urgencies));
+  if (filters.projectId)
+    conditions.push(
+      filters.projectId === 'unassigned'
+        ? value.projectId === undefined
+        : value.projectId === filters.projectId,
+    );
+  if (filters.categoryId) conditions.push(value.categoryId === filters.categoryId);
+  if (filters.from || filters.to || (filters.progress && filters.progress !== 'all'))
+    conditions.push(false);
+  return (
+    !conditions.length ||
+    (filters.match === 'any' ? conditions.some(Boolean) : conditions.every(Boolean))
+  );
 }
 
 export function ArchivePage({
@@ -81,6 +101,9 @@ export function ArchivePage({
   categories = [],
   projects = [],
   assignees = [],
+  groups = [],
+  currentUserId,
+  currentUserGroupIds = [],
 }: {
   entries: LocalArchiveEntry[];
   restore: (entry: LocalArchiveEntry) => Promise<void>;
@@ -94,10 +117,18 @@ export function ArchivePage({
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
   assignees?: readonly AssigneeOption[];
+  groups?: readonly { id: string; name: string }[];
+  currentUserId?: string;
+  currentUserGroupIds?: readonly string[];
 }) {
   const [query, setQuery] = useState('');
   const archiveFilters = filters ? { ...filters, lifecycle: 'archive' as const } : undefined;
-  const visible = entries.filter((entry) => matchesArchiveFilters(entry, archiveFilters, query));
+  const viewer = currentUserId
+    ? { userId: currentUserId, groupIds: currentUserGroupIds }
+    : undefined;
+  const visible = entries.filter((entry) =>
+    matchesArchiveFilters(entry, archiveFilters, query, viewer),
+  );
   const projectsById = new Map(projects.map((project) => [project.id, project]));
   const categoriesById = new Map(categories.map((category) => [category.id, category]));
   const calculatedUrgencyCounts = visible.reduce((counts, entry) => {
@@ -121,6 +152,9 @@ export function ArchivePage({
             categories={categories}
             projects={projects}
             assignees={assignees}
+            groups={groups}
+            {...(currentUserId ? { currentUserId } : {})}
+            currentUserGroupIds={currentUserGroupIds}
           />
         </section>
       ) : null}

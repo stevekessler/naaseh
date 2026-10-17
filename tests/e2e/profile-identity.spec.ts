@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn, expandTaskDetails, addTask } from './enhanced-helpers.js';
+import { signIn, expandTaskDetails } from './enhanced-helpers.js';
 import { expectNoDocumentOverflow } from './responsive-assertions.js';
 test.use({ serviceWorkers: 'block' });
 test('ordinary users see identity, all assignees, readable priorities, and consistently spaced buttons', async ({
@@ -36,7 +36,15 @@ test('ordinary users see identity, all assignees, readable priorities, and consi
     .evaluate((element) => getComputedStyle(element).gap);
   expect(toolbarGap).toBe('8px');
   expect(navGap).toBe(toolbarGap);
-  await addTask(page, 'Shared design review');
+  await form.getByLabel('Task label').fill('Shared design review');
+  await form.getByRole('button', { name: 'Add task' }).click();
+  await expect(page.getByRole('heading', { name: 'Shared design review' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Search and filters' })
+    .getByLabel('Assignee')
+    .selectOption('steve');
+  await expect(page.getByRole('heading', { name: 'Shared design review' })).toBeVisible();
   await page.setViewportSize({ width: 375, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(page.locator('.task-list .urgency-badge').first()).toHaveText('Medium');

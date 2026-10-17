@@ -9,7 +9,7 @@ test('shows a native-created record and safely replays a web offline mutation', 
 }) => {
   const nativeTask = createTask(
     { label: 'Created on iPhone', visibility: 'private' },
-    'user-1',
+    'local-steve',
     new Date('2026-10-07T12:00:00Z'),
   );
   const pushed: Array<{ id: string }> = [];

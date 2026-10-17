@@ -23,9 +23,11 @@ import { db } from '../db/database.js';
 import { readLocalTaskSnapshot, saveNewTask } from '../db/task-repository.js';
 import { listCategories, listRevisions } from '../db/reminder-repository.js';
 import {
-  filterTasks,
+  filterTasksForViewer,
+  filtersExpandToAllReadable,
   matchesProgressFilter,
   normalizeSearch,
+  taskAssigneeIds,
   type Filters,
 } from '../search/task-search.js';
 import { taskDueDateKey } from '../search/task-filters.js';
@@ -209,6 +211,10 @@ const CombinedSearchPage = lazy(() =>
 const emptyFilters: Filters = {
   query: '',
   assigneeId: '',
+  assigneeIds: [],
+  groupIds: [],
+  match: 'all',
+  scope: 'default',
   categoryId: '',
   projectId: '',
   from: '',
@@ -341,9 +347,22 @@ export function App() {
   const [taskTab, setTaskTab] = useState<'all' | 'filtered'>(() => {
     const params = new URLSearchParams(location.search);
     return params.get('taskTab') === 'filtered' ||
-      ['urgencies', 'from', 'to', 'assigneeId', 'categoryId', 'projectId'].some((key) =>
-        params.has(key),
-      )
+      [
+        'urgencies',
+        'from',
+        'to',
+        'assigneeId',
+        'assigneeIds',
+        'groupIds',
+        'match',
+        'scope',
+        'categoryId',
+        'projectId',
+        'contentType',
+        'lifecycle',
+        'progress',
+        'datePresets',
+      ].some((key) => params.has(key))
       ? 'filtered'
       : 'all';
   });
@@ -395,6 +414,11 @@ export function App() {
   const refreshUsers = useCallback(async () => {
     setDirectoryUsers(await readUserDirectory());
   }, []);
+  const readGroupMembers = useCallback(
+    async (group: (typeof groups)[number]) =>
+      session ? (await readRemoteGroup(group, session.csrfToken)).members : [],
+    [session],
+  );
   useEffect(() => {
     if (!session) {
       setDirectoryUsers([]);
@@ -476,7 +500,12 @@ export function App() {
           (task) =>
             task.status === 'open' &&
             (task.lifecycle ?? 'active') === 'active' &&
-            task.completionState !== 'completed',
+            task.completionState !== 'completed' &&
+            Boolean(
+              session &&
+                (task.assigneeId === session.userId ||
+                  (task.groupId && joinedGroupOptions.some((group) => group.id === task.groupId))),
+            ),
         )
         .map((task) => ({
           reference: {
@@ -489,11 +518,12 @@ export function App() {
           percentComplete: task.percentComplete,
           ...(task.projectId ? { projectId: task.projectId } : {}),
           ...(task.assigneeId ? { assigneeId: task.assigneeId } : {}),
+          ...(task.groupId ? { groupId: task.groupId } : {}),
           ...(task.categoryId ? { categoryId: task.categoryId } : {}),
           ...(taskDueDateKey(task) ? { dueDate: taskDueDateKey(task) } : {}),
           contentType: 'todos' as const,
         })),
-    [tasks],
+    [tasks, session, joinedGroupOptions],
   );
   const allRankedStackItems =
     useLiveQuery(
@@ -533,28 +563,35 @@ export function App() {
   );
   const rankedStackItems = useMemo(
     () =>
-      allRankedStackItems.filter(({ work }) =>
-        Boolean(
-          matchesUrgencySet(work.urgency, filters.urgencies) &&
-            (!filters.query ||
-              work.label.toLocaleLowerCase().includes(filters.query.toLocaleLowerCase())) &&
-            (!filters.assigneeId || work.assigneeId === filters.assigneeId) &&
-            (!filters.categoryId || work.categoryId === filters.categoryId) &&
-            (!filters.projectId ||
-              (filters.projectId === 'unassigned'
-                ? !work.projectId
-                : work.projectId === filters.projectId)) &&
-            (!filters.from || Boolean(work.dueDate && work.dueDate >= filters.from)) &&
-            (!filters.to || Boolean(work.dueDate && work.dueDate <= filters.to)) &&
-            (filters.contentType === 'all' ||
-              filters.contentType === undefined ||
-              work.contentType === filters.contentType) &&
-            (work.contentType !== 'todos' ||
-              matchesProgressFilter(work.percentComplete, filters.progress)) &&
-            (!filters.progress || filters.progress === 'all' || work.contentType === 'todos') &&
-            filters.lifecycle !== 'archive',
-        ),
-      ),
+      allRankedStackItems.filter(({ work }) => {
+        if (filters.lifecycle === 'archive') return false;
+        const conditions: boolean[] = [];
+        if (filters.query)
+          conditions.push(
+            work.label.toLocaleLowerCase().includes(filters.query.toLocaleLowerCase()),
+          );
+        if (filters.urgencies.length)
+          conditions.push(matchesUrgencySet(work.urgency, filters.urgencies));
+        const assigneeIds = taskAssigneeIds(filters);
+        if (assigneeIds.length) conditions.push(assigneeIds.includes(work.assigneeId ?? ''));
+        if (filters.groupIds?.length)
+          conditions.push(Boolean(work.groupId && filters.groupIds.includes(work.groupId)));
+        if (filters.categoryId) conditions.push(work.categoryId === filters.categoryId);
+        if (filters.projectId)
+          conditions.push(
+            filters.projectId === 'unassigned'
+              ? !work.projectId
+              : work.projectId === filters.projectId,
+          );
+        if (filters.from) conditions.push(Boolean(work.dueDate && work.dueDate >= filters.from));
+        if (filters.to) conditions.push(Boolean(work.dueDate && work.dueDate <= filters.to));
+        if (filters.progress && filters.progress !== 'all')
+          conditions.push(matchesProgressFilter(work.percentComplete, filters.progress));
+        return (
+          !conditions.length ||
+          (filters.match === 'any' ? conditions.some(Boolean) : conditions.every(Boolean))
+        );
+      }),
     [allRankedStackItems, filters],
   );
   const localStackLabels = useMemo(
@@ -611,9 +648,12 @@ export function App() {
   const hiddenAt = useRef<number | undefined>(undefined);
   const syncRetryTimer = useRef<number | undefined>(undefined);
   const visible = useMemo(() => {
-    const filtered = filterTasks(
+    const filtered = filterTasksForViewer(
       tasks,
       section === 'tasks' && taskTab === 'all' ? emptyFilters : filters,
+      session
+        ? { userId: session.userId, groupIds: joinedGroupOptions.map((group) => group.id) }
+        : undefined,
     );
     const storedTaskIds = new Set(
       (overallStackState?.work ?? [])
@@ -626,7 +666,16 @@ export function App() {
         .map(({ work, rank }) => [work.reference.workId, rank.overallPosition]),
     );
     return orderTasksForList(filtered, storedTaskIds, ranks);
-  }, [tasks, filters, section, taskTab, overallStackState, overallRankedStackItems]);
+  }, [
+    tasks,
+    filters,
+    section,
+    taskTab,
+    overallStackState,
+    overallRankedStackItems,
+    session,
+    joinedGroupOptions,
+  ]);
   useEffect(() => {
     if (section !== 'dashboard' || !session) return;
     let active = true;
@@ -677,42 +726,62 @@ export function App() {
       (filters.progress !== undefined && filters.progress !== 'all')
     )
       return [];
+    if (!session) return [];
     const query = filters.query.normalize('NFKC').trim().toLocaleLowerCase();
-    const scopedLists = lists.filter(
-      (list) =>
-        list.lifecycle !== 'archived' &&
-        matchesUrgencySet(list.urgency, filters.urgencies) &&
-        (!filters.projectId ||
-          (filters.projectId === 'unassigned'
-            ? !list.projectId
-            : list.projectId === filters.projectId)) &&
-        !filters.assigneeId &&
-        (!filters.categoryId ||
-          list.categoryId === filters.categoryId ||
-          projects.find((project) => project.id === list.projectId)?.categoryId ===
-            filters.categoryId) &&
-        !filters.from &&
-        !filters.to,
-    );
-    if (!query) return filters.contentType === 'lists' ? scopedLists : [];
+    const viewer = {
+      userId: session.userId,
+      groupIds: joinedGroupOptions.map((group) => group.id),
+    };
+    const expanded = filtersExpandToAllReadable(filters, viewer);
     const directory = new Map(directoryItems.map((item) => [item.id, item]));
-    return scopedLists.filter(
-      (list) =>
-        list.name.toLocaleLowerCase().includes(query) ||
-        (listItems.get(list.id) ?? []).some((item) =>
-          effectiveDirectoryFields(
-            {
-              directorySnapshot: item.directorySnapshot,
-              ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
-              ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
-            },
-            item.directoryItemId ? directory.get(item.directoryItemId) : undefined,
-          )
-            .name.toLocaleLowerCase()
-            .includes(query),
-        ),
-    );
-  }, [filters, lists, listItems, directoryItems, projects]);
+    return lists.filter((list) => {
+      if (list.lifecycle === 'archived') return false;
+      if (
+        !expanded &&
+        list.ownerId !== session.userId &&
+        !(list.groupId && viewer.groupIds.includes(list.groupId))
+      )
+        return false;
+      const conditions: boolean[] = [];
+      if (query)
+        conditions.push(
+          list.name.toLocaleLowerCase().includes(query) ||
+            (listItems.get(list.id) ?? []).some((item) =>
+              effectiveDirectoryFields(
+                {
+                  directorySnapshot: item.directorySnapshot,
+                  ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
+                  ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
+                },
+                item.directoryItemId ? directory.get(item.directoryItemId) : undefined,
+              )
+                .name.toLocaleLowerCase()
+                .includes(query),
+            ),
+        );
+      if (filters.urgencies.length)
+        conditions.push(matchesUrgencySet(list.urgency, filters.urgencies));
+      if (filters.projectId)
+        conditions.push(
+          filters.projectId === 'unassigned'
+            ? !list.projectId
+            : list.projectId === filters.projectId,
+        );
+      if (taskAssigneeIds(filters).length) conditions.push(false);
+      if (filters.groupIds?.length)
+        conditions.push(Boolean(list.groupId && filters.groupIds.includes(list.groupId)));
+      if (filters.categoryId)
+        conditions.push(
+          list.categoryId === filters.categoryId ||
+            projects.find((project) => project.id === list.projectId)?.categoryId ===
+              filters.categoryId,
+        );
+      if (filters.from || filters.to || (filters.progress && filters.progress !== 'all'))
+        conditions.push(false);
+      if (!conditions.length) return filters.contentType === 'lists';
+      return filters.match === 'any' ? conditions.some(Boolean) : conditions.every(Boolean);
+    });
+  }, [filters, lists, listItems, directoryItems, projects, session, joinedGroupOptions]);
   const projectDetailRows = useMemo(
     () =>
       overallRankedStackItems
@@ -1085,6 +1154,9 @@ export function App() {
             affectedWork: displayed,
             filterBasis: {
               ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
+              ...(taskAssigneeIds(filters).length ? { assigneeIds: taskAssigneeIds(filters) } : {}),
+              ...(filters.groupIds?.length ? { groupIds: filters.groupIds } : {}),
+              match: filters.match ?? 'all',
               ...(filters.projectId ? { projectId: filters.projectId } : {}),
               ...(filters.progress && filters.progress !== 'all'
                 ? { progress: filters.progress }
@@ -1227,6 +1299,8 @@ export function App() {
               projects={projects}
               openTask={(taskId) => navigate({ section: 'tasks', taskId })}
               openList={(listId) => navigate({ section: 'lists', listId })}
+              currentUserId={session.userId}
+              currentUserGroupIds={joinedGroupOptions.map((group) => group.id)}
             />
           ) : section === 'stack' ? (
             <PersonalStackPage
@@ -1237,6 +1311,9 @@ export function App() {
               projectRecords={projects}
               categories={categories}
               assignees={assignees}
+              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              currentUserId={session.userId}
+              currentUserGroupIds={joinedGroupOptions.map((group) => group.id)}
               parentTasks={tasks}
               groupOptions={joinedGroupOptions}
               defaultAssigneeId={session.userId}
@@ -1323,7 +1400,11 @@ export function App() {
                           ...(filters.urgencies.length ? { urgencies: filters.urgencies } : {}),
                           ...(filters.from ? { from: filters.from } : {}),
                           ...(filters.to ? { to: filters.to } : {}),
-                          ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
+                          ...(taskAssigneeIds(filters).length
+                            ? { assigneeIds: taskAssigneeIds(filters) }
+                            : {}),
+                          ...(filters.groupIds?.length ? { groupIds: filters.groupIds } : {}),
+                          match: filters.match ?? 'all',
                           ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
                           ...(filters.projectId ? { projectId: filters.projectId } : {}),
                           ...(filters.progress && filters.progress !== 'all'
@@ -1483,7 +1564,7 @@ export function App() {
               join={async (group, pin) => {
                 await joinRemoteGroup(group, pin, session.csrfToken);
               }}
-              read={async (group) => (await readRemoteGroup(group, session.csrfToken)).members}
+              read={readGroupMembers}
               addMember={async (group, userId) => {
                 await addRemoteGroupMember(group, userId, session.csrfToken);
               }}
@@ -1547,6 +1628,9 @@ export function App() {
               categories={categories}
               projects={projects}
               assignees={assignees}
+              groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+              currentUserId={session.userId}
+              currentUserGroupIds={joinedGroupOptions.map((group) => group.id)}
               restore={async (entry) => {
                 if (entry.task)
                   await completionUndo.save(entry.task, { status: 'open' }, session.userId);
@@ -1643,7 +1727,7 @@ export function App() {
               />
               <div className="view-toggle" role="group" aria-label="Task browsing">
                 <button aria-pressed={taskTab === 'all'} onClick={() => setTaskTab('all')}>
-                  All tasks
+                  My tasks and groups
                 </button>
                 <button
                   aria-pressed={taskTab === 'filtered'}
@@ -1667,12 +1751,17 @@ export function App() {
                       categories={categories}
                       projects={projects}
                       assignees={assignees}
+                      groups={groups.map((group) => ({ id: group.id, name: group.name }))}
+                      currentUserId={session.userId}
+                      currentUserGroupIds={joinedGroupOptions.map((group) => group.id)}
                     />
                     {(filters.query ||
                       filters.from ||
                       filters.to ||
                       filters.datePresets?.length ||
                       filters.assigneeId ||
+                      filters.assigneeIds?.length ||
+                      filters.groupIds?.length ||
                       filters.categoryId ||
                       filters.projectId ||
                       filters.urgencies.length > 0 ||

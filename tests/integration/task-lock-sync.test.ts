@@ -5,6 +5,12 @@ import {
   privacyFeedChanges,
 } from '../../apps/api/src/tasks/privacy-transition.js';
 describe('task lock feeds', () => {
+  it('publishes an unlocked grouped task to the public audience', () => {
+    const task = createTask({ label: 'Shared', groupId: 'family' }, 'owner');
+    expect(privacyFeedChanges(undefined, task)).toEqual([
+      expect.objectContaining({ audience: 'PUBLIC', operation: 'upsert' }),
+    ]);
+  });
   it('tombstones public, upserts owner, and retains the admin feed', () => {
     const task = createTask({ label: 'Lock' }, 'owner');
     const locked = setTaskLocked(task, true, 'owner');

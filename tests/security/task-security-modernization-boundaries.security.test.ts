@@ -5,13 +5,13 @@ import { revalidateProtectedSession } from '../../apps/web/src/features/auth/ses
 import { purgeRevokedSessionData } from '../../apps/web/src/sync/privacy-purge.js';
 
 describe('task security modernization collaboration boundaries', () => {
-  it('grants group task reads only after membership and removes them on revocation', () => {
+  it('keeps unlocked grouped tasks readable independent of membership', () => {
     const task = createTask({ label: 'Shared', groupId: 'group-1' }, 'owner');
     const actor = { id: 'member', role: 'user' as const, active: true };
 
-    expect(canReadTaskAs(task, { ...actor, groupIds: [] }).allowed).toBe(false);
+    expect(canReadTaskAs(task, { ...actor, groupIds: [] }).allowed).toBe(true);
     expect(canReadTaskAs(task, { ...actor, groupIds: ['group-1'] }).allowed).toBe(true);
-    expect(canReadTaskAs(task, { ...actor, groupIds: [] }).allowed).toBe(false);
+    expect(canReadTaskAs(task, { ...actor, groupIds: [] }).allowed).toBe(true);
   });
 
   it('keeps locked task ownership authoritative even for members and administrators', () => {
