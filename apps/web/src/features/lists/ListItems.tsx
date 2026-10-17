@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useMemo, useRef, useState, type FormEvent } from 'react';
 import { DragDropProvider, KeyboardSensor, PointerSensor, type DragEndEvent } from '@dnd-kit/react';
 import { useSortable } from '@dnd-kit/react/sortable';
 import {
@@ -120,8 +120,11 @@ export function ListItems({
   reset,
   promote,
   reorder,
+  move,
   csrfToken,
   directory,
+  destinationLists,
+  editable = true,
 }: {
   items: ListItem[];
   toggle: (item: ListItem) => void;
@@ -130,11 +133,34 @@ export function ListItems({
   reset: (item: ListItem) => void;
   promote: (item: ListItem, name: string) => void;
   reorder: (items: ListItem[]) => void;
+  move: (item: ListItem, destinationListId: string) => void;
   csrfToken: string;
   directory: GlobalDirectoryItem[];
+  destinationLists: { id: string; name: string }[];
+  editable?: boolean;
 }) {
   const lastDragTarget = useRef<string | undefined>(undefined);
   const columns = useListColumns();
+  const [query, setQuery] = useState('');
+  const effectiveItems = useMemo(
+    () =>
+      items.map((item) => {
+        const current = item.directoryItemId
+          ? directory.find((entry) => entry.id === item.directoryItemId)
+          : undefined;
+        const effective = effectiveDirectoryFields(
+          {
+            directorySnapshot: item.directorySnapshot,
+            ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
+            ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
+          },
+          current,
+        );
+        return { item, name: effective.name };
+      }),
+    [directory, items],
+  );
+  const visibleItems = filterListItems(effectiveItems, query);
   if (!items.length)
     return (
       <div className="list-empty-state">
@@ -147,14 +173,15 @@ export function ListItems({
     const sourceId = String(event.operation.source.id);
     const targetId = lastDragTarget.current ?? String(event.operation.target.id);
     lastDragTarget.current = undefined;
-    const sourceIndex = items.findIndex((item) => item.id === sourceId);
-    const targetIndex = items.findIndex((item) => item.id === targetId);
+    const sourceIndex = visibleItems.findIndex(({ item }) => item.id === sourceId);
+    const targetIndex = visibleItems.findIndex(({ item }) => item.id === targetId);
     if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
-    const ordered = [...items];
+    const orderedVisible = visibleItems.map(({ item }) => item);
+    const ordered = [...orderedVisible];
     const [selected] = ordered.splice(sourceIndex, 1);
     if (!selected) return;
     ordered.splice(targetIndex, 0, selected);
-    reorder(ordered);
+    if (visibleItems.length === items.length) reorder(ordered);
   };
   return (
     <DragDropProvider
@@ -171,7 +198,17 @@ export function ListItems({
       onDragEnd={finishDrag}
     >
       <div className="list-table-tools">
-        <p className="list-item-count">
+        <label className="list-filter-field">
+          <span>Search list items</span>
+          <input
+            type="search"
+            value={query}
+            placeholder="Search item names and memos"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <p className="list-item-count" role="status">
+          {query.trim() ? `${visibleItems.length} of ` : ''}
           {items.length} item{items.length === 1 ? '' : 's'}
         </p>
         <ListColumnSettings {...columns} />
@@ -193,31 +230,23 @@ export function ListItems({
             </tr>
           </thead>
           <tbody>
-            {items.map((item, index) => {
-              const current = item.directoryItemId
-                ? directory.find((entry) => entry.id === item.directoryItemId)
-                : undefined;
-              const effective = effectiveDirectoryFields(
-                {
-                  directorySnapshot: item.directorySnapshot,
-                  ...(item.nameOverride ? { nameOverride: item.nameOverride } : {}),
-                  ...(item.valueOverride ? { valueOverride: item.valueOverride } : {}),
-                },
-                current,
-              );
+            {visibleItems.map(({ item, name }, index) => {
               return (
                 <SortableListItemRow
                   key={item.id}
                   item={item}
                   index={index}
                   group={`list-items:${item.listId}`}
-                  name={effective.name}
+                  name={name}
                   visibleColumns={columns.visible}
+                  editable={editable}
                   onToggle={() => toggle(item)}
                   onRemove={() => remove(item)}
                   onEdit={(input) => edit(item, input)}
                   {...(item.directoryItemId ? { onReset: () => reset(item) } : {})}
-                  onPromote={() => promote(item, effective.name)}
+                  onPromote={() => promote(item, name)}
+                  destinationLists={destinationLists.filter((list) => list.id !== item.listId)}
+                  onMove={(destinationListId) => move(item, destinationListId)}
                   attachments={
                     <AttachmentPanelForParent
                       parentType="listItem"
@@ -230,8 +259,21 @@ export function ListItems({
             })}
           </tbody>
         </table>
+        {!visibleItems.length && (
+          <p className="list-filter-empty">No items match “{query.trim()}”.</p>
+        )}
       </div>
     </DragDropProvider>
+  );
+}
+
+export function filterListItems(items: readonly { item: ListItem; name: string }[], query: string) {
+  const normalized = query.normalize('NFKC').trim().toLocaleLowerCase();
+  if (!normalized) return [...items];
+  return items.filter(({ item, name }) =>
+    [name, item.memo ?? '', ...(item.fileLinks ?? [])].some((value) =>
+      value.normalize('NFKC').toLocaleLowerCase().includes(normalized),
+    ),
   );
 }
 

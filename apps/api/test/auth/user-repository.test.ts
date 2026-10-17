@@ -43,18 +43,20 @@ describe('stored user compatibility', () => {
   });
 
   it('reads an imported account that does not have browser credentials yet', async () => {
-    store.send.mockResolvedValue({
-      Item: {
-        data: {
-          id: 'user-without-password',
-          username: 'heather',
-          displayName: 'Heather',
-          role: 'user',
-          active: true,
-          sessionEpoch: 0,
+    store.send
+      .mockResolvedValueOnce({
+        Item: {
+          data: {
+            id: 'user-without-password',
+            username: 'heather',
+            displayName: 'Heather',
+            role: 'user',
+            active: true,
+            sessionEpoch: 0,
+          },
         },
-      },
-    });
+      })
+      .mockResolvedValueOnce({});
 
     await expect(userByUsername('heather')).resolves.toMatchObject({
       id: 'user-without-password',
@@ -62,6 +64,30 @@ describe('stored user compatibility', () => {
       credentialVersion: 0,
       version: 1,
     });
+  });
+
+  it('prefers the canonical profile over a stale legacy username snapshot', async () => {
+    store.send
+      .mockResolvedValueOnce({ Item: { data: legacyAdministrator } })
+      .mockResolvedValueOnce({
+        Item: {
+          data: {
+            ...legacyAdministrator,
+            passwordHash: '$argon2id$new-password',
+            credentialVersion: 1,
+            sessionEpoch: 3,
+            version: 4,
+          },
+        },
+      });
+
+    await expect(userByUsername('Steve')).resolves.toMatchObject({
+      passwordHash: '$argon2id$new-password',
+      credentialVersion: 1,
+      sessionEpoch: 3,
+      version: 4,
+    });
+    expect(store.send).toHaveBeenCalledTimes(2);
   });
 
   it('can commit a password reset to a legacy row without an explicit version', async () => {

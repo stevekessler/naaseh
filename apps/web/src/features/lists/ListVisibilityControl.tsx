@@ -11,8 +11,8 @@ export function ListVisibilityControl({
   change: (patch: LocalListPatch) => void;
 }) {
   return (
-    <fieldset>
-      <legend>Visibility</legend>
+    <fieldset className="list-visibility-control">
+      <legend>Who can see this list?</legend>
       <button
         aria-label={list.locked ? 'Unlock list' : 'Lock list'}
         aria-pressed={list.locked}
@@ -22,12 +22,12 @@ export function ListVisibilityControl({
       </button>
       {list.locked ? null : (
         <ReferenceCombobox
-          label="Group"
+          label="Share with group"
           name="listGroup"
           {...(list.groupId ? { value: list.groupId } : {})}
           options={groups.map((group) => ({ id: group.id, label: group.name }))}
           onChange={(groupId) => change({ groupId: groupId || undefined })}
-          clearLabel="Everyone"
+          clearLabel="Everyone with an account"
         />
       )}
       <p>

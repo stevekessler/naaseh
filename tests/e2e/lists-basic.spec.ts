@@ -17,10 +17,12 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByLabel('List name').fill('Groceries');
   await page.getByRole('button', { name: 'Create list' }).click();
   await expect(page.getByRole('heading', { name: 'Groceries' })).toBeVisible();
-  await expect(page.getByText('Visibility', { exact: true })).toBeHidden();
-  await page.getByText('List settings', { exact: true }).click();
-  await expect(page.getByText('Visibility', { exact: true })).toBeVisible();
-  await page.getByText('List settings', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Share this list' })).toBeVisible();
+  await expect(page.getByText('Who can see this list?', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Rename list' }).click();
+  await page.getByLabel('New list name').fill('Weekly Groceries');
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await expect(page.getByRole('heading', { name: 'Weekly Groceries' })).toBeVisible();
   await page.getByLabel('Add an item').fill('Milk');
   await page.getByText('Optional details', { exact: true }).click();
   await expect(page.getByLabel('Link (optional)')).toBeVisible();
@@ -41,7 +43,17 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
     phoneLayout ? 0 : 1,
   );
   await expect(listDirectory.getByRole('columnheader', { name: 'Items' })).toBeVisible();
-  await expect(listDirectory.getByRole('row').filter({ hasText: 'Groceries' })).toContainText('2');
+  await expect(
+    listDirectory.getByRole('row').filter({ hasText: 'Weekly Groceries' }),
+  ).toContainText('2');
+  await page.getByLabel('List name').fill('Hardware');
+  await page.getByRole('button', { name: 'Create list' }).click();
+  await expect(page.getByRole('heading', { name: 'Hardware' })).toBeVisible();
+  await page.getByLabel('Filter lists by title').fill('weekly');
+  await expect(listDirectory.getByRole('row').filter({ hasText: 'Hardware' })).toHaveCount(0);
+  await listDirectory.getByRole('button', { name: 'Weekly Groceries' }).click();
+  await expect(page.getByRole('heading', { name: 'Weekly Groceries' })).toBeVisible();
+  await page.getByLabel('Filter lists by title').fill('');
   await page.locator('.list-index').getByText('Columns', { exact: true }).click();
   const listColumnSettings = page.getByRole('group', { name: 'List table columns' });
   if (phoneLayout) {
@@ -71,6 +83,13 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByRole('button', { name: 'Close column settings' }).click();
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
   const eggs = page.locator('.list-item').filter({ hasText: 'Eggs' });
+  await page.getByLabel('Search list items').fill('cold');
+  await expect(item).toBeVisible();
+  await expect(eggs).toHaveCount(0);
+  await item.getByRole('button', { name: 'Milk', exact: true }).click();
+  await expect(page.locator('.list-item-editor')).toBeVisible();
+  await item.getByRole('button', { name: 'Milk', exact: true }).click();
+  await page.getByLabel('Search list items').fill('');
   if (supportsSyntheticDrag) await eggs.getByRole('button', { name: 'Drag Eggs' }).dragTo(item);
   await expect(page.locator('.list-item-name-cell')).toHaveText(
     supportsSyntheticDrag ? ['Eggs', 'Milk'] : ['Milk', 'Eggs'],
@@ -88,6 +107,14 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
     item.locator('.list-item-actions'),
   );
 
+  await eggs.getByRole('button', { name: 'Eggs', exact: true }).click();
+  await page.getByLabel('Move to list').selectOption({ label: 'Hardware' });
+  await page.getByRole('button', { name: 'Move item' }).click();
+  await expect(page.getByText('1 item', { exact: true })).toBeVisible();
+  await listDirectory.getByRole('button', { name: 'Hardware' }).click();
+  await expect(page.getByText('Eggs', { exact: true })).toBeVisible();
+
+  await listDirectory.getByRole('button', { name: 'Weekly Groceries' }).click();
   await item.getByRole('button', { name: 'Edit', exact: true }).click();
   const editor = page.getByRole('table', { name: 'List items' }).locator('.list-item-editor');
   await expect(editor).toBeVisible();

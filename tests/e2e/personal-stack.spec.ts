@@ -2,7 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   expandTaskDetails,
   mockSuccessfulSync,
-  openLists,
   openTaskSection,
   signIn,
 } from './enhanced-helpers.js';
@@ -20,15 +19,6 @@ async function createTask(page: Page, label: string, urgency: string) {
   await form.getByRole('button', { name: 'Add task' }).click();
 }
 
-async function createList(page: Page, name: string, urgency: string) {
-  await openLists(page);
-  const form = page.locator('form').filter({ has: page.getByLabel('List name') });
-  await form.getByLabel('List name').fill(name);
-  await form.getByText('Priority and organization', { exact: true }).click();
-  await form.getByLabel('Priority', { exact: true }).selectOption(urgency);
-  await form.getByRole('button', { name: 'Create list' }).click();
-}
-
 async function openPersonalStack(page: Page) {
   await openTaskSection(page, 'Personal Stack');
   await expect(page.getByRole('heading', { name: 'Personal Stack' })).toBeVisible();
@@ -42,7 +32,6 @@ test('keeps urgency-independent overall and Project orders private and durable',
   await signIn(page);
   await createTask(page, 'Critical task', 'critical');
   await createTask(page, 'Low priority task', 'low');
-  await createList(page, 'Medium list', 'medium');
   await openPersonalStack(page);
 
   await expect(page.getByLabel('Stack scope')).toHaveValue('overall');
@@ -58,7 +47,7 @@ test('keeps urgency-independent overall and Project orders private and durable',
 
   await page.reload();
   await expect(stackRow(page, 'Low priority task')).toContainText('Overall position 1');
-  await expect(stackRow(page, 'Medium list')).toBeVisible();
+  await expect(stackRow(page, 'Critical task')).toContainText('Overall position 2');
 
   const projectOption = page.getByLabel('Stack scope').locator('option[value^="project:"]').first();
   if ((await projectOption.count()) > 0) {

@@ -33,7 +33,11 @@ import {
   dispatchTaskTimerSyncMutation,
   serializeSharedWorkChange,
 } from './sync-service.js';
-import { pullAudience, type SyncFeedChange } from './change-feed-repository.js';
+import {
+  prepareAudienceChange,
+  pullAudience,
+  type SyncFeedChange,
+} from './change-feed-repository.js';
 import { keys } from '../shared/keys.js';
 import { loadPublicKeyRegistry } from '../crypto-recovery/public-key-registry.js';
 import { metric } from '@naaseh/observability';
@@ -47,6 +51,7 @@ import {
   saveList,
   saveListItem,
 } from '../lists/list-repository.js';
+import { listItemAudienceTransitionChanges } from '../lists/list-audience.js';
 import { findDirectoryItem, saveDirectoryItemRecord } from '../directory/directory-repository.js';
 import { defaultPersonalStackService, dispatchStackCompaction } from '../ranking/runtime.js';
 import {
@@ -639,12 +644,21 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
                 }
             : payload,
         );
-        const parent = await findList(next.listId);
+        const [parent, previousParent] = await Promise.all([
+          findList(next.listId),
+          current ? findList(current.listId) : Promise.resolve(undefined),
+        ]);
         const conflict = classifyListItemSyncConflict({
           baseVersion: mutation.baseVersion,
           ...(current ? { currentVersion: current.version } : {}),
           parentExists: Boolean(parent),
-          ...(parent ? { parentOwned: parent.ownerId === actorId } : {}),
+          ...(parent
+            ? {
+                parentOwned:
+                  parent.ownerId === actorId &&
+                  (!previousParent || previousParent.ownerId === actorId),
+              }
+            : {}),
         });
         if (conflict) {
           results.push({
@@ -661,6 +675,12 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           });
           continue;
         }
+        const feedChanges = await Promise.all(
+          (parent
+            ? listItemAudienceTransitionChanges(previousParent ?? parent, parent, next, next)
+            : []
+          ).map(prepareAudienceChange),
+        );
         await saveListItem(
           next,
           actorId,
@@ -676,6 +696,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
                   : 'create',
           Object.keys(payload),
           current?.version ?? 0,
+          feedChanges,
         );
         results.push({
           mutationId: mutation.id,

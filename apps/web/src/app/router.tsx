@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 export type AppRoute =
   | { section: 'tasks'; taskId?: string }
+  | { section: 'search' }
   | { section: 'lists'; listId?: string }
   | { section: 'directory' }
   | { section: 'groups' }
@@ -46,6 +47,7 @@ export function parseAppRoute(pathname: string): AppRoute {
   const task = pathname.match(/^\/tasks(?:\/([^/]+))?\/?$/);
   if (task)
     return { section: 'tasks', ...(task[1] ? { taskId: decodeURIComponent(task[1]) } : {}) };
+  if (/^\/search\/?$/.test(pathname)) return { section: 'search' };
   if (/^\/groups\/?$/.test(pathname)) return { section: 'groups' };
   if (/^\/directory\/?$/.test(pathname)) return { section: 'directory' };
   if (/^\/archive\/?$/.test(pathname)) return { section: 'archive' };

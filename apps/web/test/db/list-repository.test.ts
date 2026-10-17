@@ -85,6 +85,7 @@ import {
   addLocalListItem,
   listLocalListItems,
   listLocalLists,
+  moveLocalListItem,
   saveNewList,
   updateLocalListItem,
 } from '../../src/db/list-repository.js';
@@ -154,5 +155,25 @@ describe('encrypted local list repository', () => {
     await expect(saveNewList('Cannot partially save', 'owner')).rejects.toThrow('QuotaExceeded');
     expect(state.lists.size).toBe(0);
     expect(state.outbox.size).toBe(0);
+  });
+
+  it('moves an item to the end of another list in one durable local mutation', async () => {
+    const source = await saveNewList('Groceries', 'owner');
+    const destination = await saveNewList('Hardware', 'owner');
+    const existing = await addLocalListItem(destination.id, { name: 'Nails' }, 'owner');
+    const item = await addLocalListItem(source.id, { name: 'Milk' }, 'owner');
+
+    const moved = await moveLocalListItem(item, destination.id, 'owner');
+
+    expect(await listLocalListItems(source.id)).toEqual([]);
+    expect(await listLocalListItems(destination.id)).toEqual([existing, moved]);
+    expect(moved).toMatchObject({ listId: destination.id, orderKey: '000000000020' });
+    expect(state.items.get(item.id)).toMatchObject({ taskId: destination.id });
+    expect([...state.outbox.values()].at(-1)).toMatchObject({
+      entityId: item.id,
+      operation: 'reorder',
+      baseVersion: 1,
+      payload: { listId: destination.id, orderKey: '000000000020' },
+    });
   });
 });

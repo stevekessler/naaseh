@@ -7,4 +7,10 @@ describe('active work route consolidation', () => {
     expect(routePath({ section: 'projects' })).toBe('/stack');
     expect(routePath({ section: 'stack' })).toBe('/stack');
   });
+
+  it('recognizes and emits the combined search route', () => {
+    expect(parseAppRoute('/search')).toEqual({ section: 'search' });
+    expect(parseAppRoute('/search/')).toEqual({ section: 'search' });
+    expect(routePath({ section: 'search' })).toBe('/search');
+  });
 });

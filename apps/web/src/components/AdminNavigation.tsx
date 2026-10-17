@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type AdminSection = 'admin' | 'admin-categories' | 'directory' | 'groups';
+type AdminSection = 'admin' | 'admin-categories' | 'groups';
 
 export function AdminNavigation({
   isAdmin,
@@ -48,7 +48,7 @@ export function AdminNavigation({
     document.addEventListener('pointerdown', closeOutside);
     return () => document.removeEventListener('pointerdown', closeOutside);
   }, [open]);
-  const active = ['admin', 'admin-categories', 'directory', 'groups'].includes(section);
+  const active = ['admin', 'admin-categories', 'groups'].includes(section);
   return (
     <div
       ref={container}
@@ -97,7 +97,6 @@ export function AdminNavigation({
                       ['admin-categories', 'Categories & Projects'],
                     ] as const)
                   : []),
-                ['directory', 'Global Items'],
                 ['groups', 'Groups'],
               ] as const
             ).map(([target, label]) => (

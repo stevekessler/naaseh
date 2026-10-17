@@ -12,6 +12,7 @@ import { UrgencyField } from '../../components/UrgencyField.js';
 import { CategoryPicker } from '../../components/CategoryPicker.js';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
 import type { LocalListPatch } from '../../db/list-repository.js';
+import { useState } from 'react';
 export function ListPage({
   lists,
   items,
@@ -32,6 +33,9 @@ export function ListPage({
   categories,
   projects,
   openArchive,
+  currentUserId,
+  moveItem,
+  openGroups,
 }: {
   lists: List[];
   items: Map<string, ListItem[]>;
@@ -57,6 +61,9 @@ export function ListPage({
   categories: import('@naaseh/domain').CategoryRecord[];
   projects: import('@naaseh/domain').Project[];
   openArchive: () => void;
+  currentUserId: string;
+  moveItem: (item: ListItem, destinationListId: string) => void;
+  openGroups: () => void;
 }) {
   const directory = useLiveQuery(() => listLocalDirectoryItems(), []) ?? [];
   return (
@@ -95,94 +102,96 @@ export function ListPage({
             <article className="named-list" key={list.id}>
               <header className="named-list-header">
                 <p className="eyebrow">List</p>
-                <h2>{list.name}</h2>
-              </header>
-              <div className="list-settings">
-                <UrgencyBadge urgency={list.urgency} />
-                <UrgencyField
-                  value={list.urgency}
-                  label="Priority"
-                  onChange={(urgency) => void changeList(list, { urgency })}
-                />
-                <label>
-                  Category
-                  <CategoryPicker
-                    categories={categories}
-                    value={list.categoryId ?? ''}
-                    onChange={(categoryId) =>
-                      void changeList(list, {
-                        categoryId: categoryId || null,
-                        ...(list.projectId &&
-                        projects.find((project) => project.id === list.projectId)?.categoryId !==
-                          categoryId
-                          ? { projectId: null }
-                          : {}),
-                      })
-                    }
-                  />
-                </label>
-                <ProjectPicker
-                  categories={categories}
-                  projects={projects}
-                  value={list.projectId ?? ''}
-                  {...(list.categoryId ? { categoryId: list.categoryId } : {})}
-                  onChange={(projectId) => {
-                    const categoryId = projects.find(
-                      (project) => project.id === projectId,
-                    )?.categoryId;
-                    void changeList(list, {
-                      projectId: projectId || null,
-                      ...(categoryId ? { categoryId } : {}),
-                    });
-                  }}
-                />
-              </div>
-              <details className="list-management">
-                <summary>List settings</summary>
-                <div className="list-management-fields">
-                  <form
-                    className="list-rename-form"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      const name = String(new FormData(event.currentTarget).get('listName')).trim();
-                      if (name && name !== list.name) void changeList(list, { name });
-                    }}
-                  >
-                    <label>
-                      List name
-                      <input name="listName" defaultValue={list.name} maxLength={300} required />
-                    </label>
-                    <button type="submit">Save name</button>
-                  </form>
-                  <ListVisibilityControl
-                    list={list}
-                    groups={groups}
-                    change={(patch) => void changeList(list, patch)}
-                  />
+                <div className="named-list-title-row">
+                  <h2>{list.name}</h2>
+                  {list.ownerId === currentUserId && (
+                    <ListRenameControl list={list} changeList={changeList} />
+                  )}
                 </div>
-              </details>
-              <div className="list-actions" aria-label="List actions">
-                <PermanentDeleteDialog
-                  target={{ resourceType: 'list', resourceId: list.id, version: list.version }}
-                  label={list.name}
-                  csrfToken={csrfToken}
-                  disabled={list.lifecycle === 'deleting'}
-                />
-                <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
-                <button
-                  type="button"
-                  onClick={() =>
-                    void changeList(list, {
-                      status: 'archived',
-                      lifecycle: 'archived',
-                      archiveReason: 'finished',
-                    })
-                  }
-                >
-                  Finish and archive list
-                </button>
-              </div>
-              <ListItemCreateForm add={(input) => addItem(list.id, input)} />
+              </header>
+              {list.ownerId === currentUserId ? (
+                <>
+                  <div className="list-settings">
+                    <UrgencyBadge urgency={list.urgency} />
+                    <UrgencyField
+                      value={list.urgency}
+                      label="Priority"
+                      onChange={(urgency) => void changeList(list, { urgency })}
+                    />
+                    <label>
+                      Category
+                      <CategoryPicker
+                        categories={categories}
+                        value={list.categoryId ?? ''}
+                        onChange={(categoryId) =>
+                          void changeList(list, {
+                            categoryId: categoryId || null,
+                            ...(list.projectId &&
+                            projects.find((project) => project.id === list.projectId)
+                              ?.categoryId !== categoryId
+                              ? { projectId: null }
+                              : {}),
+                          })
+                        }
+                      />
+                    </label>
+                    <ProjectPicker
+                      categories={categories}
+                      projects={projects}
+                      value={list.projectId ?? ''}
+                      {...(list.categoryId ? { categoryId: list.categoryId } : {})}
+                      onChange={(projectId) => {
+                        const categoryId = projects.find(
+                          (project) => project.id === projectId,
+                        )?.categoryId;
+                        void changeList(list, {
+                          projectId: projectId || null,
+                          ...(categoryId ? { categoryId } : {}),
+                        });
+                      }}
+                    />
+                  </div>
+                  <section className="list-sharing" aria-labelledby={`share-${list.id}`}>
+                    <h3 id={`share-${list.id}`}>Share this list</h3>
+                    <ListVisibilityControl
+                      list={list}
+                      groups={groups}
+                      change={(patch) => void changeList(list, patch)}
+                    />
+                    <button type="button" className="quiet" onClick={openGroups}>
+                      Manage sharing groups
+                    </button>
+                  </section>
+                  <div className="list-actions" aria-label="List actions">
+                    <PermanentDeleteDialog
+                      target={{
+                        resourceType: 'list',
+                        resourceId: list.id,
+                        version: list.version,
+                      }}
+                      label={list.name}
+                      csrfToken={csrfToken}
+                      disabled={list.lifecycle === 'deleting'}
+                    />
+                    <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void changeList(list, {
+                          status: 'archived',
+                          lifecycle: 'archived',
+                          archiveReason: 'finished',
+                        })
+                      }
+                    >
+                      Finish and archive list
+                    </button>
+                  </div>
+                  <ListItemCreateForm add={(input) => addItem(list.id, input)} />
+                </>
+              ) : (
+                <p className="list-read-only-notice">Shared with you · Only the owner can edit.</p>
+              )}
               <ListItems
                 items={items.get(list.id) ?? []}
                 toggle={toggle}
@@ -193,10 +202,50 @@ export function ListPage({
                 reorder={reorderItems}
                 csrfToken={csrfToken}
                 directory={directory}
+                editable={list.ownerId === currentUserId}
+                destinationLists={lists.filter(
+                  (candidate) =>
+                    candidate.ownerId === currentUserId && candidate.status === 'active',
+                )}
+                move={moveItem}
               />
             </article>
           ))
       )}
     </section>
+  );
+}
+
+function ListRenameControl({
+  list,
+  changeList,
+}: {
+  list: List;
+  changeList: (list: List, patch: LocalListPatch) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  return editing ? (
+    <form
+      className="list-rename-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const name = String(new FormData(event.currentTarget).get('listName')).trim();
+        if (name && name !== list.name) void changeList(list, { name });
+        setEditing(false);
+      }}
+    >
+      <label>
+        New list name
+        <input name="listName" defaultValue={list.name} maxLength={300} required autoFocus />
+      </label>
+      <button type="submit">Save name</button>
+      <button type="button" className="quiet" onClick={() => setEditing(false)}>
+        Cancel
+      </button>
+    </form>
+  ) : (
+    <button type="button" className="quiet" onClick={() => setEditing(true)}>
+      Rename list
+    </button>
   );
 }

@@ -23,7 +23,11 @@ import {
   updateOwnedListItem,
 } from './list-service.js';
 import { authorizeList } from './list-authorization.js';
-import { listAudienceChanges, listItemAudienceChanges } from './list-audience.js';
+import {
+  listAudienceChanges,
+  listItemAudienceChanges,
+  listItemAudienceTransitionChanges,
+} from './list-audience.js';
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { recordListAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
@@ -161,10 +165,20 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
                   ([, value]) => value !== undefined && value !== null,
                 ),
               );
+      const destination =
+        typeof patch.listId === 'string' && patch.listId !== current.id
+          ? await findList(patch.listId)
+          : current;
+      if (!destination || !authorizeList(destination, actor, 'edit').allowed)
+        return problem(404, 'not_found', 'Destination list not found.', correlationId);
+      if (destination.id !== current.id && patch.orderKey === undefined)
+        patch.orderKey = orderKeyAfter((await listItemsForList(destination.id)).at(-1)?.orderKey);
       const value = updateOwnedListItem(current, item, patch, actor.id);
       const status = patch.status;
       const feeds = await Promise.all(
-        listItemAudienceChanges(current, value, value).map(prepareAudienceChange),
+        listItemAudienceTransitionChanges(current, destination, value, value).map(
+          prepareAudienceChange,
+        ),
       );
       await saveListItem(
         value,
