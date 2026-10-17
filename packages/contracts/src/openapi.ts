@@ -191,6 +191,7 @@ export const listItemCreateSchema = z
   .strict();
 export const listItemPatchSchema = z
   .object({
+    listId: ulidSchema.optional(),
     nameOverride: z.string().trim().min(1).max(300).nullable().optional(),
     valueOverride: z
       .discriminatedUnion('kind', [

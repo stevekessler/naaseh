@@ -162,6 +162,29 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await listForm.getByText('Priority and organization', { exact: true }).click();
   await listForm.getByLabel('Category').selectOption({ label: 'Client work' });
   await listForm.getByRole('button', { name: 'Create list' }).click();
+  await expect(page.getByRole('heading', { name: 'Filter checklist' })).toBeVisible();
+  await page.getByLabel('Add an item').fill('Roof nails');
+  await page.getByRole('button', { name: 'Add item' }).click();
+
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page).toHaveURL(/\/search(?:\?|$)/);
+  await page.getByLabel('Search tasks and list items').fill('roof');
+  const searchResults = page.getByRole('table', { name: 'Search results' });
+  await expect(searchResults.getByRole('row')).toHaveCount(3);
+  await expect(searchResults.getByRole('row').filter({ hasText: 'Project Cedar' })).toContainText(
+    'Task',
+  );
+  await expect(searchResults.getByRole('row').filter({ hasText: 'Roof nails' })).toContainText(
+    'List item',
+  );
+  await page.getByText('Columns', { exact: true }).click();
+  await page.getByLabel('Show search Project column').uncheck();
+  await expect(searchResults.getByRole('columnheader', { name: 'Project' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close search result column settings' }).click();
+  await searchResults.getByRole('button', { name: 'Roof nails' }).click();
+  await expect(page).toHaveURL(/\/lists\//);
+  await expect(page.getByRole('heading', { name: 'Filter checklist' })).toBeVisible();
+
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
   await page.getByRole('button', { name: 'My Tasks', exact: true }).click();
 

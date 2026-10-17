@@ -393,3 +393,20 @@ export async function reorderLocalListItems(items: readonly ListItem[]): Promise
     }
   });
 }
+
+export async function moveLocalListItem(
+  item: ListItem,
+  destinationListId: string,
+  actorId: string,
+): Promise<ListItem> {
+  if (destinationListId === item.listId) return item;
+  const destinationItems = await listLocalListItems(destinationListId);
+  return updateLocalListItem(
+    item,
+    {
+      listId: destinationListId,
+      orderKey: orderKeyAfter(destinationItems.at(-1)?.orderKey),
+    },
+    actorId,
+  );
+}

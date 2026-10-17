@@ -1,4 +1,5 @@
 import type { CategoryRecord, List, ListItem, Project } from '@naaseh/domain';
+import { useState } from 'react';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { ListIndexColumnSettings, useListIndexColumns } from './ListIndexColumnSettings.js';
 
@@ -18,6 +19,8 @@ export function ListIndexPage({
   projects: readonly Project[];
 }) {
   const active = lists.filter((list) => list.status === 'active');
+  const [query, setQuery] = useState('');
+  const visible = filterListsByTitle(active, query);
   const columns = useListIndexColumns();
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const projectRecords = new Map(projects.map((project) => [project.id, project]));
@@ -25,7 +28,17 @@ export function ListIndexPage({
   return (
     <div className="list-index">
       <div className="list-index-tools">
-        <p>
+        <label className="list-filter-field">
+          <span>Filter lists by title</span>
+          <input
+            type="search"
+            value={query}
+            placeholder="Search list titles"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <p role="status">
+          {query.trim() ? `${visible.length} of ` : ''}
           {active.length} list{active.length === 1 ? '' : 's'}
         </p>
         <ListIndexColumnSettings {...columns} />
@@ -43,7 +56,7 @@ export function ListIndexPage({
             </tr>
           </thead>
           <tbody>
-            {active.map((list) => {
+            {visible.map((list) => {
               const project = list.projectId ? projectRecords.get(list.projectId) : undefined;
               const categoryId = list.categoryId ?? project?.categoryId;
               const count = (items.get(list.id) ?? []).filter(
@@ -52,8 +65,10 @@ export function ListIndexPage({
               return (
                 <tr key={list.id} aria-current={list.id === selectedId ? 'page' : undefined}>
                   <th scope="row" data-label="List">
-                    {list.locked ? <span aria-label="Locked">{'🔒 '}</span> : null}
-                    {list.name}
+                    <button className="quiet list-title-button" onClick={() => open(list)}>
+                      {list.locked ? <span aria-label="Locked">{'🔒 '}</span> : null}
+                      {list.name}
+                    </button>
                   </th>
                   {columns.visible.has('category') && (
                     <td data-label="Category">
@@ -81,7 +96,16 @@ export function ListIndexPage({
             })}
           </tbody>
         </table>
+        {!visible.length && <p className="list-filter-empty">No lists match “{query.trim()}”.</p>}
       </div>
     </div>
+  );
+}
+
+export function filterListsByTitle(lists: readonly List[], query: string) {
+  const normalized = query.normalize('NFKC').trim().toLocaleLowerCase();
+  if (!normalized) return [...lists];
+  return lists.filter((list) =>
+    list.name.normalize('NFKC').toLocaleLowerCase().includes(normalized),
   );
 }

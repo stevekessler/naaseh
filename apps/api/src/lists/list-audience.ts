@@ -45,18 +45,43 @@ export function listItemAudienceChanges(
   item: { id: string; version: number; updatedAt: string; status: string },
   payload: unknown,
 ): Omit<SyncChange, 'sequence'>[] {
-  return contentAudiences({
-    entityId: parent.id,
-    ownerId: parent.ownerId,
-    locked: parent.locked,
-    ...(parent.groupId ? { groupId: parent.groupId } : {}),
-  }).map((audience) => ({
-    audience,
-    entityType: 'listItem',
-    entityId: item.id,
-    version: item.version,
-    operation: item.status === 'removed' ? 'tombstone' : 'upsert',
-    ...(item.status === 'removed' ? {} : { payload }),
-    changedAt: item.updatedAt,
-  }));
+  return listItemAudienceTransitionChanges(parent, parent, item, payload);
+}
+
+export function listItemAudienceTransitionChanges(
+  previousParent: List,
+  nextParent: List,
+  item: { id: string; version: number; updatedAt: string; status: string },
+  payload: unknown,
+): Omit<SyncChange, 'sequence'>[] {
+  const audiencesFor = (parent: List) =>
+    contentAudiences({
+      entityId: parent.id,
+      ownerId: parent.ownerId,
+      locked: parent.locked,
+      ...(parent.groupId ? { groupId: parent.groupId } : {}),
+    });
+  const before = audiencesFor(previousParent);
+  const after = audiencesFor(nextParent);
+  return [
+    ...before
+      .filter((audience) => !after.includes(audience))
+      .map((audience) => ({
+        audience,
+        entityType: 'listItem' as const,
+        entityId: item.id,
+        version: item.version,
+        operation: 'tombstone' as const,
+        changedAt: item.updatedAt,
+      })),
+    ...after.map((audience) => ({
+      audience,
+      entityType: 'listItem' as const,
+      entityId: item.id,
+      version: item.version,
+      operation: item.status === 'removed' ? ('tombstone' as const) : ('upsert' as const),
+      ...(item.status === 'removed' ? {} : { payload }),
+      changedAt: item.updatedAt,
+    })),
+  ];
 }

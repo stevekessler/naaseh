@@ -1,6 +1,7 @@
 import { useTaskCompletionUndo } from '../features/tasks/useTaskCompletionUndo.js';
 import { AdminNavigation } from '../components/AdminNavigation.js';
 import { TasksNavigation } from '../components/TasksNavigation.js';
+import { ListsNavigation } from '../components/ListsNavigation.js';
 import {
   UserAvatar,
   UserDirectoryContext,
@@ -80,6 +81,7 @@ import {
   linkLocalListItemToDirectory,
   listLocalListItems,
   listLocalLists,
+  moveLocalListItem,
   reorderLocalListItems,
   resetLocalListItemOverrides,
   saveNewList,
@@ -198,6 +200,11 @@ const JournalPage = lazy(() =>
     default: JournalPage,
   })),
 );
+const CombinedSearchPage = lazy(() =>
+  import('../features/search/CombinedSearchPage.js').then(({ CombinedSearchPage }) => ({
+    default: CombinedSearchPage,
+  })),
+);
 
 const emptyFilters: Filters = {
   query: '',
@@ -269,6 +276,7 @@ export function App() {
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
+    | 'search'
     | 'lists'
     | 'directory'
     | 'groups'
@@ -1152,11 +1160,12 @@ export function App() {
               </button>
               <button
                 className="quiet"
-                aria-current={section === 'lists' ? 'page' : undefined}
-                onClick={() => navigate({ section: 'lists' })}
+                aria-current={section === 'search' ? 'page' : undefined}
+                onClick={() => navigate({ section: 'search' })}
               >
-                Lists
+                Search
               </button>
+              <ListsNavigation section={section} navigate={(next) => navigate({ section: next })} />
               <AdminNavigation
                 isAdmin={session.role === 'admin'}
                 section={section}
@@ -1207,6 +1216,17 @@ export function App() {
               tasks={tasks}
               unlockedKey={journalKey}
               onUnlockedKeyChange={changeJournalKey}
+            />
+          ) : section === 'search' ? (
+            <CombinedSearchPage
+              tasks={tasks}
+              lists={lists}
+              items={listItems}
+              directory={directoryItems}
+              categories={categories}
+              projects={projects}
+              openTask={(taskId) => navigate({ section: 'tasks', taskId })}
+              openList={(listId) => navigate({ section: 'lists', listId })}
             />
           ) : section === 'stack' ? (
             <PersonalStackPage
@@ -1552,6 +1572,8 @@ export function App() {
               {...(selectedListId ? { selectedId: selectedListId } : {})}
               openList={(list) => navigate({ section: 'lists', listId: list.id })}
               openArchive={() => navigate({ section: 'archive' })}
+              openGroups={() => navigate({ section: 'groups' })}
+              currentUserId={session.userId}
               groups={joinedGroupOptions.map((group) => ({ id: group.id, name: group.label }))}
               categories={categories}
               projects={projects}
@@ -1577,6 +1599,9 @@ export function App() {
               }}
               reorderItems={(ordered) => {
                 void reorderLocalListItems(ordered);
+              }}
+              moveItem={(item, destinationListId) => {
+                void moveLocalListItem(item, destinationListId, session.userId);
               }}
               copyReady={() => {
                 void synchronize();

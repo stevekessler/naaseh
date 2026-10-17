@@ -27,6 +27,9 @@ export function ListItemRow({
   handleRef,
   dragging = false,
   dropTarget = false,
+  destinationLists,
+  onMove,
+  editable = true,
 }: {
   item: ListItem;
   name: string;
@@ -41,6 +44,9 @@ export function ListItemRow({
   handleRef?: (element: Element | null) => void;
   dragging?: boolean;
   dropTarget?: boolean;
+  destinationLists: { id: string; name: string }[];
+  onMove: (destinationListId: string) => void;
+  editable?: boolean;
 }) {
   const done = item.status === 'completed';
   const feedback = useCompletionFeedback();
@@ -52,6 +58,7 @@ export function ListItemRow({
     item.memoDocument ?? plainMemoDocument(item.memo ?? ''),
   );
   const [editorError, setEditorError] = useState('');
+  const [destinationListId, setDestinationListId] = useState('');
   useEffect(() => setDraftName(name), [name]);
   return (
     <Fragment>
@@ -60,19 +67,34 @@ export function ListItemRow({
         className={`list-item ${done ? 'completed' : ''}${dragging ? ' list-item--dragging' : ''}${dropTarget ? ' list-item--drop-target' : ''}`}
       >
         <td className="list-item-status-cell">
-          <button
-            className="check"
-            aria-label={`${done ? 'Reopen' : 'Complete'} ${name}`}
-            onClick={() => {
-              feedback.complete(name, !done);
-              onToggle();
-            }}
-          >
-            {done ? '✓' : ''}
-          </button>
+          {editable ? (
+            <button
+              className="check"
+              aria-label={`${done ? 'Reopen' : 'Complete'} ${name}`}
+              onClick={() => {
+                feedback.complete(name, !done);
+                onToggle();
+              }}
+            >
+              {done ? '✓' : ''}
+            </button>
+          ) : (
+            <span aria-label={done ? 'Completed' : 'Open'}>{done ? '✓' : '○'}</span>
+          )}
         </td>
         <th className="list-item-name-cell" scope="row">
-          <span className="completion-label">{name}</span>
+          {editable ? (
+            <button
+              type="button"
+              className="quiet list-item-title-button completion-label"
+              aria-expanded={editing}
+              onClick={() => setEditing((open) => !open)}
+            >
+              {name}
+            </button>
+          ) : (
+            <span className="completion-label">{name}</span>
+          )}
         </th>
         {visibleColumns.has('due') && (
           <td className="list-item-due-cell" data-label="Due">
@@ -99,7 +121,7 @@ export function ListItemRow({
             )}
           </td>
         )}
-        {visibleColumns.has('actions') && (
+        {editable && visibleColumns.has('actions') && (
           <td className="list-item-actions" aria-label={`Actions for ${name}`}>
             <div className="list-item-action-buttons">
               {handleRef ? (
@@ -168,6 +190,35 @@ export function ListItemRow({
                 <span>Memo</span>
                 <MemoEditor value={draftMemoDocument} onChange={setDraftMemoDocument} />
               </div>
+              {destinationLists.length > 0 && (
+                <div className="list-item-move-control">
+                  <label>
+                    Move to list
+                    <select
+                      value={destinationListId}
+                      onChange={(event) => setDestinationListId(event.target.value)}
+                    >
+                      <option value="">Choose a list</option>
+                      {destinationLists.map((list) => (
+                        <option key={list.id} value={list.id}>
+                          {list.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!destinationListId}
+                    onClick={() => {
+                      if (!destinationListId) return;
+                      onMove(destinationListId);
+                      setEditing(false);
+                    }}
+                  >
+                    Move item
+                  </button>
+                </div>
+              )}
               {attachments}
               <button
                 className="list-item-save"

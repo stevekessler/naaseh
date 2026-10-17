@@ -6,7 +6,7 @@ test('@enhanced-lists global names can be added, overridden, and reset without m
 }) => {
   await signIn(page);
   await createListWithItem(page, 'Shopping', 'Bread');
-  await page.getByRole('button', { name: 'Admin', exact: true }).click();
+  await page.getByRole('button', { name: 'Lists', exact: true }).click();
   await page.getByRole('button', { name: 'Global Items', exact: true }).click();
   await page.getByLabel('Item name').fill('Refund');
   await page.getByRole('button', { name: 'Add global item' }).click();
