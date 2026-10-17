@@ -166,6 +166,13 @@ export interface GroupRevocationPurge {
   groupId: string;
   listIds: string[];
 }
+export function childRecordsForRevokedLists<T extends { id: string; taskId?: string }>(
+  records: readonly T[],
+  listIds: readonly string[],
+): T[] {
+  const revoked = new Set(listIds);
+  return records.filter((record) => Boolean(record.taskId && revoked.has(record.taskId)));
+}
 export async function commitEnhancedPull(
   changes: EncryptedPullChange[],
   conflicts: EncryptedEntityRecord[],
@@ -224,8 +231,30 @@ export async function commitEnhancedPull(
         )
           continue;
         const store = encryptedStoreFor(change.entityType);
-        if (change.operation === 'tombstone') await store.delete(change.entityId);
-        else if (change.record) await store.put(change.record);
+        if (change.operation === 'tombstone') {
+          if (change.entityType === 'list') {
+            const children = childRecordsForRevokedLists(await db.secureListItems.toArray(), [
+              change.entityId,
+            ]);
+            const childIds = children.map((child) => child.id);
+            if (childIds.length) {
+              await db.secureListItems.bulkDelete(childIds);
+              await db.secureAttachments.where('taskId').anyOf(childIds).delete();
+              const dependent = pending.filter((item) => childIds.includes(item.entityId));
+              for (const mutation of dependent) {
+                await db.secureConflicts.put({
+                  id: mutation.id,
+                  updatedAt: new Date().toISOString(),
+                  value: mutation.payload,
+                });
+                await db.outbox.delete(mutation.id);
+              }
+              for (const id of childIds) await db.settings.delete(`search-document:listItem:${id}`);
+            }
+            await db.settings.delete(`search-document:list:${change.entityId}`);
+          }
+          await store.delete(change.entityId);
+        } else if (change.record) await store.put(change.record);
       }
       if (conflicts.length) await db.secureConflicts.bulkPut(conflicts);
       await commitPullCursor(cursor);

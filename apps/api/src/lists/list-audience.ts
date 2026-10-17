@@ -85,3 +85,30 @@ export function listItemAudienceTransitionChanges(
     })),
   ];
 }
+
+export function completeListAudienceTransitionChanges(
+  previous: List,
+  next: List,
+  items: readonly (Parameters<typeof listItemAudienceTransitionChanges>[2] & object)[],
+): Omit<SyncChange, 'sequence'>[] {
+  const parentChanges = listAudienceChanges(previous, next);
+  const beforeAudience = contentAudiences({
+    entityId: previous.id,
+    ownerId: previous.ownerId,
+    locked: previous.locked,
+    ...(previous.groupId ? { groupId: previous.groupId } : {}),
+  }).sort();
+  const afterAudience = contentAudiences({
+    entityId: next.id,
+    ownerId: next.ownerId,
+    locked: next.locked,
+    ...(next.groupId ? { groupId: next.groupId } : {}),
+  }).sort();
+  if (beforeAudience.join('|') === afterAudience.join('|')) return parentChanges;
+  return [
+    ...parentChanges,
+    ...items
+      .filter((item) => item.status !== 'removed')
+      .flatMap((item) => listItemAudienceTransitionChanges(previous, next, item, item)),
+  ];
+}

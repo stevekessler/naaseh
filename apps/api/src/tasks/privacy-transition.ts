@@ -12,7 +12,6 @@ const taskAudiences = (task: Task) =>
     entityId: task.id,
     ownerId: task.ownerId,
     locked: task.visibility === 'private',
-    ...(task.groupId ? { groupId: task.groupId } : {}),
   }).filter((audience) => !audience.startsWith('ADMIN#'));
 
 /**

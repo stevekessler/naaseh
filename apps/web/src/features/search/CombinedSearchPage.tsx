@@ -23,6 +23,8 @@ export function CombinedSearchPage({
   directory,
   categories,
   projects,
+  currentUserId,
+  currentUserGroupIds,
   openTask,
   openList,
 }: {
@@ -32,14 +34,50 @@ export function CombinedSearchPage({
   directory: readonly GlobalDirectoryItem[];
   categories: readonly CategoryRecord[];
   projects: readonly Project[];
+  currentUserId: string;
+  currentUserGroupIds: readonly string[];
   openTask: (taskId: string) => void;
   openList: (listId: string) => void;
 }) {
   const [query, setQuery] = useState('');
+  const [allContent, setAllContent] = useState(
+    () => new URLSearchParams(location.search).get('scope') === 'all',
+  );
   const columns = useCombinedSearchColumns();
+  const scopedTasks = useMemo(
+    () =>
+      allContent
+        ? tasks
+        : tasks.filter(
+            (task) =>
+              task.assigneeId === currentUserId ||
+              Boolean(task.groupId && currentUserGroupIds.includes(task.groupId)),
+          ),
+    [allContent, tasks, currentUserId, currentUserGroupIds],
+  );
+  const scopedLists = useMemo(
+    () =>
+      allContent
+        ? lists
+        : lists.filter(
+            (list) =>
+              list.ownerId === currentUserId ||
+              Boolean(list.groupId && currentUserGroupIds.includes(list.groupId)),
+          ),
+    [allContent, lists, currentUserId, currentUserGroupIds],
+  );
   const results = useMemo(
-    () => buildCombinedSearchRows({ query, tasks, lists, items, directory, categories, projects }),
-    [query, tasks, lists, items, directory, categories, projects],
+    () =>
+      buildCombinedSearchRows({
+        query,
+        tasks: scopedTasks,
+        lists: scopedLists,
+        items,
+        directory,
+        categories,
+        projects,
+      }),
+    [query, scopedTasks, scopedLists, items, directory, categories, projects],
   );
   const hiddenClasses = combinedSearchColumns
     .filter(({ id }) => !columns.visible.has(id))
@@ -52,7 +90,9 @@ export function CombinedSearchPage({
         <div>
           <p className="eyebrow">Tasks and lists</p>
           <h1 id="combined-search-heading">Search all work</h1>
-          <p>Find active tasks and list items by title, memo, list, category, or project.</p>
+          <p>
+            Find your content and your groups’ content by title, memo, list, category, or project.
+          </p>
         </div>
       </header>
       <label className="search combined-search-input">
@@ -70,6 +110,24 @@ export function CombinedSearchPage({
             : 'Enter a search term'}
         </span>
       </label>
+      <label className="search-scope-toggle">
+        <input
+          type="checkbox"
+          checked={allContent}
+          onChange={(event) => {
+            const checked = event.currentTarget.checked;
+            setAllContent(checked);
+            const url = new URL(location.href);
+            if (checked) url.searchParams.set('scope', 'all');
+            else url.searchParams.delete('scope');
+            history.replaceState(history.state, '', url);
+          }}
+        />
+        All content
+      </label>
+      <p role="status">
+        Searching {allContent ? 'all readable content' : 'my content and groups'}.
+      </p>
       <div className="task-list-toolbar combined-search-toolbar">
         <p>
           {results.length} {results.length === 1 ? 'result' : 'results'}

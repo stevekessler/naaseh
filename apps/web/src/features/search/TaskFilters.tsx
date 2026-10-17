@@ -5,6 +5,7 @@ import { CategoryPicker } from '../../components/CategoryPicker.js';
 import { PriorityFilter } from '../../components/PriorityFilter.js';
 import { ProjectPicker } from '../projects/ProjectPicker.js';
 import { dateRangeForPresets } from '../../search/task-filters.js';
+import { filtersExpandToAllReadable } from '../../search/task-search.js';
 
 export { dateRangeForPreset } from '../../search/task-filters.js';
 
@@ -15,6 +16,9 @@ export function TaskFilters({
   categories = [],
   projects = [],
   assignees = [],
+  groups = [],
+  currentUserId,
+  currentUserGroupIds = [],
   contentType = 'all',
 }: {
   value: Filters;
@@ -23,32 +27,61 @@ export function TaskFilters({
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
   assignees?: readonly AssigneeOption[];
+  groups?: readonly { id: string; name: string }[];
+  currentUserId?: string;
+  currentUserGroupIds?: readonly string[];
   contentType?: 'all' | 'tasks';
 }) {
   const selectedUrgencies = value.urgencies ?? [];
   const active = [
     ['from', value.from],
     ['to', value.to],
-    ['assigneeId', value.assigneeId],
     ['categoryId', value.categoryId],
     ['projectId', value.projectId ?? ''],
   ] as const;
   const filterLabels: Record<(typeof active)[number][0], string> = {
     from: 'From',
     to: 'To',
-    assigneeId: 'Assignee',
     categoryId: 'Category',
     projectId: 'Project',
   };
   const displayFilterValue = (key: (typeof active)[number][0], current: string) => {
-    if (key === 'assigneeId')
-      return assignees.find((assignee) => assignee.id === current)?.displayName ?? current;
     if (key === 'categoryId')
       return categories.find((category) => category.id === current)?.name ?? current;
     if (key === 'projectId')
       return projects.find((project) => project.id === current)?.name ?? current;
     return current;
   };
+  const selectedAssignees = value.assigneeIds?.length
+    ? value.assigneeIds
+    : value.assigneeId
+      ? [value.assigneeId]
+      : [];
+  const selectedGroups = value.groupIds ?? [];
+  const conditionLabels = [
+    ...(selectedAssignees.length
+      ? [
+          `Assignee is ${selectedAssignees
+            .map((id) => assignees.find((assignee) => assignee.id === id)?.displayName ?? id)
+            .join(' or ')}`,
+        ]
+      : []),
+    ...(selectedGroups.length
+      ? [
+          `Group is ${selectedGroups
+            .map((id) => groups.find((group) => group.id === id)?.name ?? id)
+            .join(' or ')}`,
+        ]
+      : []),
+    ...(selectedUrgencies.length ? [`Priority is ${selectedUrgencies.join(' or ')}`] : []),
+  ];
+  const expanded = Boolean(
+    currentUserId &&
+      filtersExpandToAllReadable(value, {
+        userId: currentUserId,
+        groupIds: currentUserGroupIds,
+      }),
+  );
 
   return (
     <fieldset className="filter-fields">
@@ -58,6 +91,27 @@ export function TaskFilters({
         change={(urgencies) => change({ ...value, urgencies })}
         {...(resultCount === undefined ? {} : { resultCount })}
       />
+      <fieldset className="filter-match-mode">
+        <legend>How should conditions match?</legend>
+        <label>
+          <input
+            type="radio"
+            name="filterMatchMode"
+            checked={(value.match ?? 'all') === 'all'}
+            onChange={() => change({ ...value, match: 'all' })}
+          />
+          Match all conditions
+        </label>
+        <label>
+          <input
+            type="radio"
+            name="filterMatchMode"
+            checked={value.match === 'any'}
+            onChange={() => change({ ...value, match: 'any' })}
+          />
+          Match any condition
+        </label>
+      </fieldset>
       <ProjectPicker
         categories={categories}
         projects={projects}
@@ -156,15 +210,43 @@ export function TaskFilters({
         ))}
       </div>
       <label>
-        <span>Filter by assignee</span>
+        <span>Add assignee filter</span>
         <AssigneePicker
-          assignees={assignees}
-          value={value.assigneeId}
-          allLabel="All assignees"
+          assignees={assignees.filter((assignee) => !selectedAssignees.includes(assignee.id))}
+          value=""
+          allLabel="Choose an assignee"
           ariaLabel="Assignee"
-          onChange={(assigneeId) => change({ ...value, assigneeId })}
+          onChange={(assigneeId) =>
+            assigneeId &&
+            change({
+              ...value,
+              assigneeId: '',
+              assigneeIds: [...selectedAssignees, assigneeId],
+            })
+          }
         />
       </label>
+      {groups.length ? (
+        <label>
+          <span>Add group filter</span>
+          <select
+            value=""
+            onChange={(event) => {
+              const groupId = event.currentTarget.value;
+              if (groupId) change({ ...value, groupIds: [...selectedGroups, groupId] });
+            }}
+          >
+            <option value="">Choose a group</option>
+            {groups
+              .filter((group) => !selectedGroups.includes(group.id))
+              .map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      ) : null}
       <label>
         <span>Category</span>
         <CategoryPicker
@@ -186,6 +268,34 @@ export function TaskFilters({
         />
       </label>
       <div className="filter-chips" role="group" aria-label="Active filters">
+        {selectedAssignees.map((id) => (
+          <button
+            className="quiet"
+            key={`assignee:${id}`}
+            onClick={() =>
+              change({
+                ...value,
+                assigneeId: '',
+                assigneeIds: selectedAssignees.filter((item) => item !== id),
+              })
+            }
+            aria-label="Remove assignee filter"
+          >
+            Assignee: {assignees.find((assignee) => assignee.id === id)?.displayName ?? id} ×
+          </button>
+        ))}
+        {selectedGroups.map((id) => (
+          <button
+            className="quiet"
+            key={`group:${id}`}
+            onClick={() =>
+              change({ ...value, groupIds: selectedGroups.filter((item) => item !== id) })
+            }
+            aria-label="Remove group filter"
+          >
+            Group: {groups.find((group) => group.id === id)?.name ?? id} ×
+          </button>
+        ))}
         {active
           .filter(([, current]) => current)
           .map(([key, current]) => (
@@ -199,6 +309,12 @@ export function TaskFilters({
             </button>
           ))}
       </div>
+      {conditionLabels.length ? (
+        <p className="filter-expression-summary">
+          {conditionLabels.join(value.match === 'any' ? ' OR ' : ' AND ')}
+        </p>
+      ) : null}
+      {expanded ? <p role="status">Searching all readable content.</p> : null}
     </fieldset>
   );
 }

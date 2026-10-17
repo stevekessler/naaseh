@@ -150,9 +150,10 @@ export async function saveNewList(
   });
   return value;
 }
-export type LocalListPatch = Omit<Partial<List>, 'categoryId' | 'projectId'> & {
+export type LocalListPatch = Omit<Partial<List>, 'categoryId' | 'projectId' | 'groupId'> & {
   categoryId?: string | null;
   projectId?: string | null;
+  groupId?: string | null;
 };
 export async function updateLocalList(current: List, patch: LocalListPatch): Promise<List> {
   const wantsArchive = patch.lifecycle === 'archived' || patch.status === 'archived';
@@ -183,6 +184,7 @@ export async function updateLocalList(current: List, patch: LocalListPatch): Pro
     ...patch,
     ...(patch.categoryId === null ? { categoryId: undefined } : {}),
     ...(patch.projectId === null ? { projectId: undefined } : {}),
+    ...(patch.groupId === null ? { groupId: undefined } : {}),
   };
   const next = listSchema.parse({ ...transitioned, ...localPatch });
   const [stored, mutation] = await Promise.all([

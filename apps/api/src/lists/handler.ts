@@ -24,10 +24,12 @@ import {
 } from './list-service.js';
 import { authorizeList } from './list-authorization.js';
 import {
+  completeListAudienceTransitionChanges,
   listAudienceChanges,
   listItemAudienceChanges,
   listItemAudienceTransitionChanges,
 } from './list-audience.js';
+import { prepareAudienceChanges } from '../sync/change-feed-repository.js';
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { recordListAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
@@ -116,9 +118,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         'name' | 'groupId' | 'locked' | 'status' | 'categoryId' | 'projectId' | 'urgency'
       >;
       const value = updateOwnedList(current, patch, actor.id);
-      const feeds = await Promise.all(
-        listAudienceChanges(current, value).map(prepareAudienceChange),
-      );
+      const sharingChanged = current.locked !== value.locked || current.groupId !== value.groupId;
+      const intents = sharingChanged
+        ? completeListAudienceTransitionChanges(current, value, await listItemsForList(current.id))
+        : listAudienceChanges(current, value);
+      const feeds = await prepareAudienceChanges(intents);
       await saveList(
         value,
         actor.id,

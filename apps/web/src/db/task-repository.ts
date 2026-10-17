@@ -147,9 +147,13 @@ export async function readLocalTaskSnapshot() {
   const unreadable: import('./database.js').EncryptedTaskRecord[] = [];
   for (const record of records) {
     try {
-      tasks.push(
-        taskSchema.parse(JSON.parse(await decryptText(record.value, key, `task:${record.id}`))),
-      );
+      const raw = JSON.parse(await decryptText(record.value, key, `task:${record.id}`)) as Record<
+        string,
+        unknown
+      >;
+      const task = taskSchema.parse(raw);
+      tasks.push(task);
+      if (!raw.assigneeId) await db.secureTasks.put(await taskToEncryptedRecord(task));
     } catch (error) {
       // Keep the original ciphertext intact. A broken cached task must not take
       // the entire application down or conceal the other readable tasks.

@@ -138,6 +138,12 @@ export function TaskForm({
     const submittedProjectId = value('projectId');
     const submittedCategoryId =
       projects.find((item) => item.id === submittedProjectId)?.categoryId || value('categoryId');
+    const submittedAssigneeId =
+      canonicalAssigneeId(assignees, assigneeId) || defaultAssigneeId || task?.ownerId;
+    if (!submittedAssigneeId) {
+      setSaveError('Choose a task assignee.');
+      return;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -151,7 +157,7 @@ export function TaskForm({
           ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
           : {}),
         ...(dueKind !== 'none' && repeatUnit ? { repeatInterval, repeatUnit } : {}),
-        assigneeId: canonicalAssigneeId(assignees, assigneeId) || undefined,
+        assigneeId: submittedAssigneeId,
         ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
         ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
         ...(groupId ? { groupId } : {}),
@@ -317,7 +323,7 @@ export function TaskForm({
             </span>
           </label>
           <label>
-            Task assignee
+            Task assignee (required)
             <AssigneePicker
               assignees={assignees}
               value={assigneeId}

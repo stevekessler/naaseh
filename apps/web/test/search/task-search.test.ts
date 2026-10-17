@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createTask } from '@naaseh/domain';
-import { filterTasks, normalizeSearch, searchTaskIds } from '../../src/search/task-search.js';
+import {
+  filterTasks,
+  filterTasksForViewer,
+  filtersExpandToAllReadable,
+  normalizeSearch,
+  searchTaskIds,
+} from '../../src/search/task-search.js';
 import { safeSearchState } from '../../src/features/search/search-state.js';
 describe('authorized task search', () => {
   const task = (label: string, extra: Parameters<typeof createTask>[0] = { label }) =>
@@ -119,4 +125,81 @@ describe('authorized task search', () => {
         categoryId: '',
       }),
     ).toBe('assigneeId=steve'));
+  it('defaults to the viewer and their groups but expands for another assignee', () => {
+    const mine = task('Mine', { label: 'Mine', assigneeId: 'viewer' });
+    const group = task('Group', {
+      label: 'Group',
+      assigneeId: 'teammate',
+      groupId: 'family',
+    });
+    const publicOther = task('Other', { label: 'Other', assigneeId: 'alex' });
+    const filters = {
+      query: '',
+      assigneeId: '',
+      assigneeIds: [],
+      groupIds: [],
+      categoryId: '',
+      from: '',
+      to: '',
+      urgencies: [],
+      match: 'all' as const,
+      scope: 'default' as const,
+    };
+    const viewer = { userId: 'viewer', groupIds: ['family'] };
+    expect(filterTasksForViewer([mine, group, publicOther], filters, viewer)).toEqual([
+      mine,
+      group,
+    ]);
+    const crossUser = { ...filters, assigneeIds: ['alex'] };
+    expect(filtersExpandToAllReadable(crossUser, viewer)).toBe(true);
+    expect(filterTasksForViewer([mine, group, publicOther], crossUser, viewer)).toEqual([
+      publicOther,
+    ]);
+  });
+  it('supports Match any across assignee and urgency conditions', () => {
+    const steve = task('Steve normal', {
+      label: 'Steve normal',
+      assigneeId: 'steve',
+      urgency: 'medium',
+    });
+    const critical = task('Alex critical', {
+      label: 'Alex critical',
+      assigneeId: 'alex',
+      urgency: 'critical',
+    });
+    const neither = task('Alex low', {
+      label: 'Alex low',
+      assigneeId: 'alex',
+      urgency: 'low',
+    });
+    expect(
+      filterTasks([steve, critical, neither], {
+        query: '',
+        assigneeId: '',
+        assigneeIds: ['steve'],
+        groupIds: [],
+        categoryId: '',
+        from: '',
+        to: '',
+        urgencies: ['critical'],
+        match: 'any',
+      }),
+    ).toEqual([steve, critical]);
+  });
+  it('round-trips multi-value Boolean filter state without query text', () => {
+    expect(
+      safeSearchState('private phrase', {
+        query: 'private phrase',
+        from: '',
+        to: '',
+        assigneeId: '',
+        assigneeIds: ['steve', 'heather'],
+        groupIds: ['family'],
+        match: 'any',
+        scope: 'all',
+        categoryId: '',
+        urgencies: [],
+      }),
+    ).toBe('assigneeIds=steve%2Cheather&groupIds=family&match=any&scope=all');
+  });
 });

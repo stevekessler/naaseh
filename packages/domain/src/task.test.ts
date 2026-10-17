@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   archiveTask,
   canReadTask,
+  canReadTaskAs,
   createTask,
   postItColorSchema,
   restoreArchivedTask,
   taskInputSchema,
+  taskSchema,
 } from './task.js';
 
 describe('task boundaries', () => {
@@ -13,6 +15,23 @@ describe('task boundaries', () => {
     expect(
       canReadTask(createTask({ label: 'Call', visibility: 'public' }, 'steve'), 'friend'),
     ).toBe(true);
+  });
+  it('keeps unlocked grouped tasks globally readable while group membership controls discovery', () => {
+    const grouped = createTask(
+      { label: 'Neighborhood cleanup', visibility: 'public', groupId: 'neighbors' },
+      'steve',
+    );
+    expect(
+      canReadTaskAs(grouped, { id: 'friend', role: 'user', active: true, groupIds: [] }).allowed,
+    ).toBe(true);
+  });
+  it('always persists an assignee and normalizes legacy owner-only tasks', () => {
+    const created = createTask({ label: 'Call' }, 'steve');
+    expect(created.assigneeId).toBe('steve');
+    const { assigneeId: _missing, ...legacy } = created;
+    expect(_missing).toBe('steve');
+    expect(taskSchema.parse(legacy).assigneeId).toBe('steve');
+    expect(taskSchema.safeParse({ ...legacy, ownerId: '' }).success).toBe(false);
   });
   it('restricts private tasks to their owner', () => {
     const task = createTask({ label: 'Secret', visibility: 'private' }, 'steve');

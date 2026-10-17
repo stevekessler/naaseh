@@ -4,6 +4,10 @@ import { matchesDatePresets, taskDueDateKey, type DatePreset } from './task-filt
 export interface Filters {
   query: string;
   assigneeId: string;
+  assigneeIds?: string[];
+  groupIds?: string[];
+  match?: 'all' | 'any';
+  scope?: 'default' | 'all';
   categoryId: string;
   projectId?: string;
   from: string;
@@ -48,27 +52,80 @@ export function searchTaskIds(tasks: Task[], query: string): Set<string> {
   );
 }
 export function filterTasks(tasks: Task[], filters: Filters): Task[] {
+  return filterTasksForViewer(tasks, filters);
+}
+
+export interface TaskFilterViewer {
+  userId: string;
+  groupIds: readonly string[];
+}
+
+export function taskAssigneeIds(filters: Filters): string[] {
+  return filters.assigneeIds?.length
+    ? [...new Set(filters.assigneeIds)]
+    : filters.assigneeId
+      ? [filters.assigneeId]
+      : [];
+}
+
+export function taskIsInDefaultScope(task: Task, viewer: TaskFilterViewer): boolean {
+  return (
+    task.assigneeId === viewer.userId ||
+    Boolean(task.groupId && viewer.groupIds.includes(task.groupId))
+  );
+}
+
+export function filtersExpandToAllReadable(filters: Filters, viewer: TaskFilterViewer): boolean {
+  if (filters.scope === 'all') return true;
+  const assigneeIds = taskAssigneeIds(filters);
+  return (
+    assigneeIds.some((id) => id !== viewer.userId) ||
+    (filters.groupIds ?? []).some((id) => !viewer.groupIds.includes(id))
+  );
+}
+
+export function taskMatchesExpression(task: Task, filters: Filters, ids?: Set<string>): boolean {
+  const dueDate = taskDueDateKey(task);
+  const assigneeIds = taskAssigneeIds(filters);
+  const conditions: boolean[] = [];
+  if (filters.query.trim()) conditions.push(Boolean(ids?.has(task.id)));
+  if (assigneeIds.length) conditions.push(assigneeIds.includes(task.assigneeId));
+  if (filters.groupIds?.length)
+    conditions.push(Boolean(task.groupId && filters.groupIds.includes(task.groupId)));
+  if (filters.categoryId) conditions.push(task.categoryId === filters.categoryId);
+  if (filters.projectId)
+    conditions.push(
+      filters.projectId === 'unassigned' ? !task.projectId : task.projectId === filters.projectId,
+    );
+  if (filters.from) conditions.push(Boolean(dueDate && dueDate >= filters.from));
+  if (filters.to) conditions.push(Boolean(dueDate && dueDate <= filters.to));
+  if (filters.datePresets?.length)
+    conditions.push(matchesDatePresets(dueDate, filters.datePresets));
+  if (filters.progress && filters.progress !== 'all')
+    conditions.push(matchesProgressFilter(task.percentComplete, filters.progress));
+  if (filters.urgencies?.length)
+    conditions.push(matchesUrgencySet(task.urgency, filters.urgencies));
+  if (!conditions.length) return true;
+  return filters.match === 'any' ? conditions.some(Boolean) : conditions.every(Boolean);
+}
+
+export function filterTasksForViewer(
+  tasks: Task[],
+  filters: Filters,
+  viewer?: TaskFilterViewer,
+): Task[] {
   if (filters.contentType === 'lists') return [];
   const ids = filters.query.trim() ? searchTaskIds(tasks, filters.query) : undefined;
   return tasks.filter((task) => {
-    const dueDate = taskDueDateKey(task);
     return (
-      (!ids || ids.has(task.id)) &&
+      (!viewer ||
+        filtersExpandToAllReadable(filters, viewer) ||
+        taskIsInDefaultScope(task, viewer)) &&
       (filters.lifecycle === 'all' ||
         (filters.lifecycle === 'archive'
           ? task.lifecycle === 'archived'
           : task.lifecycle !== 'archived' && task.lifecycle !== 'deleting')) &&
-      (!filters.assigneeId || task.assigneeId === filters.assigneeId) &&
-      (!filters.categoryId || task.categoryId === filters.categoryId) &&
-      (!filters.projectId ||
-        (filters.projectId === 'unassigned'
-          ? !task.projectId
-          : task.projectId === filters.projectId)) &&
-      (!filters.from || Boolean(dueDate && dueDate >= filters.from)) &&
-      (!filters.to || Boolean(dueDate && dueDate <= filters.to)) &&
-      matchesDatePresets(dueDate, filters.datePresets) &&
-      matchesProgressFilter(task.percentComplete, filters.progress) &&
-      matchesUrgencySet(task.urgency, filters.urgencies)
+      taskMatchesExpression(task, filters, ids)
     );
   });
 }

@@ -151,6 +151,27 @@ export async function prepareAudienceChange(
   return { expectedSequence, change: { ...change, sequence: expectedSequence + 1 } };
 }
 
+/** Prepare multiple changes while preserving a strictly increasing sequence per audience. */
+export async function prepareAudienceChanges(changes: readonly Omit<SyncChange, 'sequence'>[]) {
+  const nextByAudience = new Map<string, number>();
+  const prepared: PreparedFeedChange[] = [];
+  for (const change of changes) {
+    const next = nextByAudience.get(change.audience);
+    if (next === undefined) {
+      const first = await prepareAudienceChange(change);
+      prepared.push(first);
+      nextByAudience.set(change.audience, first.change.sequence + 1);
+    } else {
+      prepared.push({
+        expectedSequence: next - 1,
+        change: { ...change, sequence: next },
+      });
+      nextByAudience.set(change.audience, next + 1);
+    }
+  }
+  return prepared;
+}
+
 export async function pullAudience(
   audience: string,
   after: number,

@@ -9,7 +9,13 @@ import {
   type ScanCommandInput,
   type TransactWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
-import type { EntityRevision, StableMutationResult, Task, TaskRevision } from '@naaseh/domain';
+import {
+  taskSchema,
+  type EntityRevision,
+  type StableMutationResult,
+  type Task,
+  type TaskRevision,
+} from '@naaseh/domain';
 import type { PreparedFeedChange } from '../sync/change-feed-repository.js';
 import { keys } from './keys.js';
 
@@ -19,6 +25,57 @@ const document = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
   marshallOptions: { removeUndefinedValues: true },
 });
 const table = process.env.NAASEH_TABLE ?? 'naaseh-local';
+
+export function feedTransactionItems(
+  feedChanges: readonly PreparedFeedChange[],
+): NonNullable<TransactWriteCommandInput['TransactItems']> {
+  const byAudience = new Map<string, PreparedFeedChange[]>();
+  for (const prepared of feedChanges) {
+    const audience = prepared.change.audience;
+    byAudience.set(audience, [...(byAudience.get(audience) ?? []), prepared]);
+  }
+  return [...byAudience.values()].flatMap((preparedChanges) => {
+    const ordered = [...preparedChanges].sort(
+      (left, right) => left.change.sequence - right.change.sequence,
+    );
+    const first = ordered[0]!;
+    const last = ordered.at(-1)!;
+    for (let index = 0; index < ordered.length; index += 1) {
+      const prepared = ordered[index]!;
+      if (
+        prepared.expectedSequence !== first.expectedSequence + index ||
+        prepared.change.sequence !== first.expectedSequence + index + 1
+      )
+        throw new Error(`Non-contiguous feed sequence for ${prepared.change.audience}.`);
+    }
+    return [
+      {
+        Update: {
+          TableName: table,
+          Key: { PK: `FEED#${first.change.audience}`, SK: 'COUNTER' },
+          UpdateExpression: 'SET #value=:next',
+          ConditionExpression: 'attribute_not_exists(#value) OR #value=:expected',
+          ExpressionAttributeNames: { '#value': 'value' },
+          ExpressionAttributeValues: {
+            ':next': last.change.sequence,
+            ':expected': first.expectedSequence,
+          },
+        },
+      },
+      ...ordered.map(({ change }) => ({
+        Put: {
+          TableName: table,
+          Item: {
+            PK: `FEED#${change.audience}`,
+            SK: `CHANGE#${String(change.sequence).padStart(20, '0')}`,
+            data: change,
+          },
+          ConditionExpression: 'attribute_not_exists(PK)',
+        },
+      })),
+    ];
+  });
+}
 export async function getRecord<T>(pk: string, sk: string): Promise<T | undefined> {
   const result = await document.send(
     new GetCommand({ TableName: table, Key: { PK: pk, SK: sk }, ConsistentRead: true }),
@@ -50,7 +107,7 @@ export async function listPublicTasks(): Promise<Task[]> {
       ExpressionAttributeValues: { ':pk': 'TASK#PUBLIC' },
     }),
   );
-  return (result.Items ?? []).map((item) => item.data as Task);
+  return (result.Items ?? []).map((item) => taskSchema.parse(item.data));
 }
 export function legacyOwnerTaskScanInput(
   ownerId: string,
@@ -78,7 +135,10 @@ export async function listOwnerTasks(ownerId: string): Promise<Task[]> {
     }),
   );
   const tasks = new Map(
-    (result.Items ?? []).map((item) => [(item.data as Task).id, item.data as Task]),
+    (result.Items ?? []).map((item) => {
+      const task = taskSchema.parse(item.data);
+      return [task.id, task];
+    }),
   );
   // Compatibility scan keeps pre-index records eligible until normal writes backfill GSI2.
   let startKey: Record<string, unknown> | undefined;
@@ -87,7 +147,7 @@ export async function listOwnerTasks(ownerId: string): Promise<Task[]> {
       new ScanCommand(legacyOwnerTaskScanInput(ownerId, startKey)),
     );
     for (const item of legacy.Items ?? []) {
-      const task = item.data as Task;
+      const task = taskSchema.parse(item.data);
       tasks.set(task.id, task);
     }
     startKey = legacy.LastEvaluatedKey;
@@ -149,29 +209,7 @@ export function buildTaskTransaction(
           ConditionExpression: 'attribute_not_exists(PK)',
         },
       },
-      ...feedChanges.flatMap(({ change, expectedSequence }) => [
-        {
-          Update: {
-            TableName: table,
-            Key: { PK: `FEED#${change.audience}`, SK: 'COUNTER' },
-            UpdateExpression: 'SET #value=:next',
-            ConditionExpression: 'attribute_not_exists(#value) OR #value=:expected',
-            ExpressionAttributeNames: { '#value': 'value' },
-            ExpressionAttributeValues: { ':next': change.sequence, ':expected': expectedSequence },
-          },
-        },
-        {
-          Put: {
-            TableName: table,
-            Item: {
-              PK: `FEED#${change.audience}`,
-              SK: `CHANGE#${String(change.sequence).padStart(20, '0')}`,
-              data: change,
-            },
-            ConditionExpression: 'attribute_not_exists(PK)',
-          },
-        },
-      ]),
+      ...feedTransactionItems(feedChanges),
       ...additionalWrites,
     ],
   };
@@ -251,29 +289,7 @@ export function buildEntityTransaction<T>(
           ConditionExpression: 'attribute_not_exists(PK)',
         },
       },
-      ...(input.feedChanges ?? []).flatMap(({ change, expectedSequence }) => [
-        {
-          Update: {
-            TableName: table,
-            Key: { PK: `FEED#${change.audience}`, SK: 'COUNTER' },
-            UpdateExpression: 'SET #value=:next',
-            ConditionExpression: 'attribute_not_exists(#value) OR #value=:expected',
-            ExpressionAttributeNames: { '#value': 'value' },
-            ExpressionAttributeValues: { ':next': change.sequence, ':expected': expectedSequence },
-          },
-        },
-        {
-          Put: {
-            TableName: table,
-            Item: {
-              PK: `FEED#${change.audience}`,
-              SK: `CHANGE#${String(change.sequence).padStart(20, '0')}`,
-              data: change,
-            },
-            ConditionExpression: 'attribute_not_exists(PK)',
-          },
-        },
-      ]),
+      ...feedTransactionItems(input.feedChanges ?? []),
       ...(input.checkpoints ?? []).map((item) => ({
         Put: { TableName: table, Item: item },
       })),
