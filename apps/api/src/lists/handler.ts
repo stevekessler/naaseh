@@ -24,7 +24,6 @@ import {
 } from './list-service.js';
 import { authorizeList } from './list-authorization.js';
 import {
-  completeListAudienceTransitionChanges,
   listAudienceChanges,
   listItemAudienceChanges,
   listItemAudienceTransitionChanges,
@@ -35,6 +34,12 @@ import { recordListAdminRead } from './telemetry.js';
 import { resolveProjectAssignment } from '../projects/project-service.js';
 import { notifyStackMembershipWorkChange } from '../ranking/stack-membership-lifecycle.js';
 import { assertAuthorizedGroupSelection } from '../groups/group-selection-authorization.js';
+import {
+  createListAudienceTransition,
+  findListAudienceTransition,
+  findPendingListAudienceTransition,
+  resumeListAudienceTransition,
+} from './list-audience-transition-repository.js';
 const actorFor = (event: any) => ({
   id: event.requestContext.authorizer?.lambda?.userId as string,
   role: (event.requestContext.authorizer?.lambda?.role ?? 'user') as 'admin' | 'user',
@@ -85,6 +90,21 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     }
     if (!current || !authorizeList(current, actor, 'edit').allowed)
       return problem(404, 'not_found', 'List not found.', correlationId);
+    if (method === 'PATCH' && !itemId) {
+      const existingTransition = await findListAudienceTransition(actor.id, mutationId);
+      if (existingTransition) {
+        if (existingTransition.listId !== current.id)
+          return problem(409, 'conflict', 'The mutation belongs to another list.', correlationId);
+        const resumed = await resumeListAudienceTransition(existingTransition);
+        return resumed.status === 'complete'
+          ? json(200, resumed.next)
+          : json(202, {
+              status: 'pending',
+              operationId: resumed.mutationId,
+              list: resumed.next,
+            });
+      }
+    }
     const expected = Number(event.headers['if-match']);
     if (event.rawPath.endsWith('/project') && !expected)
       return problem(428, 'precondition_required', 'If-Match is required.', correlationId);
@@ -119,9 +139,26 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       >;
       const value = updateOwnedList(current, patch, actor.id);
       const sharingChanged = current.locked !== value.locked || current.groupId !== value.groupId;
-      const intents = sharingChanged
-        ? completeListAudienceTransitionChanges(current, value, await listItemsForList(current.id))
-        : listAudienceChanges(current, value);
+      const pendingTransition = sharingChanged
+        ? await findPendingListAudienceTransition(current.id)
+        : undefined;
+      if (pendingTransition && pendingTransition.mutationId !== mutationId)
+        return problem(
+          409,
+          'list_audience_transition_pending',
+          'A sharing change is still being synchronized. Retry it before changing sharing again.',
+          correlationId,
+        );
+      const transition = sharingChanged
+        ? createListAudienceTransition(
+            current,
+            value,
+            actor.id,
+            mutationId,
+            await listItemsForList(current.id),
+          )
+        : undefined;
+      const intents = listAudienceChanges(current, value);
       const feeds = await prepareAudienceChanges(intents);
       await saveList(
         value,
@@ -131,9 +168,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         Object.keys(parsed),
         current.version,
         feeds,
+        transition ? { mutationStatus: 'retry', checkpoints: transition.records } : {},
       );
       notifyStackMembershipWorkChange('list', current, value);
-      return json(200, value);
+      if (!transition) return json(200, value);
+      const resumed = await resumeListAudienceTransition(transition.transition);
+      return resumed.status === 'complete'
+        ? json(200, value)
+        : json(202, { status: 'pending', operationId: mutationId, list: value });
     }
     if (method === 'POST' && event.rawPath.endsWith('/items')) {
       const parsed = listItemCreateSchema.parse(JSON.parse(event.body ?? '{}'));

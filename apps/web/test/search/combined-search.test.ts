@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { createList, createListItem, createTask } from '@naaseh/domain';
-import { buildCombinedSearchRows } from '../../src/features/search/combined-search.js';
+import {
+  buildCombinedSearchRows,
+  isCombinedSearchKind,
+} from '../../src/features/search/combined-search.js';
 
 describe('combined task and list-item search', () => {
+  it('allows only ordinary work records across the general-search result boundary', () => {
+    expect(isCombinedSearchKind('task')).toBe(true);
+    expect(isCombinedSearchKind('listItem')).toBe(true);
+    expect(isCombinedSearchKind('journalEntry')).toBe(false);
+    expect(isCombinedSearchKind('crisisPlan')).toBe(false);
+  });
+
   it('finds active tasks and effective list-item names in one result set', () => {
     const now = new Date('2026-10-16T12:00:00.000Z');
     const task = createTask(

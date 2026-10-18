@@ -35,6 +35,7 @@ import {
 } from './sync-service.js';
 import {
   prepareAudienceChange,
+  prepareAudienceChanges,
   pullAudience,
   type SyncFeedChange,
 } from './change-feed-repository.js';
@@ -51,7 +52,13 @@ import {
   saveList,
   saveListItem,
 } from '../lists/list-repository.js';
-import { listItemAudienceTransitionChanges } from '../lists/list-audience.js';
+import { listAudienceChanges, listItemAudienceTransitionChanges } from '../lists/list-audience.js';
+import {
+  createListAudienceTransition,
+  findListAudienceTransition,
+  findPendingListAudienceTransition,
+  resumeListAudienceTransition,
+} from '../lists/list-audience-transition-repository.js';
 import { findDirectoryItem, saveDirectoryItemRecord } from '../directory/directory-repository.js';
 import { defaultPersonalStackService, dispatchStackCompaction } from '../ranking/runtime.js';
 import {
@@ -561,6 +568,17 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       const current = await findList(mutation.entityId);
       serverRecordPresence.set(mutationIndex, Boolean(current));
       try {
+        const existingTransition = await findListAudienceTransition(actorId, mutation.id);
+        if (existingTransition) {
+          const resumed = await resumeListAudienceTransition(existingTransition);
+          results.push({
+            mutationId: mutation.id,
+            status: resumed.status === 'complete' ? 'applied' : 'retry',
+            entityVersion: resumed.next.version,
+            entity: resumed.next,
+          });
+          continue;
+        }
         const payload = mutation.payload as Record<string, unknown>;
         const next = applySharedWorkSyncPayload(
           'list',
@@ -577,6 +595,27 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           });
           continue;
         }
+        const sharingChanged = Boolean(
+          current && (current.locked !== next.locked || current.groupId !== next.groupId),
+        );
+        const pendingTransition = sharingChanged
+          ? await findPendingListAudienceTransition(next.id)
+          : undefined;
+        if (pendingTransition && pendingTransition.mutationId !== mutation.id) {
+          results.push({ mutationId: mutation.id, status: 'retry' });
+          continue;
+        }
+        const transition =
+          current && sharingChanged
+            ? createListAudienceTransition(
+                current,
+                next,
+                actorId,
+                mutation.id,
+                await listItemsForList(next.id),
+              )
+            : undefined;
+        const feedChanges = await prepareAudienceChanges(listAudienceChanges(current, next));
         await saveList(
           next,
           actorId,
@@ -584,15 +623,24 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           current ? 'update' : 'create',
           Object.keys(payload),
           current?.version ?? 0,
+          feedChanges,
+          transition ? { mutationStatus: 'retry', checkpoints: transition.records } : {},
         );
+        const resumed = transition
+          ? await resumeListAudienceTransition(transition.transition)
+          : undefined;
         results.push({
           mutationId: mutation.id,
-          status: 'applied',
+          status: resumed && resumed.status !== 'complete' ? 'retry' : 'applied',
           entityVersion: next.version,
           entity: next,
         });
       } catch {
-        results.push({ mutationId: mutation.id, status: 'rejected' });
+        const pendingTransition = await findListAudienceTransition(actorId, mutation.id);
+        results.push({
+          mutationId: mutation.id,
+          status: pendingTransition?.status === 'pending' ? 'retry' : 'rejected',
+        });
       }
       continue;
     }

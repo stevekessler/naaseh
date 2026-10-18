@@ -91,182 +91,194 @@ export function TaskFilters({
         change={(urgencies) => change({ ...value, urgencies })}
         {...(resultCount === undefined ? {} : { resultCount })}
       />
-      <fieldset className="filter-match-mode">
-        <legend>How should conditions match?</legend>
+      <div className="filter-control-grid">
+        <fieldset className="filter-match-mode">
+          <legend>Match</legend>
+          <label>
+            <input
+              type="radio"
+              name="filterMatchMode"
+              aria-label="Match all conditions"
+              checked={(value.match ?? 'all') === 'all'}
+              onChange={() => change({ ...value, match: 'all' })}
+            />
+            All
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="filterMatchMode"
+              aria-label="Match any condition"
+              checked={value.match === 'any'}
+              onChange={() => change({ ...value, match: 'any' })}
+            />
+            Any
+          </label>
+        </fieldset>
+        <ProjectPicker
+          categories={categories}
+          projects={projects}
+          value={value.projectId ?? ''}
+          categoryId={value.categoryId}
+          allLabel="All projects"
+          onChange={(projectId) => change({ ...value, projectId })}
+        />
         <label>
-          <input
-            type="radio"
-            name="filterMatchMode"
-            checked={(value.match ?? 'all') === 'all'}
-            onChange={() => change({ ...value, match: 'all' })}
-          />
-          Match all conditions
-        </label>
-        <label>
-          <input
-            type="radio"
-            name="filterMatchMode"
-            checked={value.match === 'any'}
-            onChange={() => change({ ...value, match: 'any' })}
-          />
-          Match any condition
-        </label>
-      </fieldset>
-      <ProjectPicker
-        categories={categories}
-        projects={projects}
-        value={value.projectId ?? ''}
-        categoryId={value.categoryId}
-        allLabel="All projects"
-        onChange={(projectId) => change({ ...value, projectId })}
-      />
-      <label>
-        <span>Scope</span>
-        <select
-          value={value.lifecycle ?? 'active'}
-          onChange={(event) =>
-            change({ ...value, lifecycle: event.target.value as 'active' | 'archive' | 'all' })
-          }
-        >
-          <option value="active">Active</option>
-          <option value="archive">Archive</option>
-          <option value="all">Active and archive</option>
-        </select>
-      </label>
-      {contentType === 'all' ? (
-        <label>
-          <span>Content</span>
+          <span>Scope</span>
           <select
-            value={value.contentType ?? 'all'}
+            value={value.lifecycle ?? 'active'}
             onChange={(event) =>
-              change({ ...value, contentType: event.target.value as 'all' | 'lists' | 'todos' })
+              change({ ...value, lifecycle: event.target.value as 'active' | 'archive' | 'all' })
             }
           >
-            <option value="all">All</option>
-            <option value="lists">Lists</option>
-            <option value="todos">To-do lists</option>
+            <option value="active">Active</option>
+            <option value="archive">Archive</option>
+            <option value="all">Active and archive</option>
           </select>
         </label>
-      ) : null}
-      <label>
-        <span>Progress</span>
-        <select
-          value={value.progress ?? 'all'}
-          onChange={(event) =>
-            change({
-              ...value,
-              progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
-            })
-          }
-        >
-          <option value="all">Any progress</option>
-          <option value="not-started">Not started</option>
-          <option value="in-progress">In progress</option>
-          <option value="complete">100% complete</option>
-        </select>
-      </label>
-      <label>
-        <span>From</span>
-        <input
-          type="date"
-          value={value.from}
-          onChange={(event) => change({ ...value, from: event.target.value, datePresets: [] })}
-        />
-      </label>
-      <label>
-        <span>To</span>
-        <input
-          type="date"
-          value={value.to}
-          onChange={(event) => change({ ...value, to: event.target.value, datePresets: [] })}
-        />
-      </label>
-      <div className="date-filter-presets" role="group" aria-label="Due date shortcuts">
-        {(
-          [
-            ['today', 'Today'],
-            ['tomorrow', 'Tomorrow'],
-            ['week', 'This week'],
-            ['nextWeek', 'Next week'],
-            ['nextNextWeek', 'Week after next'],
-            ['month', 'This month'],
-          ] as const
-        ).map(([preset, label]) => (
-          <button
-            type="button"
-            className="quiet"
-            key={preset}
-            aria-pressed={value.datePresets?.includes(preset) ?? false}
-            onClick={() => {
-              const selected = value.datePresets ?? [];
-              const datePresets = selected.includes(preset)
-                ? selected.filter((item) => item !== preset)
-                : [...selected, preset];
-              change({ ...value, datePresets, ...dateRangeForPresets(datePresets) });
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <label>
-        <span>Add assignee filter</span>
-        <AssigneePicker
-          assignees={assignees.filter((assignee) => !selectedAssignees.includes(assignee.id))}
-          value=""
-          allLabel="Choose an assignee"
-          ariaLabel="Assignee"
-          onChange={(assigneeId) =>
-            assigneeId &&
-            change({
-              ...value,
-              assigneeId: '',
-              assigneeIds: [...selectedAssignees, assigneeId],
-            })
-          }
-        />
-      </label>
-      {groups.length ? (
+        {contentType === 'all' ? (
+          <label>
+            <span>Content</span>
+            <select
+              value={value.contentType ?? 'all'}
+              onChange={(event) =>
+                change({ ...value, contentType: event.target.value as 'all' | 'lists' | 'todos' })
+              }
+            >
+              <option value="all">All</option>
+              <option value="lists">Lists</option>
+              <option value="todos">To-do lists</option>
+            </select>
+          </label>
+        ) : null}
         <label>
-          <span>Add group filter</span>
+          <span>Progress</span>
           <select
-            value=""
+            value={value.progress ?? 'all'}
             onChange={(event) => {
-              const groupId = event.currentTarget.value;
-              if (groupId) change({ ...value, groupIds: [...selectedGroups, groupId] });
+              change({
+                ...value,
+                progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
+              });
             }}
           >
-            <option value="">Choose a group</option>
-            {groups
-              .filter((group) => !selectedGroups.includes(group.id))
-              .map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
+            <option value="all">Any progress</option>
+            <option value="not-started">Not started</option>
+            <option value="in-progress">In progress</option>
+            <option value="complete">100% complete</option>
           </select>
         </label>
-      ) : null}
-      <label>
-        <span>Category</span>
-        <CategoryPicker
-          categories={categories}
-          value={value.categoryId}
-          allLabel="All categories"
-          onChange={(categoryId) =>
-            change({
-              ...value,
-              categoryId,
-              projectId:
-                value.projectId &&
-                projects.find((project) => project.id === value.projectId)?.categoryId !==
-                  categoryId
-                  ? ''
-                  : (value.projectId ?? ''),
-            })
-          }
-        />
-      </label>
+      </div>
+      <div className="filter-date-row">
+        <div className="filter-date-inputs">
+          <label>
+            <span>Due from</span>
+            <input
+              type="date"
+              aria-label="From"
+              value={value.from}
+              onChange={(event) => change({ ...value, from: event.target.value, datePresets: [] })}
+            />
+          </label>
+          <label>
+            <span>Due to</span>
+            <input
+              type="date"
+              aria-label="To"
+              value={value.to}
+              onChange={(event) => change({ ...value, to: event.target.value, datePresets: [] })}
+            />
+          </label>
+        </div>
+        <div className="date-filter-presets" role="group" aria-label="Due date shortcuts">
+          {(
+            [
+              ['today', 'Today'],
+              ['tomorrow', 'Tomorrow'],
+              ['week', 'This week'],
+              ['nextWeek', 'Next week'],
+              ['nextNextWeek', 'Week after next'],
+              ['month', 'This month'],
+            ] as const
+          ).map(([preset, label]) => (
+            <button
+              type="button"
+              className="quiet"
+              key={preset}
+              aria-pressed={value.datePresets?.includes(preset) ?? false}
+              onClick={() => {
+                const selected = value.datePresets ?? [];
+                const datePresets = selected.includes(preset)
+                  ? selected.filter((item) => item !== preset)
+                  : [...selected, preset];
+                change({ ...value, datePresets, ...dateRangeForPresets(datePresets) });
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="filter-secondary-grid">
+        <label>
+          <span>Assignee</span>
+          <AssigneePicker
+            assignees={assignees.filter((assignee) => !selectedAssignees.includes(assignee.id))}
+            value=""
+            allLabel="Add an assignee"
+            ariaLabel="Assignee"
+            onChange={(assigneeId) =>
+              assigneeId &&
+              change({
+                ...value,
+                assigneeId: '',
+                assigneeIds: [...selectedAssignees, assigneeId],
+              })
+            }
+          />
+        </label>
+        {groups.length ? (
+          <label>
+            <span>Group</span>
+            <select
+              value=""
+              onChange={(event) => {
+                const groupId = event.currentTarget.value;
+                if (groupId) change({ ...value, groupIds: [...selectedGroups, groupId] });
+              }}
+            >
+              <option value="">Add a group</option>
+              {groups
+                .filter((group) => !selectedGroups.includes(group.id))
+                .map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        ) : null}
+        <label>
+          <span>Category</span>
+          <CategoryPicker
+            categories={categories}
+            value={value.categoryId}
+            allLabel="All categories"
+            onChange={(categoryId) =>
+              change({
+                ...value,
+                categoryId,
+                projectId:
+                  value.projectId &&
+                  projects.find((project) => project.id === value.projectId)?.categoryId !==
+                    categoryId
+                    ? ''
+                    : (value.projectId ?? ''),
+              })
+            }
+          />
+        </label>
+      </div>
       <div className="filter-chips" role="group" aria-label="Active filters">
         {selectedAssignees.map((id) => (
           <button

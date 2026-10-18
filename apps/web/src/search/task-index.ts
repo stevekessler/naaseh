@@ -23,6 +23,9 @@ export class MixedContentIndex {
   });
   private documents = new Map<string, MixedSearchDocument>();
   upsert(document: MixedSearchDocument) {
+    if (!['todo', 'list', 'listItem'].includes(document.type)) {
+      throw new Error('This content type cannot be added to general search.');
+    }
     if (this.documents.has(document.id)) this.index.discard(document.id);
     this.documents.set(document.id, document);
     this.index.add(document);

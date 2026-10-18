@@ -109,6 +109,47 @@ export function completeListAudienceTransitionChanges(
     ...parentChanges,
     ...items
       .filter((item) => item.status !== 'removed')
-      .flatMap((item) => listItemAudienceTransitionChanges(previous, next, item, item)),
+      .flatMap((item) => movedListItemAudienceChanges(previous, next, item, item)),
+  ];
+}
+
+/** Changes only the audiences that differ, leaving the unchanged admin feed untouched. */
+export function movedListItemAudienceChanges(
+  previousParent: List,
+  nextParent: List,
+  item: { id: string; version: number; updatedAt: string; status: string },
+  payload: unknown,
+): Omit<SyncChange, 'sequence'>[] {
+  const audiencesFor = (parent: List) =>
+    contentAudiences({
+      entityId: parent.id,
+      ownerId: parent.ownerId,
+      locked: parent.locked,
+      ...(parent.groupId ? { groupId: parent.groupId } : {}),
+    });
+  const before = audiencesFor(previousParent);
+  const after = audiencesFor(nextParent);
+  return [
+    ...before
+      .filter((audience) => !after.includes(audience))
+      .map((audience) => ({
+        audience,
+        entityType: 'listItem' as const,
+        entityId: item.id,
+        version: item.version,
+        operation: 'tombstone' as const,
+        changedAt: item.updatedAt,
+      })),
+    ...after
+      .filter((audience) => !before.includes(audience))
+      .map((audience) => ({
+        audience,
+        entityType: 'listItem' as const,
+        entityId: item.id,
+        version: item.version,
+        operation: item.status === 'removed' ? ('tombstone' as const) : ('upsert' as const),
+        ...(item.status === 'removed' ? {} : { payload }),
+        changedAt: item.updatedAt,
+      })),
   ];
 }

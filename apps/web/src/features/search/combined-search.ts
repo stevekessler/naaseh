@@ -25,6 +25,18 @@ export interface CombinedSearchRow {
   status: string;
 }
 
+const combinedSearchKinds = new Set<CombinedSearchRow['kind']>(['task', 'listItem']);
+
+/**
+ * Keep the general search boundary deliberately narrower than the application's
+ * full set of content types. In particular, Journal records must remain inside
+ * the unlocked Journal experience and must never become /search results.
+ */
+export function isCombinedSearchKind(value: unknown): value is CombinedSearchRow['kind'] {
+  const kind = value;
+  return typeof kind === 'string' && combinedSearchKinds.has(kind as CombinedSearchRow['kind']);
+}
+
 const searchable = (value: string) => value.normalize('NFKC').toLocaleLowerCase();
 
 export function buildCombinedSearchRows({
@@ -127,7 +139,9 @@ export function buildCombinedSearchRows({
         );
     });
 
-  return [...taskRows, ...listRows].sort((left, right) =>
-    left.title.localeCompare(right.title, undefined, { sensitivity: 'base' }),
-  );
+  return [...taskRows, ...listRows]
+    .filter((row) => isCombinedSearchKind(row.kind))
+    .sort((left, right) =>
+      left.title.localeCompare(right.title, undefined, { sensitivity: 'base' }),
+    );
 }

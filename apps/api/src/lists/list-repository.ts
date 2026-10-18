@@ -102,6 +102,10 @@ export async function saveList(
   changedFields: string[],
   expectedVersion: number,
   feedChanges: Parameters<typeof commitEntity>[0]['feedChanges'] = [],
+  options: {
+    mutationStatus?: StableMutationResult['status'];
+    checkpoints?: Record<string, unknown>[];
+  } = {},
 ) {
   const previous = expectedVersion > 0 ? await findList(value.id) : undefined;
   const projected = async (list: List | undefined): Promise<ProjectedWorkView | undefined> => {
@@ -131,7 +135,11 @@ export async function saveList(
     projected(previous),
     projected(value),
   ]);
-  const result: StableMutationResult = { mutationId, status: 'applied', version: value.version };
+  const result: StableMutationResult = {
+    mutationId,
+    status: options.mutationStatus ?? 'applied',
+    version: value.version,
+  };
   await commitEntity({
     current: {
       PK: keys.list(value.id).PK,
@@ -157,6 +165,7 @@ export async function saveList(
     mutationResult: result,
     expectedVersion,
     feedChanges,
+    ...(options.checkpoints ? { checkpoints: options.checkpoints } : {}),
     additionalWrites: [
       ...workloadProjectionWrites(workloadProjectionChanges(beforeProjection, afterProjection)),
       ...workViewProjectionWrites(workViewProjectionChanges(beforeProjection, afterProjection)),
