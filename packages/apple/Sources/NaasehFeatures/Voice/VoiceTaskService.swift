@@ -41,8 +41,10 @@ public enum VoiceTaskError: Error, Equatable, Sendable {
 }
 
 public actor VoiceTaskService {
+    public typealias TaskCreator = @Sendable (TaskCreateCommand) async throws -> TaskRecord
+
     private let projects: AuthorizedProjectQuery
-    private let commands: TaskCommandService
+    private let createTask: TaskCreator
     private let access: @Sendable () async -> VoiceTaskAccess
     private let timeZone: TimeZone
     private var receipts: [String: VoiceTaskResult] = [:]
@@ -53,7 +55,22 @@ public actor VoiceTaskService {
         access: @escaping @Sendable () async -> VoiceTaskAccess,
         timeZone: TimeZone = .current
     ) {
-        self.projects = projects; self.commands = commands; self.access = access; self.timeZone = timeZone
+        self.projects = projects
+        createTask = { try await commands.create($0) }
+        self.access = access
+        self.timeZone = timeZone
+    }
+
+    public init(
+        projects: AuthorizedProjectQuery,
+        createTask: @escaping TaskCreator,
+        access: @escaping @Sendable () async -> VoiceTaskAccess,
+        timeZone: TimeZone = .current
+    ) {
+        self.projects = projects
+        self.createTask = createTask
+        self.access = access
+        self.timeZone = timeZone
     }
 
     public func create(_ request: VoiceTaskRequest) async throws -> VoiceTaskResult {
@@ -75,7 +92,7 @@ public actor VoiceTaskService {
         case .notFound: throw VoiceTaskError.projectNotFound
         }
         let due = try dueValue(date: request.dueDate, time: request.dueTime)
-        let task = try await commands.create(.init(
+        let task = try await createTask(.init(
             mutationID: "voice:\(request.invocationID)",
             label: title,
             projectID: projectID,

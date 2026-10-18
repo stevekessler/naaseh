@@ -31,20 +31,50 @@ public actor SecureStore {
         recordID: String,
         mutationID: String,
         operationKind: String,
+        baseVersion: Int? = nil,
+        now: Date = Date()
+    ) async throws {
+        try await commit(
+            value,
+            operationPayload: value,
+            kind: kind,
+            recordID: recordID,
+            mutationID: mutationID,
+            operationKind: operationKind,
+            baseVersion: baseVersion,
+            now: now
+        )
+    }
+
+    public func commit<Value: Codable & Sendable, Payload: Codable & Sendable>(
+        _ value: Value,
+        operationPayload: Payload,
+        kind: LocalRecordKind,
+        recordID: String,
+        mutationID: String,
+        operationKind: String,
+        baseVersion: Int? = nil,
         now: Date = Date()
     ) async throws {
         guard let key else { throw SecureStoreError.missingKey }
         do { try capacityCheck() } catch { throw SecureStoreError.insufficientStorage }
-        let plaintext = try JSONEncoder().encode(value)
-        let nonce = randomNonce()
+        let recordPlaintext = try JSONEncoder().encode(value)
+        let operationPlaintext = try JSONEncoder().encode(operationPayload)
+        let recordNonce = randomNonce()
+        let operationNonce = randomNonce()
         let aad = authenticatedData(kind: kind, recordID: recordID)
-        let sealed = try NaasehCrypto.aesGCMSeal(
-            plaintext: plaintext,
+        let sealedRecord = try NaasehCrypto.aesGCMSeal(
+            plaintext: recordPlaintext,
             key: try accountKey(rootKey: key),
-            nonce: nonce,
+            nonce: recordNonce,
             authenticatedData: aad
         )
-        let ciphertextAndTag = sealed.ciphertext + sealed.tag
+        let sealedOperation = try NaasehCrypto.aesGCMSeal(
+            plaintext: operationPlaintext,
+            key: try accountKey(rootKey: key),
+            nonce: operationNonce,
+            authenticatedData: aad
+        )
         let record = EncryptedRecord(
             accountNamespace: accountNamespace,
             recordKind: kind,
@@ -52,8 +82,8 @@ public actor SecureStore {
             syncState: .pending,
             updatedAt: now,
             envelopeVersion: 1,
-            nonce: nonce,
-            ciphertextAndTag: ciphertextAndTag
+            nonce: recordNonce,
+            ciphertextAndTag: sealedRecord.ciphertext + sealedRecord.tag
         )
         let operation = PendingOperation(
             accountNamespace: accountNamespace,
@@ -61,12 +91,12 @@ public actor SecureStore {
             operationKind: operationKind,
             targetKind: kind.rawValue,
             targetId: recordID,
-            baseVersion: nil,
+            baseVersion: baseVersion,
             createdAt: now,
             state: .queued,
             envelopeVersion: 1,
-            nonce: nonce,
-            ciphertextAndTag: ciphertextAndTag
+            nonce: operationNonce,
+            ciphertextAndTag: sealedOperation.ciphertext + sealedOperation.tag
         )
         try await controller.commit(record: record, operation: operation)
     }
@@ -94,6 +124,27 @@ public actor SecureStore {
             return try JSONDecoder().decode(type, from: plaintext)
         } catch {
             throw SecureStoreError.corruptEnvelope
+        }
+    }
+
+    public func readAll<Value: Decodable & Sendable>(
+        _ type: Value.Type,
+        kind: LocalRecordKind
+    ) async throws -> [Value] {
+        guard let key else { throw SecureStoreError.missingKey }
+        let derived = try accountKey(rootKey: key)
+        return try await controller.records(accountNamespace: accountNamespace, kind: kind).map {
+            guard $0.ciphertextAndTag.count >= 16 else { throw SecureStoreError.corruptEnvelope }
+            let plaintext = try NaasehCrypto.aesGCMOpen(
+                .init(
+                    nonce: $0.nonce,
+                    ciphertext: Data($0.ciphertextAndTag.dropLast(16)),
+                    tag: Data($0.ciphertextAndTag.suffix(16))
+                ),
+                key: derived,
+                authenticatedData: authenticatedData(kind: kind, recordID: $0.recordID)
+            )
+            return try JSONDecoder().decode(type, from: plaintext)
         }
     }
 
@@ -129,9 +180,11 @@ public actor SecureStore {
                 mutationID: operation.mutationID,
                 targetKind: operation.targetKind,
                 targetID: operation.targetID,
+                operationKind: operation.operationKind,
                 baseVersion: operation.baseVersion,
                 payload: plaintext,
-                createdAt: operation.createdAt
+                createdAt: operation.createdAt,
+                attemptCount: operation.attemptCount
             )
         }
     }
@@ -181,6 +234,7 @@ public actor SecureStore {
 
     public func applyServerValues<Value: Codable & Sendable>(
         _ values: [(kind: LocalRecordKind, id: String, version: Int, value: Value)],
+        deleting: [(kind: LocalRecordKind, id: String)] = [],
         audience: String,
         cursor: String,
         now: Date = Date()
@@ -208,6 +262,13 @@ public actor SecureStore {
         }
         try await controller.apply(
             records: records,
+            deletions: deleting.map {
+                EncryptedRecordDeletion(
+                    accountNamespace: accountNamespace,
+                    kind: $0.kind,
+                    recordID: $0.id
+                )
+            },
             cursor: SyncCursorWrite(
                 accountNamespace: accountNamespace,
                 audience: audience,
@@ -273,7 +334,9 @@ public struct DecryptedPendingOperation: Sendable {
     public let mutationID: String
     public let targetKind: String
     public let targetID: String
+    public let operationKind: String
     public let baseVersion: Int?
     public let payload: Data
     public let createdAt: Date
+    public let attemptCount: Int
 }

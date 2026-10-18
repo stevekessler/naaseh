@@ -18,7 +18,8 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             path: "/api/v1/sync/bootstrap",
             session: try await credential()
         )
-        return try page(from: response.body, bootstrap: true)
+        guard (200 ..< 300).contains(response.statusCode) else { throw SyncEngineError.transport }
+        return try Self.page(from: response.body, bootstrap: true)
     }
 
     public func pull(cursor: String?) async throws -> NativeSyncPage {
@@ -32,20 +33,23 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             session: try await credential(),
             idempotencyKey: UUID().uuidString
         )
-        return try page(from: response.body, bootstrap: false)
+        guard (200 ..< 300).contains(response.statusCode) else { throw SyncEngineError.transport }
+        return try Self.page(from: response.body, bootstrap: false)
     }
 
     public func push(_ operations: [NativeSyncOperation]) async throws -> [NativePushResult] {
         let mutations = try operations.map { operation -> [String: Any] in
             let payload = try JSONSerialization.jsonObject(with: operation.payload)
-            var mutation: [String: Any] = [
+            let mutation: [String: Any] = [
                 "id": operation.id,
                 "entityType": operation.targetKind,
                 "entityId": operation.targetID,
-                "operation": operation.baseVersion == nil ? "create" : "update",
+                "operation": operation.operation,
+                "baseVersion": operation.baseVersion ?? 0,
                 "payload": payload,
+                "createdAt": ISO8601DateFormatter().string(from: operation.createdAt),
+                "attempts": operation.attempts,
             ]
-            if let baseVersion = operation.baseVersion { mutation["baseVersion"] = baseVersion }
             return mutation
         }
         let body = try JSONSerialization.data(withJSONObject: [
@@ -71,7 +75,7 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             else { throw SyncEngineError.malformedReceipt }
             let disposition: NativePushDisposition = switch status {
             case "applied": .applied
-            case "duplicate": .duplicate
+            case "duplicate", "alreadyApplied": .duplicate
             case "conflict": .conflict
             case "rejected": .rejected
             default: throw SyncEngineError.malformedReceipt
@@ -80,11 +84,12 @@ public actor APINativeSyncTransport: NativeSyncTransport {
         }
     }
 
-    private func page(from data: Data, bootstrap: Bool) throws -> NativeSyncPage {
+    static func page(from data: Data, bootstrap: Bool) throws -> NativeSyncPage {
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SyncEngineError.transport
         }
         var records: [NativeSyncRecord] = []
+        var tombstones: [NativeSyncTombstone] = []
         if bootstrap {
             for (key, kind) in [
                 ("tasks", "task"), ("categories", "category"), ("projects", "project"),
@@ -105,14 +110,19 @@ public actor APINativeSyncTransport: NativeSyncTransport {
         } else {
             for change in object["changes"] as? [[String: Any]] ?? [] {
                 guard let kind = change["entityType"] as? String,
-                      let id = change["entityId"] as? String,
-                      let payload = change["payload"]
+                      let id = change["entityId"] as? String
                 else { continue }
+                let version = change["version"] as? Int ?? 1
+                if change["operation"] as? String == "tombstone" {
+                    tombstones.append(.init(kind: kind, id: id, version: version))
+                    continue
+                }
+                guard let payload = change["payload"] else { throw SyncEngineError.malformedReceipt }
                 records.append(
                     .init(
                         kind: kind,
                         id: id,
-                        version: (payload as? [String: Any])?["version"] as? Int ?? 1,
+                        version: (payload as? [String: Any])?["version"] as? Int ?? version,
                         payload: try JSONSerialization.data(withJSONObject: payload)
                     )
                 )
@@ -123,6 +133,6 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             decoding: try JSONSerialization.data(withJSONObject: cursorObject),
             as: UTF8.self
         )
-        return NativeSyncPage(records: records, cursor: cursor)
+        return NativeSyncPage(records: records, tombstones: tombstones, cursor: cursor)
     }
 }

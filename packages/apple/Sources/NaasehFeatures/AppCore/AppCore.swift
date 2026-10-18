@@ -51,6 +51,7 @@ public struct RedactedRestorationModel: Codable, Equatable, Sendable {
 
 public protocol AppLifecycleService: Sendable {
     func start() async throws
+    func refresh() async throws
     func lock() async
     func signOut() async throws
 }
@@ -98,6 +99,16 @@ public final class AppCore {
             state = .blocked(.temporarilyUnavailable)
         } catch {
             state = .blocked(.storeUnavailable)
+        }
+    }
+
+    public func refresh() async {
+        guard case .ready = state else { return }
+        do {
+            try await dependencies.lifecycle.refresh()
+            state = .ready(connectivity: .online)
+        } catch {
+            state = .ready(connectivity: .offline)
         }
     }
 

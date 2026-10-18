@@ -21,6 +21,36 @@ struct SecureStoreRecoveryTests {
         #expect(try await first.read(Note.self, kind: .task, recordID: "t1") == Note(value: "protected"))
     }
 
+    @Test("server tombstones atomically remove cached records and queued mutations")
+    func atomicServerTombstone() async throws {
+        let temporary = try TemporaryStore()
+        let controller = PersistenceController()
+        try await controller.open(appGroupIdentifier: "test", overrideDirectory: temporary.directory)
+        let store = SecureStore(
+            controller: controller,
+            accountNamespace: "a",
+            rootKey: Data(repeating: 1, count: 32)
+        )
+        try await store.commit(
+            Note(value: "revoked"),
+            kind: .list,
+            recordID: "l1",
+            mutationID: "m1",
+            operationKind: "update"
+        )
+
+        try await store.applyServerValues(
+            [] as [(kind: LocalRecordKind, id: String, version: Int, value: Note)],
+            deleting: [(kind: .list, id: "l1")],
+            audience: "account",
+            cursor: "c2"
+        )
+
+        #expect(try await store.read(Note.self, kind: .list, recordID: "l1") == nil)
+        #expect(try await store.counts().operations == 0)
+        #expect(try await store.currentCursor(audience: "account") == "c2")
+    }
+
     @Test("low storage leaves no partial entity or outbox")
     func lowStorage() async throws {
         let temporary = try TemporaryStore()

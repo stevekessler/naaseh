@@ -181,9 +181,31 @@ public actor PersistenceController {
         try context.save()
     }
 
-    public func apply(records: [EncryptedRecordWrite], cursor: SyncCursorWrite) throws {
+    public func apply(
+        records: [EncryptedRecordWrite],
+        deletions: [EncryptedRecordDeletion] = [],
+        cursor: SyncCursorWrite
+    ) throws {
         guard let container else { throw SafeStoreFailure.storeOpenFailed }
         let context = ModelContext(container)
+        for value in deletions {
+            let storageKey = "\(value.accountNamespace):\(value.kind.rawValue):\(value.recordID)"
+            let existing = try context.fetch(
+                FetchDescriptor<EncryptedRecord>(predicate: #Predicate { $0.storageKey == storageKey })
+            )
+            for record in existing { context.delete(record) }
+            let accountNamespace = value.accountNamespace
+            let targetKind = value.kind.rawValue
+            let targetID = value.recordID
+            let pending = try context.fetch(
+                FetchDescriptor<PendingOperation>(predicate: #Predicate {
+                    $0.accountNamespace == accountNamespace
+                        && $0.targetKind == targetKind
+                        && $0.targetId == targetID
+                })
+            )
+            for operation in pending { context.delete(operation) }
+        }
         for value in records {
             let storageKey = "\(value.accountNamespace):\(value.kind.rawValue):\(value.recordID)"
             let existing = try context.fetch(
@@ -311,6 +333,21 @@ public actor PersistenceController {
         return try ModelContext(container).fetch(descriptor).first.map(EncryptedRecordSnapshot.init)
     }
 
+    public func records(
+        accountNamespace: String,
+        kind: LocalRecordKind
+    ) throws -> [EncryptedRecordSnapshot] {
+        guard let container else { throw SafeStoreFailure.storeOpenFailed }
+        let recordKind = kind.rawValue
+        let descriptor = FetchDescriptor<EncryptedRecord>(
+            predicate: #Predicate {
+                $0.accountNamespace == accountNamespace && $0.recordKind == recordKind
+            },
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        return try ModelContext(container).fetch(descriptor).map(EncryptedRecordSnapshot.init)
+    }
+
     public func counts(accountNamespace: String) throws -> (records: Int, operations: Int) {
         guard let container else { throw SafeStoreFailure.storeOpenFailed }
         let records = FetchDescriptor<EncryptedRecord>(
@@ -362,6 +399,7 @@ public struct PendingOperationSnapshot: Sendable {
     public let targetID: String
     public let baseVersion: Int?
     public let createdAt: Date
+    public let attemptCount: Int
     public let nonce: Data
     public let ciphertextAndTag: Data
 
@@ -372,6 +410,7 @@ public struct PendingOperationSnapshot: Sendable {
         targetID = operation.targetId
         baseVersion = operation.baseVersion
         createdAt = operation.createdAt
+        attemptCount = operation.attemptCount
         nonce = operation.nonce
         ciphertextAndTag = operation.ciphertextAndTag
     }
@@ -386,6 +425,18 @@ public struct EncryptedRecordWrite: Sendable {
     public let envelopeVersion: Int
     public let nonce: Data
     public let ciphertextAndTag: Data
+}
+
+public struct EncryptedRecordDeletion: Sendable {
+    public let accountNamespace: String
+    public let kind: LocalRecordKind
+    public let recordID: String
+
+    public init(accountNamespace: String, kind: LocalRecordKind, recordID: String) {
+        self.accountNamespace = accountNamespace
+        self.kind = kind
+        self.recordID = recordID
+    }
 }
 
 public struct SyncCursorWrite: Sendable {

@@ -60,7 +60,12 @@ let package = Package(
         .testTarget(name: "NaasehPersistenceTests", dependencies: ["NaasehPersistence", "NaasehTestSupport"]),
         .testTarget(name: "NaasehSyncTests", dependencies: ["NaasehSync", "NaasehTestSupport"]),
         .testTarget(name: "NaasehServicesTests", dependencies: ["NaasehServices", "NaasehTestSupport"]),
-        .testTarget(name: "NaasehFeaturesTests", dependencies: ["NaasehFeatures", "NaasehTestSupport"]),
+        .testTarget(
+            name: "NaasehFeaturesTests",
+            dependencies: [
+                "NaasehFeatures", "NaasehPersistence", "NaasehSync", "NaasehTestSupport",
+            ]
+        ),
         .testTarget(name: "NaasehPerformanceTests", dependencies: ["NaasehFeatures", "NaasehTestSupport"]),
     ],
     swiftLanguageModes: [.v6]

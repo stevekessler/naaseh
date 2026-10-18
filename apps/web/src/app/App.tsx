@@ -42,6 +42,7 @@ import {
   reconcileSyncHistory,
 } from '../features/sync/sync-activity.js';
 import { drainSequentially } from '../sync/sync-engine.js';
+import { installForegroundSync } from '../sync/foreground-sync.js';
 import { dismissObsoleteConflicts } from '../sync/conflict-review.js';
 import { drainJournalOutbox, synchronizeJournalCiphertext } from '../sync/journal-sync.js';
 import { drainJournalDataInDependencyOrder } from '../sync/crisis-plan-sync.js';
@@ -937,6 +938,16 @@ export function App() {
     if (session) void synchronize();
   }, [session, synchronize]);
 
+  useEffect(
+    () =>
+      installForegroundSync({
+        target: window,
+        document,
+        synchronize,
+      }),
+    [synchronize],
+  );
+
   const revalidateSession = useCallback(async () => {
     if (!session || validatingSession.current) return;
     if (session.userId === 'local-steve') {
@@ -1008,6 +1019,7 @@ export function App() {
       if (document.visibilityState !== 'visible') return;
       if (session?.userId === 'local-steve') void synchronize();
       else if (shouldRevalidateProtectedSession(hiddenAt.current)) void revalidateSession();
+      else void synchronize();
       hiddenAt.current = undefined;
     };
     document.addEventListener('visibilitychange', visible);

@@ -9,6 +9,7 @@ import SwiftUI
 @main
 @MainActor
 struct NaasehMacApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     private let core: AppCore
     private let authentication: AuthenticationViewModel
     private let tasks: TaskWorkspaceModel
@@ -61,16 +62,32 @@ struct NaasehMacApp: App {
             telemetry: telemetry,
             appGroupIdentifier: "group.link.thepandas.naaseh"
         )
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("-ui-testing")
         let core = AppCore(dependencies: AppDependencies(lifecycle: runtime))
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing") {
+        if isUITesting {
             core.updateState(.ready(connectivity: .online))
         }
         let authentication = AuthenticationViewModel(service: authenticationService)
-        authentication.onAuthenticated = { [weak core] in
+        let tasks: TaskWorkspaceModel
+        if isUITesting {
+            tasks = TaskWorkspaceModel(actorID: "ui-testing")
+        } else {
+            let taskStorage = SyncedTaskWorkspaceStore(syncStore: syncStore) {
+                guard let userID = await authenticationService.session?.user.id else {
+                    throw AuthenticationError.noSession
+                }
+                return userID
+            }
+            tasks = TaskWorkspaceModel(
+                storage: taskStorage,
+                afterMutation: { try? await sync.manualRefresh() }
+            )
+        }
+        authentication.onAuthenticated = { [weak core, weak tasks] in
             await core?.start()
+            await tasks?.reload()
             _ = try? await IntentDependencies.shared.resumePendingContinuation()
         }
-        let tasks = TaskWorkspaceModel(actorID: "authenticated-user")
         let projectQuery = AuthorizedProjectQuery(projects: [])
         let voiceService = tasks.voiceService(projects: projectQuery) {
             guard await authenticationService.session != nil else { return .signedOut }
@@ -104,6 +121,15 @@ struct NaasehMacApp: App {
                         }
                     }
                 }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    try? await syncAndReload()
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(120))
+                        guard !Task.isCancelled else { return }
+                        try? await syncAndReload()
+                    }
+                }
         }
         .commands { NaasehMacCommands(core: core) }
 
@@ -120,5 +146,10 @@ struct NaasehMacApp: App {
             Button("Reset") { Task { await timer.reset() } }
             Button("Switch Work/Rest") { Task { await timer.switchPhase() } }
         }
+    }
+
+    private func syncAndReload() async throws {
+        try await core.dependencies.lifecycle.refresh()
+        await tasks.reload()
     }
 }
