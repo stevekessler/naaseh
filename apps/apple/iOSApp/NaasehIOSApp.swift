@@ -9,6 +9,7 @@ import SwiftUI
 @main
 @MainActor
 struct NaasehIOSApp: App {
+    @Environment(\.scenePhase) private var scenePhase
     private let core: AppCore
     private let authentication: AuthenticationViewModel
     private let tasks: TaskWorkspaceModel
@@ -61,16 +62,32 @@ struct NaasehIOSApp: App {
             telemetry: telemetry,
             appGroupIdentifier: "group.link.thepandas.naaseh"
         )
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("-ui-testing")
         let core = AppCore(dependencies: AppDependencies(lifecycle: runtime))
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing") {
+        if isUITesting {
             core.updateState(.ready(connectivity: .online))
         }
         let authentication = AuthenticationViewModel(service: authenticationService)
-        authentication.onAuthenticated = { [weak core] in
+        let tasks: TaskWorkspaceModel
+        if isUITesting {
+            tasks = TaskWorkspaceModel(actorID: "ui-testing")
+        } else {
+            let taskStorage = SyncedTaskWorkspaceStore(syncStore: syncStore) {
+                guard let userID = await authenticationService.session?.user.id else {
+                    throw AuthenticationError.noSession
+                }
+                return userID
+            }
+            tasks = TaskWorkspaceModel(
+                storage: taskStorage,
+                afterMutation: { try? await sync.manualRefresh() }
+            )
+        }
+        authentication.onAuthenticated = { [weak core, weak tasks] in
             await core?.start()
+            await tasks?.reload()
             _ = try? await IntentDependencies.shared.resumePendingContinuation()
         }
-        let tasks = TaskWorkspaceModel(actorID: "authenticated-user")
         if ProcessInfo.processInfo.arguments.contains("-screenshot-tasks") {
             let fixtures: [(String, TaskUrgency)] = [
                 ("Prepare the quarterly planning notes", .high),
@@ -118,6 +135,20 @@ struct NaasehIOSApp: App {
                         }
                     }
                 }
+                .task(id: scenePhase) {
+                    guard scenePhase == .active else { return }
+                    try? await syncAndReload()
+                    while !Task.isCancelled {
+                        try? await Task.sleep(for: .seconds(120))
+                        guard !Task.isCancelled else { return }
+                        try? await syncAndReload()
+                    }
+                }
         }
+    }
+
+    private func syncAndReload() async throws {
+        try await core.dependencies.lifecycle.refresh()
+        await tasks.reload()
     }
 }

@@ -11,17 +11,39 @@ public struct NativeSyncRecord: Equatable, Sendable {
     }
 }
 
+public struct NativeSyncTombstone: Equatable, Sendable {
+    public let kind: String
+    public let id: String
+    public let version: Int
+
+    public init(kind: String, id: String, version: Int) {
+        self.kind = kind; self.id = id; self.version = version
+    }
+}
+
 public struct NativeSyncOperation: Equatable, Sendable {
     public let id: String
     public let targetKind: String
     public let targetID: String
+    public let operation: String
     public let baseVersion: Int?
     public let payload: Data
     public let createdAt: Date
+    public let attempts: Int
 
-    public init(id: String, targetKind: String, targetID: String, baseVersion: Int?, payload: Data, createdAt: Date) {
+    public init(
+        id: String,
+        targetKind: String,
+        targetID: String,
+        operation: String = "update",
+        baseVersion: Int?,
+        payload: Data,
+        createdAt: Date,
+        attempts: Int = 0
+    ) {
         self.id = id; self.targetKind = targetKind; self.targetID = targetID
-        self.baseVersion = baseVersion; self.payload = payload; self.createdAt = createdAt
+        self.operation = operation; self.baseVersion = baseVersion; self.payload = payload
+        self.createdAt = createdAt; self.attempts = attempts
     }
 }
 
@@ -38,11 +60,20 @@ public struct NativePushResult: Sendable {
 
 public struct NativeSyncPage: Sendable {
     public let records: [NativeSyncRecord]
+    public let tombstones: [NativeSyncTombstone]
     public let cursor: String
     public let revokedAudiences: [String]
 
-    public init(records: [NativeSyncRecord], cursor: String, revokedAudiences: [String] = []) {
-        self.records = records; self.cursor = cursor; self.revokedAudiences = revokedAudiences
+    public init(
+        records: [NativeSyncRecord],
+        tombstones: [NativeSyncTombstone] = [],
+        cursor: String,
+        revokedAudiences: [String] = []
+    ) {
+        self.records = records
+        self.tombstones = tombstones
+        self.cursor = cursor
+        self.revokedAudiences = revokedAudiences
     }
 }
 
@@ -154,6 +185,14 @@ public actor InMemoryNativeSyncStore: NativeSyncStore {
         for audience in page.revokedAudiences {
             for key in audiences.removeValue(forKey: audience) ?? [] { records.removeValue(forKey: key) }
             revoked.append(audience)
+        }
+        for tombstone in page.tombstones {
+            let key = "\(tombstone.kind):\(tombstone.id)"
+            records.removeValue(forKey: key)
+            for audience in audiences.keys { audiences[audience]?.remove(key) }
+            operations.removeAll {
+                $0.targetKind == tombstone.kind && $0.targetID == tombstone.id
+            }
         }
         for record in page.records { records["\(record.kind):\(record.id)"] = record }
         cursor = page.cursor

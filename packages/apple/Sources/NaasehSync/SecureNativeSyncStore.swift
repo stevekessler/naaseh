@@ -40,8 +40,15 @@ public actor SecureNativeSyncStore: NativeSyncStore {
             }
             return (kind, $0.id, $0.version, try JSONDecoder().decode(JSONValue.self, from: $0.payload))
         }
+        let deletions: [(kind: LocalRecordKind, id: String)] = try page.tombstones.map {
+            guard let kind = LocalRecordKind(rawValue: $0.kind) else {
+                throw SecureNativeSyncStoreError.unsupportedRecordKind($0.kind)
+            }
+            return (kind, $0.id)
+        }
         try await secureStore.applyServerValues(
             values,
+            deleting: deletions,
             audience: "account",
             cursor: page.cursor
         )
@@ -53,11 +60,42 @@ public actor SecureNativeSyncStore: NativeSyncStore {
                 id: $0.mutationID,
                 targetKind: $0.targetKind,
                 targetID: $0.targetID,
+                operation: $0.operationKind,
                 baseVersion: $0.baseVersion,
                 payload: $0.payload,
-                createdAt: $0.createdAt
+                createdAt: $0.createdAt,
+                attempts: $0.attemptCount
             )
         }
+    }
+
+    public func values<Value: Decodable & Sendable>(
+        _ type: Value.Type,
+        kind: LocalRecordKind
+    ) async throws -> [Value] {
+        try await requireStore().readAll(type, kind: kind)
+    }
+
+    public func commit<Value: Codable & Sendable, Payload: Codable & Sendable>(
+        _ value: Value,
+        operationPayload: Payload,
+        kind: LocalRecordKind,
+        recordID: String,
+        mutationID: String,
+        operationKind: String,
+        baseVersion: Int?,
+        now: Date = Date()
+    ) async throws {
+        try await requireStore().commit(
+            value,
+            operationPayload: operationPayload,
+            kind: kind,
+            recordID: recordID,
+            mutationID: mutationID,
+            operationKind: operationKind,
+            baseVersion: baseVersion,
+            now: now
+        )
     }
 
     public func markApplied(_ mutationIDs: [String]) async throws {

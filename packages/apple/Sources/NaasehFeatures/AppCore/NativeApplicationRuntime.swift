@@ -75,6 +75,12 @@ public actor NativeApplicationRuntime: AppLifecycleService {
         await telemetry.flush(sessionIsValidated: true)
     }
 
+    public func refresh() async throws {
+        _ = try await authentication.validateSession()
+        try await sync.manualRefresh()
+        await telemetry.flush(sessionIsValidated: true)
+    }
+
     public func lock() async { await authentication.lockLocally() }
 
     public func signOut() async throws {

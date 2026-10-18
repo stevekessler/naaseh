@@ -35,3 +35,18 @@ Decision: do not modify `.github/workflows/validate.yml`, `test:e2e:quick`, or a
 The hosted run passed dependency installation, workflow validation, runtime dependency audit, the
 complete `npm run validate` gate, Chromium installation, and all 30 quick Playwright tests. The
 required workflow remains within policy without adding the exhaustive Apple release matrix.
+
+## Content-sync foreground refresh — 2026-10-18
+
+- Required Vitest baseline without the new foreground-sync test file: 345 files and 1,055 tests;
+  wall `real 37.93` seconds.
+- Required Vitest result with the new foreground-sync coverage: 346 files and 1,057 tests; wall
+  `real 37.66` seconds.
+- Required browser count before/after: 30 / 30 tests in 19 files (unchanged).
+- Timed browser command: `/usr/bin/time -p npm run test:e2e:quick`.
+- Browser result: 30 passed; wall `real 28.81`, user `37.73`, system `8.83` seconds. The first
+  sandbox attempt could not bind `127.0.0.1:4173`; the recorded result is the successful rerun.
+
+The two deterministic unit tests add focus and visible-interval coverage without expanding the
+quick browser matrix. Local timings show no material increase to required validation; hosted timing
+is recorded on the pull request before merge.

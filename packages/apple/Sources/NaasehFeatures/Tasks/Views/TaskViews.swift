@@ -22,19 +22,35 @@ public final class TaskWorkspaceModel {
     public var conflict: TaskConflictPresentation?
     public var completionMutationID: String?
 
-    private let store: InMemoryTaskCommandStore
-    private let commands: TaskCommandService
+    private let storage: any TaskWorkspaceStorage
+    private let afterMutation: @Sendable () async -> Void
 
     public init(actorID: String, store: InMemoryTaskCommandStore = .init()) {
-        self.store = store
-        commands = TaskCommandService(store: store, actorID: actorID)
+        storage = InMemoryTaskWorkspaceStorage(actorID: actorID, store: store)
+        afterMutation = {}
+    }
+
+    public init(
+        storage: any TaskWorkspaceStorage,
+        afterMutation: @escaping @Sendable () async -> Void
+    ) {
+        self.storage = storage
+        self.afterMutation = afterMutation
     }
 
     public func voiceService(
         projects: AuthorizedProjectQuery,
         access: @escaping @Sendable () async -> VoiceTaskAccess
     ) -> VoiceTaskService {
-        VoiceTaskService(projects: projects, commands: commands, access: access)
+        VoiceTaskService(
+            projects: projects,
+            createTask: { [storage, afterMutation] command in
+                let task = try await storage.create(command)
+                await afterMutation()
+                return task
+            },
+            access: access
+        )
     }
 
     public var visibleTasks: [TaskRecord] {
@@ -54,7 +70,10 @@ public final class TaskWorkspaceModel {
         tasks.first { $0.id == selectedTaskID }
     }
 
-    public func reload() async { tasks = await store.allTasks() }
+    public func reload() async {
+        do { tasks = try await storage.allTasks() }
+        catch { errorMessage = String(describing: error) }
+    }
 
     public func beginCreate() {
         editingTask = nil
@@ -77,16 +96,16 @@ public final class TaskWorkspaceModel {
     public func save(label: String, urgency: TaskUrgency, parentID: String?) async {
         do {
             if let editingTask {
-                _ = try await commands.edit(.init(
-                    mutationID: UUID().uuidString,
+                _ = try await storage.edit(.init(
+                    mutationID: NativeULID.make(),
                     taskID: editingTask.id,
                     label: label,
                     parentID: parentID,
                     baseVersion: editingTask.version
                 ))
             } else {
-                _ = try await commands.create(.init(
-                    mutationID: UUID().uuidString,
+                _ = try await storage.create(.init(
+                    mutationID: NativeULID.make(),
                     label: label,
                     urgency: urgency,
                     parentID: parentID
@@ -94,6 +113,7 @@ public final class TaskWorkspaceModel {
             }
             showingEditor = false
             draftParentID = nil
+            await afterMutation()
             await reload()
         } catch let TaskCommandError.conflict(currentVersion) {
             conflict = .init(taskID: editingTask?.id ?? "", currentVersion: currentVersion)
@@ -101,31 +121,35 @@ public final class TaskWorkspaceModel {
     }
 
     public func complete(_ task: TaskRecord) async {
-        let mutationID = UUID().uuidString
+        let mutationID = NativeULID.make()
         do {
-            _ = try await commands.complete(taskID: task.id, mutationID: mutationID)
+            _ = try await storage.complete(taskID: task.id, mutationID: mutationID)
             completionMutationID = mutationID
+            await afterMutation()
             await reload()
         } catch { errorMessage = String(describing: error) }
     }
 
     public func undo(_ task: TaskRecord) async {
         do {
-            _ = try await commands.undoCompletion(taskID: task.id, mutationID: UUID().uuidString)
+            _ = try await storage.undoCompletion(taskID: task.id, mutationID: NativeULID.make())
+            await afterMutation()
             await reload()
         } catch { errorMessage = String(describing: error) }
     }
 
     public func archive(_ task: TaskRecord) async {
         do {
-            _ = try await commands.archive(taskID: task.id, mutationID: UUID().uuidString)
+            _ = try await storage.archive(taskID: task.id, mutationID: NativeULID.make())
+            await afterMutation()
             await reload()
         } catch { errorMessage = String(describing: error) }
     }
 
     public func restore(_ task: TaskRecord) async {
         do {
-            _ = try await commands.restore(taskID: task.id, mutationID: UUID().uuidString)
+            _ = try await storage.restore(taskID: task.id, mutationID: NativeULID.make())
+            await afterMutation()
             await reload()
         } catch { errorMessage = String(describing: error) }
     }

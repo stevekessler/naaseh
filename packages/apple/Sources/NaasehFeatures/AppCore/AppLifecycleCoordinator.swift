@@ -50,6 +50,10 @@ public actor AppLifecycleCoordinator: AppLifecycleService {
         try await sync.manualRefresh()
     }
 
+    public func refresh() async throws {
+        try await manualRefresh()
+    }
+
     public func beforeMutation() async throws {
         if let lastCompatibilityCheck, Date().timeIntervalSince(lastCompatibilityCheck) < 15 * 60 {
             return

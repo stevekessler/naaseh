@@ -1,5 +1,5 @@
 import Foundation
-import NaasehSync
+@testable import NaasehSync
 import Testing
 
 @Suite("Native sync engine")
@@ -53,6 +53,30 @@ struct SyncEngineTests {
         try await SyncEngine(store: store, transport: transport).pull()
         #expect(await store.records.isEmpty)
         #expect(await store.revoked == ["group:g1"])
+    }
+
+    @Test("API pull decoding preserves payload-free tombstones before advancing the cursor")
+    func apiTombstoneDecoding() throws {
+        let body = Data(#"{"changes":[{"entityType":"list","entityId":"l1","version":4,"operation":"tombstone"}],"cursor":{"group:g1":9}}"#.utf8)
+        let page = try APINativeSyncTransport.page(from: body, bootstrap: false)
+        #expect(page.records.isEmpty)
+        #expect(page.tombstones == [.init(kind: "list", id: "l1", version: 4)])
+        #expect(page.cursor.contains("group:g1"))
+    }
+
+    @Test("entity tombstones remove cached records and their pending mutations")
+    func entityTombstone() async throws {
+        let store = InMemoryNativeSyncStore()
+        let now = Date(timeIntervalSince1970: 100)
+        await store.seed(audience: "GROUP#g1", record: .init(kind: "list", id: "l1", version: 3, payload: Data()))
+        await store.enqueue(.init(id: "m1", targetKind: "list", targetID: "l1", baseVersion: 3, payload: Data(), createdAt: now))
+        let transport = SyncTransportStub(pulls: [
+            .init(records: [], tombstones: [.init(kind: "list", id: "l1", version: 4)], cursor: "c4")
+        ])
+        try await SyncEngine(store: store, transport: transport).pull()
+        #expect(await store.records.isEmpty)
+        #expect(await store.queuedOperations(readyAt: now, limit: 10).isEmpty)
+        #expect(await store.cursor == "c4")
     }
 
     @Test("four clients converge after duplicate delivery")
