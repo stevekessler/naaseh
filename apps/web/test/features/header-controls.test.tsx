@@ -8,7 +8,10 @@ import {
   announceServiceWorkerUpdate,
   subscribeToServiceWorkerUpdate,
 } from '../../src/app/service-worker-update.js';
-import { registerAppServiceWorker } from '../../src/app/register-service-worker.js';
+import {
+  registerAppServiceWorker,
+  reloadWithFreshAppShell,
+} from '../../src/app/register-service-worker.js';
 
 afterEach(cleanup);
 
@@ -144,11 +147,16 @@ describe('header controls', () => {
       update: vi.fn(async () => {}),
     });
     const register = vi.fn(async () => registration);
-    const reload = vi.fn();
+    const replace = vi.fn();
+    const unregister = vi.fn(async () => true);
+    registration.unregister = unregister;
     vi.stubGlobal('navigator', { serviceWorker: { controller: original, register } });
     const document = Object.assign(new EventTarget(), { visibilityState: 'visible' });
     vi.stubGlobal('document', document);
-    vi.stubGlobal('window', { location: { reload } });
+    vi.stubGlobal('caches', { keys: vi.fn(async () => []), delete: vi.fn(async () => true) });
+    vi.stubGlobal('window', {
+      location: { href: 'https://gsd.thepandas.link/tasks', replace },
+    });
     try {
       await registerAppServiceWorker();
       expect(register).toHaveBeenCalledWith('/sw.js', { updateViaCache: 'none' });
@@ -157,14 +165,37 @@ describe('header controls', () => {
       installing.state = 'activated';
       installing.dispatchEvent(new Event('statechange'));
       expect(observed).not.toBe(apply);
-      expect(reload).not.toHaveBeenCalled();
+      expect(replace).not.toHaveBeenCalled();
       await observed?.();
-      expect(reload).toHaveBeenCalledOnce();
+      expect(unregister).toHaveBeenCalledOnce();
+      expect(replace).toHaveBeenCalledOnce();
       document.dispatchEvent(new Event('visibilitychange'));
       expect(registration.update).toHaveBeenCalledOnce();
     } finally {
       unsubscribe();
       vi.unstubAllGlobals();
     }
+  });
+
+  it('removes only the app shell before reloading with a fresh URL', async () => {
+    const unregister = vi.fn(async () => true);
+    const keys = vi.fn(async () => ['workbox-precache', 'runtime']);
+    const remove = vi.fn(async () => true);
+    const replace = vi.fn();
+
+    await reloadWithFreshAppShell(
+      { unregister },
+      {
+        caches: { keys, delete: remove },
+        location: { href: 'https://gsd.thepandas.link/tasks?taskTab=filtered', replace },
+        now: () => 123,
+      },
+    );
+
+    expect(unregister).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledTimes(2);
+    expect(replace).toHaveBeenCalledWith(
+      'https://gsd.thepandas.link/tasks?taskTab=filtered&app-update=123',
+    );
   });
 });

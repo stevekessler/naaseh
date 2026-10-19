@@ -758,6 +758,22 @@ export async function pullChanges(): Promise<boolean> {
     );
   return cursorAdvanced(current, cursor);
 }
+
+async function refreshTaskSnapshotFromServer(): Promise<void> {
+  const response = await fetch('/api/v1/sync/bootstrap', { credentials: 'include' });
+  if (!response.ok) throw await syncHttpResponseError('Task snapshot refresh', response);
+  const body = (await response.json()) as { tasks?: unknown[] };
+  const records = await Promise.all(
+    (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
+  );
+  const canonical = [...new Map(records.map((record) => [record.id, record])).values()];
+  await db.transaction('rw', db.secureTasks, db.outbox, db.settings, async () => {
+    if (await db.outbox.count())
+      throw new Error('Pending changes must finish uploading before refreshing tasks.');
+    if (canonical.length) await db.secureTasks.bulkPut(canonical);
+    await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+  });
+}
 async function performSync(csrfToken: string) {
   let recoveryError: unknown;
   try {
@@ -814,6 +830,9 @@ export async function resyncFromServer(csrfToken: string, maxPages = 100) {
     await drainOutbox(csrfToken);
     if (await db.outbox.count())
       throw new Error('Pending changes must finish uploading before a full resync.');
+    // A feed replay repairs a bad cursor, while the authoritative snapshot also
+    // restores records that are absent from a damaged or incomplete local feed.
+    await refreshTaskSnapshotFromServer();
     await db.transaction('rw', db.settings, async () => {
       await db.settings.delete('sync-cursor');
       await db.settings.delete('pending-sync-replay-cursor');

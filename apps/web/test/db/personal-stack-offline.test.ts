@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
   settings: new Map<string, Row>(),
   cryptoKeys: new Map<string, Row>(),
   genericConflicts: new Map<string, Row>(),
+  tasks: new Map<string, Row>(),
   failOutbox: false,
   inTransaction: false,
 }));
@@ -80,6 +81,7 @@ const database = vi.hoisted(() => {
       secureStackSnapshots: table(state.snapshots),
       secureStackConflicts: table(state.stackConflicts),
       secureConflicts: table(state.genericConflicts),
+      secureTasks: table(state.tasks),
       outbox: table(state.outbox),
       settings: table(state.settings, 'key'),
       cryptoKeys: table(state.cryptoKeys),
@@ -116,6 +118,15 @@ vi.mock('../../src/db/task-repository.js', () => ({
     payload: JSON.parse(Buffer.from(record.payload.ciphertext, 'base64').toString()),
   }),
   markRevisionSynced: vi.fn(),
+  taskToEncryptedRecord: async (task: Row) => ({
+    id: task.id,
+    ownerId: task.ownerId,
+    status: task.status,
+    visibility: task.visibility,
+    updatedAt: task.updatedAt,
+    value: { iv: 'test-iv', ciphertext: Buffer.from(JSON.stringify(task)).toString('base64') },
+  }),
+  readLocalTaskSnapshot: async () => ({ tasks: [], unreadable: [] }),
 }));
 
 import {
@@ -176,11 +187,26 @@ beforeEach(() => {
 
 describe('encrypted offline personal-stack persistence', () => {
   it('replays the retained server feed from zero until every cursor stops advancing', async () => {
+    const recoveredTask = {
+      id: '01J00000000000000000000005',
+      ownerId: 'owner',
+      label: "Chinju's Email",
+      createdAt: '2026-10-19T12:00:00.000Z',
+      updatedAt: '2026-10-19T12:00:00.000Z',
+      assigneeId: 'owner',
+      visibility: 'private',
+      version: 1,
+    };
     state.settings.set('sync-cursor', {
       key: 'sync-cursor',
       value: JSON.stringify({ owner: 900 }),
     });
     vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ tasks: [recoveredTask] }), {
+          status: 200,
+        }),
+      )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ changes: [], cursor: { owner: 200, public: 40 } }), {
           status: 200,
@@ -194,7 +220,14 @@ describe('encrypted offline personal-stack persistence', () => {
 
     await resyncFromServer('csrf');
 
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/sync/bootstrap', {
+      credentials: 'include',
+    });
+    expect(state.tasks.get(recoveredTask.id)).toMatchObject({
+      id: recoveredTask.id,
+      ownerId: 'owner',
+    });
     expect(JSON.parse(String(state.settings.get('sync-cursor')?.value))).toEqual({
       owner: 200,
       public: 40,
