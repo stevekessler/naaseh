@@ -41,7 +41,7 @@ import {
   listSyncHistory,
   reconcileSyncHistory,
 } from '../features/sync/sync-activity.js';
-import { drainSequentially } from '../sync/sync-engine.js';
+import { drainSequentially, resyncFromServer } from '../sync/sync-engine.js';
 import { installForegroundSync } from '../sync/foreground-sync.js';
 import { dismissObsoleteConflicts } from '../sync/conflict-review.js';
 import { drainJournalOutbox, synchronizeJournalCiphertext } from '../sync/journal-sync.js';
@@ -645,6 +645,7 @@ export function App() {
   const [signingOut, setSigningOut] = useState(false);
   const signingOutRef = useRef(false);
   const syncing = useRef(false);
+  const fullResyncRequested = useRef(new URLSearchParams(location.search).has('recover-sync'));
   const validatingSession = useRef(false);
   const hiddenAt = useRef<number | undefined>(undefined);
   const syncRetryTimer = useRef<number | undefined>(undefined);
@@ -892,51 +893,59 @@ export function App() {
     const query = section === 'tasks' && taskTab === 'all' ? '' : params.toString();
     history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
   }, [filters, taskTab, section]);
-  const synchronize = useCallback(async () => {
-    if (
-      !session ||
-      sessionValidation !== 'valid' ||
-      !navigator.onLine ||
-      document.visibilityState === 'hidden' ||
-      syncing.current
-    )
-      return;
-    if (syncRetryTimer.current !== undefined) {
-      window.clearTimeout(syncRetryTimer.current);
-      syncRetryTimer.current = undefined;
-    }
-    syncing.current = true;
-    try {
-      let journalError: unknown;
-      try {
-        await drainJournalDataInDependencyOrder(
-          session.userId,
-          session.csrfToken,
-          drainJournalOutbox,
-        );
-        await synchronizeJournalCiphertext(session.userId);
-      } catch (error) {
-        journalError = error;
+  const synchronize = useCallback(
+    async (fullReplay = false) => {
+      if (
+        !session ||
+        sessionValidation !== 'valid' ||
+        !navigator.onLine ||
+        document.visibilityState === 'hidden' ||
+        syncing.current
+      )
+        return;
+      if (syncRetryTimer.current !== undefined) {
+        window.clearTimeout(syncRetryTimer.current);
+        syncRetryTimer.current = undefined;
       }
-      await drainSequentially(session.csrfToken, (delay) => {
-        if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
-        syncRetryTimer.current = window.setTimeout(() => {
-          syncRetryTimer.current = undefined;
-          void synchronize();
-        }, delay);
-      });
-      if (journalError) throw journalError;
-      setSyncError(undefined);
-    } catch (error) {
-      setSyncError(error instanceof Error ? error.message : 'Synchronization failed.');
-    } finally {
-      syncing.current = false;
-    }
-  }, [session, sessionValidation]);
+      syncing.current = true;
+      try {
+        let journalError: unknown;
+        try {
+          await drainJournalDataInDependencyOrder(
+            session.userId,
+            session.csrfToken,
+            drainJournalOutbox,
+          );
+          await synchronizeJournalCiphertext(session.userId);
+        } catch (error) {
+          journalError = error;
+        }
+        if (fullReplay) await resyncFromServer(session.csrfToken);
+        else
+          await drainSequentially(session.csrfToken, (delay) => {
+            if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
+            syncRetryTimer.current = window.setTimeout(() => {
+              syncRetryTimer.current = undefined;
+              void synchronize();
+            }, delay);
+          });
+        if (journalError) throw journalError;
+        setSyncError(undefined);
+      } catch (error) {
+        setSyncError(error instanceof Error ? error.message : 'Synchronization failed.');
+      } finally {
+        syncing.current = false;
+      }
+    },
+    [session, sessionValidation],
+  );
 
   useEffect(() => {
-    if (session) void synchronize();
-  }, [session, synchronize]);
+    if (!session || sessionValidation !== 'valid') return;
+    const fullReplay = fullResyncRequested.current;
+    fullResyncRequested.current = false;
+    void synchronize(fullReplay);
+  }, [session, sessionValidation, synchronize]);
 
   useEffect(
     () =>

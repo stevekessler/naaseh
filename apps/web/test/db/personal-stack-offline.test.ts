@@ -129,7 +129,12 @@ import {
   reorderLocalStack,
   purgeLocalPersonalStack,
 } from '../../src/db/personal-stack-repository.js';
-import { drainOutbox, pullChanges, queuePersonalStackReorder } from '../../src/sync/sync-engine.js';
+import {
+  drainOutbox,
+  pullChanges,
+  queuePersonalStackReorder,
+  resyncFromServer,
+} from '../../src/sync/sync-engine.js';
 import {
   listPersonalStackConflicts,
   resolvePersonalStackConflict,
@@ -170,6 +175,32 @@ beforeEach(() => {
 });
 
 describe('encrypted offline personal-stack persistence', () => {
+  it('replays the retained server feed from zero until every cursor stops advancing', async () => {
+    state.settings.set('sync-cursor', {
+      key: 'sync-cursor',
+      value: JSON.stringify({ owner: 900 }),
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ changes: [], cursor: { owner: 200, public: 40 } }), {
+          status: 200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ changes: [], cursor: { owner: 200, public: 40 } }), {
+          status: 200,
+        }),
+      );
+
+    await resyncFromServer('csrf');
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(String(state.settings.get('sync-cursor')?.value))).toEqual({
+      owner: 200,
+      public: 40,
+    });
+  });
+
   it('commits a reorder and encrypted outbox mutation atomically', async () => {
     await seed();
     const accepted = await reorderLocalStack({

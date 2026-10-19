@@ -512,8 +512,12 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
   }
   if (firstError) throw firstError;
 }
-export async function pullChanges(): Promise<void> {
-  if (!navigator.onLine) return;
+export function cursorAdvanced(current: VectorCursor, next: VectorCursor): boolean {
+  return Object.entries(next).some(([feed, sequence]) => sequence > (current[feed] ?? 0));
+}
+
+export async function pullChanges(): Promise<boolean> {
+  if (!navigator.onLine) return false;
   const current = await readCursor();
   const response = await fetch('/api/v1/sync/pull', {
     method: 'POST',
@@ -752,6 +756,7 @@ export async function pullChanges(): Promise<void> {
       cursor,
       records.length ? (await readLocalTaskSnapshot()).unreadable : [],
     );
+  return cursorAdvanced(current, cursor);
 }
 async function performSync(csrfToken: string) {
   let recoveryError: unknown;
@@ -796,6 +801,28 @@ export async function runWithSyncLock(
 
 export async function syncNow(csrfToken: string) {
   await runWithSyncLock(() => performSync(csrfToken));
+}
+
+/**
+ * Replay the complete retained server feed after first making every durable
+ * local mutation safe on the server. This preserves local encrypted data and
+ * outbox semantics while recovering from a cursor that incorrectly appears
+ * current on one device.
+ */
+export async function resyncFromServer(csrfToken: string, maxPages = 100) {
+  await runWithSyncLock(async () => {
+    await drainOutbox(csrfToken);
+    if (await db.outbox.count())
+      throw new Error('Pending changes must finish uploading before a full resync.');
+    await db.transaction('rw', db.settings, async () => {
+      await db.settings.delete('sync-cursor');
+      await db.settings.delete('pending-sync-replay-cursor');
+    });
+    for (let page = 0; page < maxPages; page += 1) {
+      if (!(await pullChanges())) return;
+    }
+    throw new Error('Full synchronization exceeded the safe replay limit.');
+  });
 }
 export async function drainSequentially(
   csrfToken: string,

@@ -48,7 +48,7 @@ describe('web shell recovery', () => {
     expect(script.headers['content-type']).toContain('application/javascript');
     expect(script.body).toContain('registration.unregister()');
     expect(script.body).toContain('caches.delete(cacheName)');
-    expect(script.body).toContain("location.replace('/?recovered='");
+    expect(script.body).toContain("location.replace('/?recover-sync='");
   });
 
   it('does not clear account cookies, browser history, or durable user data', () => {

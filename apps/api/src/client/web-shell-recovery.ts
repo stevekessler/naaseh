@@ -96,7 +96,7 @@ function recoveryScript(): APIGatewayProxyResultV2 {
       const cacheNames = 'caches' in window ? await caches.keys() : [];
       await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
       status.textContent = 'Repair complete. Reopening Naaseh…';
-      location.replace('/?recovered=' + Date.now());
+      location.replace('/?recover-sync=' + Date.now());
     } catch (error) {
       status.textContent = 'Naaseh could not finish the repair. Close this tab, reopen it, and try once more.';
       retry.hidden = false;

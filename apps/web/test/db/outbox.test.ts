@@ -11,6 +11,7 @@ import {
   shouldBootstrapListSnapshot,
   shouldBootstrapOrganizationSnapshot,
   shouldBootstrapTaskSnapshot,
+  cursorAdvanced,
 } from '../../src/sync/sync-engine.js';
 describe('durable local outbox rules', () => {
   it('keeps each entity sequential while allowing independent entity queues', () => {
@@ -28,6 +29,10 @@ describe('durable local outbox rules', () => {
       public: 5,
       owner: 7,
     }));
+  it('detects whether a full feed replay has another page', () => {
+    expect(cursorAdvanced({ public: 5, owner: 2 }, { public: 5, owner: 3 })).toBe(true);
+    expect(cursorAdvanced({ public: 5, owner: 2 }, { public: 5, owner: 2 })).toBe(false);
+  });
   it('recognizes only the current encrypted database schema', () => {
     expect(supportedLocalSchema(15)).toBe(true);
     expect(supportedLocalSchema(14)).toBe(false);
