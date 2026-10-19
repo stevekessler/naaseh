@@ -44,6 +44,7 @@ import { loadPublicKeyRegistry } from '../crypto-recovery/public-key-registry.js
 import { metric } from '@naaseh/observability';
 import { listUserMemberships } from '../groups/group-repository.js';
 import { handler as nativeClientHandler } from '../client/compatibility-handler.js';
+import { handleWebShellRecovery, webShellRecoveryPath } from '../client/web-shell-recovery.js';
 import {
   findList,
   findListItem,
@@ -859,6 +860,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
 }
 
 export const handler: APIGatewayProxyHandlerV2 = async (event, context, callback) => {
+  if (event.rawPath === webShellRecoveryPath) return handleWebShellRecovery(event);
   if (event.rawPath === '/api/client/compatibility' || event.rawPath === '/api/client/telemetry')
     return (await nativeClientHandler(event, context, callback)) as APIGatewayProxyResultV2;
   try {

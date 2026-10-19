@@ -45,6 +45,27 @@ describe('native client infrastructure', () => {
     expect(nativeRoutes[1]?.Properties.Target).toEqual(syncRoute?.Properties.Target);
   });
 
+  it('exposes an unauthenticated GET and POST recovery path on the sync Lambda', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+      RouteKey: 'GET /api/v1/client/recover-shell',
+      AuthorizationType: 'NONE',
+    });
+    template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+      RouteKey: 'POST /api/v1/client/recover-shell',
+      AuthorizationType: 'NONE',
+    });
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route'));
+    const recoveryRoutes = routes.filter((resource) =>
+      String(resource.Properties.RouteKey).endsWith('/api/v1/client/recover-shell'),
+    );
+    const syncRoute = routes.find(
+      (resource) => resource.Properties.RouteKey === 'POST /api/v1/sync/push',
+    );
+    expect(recoveryRoutes).toHaveLength(2);
+    expect(recoveryRoutes[0]?.Properties.Target).toEqual(syncRoute?.Properties.Target);
+    expect(recoveryRoutes[1]?.Properties.Target).toEqual(syncRoute?.Properties.Target);
+  });
+
   it('creates no telemetry data store, queue, topic, log group, or other managed service', () => {
     const resources = template.toJSON().Resources as Record<
       string,

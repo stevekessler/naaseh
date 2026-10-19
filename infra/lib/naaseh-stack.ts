@@ -184,6 +184,9 @@ export class NaasehStack extends Stack {
     );
     new CfnOutput(this, 'DeploymentRegion', { value: this.region });
     new CfnOutput(this, 'SiteUrl', { value: `https://${props.domainName}` });
+    new CfnOutput(this, 'WebShellRecoveryLauncherUrl', {
+      value: `${httpApi.apiEndpoint}/api/v1/client/recover-shell`,
+    });
     new CfnOutput(this, 'DistributionDomain', { value: distribution.distributionDomainName });
     new CfnOutput(this, 'CriticalAlertsTopicArn', { value: criticalAlerts.topicArn });
     new CfnOutput(this, 'Argon2CalibrationFunctionName', {

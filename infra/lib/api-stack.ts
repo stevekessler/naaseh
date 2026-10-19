@@ -575,6 +575,13 @@ export function createApplicationApi(
   route('SyncPullIntegration', '/api/v1/sync/pull', [apigwv2.HttpMethod.POST], sync);
   route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
   route(
+    'WebShellRecoveryIntegration',
+    '/api/v1/client/recover-shell',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+    sync,
+    false,
+  );
+  route(
     'NativeClientCompatibilityIntegration',
     '/api/client/compatibility',
     [apigwv2.HttpMethod.GET],
