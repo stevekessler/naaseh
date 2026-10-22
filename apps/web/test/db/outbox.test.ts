@@ -11,6 +11,7 @@ import {
   shouldBootstrapListSnapshot,
   shouldBootstrapOrganizationSnapshot,
   shouldBootstrapTaskSnapshot,
+  shouldRefreshTaskSnapshot,
   cursorAdvanced,
 } from '../../src/sync/sync-engine.js';
 describe('durable local outbox rules', () => {
@@ -68,5 +69,12 @@ describe('durable local outbox rules', () => {
     expect(shouldBootstrapListSnapshot('true', now)).toBe(true);
     expect(shouldBootstrapListSnapshot('2026-10-15T00:59:30.000Z', now)).toBe(false);
     expect(shouldBootstrapListSnapshot('2026-10-15T00:59:00.000Z', now)).toBe(true);
+  });
+  it('refreshes task snapshots so a device with a bad cursor still receives server changes', () => {
+    const now = Date.parse('2026-10-21T16:01:00.000Z');
+    expect(shouldRefreshTaskSnapshot(undefined, now)).toBe(true);
+    expect(shouldRefreshTaskSnapshot('true', now)).toBe(true);
+    expect(shouldRefreshTaskSnapshot('2026-10-21T16:00:30.000Z', now)).toBe(false);
+    expect(shouldRefreshTaskSnapshot('2026-10-21T16:00:00.000Z', now)).toBe(true);
   });
 });

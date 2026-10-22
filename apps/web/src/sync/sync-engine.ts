@@ -159,22 +159,36 @@ export const shouldBootstrapListSnapshot = (
   refreshAfterMs = 60_000,
 ) => shouldBootstrapOrganizationSnapshot(lastHydratedAt, now, refreshAfterMs);
 
+export const shouldRefreshTaskSnapshot = (
+  lastHydratedAt: string | undefined,
+  now = Date.now(),
+  refreshAfterMs = 60_000,
+) => shouldBootstrapOrganizationSnapshot(lastHydratedAt, now, refreshAfterMs);
+
 async function recoverMissingSnapshots(): Promise<void> {
-  const [snapshot, bootstrapState, organizationBootstrapState, listBootstrapState, pendingCount] =
-    await Promise.all([
-      readLocalTaskSnapshot(),
-      db.settings.get('task-snapshot-bootstrapped'),
-      db.settings.get('organization-snapshot-bootstrapped-v1'),
-      db.settings.get('list-snapshot-bootstrapped-v1'),
-      db.outbox.count(),
-    ]);
+  const [
+    snapshot,
+    bootstrapState,
+    taskRefreshState,
+    organizationBootstrapState,
+    listBootstrapState,
+    pendingCount,
+  ] = await Promise.all([
+    readLocalTaskSnapshot(),
+    db.settings.get('task-snapshot-bootstrapped'),
+    db.settings.get('task-snapshot-refreshed-at-v1'),
+    db.settings.get('organization-snapshot-bootstrapped-v1'),
+    db.settings.get('list-snapshot-bootstrapped-v1'),
+    db.outbox.count(),
+  ]);
   const shouldRecoverTasks =
     snapshot.unreadable.length ||
     shouldBootstrapTaskSnapshot(
       snapshot.tasks.length,
       pendingCount,
       bootstrapState?.value === 'true',
-    );
+    ) ||
+    shouldRefreshTaskSnapshot(taskRefreshState?.value);
   const shouldRecoverOrganization = shouldBootstrapOrganizationSnapshot(
     organizationBootstrapState?.value,
   );
@@ -304,17 +318,18 @@ async function recoverMissingSnapshots(): Promise<void> {
           const existing = await db.secureTasks.get(record.id);
           if (existing) {
             const broken = unreadable.get(record.id);
-            // Recheck inside the transaction so a concurrent local save wins.
-            if (
-              !broken ||
-              existing.value.ciphertext !== broken.value.ciphertext ||
-              existing.value.iv !== broken.value.iv
-            )
-              continue;
-            await db.settings.put({
-              key: `task-recovery:${existing.id}:${existing.value.iv}`,
-              value: JSON.stringify(existing),
-            });
+            if (broken) {
+              // Recheck inside the transaction so a concurrent local save wins.
+              if (
+                existing.value.ciphertext !== broken.value.ciphertext ||
+                existing.value.iv !== broken.value.iv
+              )
+                continue;
+              await db.settings.put({
+                key: `task-recovery:${existing.id}:${existing.value.iv}`,
+                value: JSON.stringify(existing),
+              });
+            }
           }
           await db.secureTasks.put(record);
         }
@@ -338,6 +353,11 @@ async function recoverMissingSnapshots(): Promise<void> {
           await db.secureTaskTimers.put(timerRecord);
         if (!protectedTasks.size)
           await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+        if (shouldRecoverTasks)
+          await db.settings.put({
+            key: 'task-snapshot-refreshed-at-v1',
+            value: new Date().toISOString(),
+          });
         if (shouldRecoverOrganization && organizationSnapshotAvailable)
           await db.settings.put({
             key: 'organization-snapshot-bootstrapped-v1',
@@ -772,6 +792,10 @@ async function refreshTaskSnapshotFromServer(): Promise<void> {
       throw new Error('Pending changes must finish uploading before refreshing tasks.');
     if (canonical.length) await db.secureTasks.bulkPut(canonical);
     await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
+    await db.settings.put({
+      key: 'task-snapshot-refreshed-at-v1',
+      value: new Date().toISOString(),
+    });
   });
 }
 async function performSync(csrfToken: string) {
