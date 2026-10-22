@@ -758,12 +758,18 @@
   display: grid;
   gap: 0.35rem;
 }
-.list-item-editor > .attachments {
+.list-item-editor > .list-item-link-editor {
   grid-column: 1 / -1;
 }
-.list-item-editor > .list-item-save {
+.list-item-save-actions {
+  display: flex;
   grid-column: 1 / -1;
-  justify-self: start;
+  align-items: center;
+  gap: var(--button-gap);
+  flex-wrap: wrap;
+}
+.list-item-editor > .attachments {
+  grid-column: 1 / -1;
 }
 .attachments > label {
   display: grid;
@@ -1063,6 +1069,22 @@ form > label {
 .lists-navigation,
 .tasks-navigation {
   position: relative;
+}
+.lists-navigation,
+.tasks-navigation {
+  display: inline-flex;
+  align-items: stretch;
+}
+.lists-navigation .navigation-primary,
+.tasks-navigation .navigation-primary {
+  border-radius: 10px 0 0 10px;
+  padding-right: 0.45rem;
+}
+.lists-navigation .navigation-disclosure,
+.tasks-navigation .navigation-disclosure {
+  min-width: var(--control-min-size);
+  padding-inline: 0.45rem;
+  border-radius: 0 10px 10px 0;
 }
 .tasks-navigation > [data-active],
 .lists-navigation > [data-active],

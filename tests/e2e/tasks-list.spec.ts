@@ -164,7 +164,7 @@ test('keeps Tasks first and collapses the mobile header after scrolling', async 
   await signIn(page);
   const navigation = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(navigation.getByRole('button').first()).toContainText('Tasks');
-  await navigation.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await navigation.getByRole('button', { name: 'Show Tasks menu' }).click();
   const taskMenu = page.locator('#tasks-navigation-links');
   const navigationLabels = await taskMenu.getByRole('button').allTextContents();
   expect(navigationLabels).toEqual(['My Tasks', 'Personal Stack', 'Task Reporting', 'Archive']);

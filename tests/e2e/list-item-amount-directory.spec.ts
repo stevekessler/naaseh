@@ -23,7 +23,7 @@ test('creates a detailed list item offline without money and keeps directory CRU
   await expect(list.getByLabel('List total')).toHaveCount(0);
 
   await context.setOffline(false);
-  await page.getByRole('button', { name: 'Lists', exact: true }).click();
+  await page.getByRole('button', { name: 'Show Lists menu' }).click();
   await page.getByRole('button', { name: 'Global Items', exact: true }).click();
   await expect(page).toHaveURL(/\/directory(?:\?|$)/);
   await expect(page.getByRole('heading', { name: 'Global directory' })).toBeVisible();

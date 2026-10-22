@@ -163,17 +163,6 @@ export function ListPage({
                     </button>
                   </section>
                   <div className="list-actions" aria-label="List actions">
-                    <PermanentDeleteDialog
-                      target={{
-                        resourceType: 'list',
-                        resourceId: list.id,
-                        version: list.version,
-                      }}
-                      label={list.name}
-                      csrfToken={csrfToken}
-                      disabled={list.lifecycle === 'deleting'}
-                    />
-                    <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
                     <button
                       type="button"
                       onClick={() =>
@@ -186,6 +175,17 @@ export function ListPage({
                     >
                       Finish and archive list
                     </button>
+                    <CopyListAction listId={list.id} csrfToken={csrfToken} ready={copyReady} />
+                    <PermanentDeleteDialog
+                      target={{
+                        resourceType: 'list',
+                        resourceId: list.id,
+                        version: list.version,
+                      }}
+                      label={list.name}
+                      csrfToken={csrfToken}
+                      disabled={list.lifecycle === 'deleting'}
+                    />
                   </div>
                   <ListItemCreateForm add={(input) => addItem(list.id, input)} />
                 </>

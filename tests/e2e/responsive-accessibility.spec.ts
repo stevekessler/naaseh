@@ -23,7 +23,7 @@ test('representative responsive pages have no serious or critical axe findings',
     else if (pageName === 'Archive') await openTaskSection(page, 'Archive');
     else {
       if (pageName === 'Global Items')
-        await page.getByRole('button', { name: 'Lists', exact: true }).click();
+        await page.getByRole('button', { name: 'Show Lists menu' }).click();
       else if (['Groups', 'Users'].includes(pageName))
         await page.getByRole('button', { name: 'Admin', exact: true }).click();
       await page

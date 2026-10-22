@@ -13,6 +13,47 @@ import { ListItemRow } from './ListItemRow.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import { MemoEditor } from '../memos/MemoEditor.js';
 import { ListColumnSettings, useListColumns } from './ListColumnSettings.js';
+import { sortListItemsForTable, type ListItemSortKey, type TableSort } from './list-table-sort.js';
+
+const sortLabels: Record<ListItemSortKey, string> = {
+  status: 'Status',
+  name: 'Item',
+  due: 'Due',
+  memo: 'Memo',
+  fileLinks: 'Link',
+};
+
+function SortableHeading({
+  sortKey,
+  sort,
+  change,
+  visuallyHidden = false,
+}: {
+  sortKey: ListItemSortKey;
+  sort: TableSort<ListItemSortKey> | undefined;
+  change: (key: ListItemSortKey) => void;
+  visuallyHidden?: boolean;
+}) {
+  const active = sort?.key === sortKey;
+  const nextDirection = active && sort.direction === 'ascending' ? 'descending' : 'ascending';
+  return (
+    <th scope="col" aria-label={sortLabels[sortKey]} aria-sort={active ? sort.direction : 'none'}>
+      <button
+        type="button"
+        className="task-sort-button"
+        aria-label={`Sort by ${sortLabels[sortKey]} ${nextDirection}`}
+        onClick={() => change(sortKey)}
+      >
+        <span className={visuallyHidden ? 'visually-hidden' : undefined}>
+          {sortLabels[sortKey]}
+        </span>
+        <span aria-hidden="true">
+          {active ? (sort.direction === 'ascending' ? '▲' : '▼') : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 export type NewListItem = {
   name: string;
@@ -142,6 +183,7 @@ export function ListItems({
   const lastDragTarget = useRef<string | undefined>(undefined);
   const columns = useListColumns();
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<TableSort<ListItemSortKey>>();
   const effectiveItems = useMemo(
     () =>
       items.map((item) => {
@@ -160,15 +202,23 @@ export function ListItems({
       }),
     [directory, items],
   );
-  const visibleItems = filterListItems(effectiveItems, query);
+  const visibleItems = sortListItemsForTable(filterListItems(effectiveItems, query), sort);
+  const openItemCount = items.filter((item) => item.status === 'open').length;
+  const visibleOpenItemCount = visibleItems.filter(({ item }) => item.status === 'open').length;
+  const changeSort = (key: ListItemSortKey) =>
+    setSort({
+      key,
+      direction: sort?.key === key && sort.direction === 'ascending' ? 'descending' : 'ascending',
+    });
   if (!items.length)
     return (
       <div className="list-empty-state">
-        <p className="list-item-count">0 items</p>
+        <p className="list-item-count">0 open items</p>
         <p>No items yet.</p>
       </div>
     );
   const finishDrag = (event: DragEndEvent) => {
+    if (sort) return;
     if (event.canceled || !event.operation.source || !event.operation.target) return;
     const sourceId = String(event.operation.source.id);
     const targetId = lastDragTarget.current ?? String(event.operation.target.id);
@@ -208,12 +258,22 @@ export function ListItems({
           />
         </label>
         <p className="list-item-count" role="status">
-          {query.trim() ? `${visibleItems.length} of ` : ''}
-          {items.length} item{items.length === 1 ? '' : 's'}
+          {query.trim() ? `${visibleOpenItemCount} of ` : ''}
+          {openItemCount} open item{openItemCount === 1 ? '' : 's'}
         </p>
         <ListColumnSettings {...columns} />
       </div>
       <div className="task-table-wrap list-item-table-wrap">
+        {sort ? (
+          <div className="task-sort-toolbar" role="status">
+            <span>
+              Sorted by {sortLabels[sort.key]} {sort.direction}
+            </span>
+            <button type="button" className="quiet" onClick={() => setSort(undefined)}>
+              Reset sort
+            </button>
+          </div>
+        ) : null}
         <p id="list-item-drag-instructions" className="visually-hidden">
           Drag to reorder. With a keyboard, press Space on the handle, use the arrow keys, then
           press Space again to drop.
@@ -221,11 +281,17 @@ export function ListItems({
         <table className="task-list list-item-table" aria-label="List items">
           <thead>
             <tr>
-              <th scope="col" aria-label="Status" />
-              <th scope="col">Item</th>
-              {columns.visible.has('due') && <th scope="col">Due</th>}
-              {columns.visible.has('memo') && <th scope="col">Memo</th>}
-              {columns.visible.has('fileLinks') && <th scope="col">Link</th>}
+              <SortableHeading sortKey="status" sort={sort} change={changeSort} visuallyHidden />
+              <SortableHeading sortKey="name" sort={sort} change={changeSort} />
+              {columns.visible.has('due') && (
+                <SortableHeading sortKey="due" sort={sort} change={changeSort} />
+              )}
+              {columns.visible.has('memo') && (
+                <SortableHeading sortKey="memo" sort={sort} change={changeSort} />
+              )}
+              {columns.visible.has('fileLinks') && (
+                <SortableHeading sortKey="fileLinks" sort={sort} change={changeSort} />
+              )}
               {columns.visible.has('actions') && <th scope="col">Actions</th>}
             </tr>
           </thead>
@@ -254,6 +320,7 @@ export function ListItems({
                       csrfToken={csrfToken}
                     />
                   }
+                  reorderable={!sort && !query.trim()}
                 />
               );
             })}
@@ -292,7 +359,7 @@ function SortableListItemRow({
     <ListItemRow
       {...props}
       rowRef={ref}
-      handleRef={handleRef}
+      {...(props.reorderable ? { handleRef } : {})}
       dragging={isDragging}
       dropTarget={isDropTarget}
     />

@@ -121,7 +121,7 @@ export async function openTaskSection(
   page: Page,
   section: 'My Tasks' | 'Personal Stack' | 'Task Reporting' | 'Archive',
 ) {
-  const trigger = page.getByRole('button', { name: 'Tasks', exact: true });
+  const trigger = page.getByRole('button', { name: 'Show Tasks menu' });
   if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
   const link = page
     .locator('#tasks-navigation-links')

@@ -80,7 +80,6 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await projectForm.getByLabel('Project name').fill('Home account');
   await projectForm.getByRole('button', { name: 'Create Project' }).click();
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await page.getByRole('button', { name: 'My Tasks', exact: true }).click();
 
   const dates = await page.evaluate(() => {
     const key = (value: Date) => {
@@ -186,7 +185,6 @@ test('all task filters and date shortcuts narrow the rendered browser results', 
   await expect(page.getByRole('heading', { name: 'Filter checklist' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Tasks', exact: true }).click();
-  await page.getByRole('button', { name: 'My Tasks', exact: true }).click();
 
   await page.getByRole('button', { name: 'Filtered tasks', exact: true }).click();
   const filters = page.getByRole('region', { name: 'Search and filters' });

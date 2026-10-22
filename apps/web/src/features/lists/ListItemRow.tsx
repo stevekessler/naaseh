@@ -11,7 +11,7 @@ import type { NewListItem } from './ListItems.js';
 import { formatCalendarDate } from '../tasks/due-value.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { MemoEditor } from '../memos/MemoEditor.js';
-import { MemoDocumentView } from '../memos/MemoDocumentView.js';
+import { LinkifiedText, MemoDocumentView } from '../memos/MemoDocumentView.js';
 import type { ListColumnId } from './ListColumnSettings.js';
 export function ListItemRow({
   item,
@@ -30,6 +30,7 @@ export function ListItemRow({
   destinationLists,
   onMove,
   editable = true,
+  reorderable = true,
 }: {
   item: ListItem;
   name: string;
@@ -47,6 +48,7 @@ export function ListItemRow({
   destinationLists: { id: string; name: string }[];
   onMove: (destinationListId: string) => void;
   editable?: boolean;
+  reorderable?: boolean;
 }) {
   const done = item.status === 'completed';
   const feedback = useCompletionFeedback();
@@ -59,7 +61,23 @@ export function ListItemRow({
   );
   const [editorError, setEditorError] = useState('');
   const [destinationListId, setDestinationListId] = useState('');
-  useEffect(() => setDraftName(name), [name]);
+  useEffect(() => {
+    if (editing) return;
+    setDraftName(name);
+    setDraftDueDate(item.dueDate ?? '');
+    setDraftLink(item.fileLinks?.[0] ?? '');
+    setDraftMemoDocument(item.memoDocument ?? plainMemoDocument(item.memo ?? ''));
+  }, [editing, item.dueDate, item.fileLinks, item.memo, item.memoDocument, name]);
+  const toggleEditor = () => {
+    if (!editing) {
+      setDraftName(name);
+      setDraftDueDate(item.dueDate ?? '');
+      setDraftLink(item.fileLinks?.[0] ?? '');
+      setDraftMemoDocument(item.memoDocument ?? plainMemoDocument(item.memo ?? ''));
+      setEditorError('');
+    }
+    setEditing((open) => !open);
+  };
   return (
     <Fragment>
       <tr
@@ -88,7 +106,7 @@ export function ListItemRow({
               type="button"
               className="quiet list-item-title-button completion-label"
               aria-expanded={editing}
-              onClick={() => setEditing((open) => !open)}
+              onClick={toggleEditor}
             >
               {name}
             </button>
@@ -106,7 +124,9 @@ export function ListItemRow({
             {item.memoDocument ? (
               <MemoDocumentView document={item.memoDocument} />
             ) : item.memo ? (
-              <p>{item.memo}</p>
+              <p>
+                <LinkifiedText text={item.memo} />
+              </p>
             ) : (
               <span aria-hidden="true">—</span>
             )}
@@ -124,7 +144,7 @@ export function ListItemRow({
         {editable && visibleColumns.has('actions') && (
           <td className="list-item-actions" aria-label={`Actions for ${name}`}>
             <div className="list-item-action-buttons">
-              {handleRef ? (
+              {handleRef && reorderable ? (
                 <button
                   ref={handleRef}
                   className="stack-drag-handle"
@@ -135,14 +155,9 @@ export function ListItemRow({
                   <span aria-hidden="true">⋮⋮</span>
                 </button>
               ) : null}
-              <button className="quiet" type="button" onClick={() => setEditing((open) => !open)}>
+              <button className="quiet" type="button" onClick={toggleEditor}>
                 {editing ? 'Close editor' : 'Edit'}
               </button>
-              {!item.directoryItemId && (
-                <button className="quiet" type="button" onClick={onPromote}>
-                  Add to directory
-                </button>
-              )}
               <button className="quiet" aria-label={`Archive ${name}`} onClick={onRemove}>
                 Archive
               </button>
@@ -174,7 +189,11 @@ export function ListItemRow({
                   onChange={(event) => setDraftDueDate(event.target.value)}
                 />
               </label>
-              <label>
+              <div className="list-item-memo-editor">
+                <span>Memo</span>
+                <MemoEditor value={draftMemoDocument} onChange={setDraftMemoDocument} />
+              </div>
+              <label className="list-item-link-editor">
                 Link
                 <input
                   type="url"
@@ -186,10 +205,6 @@ export function ListItemRow({
                   onChange={(event) => setDraftLink(event.target.value)}
                 />
               </label>
-              <div className="list-item-memo-editor">
-                <span>Memo</span>
-                <MemoEditor value={draftMemoDocument} onChange={setDraftMemoDocument} />
-              </div>
               {destinationLists.length > 0 && (
                 <div className="list-item-move-control">
                   <label>
@@ -220,28 +235,35 @@ export function ListItemRow({
                 </div>
               )}
               {attachments}
-              <button
-                className="list-item-save"
-                type="button"
-                disabled={!draftName.trim()}
-                onClick={() => {
-                  const memo = memoDocumentText(draftMemoDocument);
-                  if (memo.length > 2000) {
-                    setEditorError('List item memos cannot exceed 2,000 characters.');
-                    return;
-                  }
-                  setEditorError('');
-                  onEdit({
-                    name: draftName.trim(),
-                    ...(draftDueDate ? { dueDate: draftDueDate } : {}),
-                    ...(memo ? { memo, memoDocument: draftMemoDocument } : {}),
-                    ...(draftLink ? { fileLinks: [draftLink] } : {}),
-                  });
-                  setEditing(false);
-                }}
-              >
-                Save item
-              </button>
+              <div className="list-item-save-actions">
+                <button
+                  className="list-item-save"
+                  type="button"
+                  disabled={!draftName.trim()}
+                  onClick={() => {
+                    const memo = memoDocumentText(draftMemoDocument);
+                    if (memo.length > 2000) {
+                      setEditorError('List item memos cannot exceed 2,000 characters.');
+                      return;
+                    }
+                    setEditorError('');
+                    onEdit({
+                      name: draftName.trim(),
+                      ...(draftDueDate ? { dueDate: draftDueDate } : {}),
+                      ...(memo ? { memo, memoDocument: draftMemoDocument } : {}),
+                      ...(draftLink ? { fileLinks: [draftLink] } : {}),
+                    });
+                    setEditing(false);
+                  }}
+                >
+                  Save item
+                </button>
+                {!item.directoryItemId && (
+                  <button className="quiet" type="button" onClick={onPromote}>
+                    Add to directory
+                  </button>
+                )}
+              </div>
               {editorError && <p role="alert">{editorError}</p>}
             </div>
           </td>

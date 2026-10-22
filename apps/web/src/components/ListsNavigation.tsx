@@ -13,6 +13,7 @@ export function ListsNavigation({
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
   const [position, setPosition] = useState({ top: 0, left: 16 });
 
   useLayoutEffect(() => {
@@ -46,24 +47,45 @@ export function ListsNavigation({
   }, [open]);
 
   useEffect(() => setOpen(false), [section]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  const openOnHover = () => {
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const closeAfterHover = () => {
+    closeTimer.current = window.setTimeout(() => setOpen(false), 140);
+  };
 
   const active = section === 'lists' || section === 'directory';
   return (
-    <div ref={container} className="lists-navigation">
+    <div
+      ref={container}
+      className="lists-navigation"
+      onMouseEnter={openOnHover}
+      onMouseLeave={closeAfterHover}
+    >
       <button
         type="button"
-        className="quiet"
-        aria-label="Lists"
-        aria-expanded={open}
-        aria-controls="lists-navigation-links"
+        className="quiet navigation-primary"
         aria-current={active ? 'page' : undefined}
         data-active={active || undefined}
         onClick={() => {
-          if (section !== 'lists') navigate('lists');
-          setOpen((value) => !value);
+          navigate('lists');
+          setOpen(false);
         }}
       >
-        Lists <span aria-hidden="true">▾</span>
+        Lists
+      </button>
+      <button
+        type="button"
+        className="quiet navigation-disclosure"
+        aria-label="Show Lists menu"
+        aria-expanded={open}
+        aria-controls="lists-navigation-links"
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true">▾</span>
       </button>
       {open &&
         createPortal(
@@ -72,6 +94,8 @@ export function ListsNavigation({
             id="lists-navigation-links"
             className="lists-navigation-links"
             style={{ ...position }}
+            onMouseEnter={() => window.clearTimeout(closeTimer.current)}
+            onMouseLeave={closeAfterHover}
           >
             {(
               [

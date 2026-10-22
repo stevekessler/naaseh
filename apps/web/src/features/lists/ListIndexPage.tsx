@@ -2,6 +2,43 @@ import type { CategoryRecord, List, ListItem, Project } from '@naaseh/domain';
 import { useState } from 'react';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
 import { ListIndexColumnSettings, useListIndexColumns } from './ListIndexColumnSettings.js';
+import { sortListsForTable, type ListIndexSortKey, type TableSort } from './list-table-sort.js';
+
+const sortLabels: Record<ListIndexSortKey, string> = {
+  name: 'List',
+  category: 'Category',
+  project: 'Project',
+  items: 'Items',
+  priority: 'Priority',
+};
+
+function SortableHeading({
+  sortKey,
+  sort,
+  change,
+}: {
+  sortKey: ListIndexSortKey;
+  sort: TableSort<ListIndexSortKey> | undefined;
+  change: (key: ListIndexSortKey) => void;
+}) {
+  const active = sort?.key === sortKey;
+  const nextDirection = active && sort.direction === 'ascending' ? 'descending' : 'ascending';
+  return (
+    <th scope="col" aria-label={sortLabels[sortKey]} aria-sort={active ? sort.direction : 'none'}>
+      <button
+        type="button"
+        className="task-sort-button"
+        aria-label={`Sort by ${sortLabels[sortKey]} ${nextDirection}`}
+        onClick={() => change(sortKey)}
+      >
+        <span>{sortLabels[sortKey]}</span>
+        <span aria-hidden="true">
+          {active ? (sort.direction === 'ascending' ? '▲' : '▼') : '↕'}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 export function ListIndexPage({
   lists,
@@ -20,10 +57,36 @@ export function ListIndexPage({
 }) {
   const active = lists.filter((list) => list.status === 'active');
   const [query, setQuery] = useState('');
-  const visible = filterListsByTitle(active, query);
+  const [sort, setSort] = useState<TableSort<ListIndexSortKey>>();
   const columns = useListIndexColumns();
   const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
   const projectRecords = new Map(projects.map((project) => [project.id, project]));
+  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+  const categoryNamesByList = new Map(
+    active.flatMap((list) => {
+      const categoryId = list.categoryId ?? projectRecords.get(list.projectId ?? '')?.categoryId;
+      const categoryName = categoryId ? categoryNames.get(categoryId) : undefined;
+      return categoryName ? [[list.id, categoryName] as const] : [];
+    }),
+  );
+  const itemCounts = new Map(
+    active.map((list) => [
+      list.id,
+      (items.get(list.id) ?? []).filter((item) => item.status === 'open').length,
+    ]),
+  );
+  const visible = sortListsForTable(
+    filterListsByTitle(active, query),
+    sort,
+    itemCounts,
+    categoryNamesByList,
+    projectNames,
+  );
+  const changeSort = (key: ListIndexSortKey) =>
+    setSort({
+      key,
+      direction: sort?.key === key && sort.direction === 'ascending' ? 'descending' : 'ascending',
+    });
   if (!active.length) return null;
   return (
     <div className="list-index">
@@ -44,14 +107,32 @@ export function ListIndexPage({
         <ListIndexColumnSettings {...columns} />
       </div>
       <div className="task-table-wrap list-index-table-wrap">
+        {sort ? (
+          <div className="task-sort-toolbar" role="status">
+            <span>
+              Sorted by {sortLabels[sort.key]} {sort.direction}
+            </span>
+            <button type="button" className="quiet" onClick={() => setSort(undefined)}>
+              Reset sort
+            </button>
+          </div>
+        ) : null}
         <table className="task-list list-index-table" aria-label="Authorized lists">
           <thead>
             <tr>
-              <th scope="col">List</th>
-              {columns.visible.has('category') && <th scope="col">Category</th>}
-              {columns.visible.has('project') && <th scope="col">Project</th>}
-              {columns.visible.has('items') && <th scope="col">Items</th>}
-              {columns.visible.has('priority') && <th scope="col">Priority</th>}
+              <SortableHeading sortKey="name" sort={sort} change={changeSort} />
+              {columns.visible.has('category') && (
+                <SortableHeading sortKey="category" sort={sort} change={changeSort} />
+              )}
+              {columns.visible.has('project') && (
+                <SortableHeading sortKey="project" sort={sort} change={changeSort} />
+              )}
+              {columns.visible.has('items') && (
+                <SortableHeading sortKey="items" sort={sort} change={changeSort} />
+              )}
+              {columns.visible.has('priority') && (
+                <SortableHeading sortKey="priority" sort={sort} change={changeSort} />
+              )}
               {columns.visible.has('actions') && <th scope="col">Actions</th>}
             </tr>
           </thead>
@@ -59,9 +140,7 @@ export function ListIndexPage({
             {visible.map((list) => {
               const project = list.projectId ? projectRecords.get(list.projectId) : undefined;
               const categoryId = list.categoryId ?? project?.categoryId;
-              const count = (items.get(list.id) ?? []).filter(
-                (item) => item.status !== 'removed',
-              ).length;
+              const count = itemCounts.get(list.id) ?? 0;
               return (
                 <tr key={list.id} aria-current={list.id === selectedId ? 'page' : undefined}>
                   <th scope="row" data-label="List">

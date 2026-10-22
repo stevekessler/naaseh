@@ -66,7 +66,7 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await expect(listDirectory.getByRole('columnheader', { name: 'Project' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close list table column settings' }).click();
   await expect(page.getByRole('table', { name: 'List items' })).toBeVisible();
-  await expect(page.getByText('2 items', { exact: true })).toBeVisible();
+  await expect(page.getByText('2 open items', { exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Item', exact: true })).toBeVisible();
   const supportsSyntheticDrag = testInfo.project.name === 'chromium';
   await expect(page.getByRole('columnheader', { name: 'Link' })).toHaveCount(phoneLayout ? 0 : 1);
@@ -110,7 +110,7 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await eggs.getByRole('button', { name: 'Eggs', exact: true }).click();
   await page.getByLabel('Move to list').selectOption({ label: 'Hardware' });
   await page.getByRole('button', { name: 'Move item' }).click();
-  await expect(page.getByText('1 item', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 open item', { exact: true })).toBeVisible();
   await listDirectory.getByRole('button', { name: 'Hardware' }).click();
   await expect(page.getByText('Eggs', { exact: true })).toBeVisible();
 

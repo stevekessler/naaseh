@@ -13,6 +13,7 @@ export function TasksNavigation({
   const [open, setOpen] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
   const [position, setPosition] = useState({ top: 0, left: 16 });
   useLayoutEffect(() => {
     if (!open) return;
@@ -42,19 +43,43 @@ export function TasksNavigation({
     document.addEventListener('pointerdown', closeOutside);
     return () => document.removeEventListener('pointerdown', closeOutside);
   }, [open]);
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  const openOnHover = () => {
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  };
+  const closeAfterHover = () => {
+    closeTimer.current = window.setTimeout(() => setOpen(false), 140);
+  };
   const active = ['tasks', 'stack', 'archive', 'dashboard'].includes(section);
   return (
-    <div ref={container} className="tasks-navigation">
+    <div
+      ref={container}
+      className="tasks-navigation"
+      onMouseEnter={openOnHover}
+      onMouseLeave={closeAfterHover}
+    >
       <button
         type="button"
-        className="quiet"
-        aria-expanded={open}
-        aria-controls="tasks-navigation-links"
+        className="quiet navigation-primary"
         aria-current={active ? 'page' : undefined}
         data-active={active || undefined}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          navigate('tasks');
+          setOpen(false);
+        }}
       >
-        Tasks <span aria-hidden="true">▾</span>
+        Tasks
+      </button>
+      <button
+        type="button"
+        className="quiet navigation-disclosure"
+        aria-label="Show Tasks menu"
+        aria-expanded={open}
+        aria-controls="tasks-navigation-links"
+        onClick={() => setOpen(true)}
+      >
+        <span aria-hidden="true">▾</span>
       </button>
       {open &&
         createPortal(
@@ -63,6 +88,8 @@ export function TasksNavigation({
             id="tasks-navigation-links"
             className="tasks-navigation-links"
             style={{ ...position }}
+            onMouseEnter={() => window.clearTimeout(closeTimer.current)}
+            onMouseLeave={closeAfterHover}
           >
             {(
               [
