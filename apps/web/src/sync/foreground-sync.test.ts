@@ -18,7 +18,7 @@ class FakeTarget extends EventTarget {
 }
 
 describe('foreground synchronization', () => {
-  it('syncs on focus and on the bounded visible interval', () => {
+  it('syncs on focus, mobile resume, page restore, and the bounded visible interval', () => {
     const target = new FakeTarget();
     const document = new EventTarget() as EventTarget & {
       visibilityState: DocumentVisibilityState;
@@ -28,13 +28,17 @@ describe('foreground synchronization', () => {
     const cleanup = installForegroundSync({ target, document, synchronize });
 
     target.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    target.dispatchEvent(new Event('pageshow'));
     target.interval?.();
 
-    expect(synchronize).toHaveBeenCalledTimes(2);
+    expect(synchronize).toHaveBeenCalledTimes(4);
     expect(target.timeout).toBe(foregroundSyncIntervalMs);
     cleanup();
     target.dispatchEvent(new Event('focus'));
-    expect(synchronize).toHaveBeenCalledTimes(2);
+    document.dispatchEvent(new Event('visibilitychange'));
+    target.dispatchEvent(new Event('pageshow'));
+    expect(synchronize).toHaveBeenCalledTimes(4);
     expect(target.cleared).toBe(17);
   });
 
@@ -48,6 +52,8 @@ describe('foreground synchronization', () => {
     installForegroundSync({ target, document, synchronize });
 
     target.dispatchEvent(new Event('focus'));
+    document.dispatchEvent(new Event('visibilitychange'));
+    target.dispatchEvent(new Event('pageshow'));
     target.interval?.();
 
     expect(synchronize).not.toHaveBeenCalled();

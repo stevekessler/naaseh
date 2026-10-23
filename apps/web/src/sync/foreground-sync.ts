@@ -11,7 +11,7 @@ export interface ForegroundSyncDocument {
   removeEventListener(type: string, listener: () => void): void;
 }
 
-export const foregroundSyncIntervalMs = 120_000;
+export const foregroundSyncIntervalMs = 60_000;
 
 /**
  * Refresh incremental data when a person returns to an already-open client.
@@ -27,9 +27,16 @@ export function installForegroundSync(input: {
     if (input.document.visibilityState === 'visible') void input.synchronize();
   };
   input.target.addEventListener('focus', refresh);
+  // Mobile Safari commonly resumes an existing tab without dispatching focus.
+  // visibilitychange covers app switching, while pageshow also covers restoring
+  // a tab from the back-forward cache.
+  input.document.addEventListener('visibilitychange', refresh);
+  input.target.addEventListener('pageshow', refresh);
   const interval = input.target.setInterval(refresh, input.intervalMs ?? foregroundSyncIntervalMs);
   return () => {
     input.target.removeEventListener('focus', refresh);
+    input.document.removeEventListener('visibilitychange', refresh);
+    input.target.removeEventListener('pageshow', refresh);
     input.target.clearInterval(interval);
   };
 }
