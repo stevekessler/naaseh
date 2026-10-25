@@ -11,6 +11,9 @@ import {
 } from '@naaseh/domain';
 import { ListItemRow } from './ListItemRow.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
+import { attachmentAccept, uploadAttachment } from '../attachments/attachment-client.js';
+import { drainSequentially } from '../../sync/sync-engine.js';
+import { db } from '../../db/database.js';
 import { MemoEditor } from '../memos/MemoEditor.js';
 import { ListColumnSettings, useListColumns } from './ListColumnSettings.js';
 import { sortListItemsForTable, type ListItemSortKey, type TableSort } from './list-table-sort.js';
@@ -65,7 +68,13 @@ export type NewListItem = {
 
 export const parseInitialListItem = (name: string): NewListItem => ({ name: name.trim() });
 
-export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promise<void> }) {
+export function ListItemCreateForm({
+  add,
+  csrfToken,
+}: {
+  add: (input: NewListItem) => Promise<ListItem | void>;
+  csrfToken?: string;
+}) {
   const [name, setName] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [link, setLink] = useState('');
@@ -73,6 +82,9 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
   const [memoEditorKey, setMemoEditorKey] = useState(0);
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [createdItem, setCreatedItem] = useState<ListItem>();
+  const fileInput = useRef<HTMLInputElement>(null);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -95,14 +107,38 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
     setError('');
     setPending(true);
     try {
-      await add(input);
+      const saved = createdItem ?? (await add(input));
+      if (saved && files.length && csrfToken) {
+        setCreatedItem(saved);
+        await drainSequentially(csrfToken);
+        const mutations = await db.outbox.where('entityId').anyOf(saved.id, saved.listId).toArray();
+        if (
+          mutations.some(
+            (mutation) =>
+              (mutation.entityType === 'listItem' || mutation.entityType === 'list') &&
+              mutation.operation === 'create',
+          )
+        )
+          throw new Error('Item saved. Connect and retry to upload its files.');
+        for (const file of files) {
+          await uploadAttachment(file, 'listItem', saved.id, csrfToken);
+          setFiles((remaining) => remaining.filter((candidate) => candidate !== file));
+        }
+      }
+      setCreatedItem(undefined);
+      setFiles([]);
+      if (fileInput.current) fileInput.current.value = '';
       setName('');
       setDueDate('');
       setLink('');
       setMemoDocument(plainMemoDocument(''));
       setMemoEditorKey((value) => value + 1);
-    } catch {
-      setError('The item was not saved. Your entry is still here; try again.');
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'The item was not saved. Your entry is still here; try again.',
+      );
     } finally {
       setPending(false);
     }
@@ -143,7 +179,37 @@ export function ListItemCreateForm({ add }: { add: (input: NewListItem) => Promi
           </div>
         </div>
       </details>
-      <button disabled={pending}>{pending ? 'Adding…' : 'Add item'}</button>
+      {csrfToken && (
+        <label>
+          Attach files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or CSV; up to 10 files,
+          25 MiB each)
+          <input
+            ref={fileInput}
+            type="file"
+            multiple
+            accept={attachmentAccept}
+            disabled={pending || Boolean(createdItem)}
+            onChange={(event) => {
+              const selected = Array.from(event.currentTarget.files ?? []);
+              if (
+                selected.length > 10 ||
+                selected.some((file) => file.size < 1 || file.size > 25 * 1024 * 1024)
+              ) {
+                setError('Choose up to 10 files, each between 1 byte and 25 MiB.');
+                event.currentTarget.value = '';
+                setFiles([]);
+                return;
+              }
+              setError('');
+              setFiles(selected);
+            }}
+          />
+          {files.length > 0 && <span>{files.map((file) => file.name).join(', ')}</span>}
+        </label>
+      )}
+      <button disabled={pending}>
+        {pending ? 'Adding…' : createdItem ? 'Retry file upload' : 'Add item'}
+      </button>
       {error && (
         <p id="list-item-amount-error" role="alert">
           {error}

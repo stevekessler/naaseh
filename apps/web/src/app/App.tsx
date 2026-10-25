@@ -1687,7 +1687,7 @@ export function App() {
                 return saveNewList(name, session.userId, projectId, urgency, categoryId);
               }}
               addItem={async (listId, input) => {
-                await addLocalListItem(listId, input, session.userId);
+                return addLocalListItem(listId, input, session.userId);
               }}
               changeList={async (list, patch) => {
                 await updateLocalList(list, patch);

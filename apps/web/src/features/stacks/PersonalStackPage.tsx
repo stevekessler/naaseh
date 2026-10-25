@@ -10,6 +10,7 @@ import { TaskForm } from '../tasks/TaskForm.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from '../tasks/TaskEditDialog.js';
 import type { ReturnTypeWorkloadTree } from '../projects/project-tree-types.js';
+import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import { ProjectStatus } from '../projects/ProjectStatus.js';
 
 export interface PersonalStackPageProps {
@@ -271,6 +272,15 @@ export function PersonalStackPage({
           groupOptions={groupOptions}
           save={(patch) => updateTask(editing, patch)}
           close={() => setEditingId(undefined)}
+          primaryContent={
+            csrfToken ? (
+              <AttachmentPanelForParent
+                parentType="task"
+                parentId={editing.id}
+                csrfToken={csrfToken}
+              />
+            ) : undefined
+          }
         />
       ) : null}
     </section>
