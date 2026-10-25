@@ -217,7 +217,7 @@ export function TaskForm({
       setPostItColor('');
       setPercentComplete(0);
       form.querySelector<HTMLDetailsElement>('.task-form-details')?.removeAttribute('open');
-      if (form.contains(document.activeElement))
+      if (document.activeElement === document.body || form.contains(document.activeElement))
         form.querySelector<HTMLInputElement>('input[name="label"]')?.focus();
     }
   }
