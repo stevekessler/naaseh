@@ -29,7 +29,7 @@ const subscriptionSchema = z
       .refine((value) => new URL(value).protocol === 'https:'),
     expirationTime: z.number().nullable().optional(),
     keys: z.object({ p256dh: z.string().min(20).max(1024), auth: z.string().min(8).max(256) }),
-    capabilities: z.record(z.unknown()).optional(),
+    capabilities: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 

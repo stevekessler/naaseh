@@ -18,10 +18,10 @@ export const backupManifestContentSchema = z
     dataRange: z
       .object({ earliestAt: z.string().datetime(), latestAt: z.string().datetime() })
       .strict(),
-    entityCounts: z.record(z.number().int().nonnegative()),
+    entityCounts: z.record(z.string(), z.number().int().nonnegative()),
     keyVersions: uniqueNonEmptyStrings,
     recoveryWrapVersions: uniqueNonEmptyStrings,
-    artifactHashes: z.record(sha256Schema),
+    artifactHashes: z.record(z.string(), sha256Schema),
   })
   .strict();
 
@@ -51,7 +51,7 @@ export const restoreEvidenceSchema = z
 export const recoveryPackageInventorySchema = z
   .object({
     manifestId: z.string().min(1),
-    entityCounts: z.record(z.number().int().nonnegative()),
+    entityCounts: z.record(z.string(), z.number().int().nonnegative()),
     requiredKeyVersions: uniqueNonEmptyStrings,
     recoveryWraps: z
       .array(

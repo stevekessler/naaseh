@@ -263,8 +263,8 @@ export const attachmentUploadGrantSchema = z
   .strict();
 export const taskLockRequestSchema = z.object({ locked: z.boolean() }).strict();
 export const exportStartSchema = z.object({ idempotencyKey: z.string().min(1).max(200) }).strict();
-export const exportJobResponseSchema = exportJobSchema
-  .innerType()
+export const exportJobResponseSchema = z
+  .object(exportJobSchema.shape)
   .omit({ stagingPrefix: true, resultKey: true });
 const legacyMutationSchema = z.object({
   id: ulidSchema,

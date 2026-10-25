@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Attachment } from '@naaseh/domain';
 import {
+  attachmentAccept,
   downloadAttachment,
   refreshAttachment,
   removeAttachment,
@@ -61,12 +62,13 @@ export function AttachmentPanel({
     <section className="attachments">
       <h3>Attachments</h3>
       <label>
-        Attach a file or multiple files (PDF, image, text, or CSV; up to 25 MiB each)
+        Attach a file or multiple files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or
+        CSV; up to 25 MiB each)
         <input
           type="file"
           multiple
-          accept="application/pdf,image/jpeg,image/png,text/plain,text/csv"
-          disabled={!online || awaitingParentSync || active.length >= 10}
+          accept={attachmentAccept}
+          disabled={!online || awaitingParentSync || progress !== undefined || active.length >= 10}
           onChange={(event) => {
             const input = event.currentTarget;
             const files = Array.from(event.target.files ?? []);
