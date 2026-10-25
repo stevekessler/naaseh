@@ -45,7 +45,7 @@ export function ListPage({
     urgency?: import('@naaseh/domain').Urgency,
     categoryId?: string,
   ) => Promise<List>;
-  addItem: (listId: string, input: NewListItem) => Promise<void>;
+  addItem: (listId: string, input: NewListItem) => Promise<ListItem | void>;
   toggle: (item: ListItem) => void;
   remove: (item: ListItem) => void;
   csrfToken: string;
@@ -187,7 +187,11 @@ export function ListPage({
                       disabled={list.lifecycle === 'deleting'}
                     />
                   </div>
-                  <ListItemCreateForm add={(input) => addItem(list.id, input)} />
+                  <ListItemCreateForm
+                    key={list.id}
+                    csrfToken={csrfToken}
+                    add={(input) => addItem(list.id, input)}
+                  />
                 </>
               ) : (
                 <p className="list-read-only-notice">Shared with you · Only the owner can edit.</p>

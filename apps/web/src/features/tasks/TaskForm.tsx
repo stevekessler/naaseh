@@ -1,4 +1,12 @@
-import { lazy, Suspense, type CSSProperties, type FormEvent, useId, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+  useId,
+  useState,
+} from 'react';
 import {
   defaultUrgency,
   instantToLocalDue,
@@ -86,6 +94,7 @@ export function TaskForm({
   submitLabel = task ? 'Save changes' : 'Add task',
   cancel,
   nestedDialogs = false,
+  attachments,
 }: {
   save: (task: TaskInput) => Promise<Task | void>;
   csrfToken?: string;
@@ -100,6 +109,7 @@ export function TaskForm({
   submitLabel?: string;
   cancel?: () => void;
   nestedDialogs?: boolean;
+  attachments?: ReactNode;
 }) {
   const [urgency, setUrgency] = useState<Urgency>(task?.urgency ?? defaultUrgency);
   const initialCategoryId =
@@ -319,33 +329,6 @@ export function TaskForm({
       </div>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
         <summary>Task details</summary>
-        {!task && csrfToken && (
-          <label>
-            Attach files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or CSV; up to 10
-            files, 25 MiB each)
-            <input
-              type="file"
-              multiple
-              accept={attachmentAccept}
-              disabled={saving || Boolean(createdTask)}
-              onChange={(event) => {
-                const selected = Array.from(event.currentTarget.files ?? []);
-                if (
-                  selected.length > 10 ||
-                  selected.some((file) => file.size < 1 || file.size > 25 * 1024 * 1024)
-                ) {
-                  setSaveError('Choose up to 10 files, each between 1 byte and 25 MiB.');
-                  event.currentTarget.value = '';
-                  setFiles([]);
-                  return;
-                }
-                setSaveError('');
-                setFiles(selected);
-              }}
-            />
-            {files.length > 0 && <span>{files.map((file) => file.name).join(', ')}</span>}
-          </label>
-        )}
         <label>{task?.memoHidden ? '🔒 Private notes' : 'Memo'}</label>
         {typeof document === 'undefined' ? (
           <div className="memo-editor" aria-label="Memo">
@@ -417,6 +400,34 @@ export function TaskForm({
             placeholder="Search parent tasks"
           />
         </div>
+        {!task && csrfToken && (
+          <label>
+            Attach files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or CSV; up to 10
+            files, 25 MiB each)
+            <input
+              type="file"
+              multiple
+              accept={attachmentAccept}
+              disabled={saving || Boolean(createdTask)}
+              onChange={(event) => {
+                const selected = Array.from(event.currentTarget.files ?? []);
+                if (
+                  selected.length > 10 ||
+                  selected.some((file) => file.size < 1 || file.size > 25 * 1024 * 1024)
+                ) {
+                  setSaveError('Choose up to 10 files, each between 1 byte and 25 MiB.');
+                  event.currentTarget.value = '';
+                  setFiles([]);
+                  return;
+                }
+                setSaveError('');
+                setFiles(selected);
+              }}
+            />
+            {files.length > 0 && <span>{files.map((file) => file.name).join(', ')}</span>}
+          </label>
+        )}
+        {attachments}
         <label className="checkbox">
           <input
             aria-describedby="task-privacy-help"

@@ -102,6 +102,7 @@ export function TaskEditDialog({
         <fieldset disabled={busy}>
           <TaskForm
             task={task}
+            attachments={primaryContent}
             nestedDialogs
             categories={categories}
             projects={projects}
@@ -129,7 +130,6 @@ export function TaskEditDialog({
             }}
           />
         </fieldset>
-        {primaryContent}
         {secondaryContent}
       </div>
     </dialog>
