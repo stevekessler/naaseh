@@ -217,6 +217,7 @@ export function TaskForm({
       setPostItColor('');
       setPercentComplete(0);
       form.querySelector<HTMLDetailsElement>('.task-form-details')?.removeAttribute('open');
+      form.querySelector<HTMLInputElement>('input[name="label"]')?.focus();
     }
   }
   return (
