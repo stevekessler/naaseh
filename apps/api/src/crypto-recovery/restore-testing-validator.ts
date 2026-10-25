@@ -69,7 +69,7 @@ const workflowEventSchema = z
       'RecordEvidence',
       'RecordFailure',
     ]),
-    input: z.record(z.unknown()),
+    input: z.record(z.string(), z.unknown()),
   })
   .strict();
 

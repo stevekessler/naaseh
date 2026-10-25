@@ -51,7 +51,7 @@ const manifestInventoryInputSchema = z
           .strict(),
       )
       .min(1),
-    artifactHashes: z.record(z.string().regex(/^[a-f0-9]{64}$/)),
+    artifactHashes: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)),
   })
   .strict();
 

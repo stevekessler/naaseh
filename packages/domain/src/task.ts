@@ -192,7 +192,8 @@ export const taskInputSchema = taskObjectSchema
     currentCompletionEventId: true,
   })
   .partial()
-  .required({ label: true, urgency: true })
+  .required({ label: true })
+  .extend({ urgency: urgencySchema.default(defaultUrgency) })
   .strict()
   .superRefine(validateTaskInvariants);
 
