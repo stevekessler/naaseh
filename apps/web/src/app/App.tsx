@@ -1105,7 +1105,7 @@ export function App() {
     );
 
   async function addTask(input: import('@naaseh/domain').TaskInput) {
-    await saveNewTask(input, session!.userId);
+    return saveNewTask(input, session!.userId);
   }
   async function toggle(task: Task) {
     await completionUndo.save(
@@ -1340,6 +1340,7 @@ export function App() {
               defaultAssigneeId={session.userId}
               workloadTree={workloadTree}
               createTask={addTask}
+              csrfToken={session.csrfToken}
               updateTask={async (task, patch) => {
                 await completionUndo.save(task, patch, session.userId);
               }}
@@ -1739,6 +1740,7 @@ export function App() {
               </section>
               <TaskForm
                 save={addTask}
+                csrfToken={session.csrfToken}
                 categories={categories}
                 projects={projects}
                 assignees={assignees}

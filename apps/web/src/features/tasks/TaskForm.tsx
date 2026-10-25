@@ -24,6 +24,9 @@ import {
 import { CategoryPicker } from '../../components/CategoryPicker.js';
 import { ReferenceCombobox } from '../../components/ReferenceCombobox.js';
 import { postItPalette } from '../../styles/category-color.js';
+import { attachmentAccept, uploadAttachment } from '../attachments/attachment-client.js';
+import { drainSequentially } from '../../sync/sync-engine.js';
+import { db } from '../../db/database.js';
 import { DueDateField } from './DueDateField.js';
 
 const MemoEditor = lazy(() =>
@@ -71,6 +74,7 @@ export function eligibleParentTasks(task: Task | undefined, parentTasks: readonl
 
 export function TaskForm({
   save,
+  csrfToken,
   task,
   categories = [],
   projects = [],
@@ -83,7 +87,8 @@ export function TaskForm({
   cancel,
   nestedDialogs = false,
 }: {
-  save: (task: TaskInput) => Promise<void>;
+  save: (task: TaskInput) => Promise<Task | void>;
+  csrfToken?: string;
   task?: Task;
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
@@ -125,6 +130,8 @@ export function TaskForm({
   const [groupId, setGroupId] = useState(task?.groupId ?? '');
   const [postItColor, setPostItColor] = useState<PostItColor | ''>(task?.postItColor ?? '');
   const [percentComplete, setPercentComplete] = useState(task?.percentComplete ?? 0);
+  const [files, setFiles] = useState<File[]>([]);
+  const [createdTask, setCreatedTask] = useState<Task>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const progressId = useId();
@@ -147,26 +154,45 @@ export function TaskForm({
     setSaving(true);
     setSaveError('');
     try {
-      await save({
-        label: value('label'),
-        memo: memoDocumentText(memoDocument),
-        memoDocument,
-        link: value('link'),
-        ...(dueKind === 'date' && dueDate ? { dueKind, dueDate } : {}),
-        ...(dueKind === 'timed' && dueDate && dueTime
-          ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
-          : {}),
-        ...(dueKind !== 'none' && repeatUnit ? { repeatInterval, repeatUnit } : {}),
-        assigneeId: submittedAssigneeId,
-        ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
-        ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
-        ...(groupId ? { groupId } : {}),
-        ...(parentId ? { parentId } : {}),
-        visibility: data.get('private') ? 'private' : 'public',
-        urgency,
-        ...(postItColor ? { postItColor } : {}),
-        percentComplete,
-      });
+      const saved =
+        createdTask ??
+        (await save({
+          label: value('label'),
+          memo: memoDocumentText(memoDocument),
+          memoDocument,
+          link: value('link'),
+          ...(dueKind === 'date' && dueDate ? { dueKind, dueDate } : {}),
+          ...(dueKind === 'timed' && dueDate && dueTime
+            ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
+            : {}),
+          ...(dueKind !== 'none' && repeatUnit ? { repeatInterval, repeatUnit } : {}),
+          assigneeId: submittedAssigneeId,
+          ...(submittedCategoryId ? { categoryId: submittedCategoryId } : {}),
+          ...(submittedProjectId ? { projectId: submittedProjectId } : {}),
+          ...(groupId ? { groupId } : {}),
+          ...(parentId ? { parentId } : {}),
+          visibility: data.get('private') ? 'private' : 'public',
+          urgency,
+          ...(postItColor ? { postItColor } : {}),
+          percentComplete,
+        }));
+      if (saved && files.length && csrfToken) {
+        setCreatedTask(saved);
+        await drainSequentially(csrfToken);
+        const pending = await db.outbox.where('entityId').equals(saved.id).toArray();
+        if (
+          pending.some(
+            (mutation) => mutation.entityType === 'task' && mutation.operation === 'create',
+          )
+        )
+          throw new Error('Task saved. Connect and retry to upload its files.');
+        for (const file of files) {
+          await uploadAttachment(file, 'task', saved.id, csrfToken);
+          setFiles((remaining) => remaining.filter((candidate) => candidate !== file));
+        }
+      }
+      setCreatedTask(undefined);
+      setFiles([]);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'The task could not be saved.');
       return;
@@ -291,6 +317,33 @@ export function TaskForm({
       </div>
       <details className="task-form-details" {...(task ? { open: true } : {})}>
         <summary>Task details</summary>
+        {!task && csrfToken && (
+          <label>
+            Attach files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or CSV; up to 10
+            files, 25 MiB each)
+            <input
+              type="file"
+              multiple
+              accept={attachmentAccept}
+              disabled={saving || Boolean(createdTask)}
+              onChange={(event) => {
+                const selected = Array.from(event.currentTarget.files ?? []);
+                if (
+                  selected.length > 10 ||
+                  selected.some((file) => file.size < 1 || file.size > 25 * 1024 * 1024)
+                ) {
+                  setSaveError('Choose up to 10 files, each between 1 byte and 25 MiB.');
+                  event.currentTarget.value = '';
+                  setFiles([]);
+                  return;
+                }
+                setSaveError('');
+                setFiles(selected);
+              }}
+            />
+            {files.length > 0 && <span>{files.map((file) => file.name).join(', ')}</span>}
+          </label>
+        )}
         <label>{task?.memoHidden ? '🔒 Private notes' : 'Memo'}</label>
         {typeof document === 'undefined' ? (
           <div className="memo-editor" aria-label="Memo">
@@ -409,13 +462,17 @@ export function TaskForm({
       </details>
       {cancel ? (
         <div className="dialog-actions">
-          <button disabled={saving}>{saving ? 'Saving…' : submitLabel}</button>
+          <button disabled={saving}>
+            {saving ? 'Saving…' : createdTask ? 'Retry file upload' : submitLabel}
+          </button>
           <button type="button" className="quiet" onClick={cancel}>
             Cancel
           </button>
         </div>
       ) : (
-        <button disabled={saving}>{saving ? 'Saving…' : submitLabel}</button>
+        <button disabled={saving}>
+          {saving ? 'Saving…' : createdTask ? 'Retry file upload' : submitLabel}
+        </button>
       )}
       {saveError && <p role="alert">{saveError}</p>}
     </form>

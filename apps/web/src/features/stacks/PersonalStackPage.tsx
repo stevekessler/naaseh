@@ -35,7 +35,8 @@ export interface PersonalStackPageProps {
   discardConflicts?: () => void | Promise<void>;
   filters?: Filters;
   changeFilters?: (filters: Filters) => void;
-  createTask?: (task: TaskInput) => Promise<void>;
+  createTask?: (task: TaskInput) => Promise<Task | void>;
+  csrfToken?: string;
   updateTask?: (task: Task, patch: Partial<Task>) => Promise<void>;
   readError?: 'invalid_cursor' | 'expired_cursor' | 'context_changed' | 'failed' | 'timeout';
   retryRead?: () => void;
@@ -91,6 +92,7 @@ export function PersonalStackPage({
   filters,
   changeFilters,
   createTask,
+  csrfToken,
   updateTask,
   readError,
   retryRead,
@@ -170,6 +172,7 @@ export function PersonalStackPage({
           <summary>New task</summary>
           <TaskForm
             save={createTask}
+            {...(csrfToken ? { csrfToken } : {})}
             categories={categories}
             projects={projectRecords}
             assignees={assignees}

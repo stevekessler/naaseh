@@ -4,6 +4,13 @@ const allowedTypes = new Set([
   'image/png',
   'text/plain',
   'text/csv',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/markdown',
 ]);
 const mediaTypeByExtension = new Map([
   ['.pdf', 'application/pdf'],
@@ -12,6 +19,14 @@ const mediaTypeByExtension = new Map([
   ['.png', 'image/png'],
   ['.txt', 'text/plain'],
   ['.csv', 'text/csv'],
+  ['.doc', 'application/msword'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['.xls', 'application/vnd.ms-excel'],
+  ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['.ppt', 'application/vnd.ms-powerpoint'],
+  ['.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  ['.md', 'text/markdown'],
+  ['.markdown', 'text/markdown'],
 ]);
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export const MAX_ATTACHMENTS_PER_PARENT = 10;

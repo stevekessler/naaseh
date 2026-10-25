@@ -3,6 +3,9 @@ import {
   removeAttachmentMetadata,
 } from '../../db/attachment-repository.js';
 import type { Attachment } from '@naaseh/domain';
+export const attachmentAccept =
+  '.pdf,.jpg,.jpeg,.png,.txt,.csv,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.md,.markdown';
+
 function base64(bytes: ArrayBuffer) {
   let binary = '';
   for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
@@ -18,6 +21,14 @@ const mediaTypeByExtension = new Map([
   ['.png', 'image/png'],
   ['.txt', 'text/plain'],
   ['.csv', 'text/csv'],
+  ['.doc', 'application/msword'],
+  ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['.xls', 'application/vnd.ms-excel'],
+  ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['.ppt', 'application/vnd.ms-powerpoint'],
+  ['.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  ['.md', 'text/markdown'],
+  ['.markdown', 'text/markdown'],
 ]);
 export function attachmentMediaType(file: Pick<File, 'name' | 'type'>) {
   const reported = file.type.trim().toLowerCase();

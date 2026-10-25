@@ -139,10 +139,22 @@ export function ListItemRow({
             ) : (
               <span aria-hidden="true">—</span>
             )}
+            {!editing && attachments && (
+              <details>
+                <summary>Files</summary>
+                {attachments}
+              </details>
+            )}
           </td>
         )}
         {editable && visibleColumns.has('actions') && (
           <td className="list-item-actions" aria-label={`Actions for ${name}`}>
+            {!editing && !visibleColumns.has('fileLinks') && attachments && (
+              <details>
+                <summary>Files</summary>
+                {attachments}
+              </details>
+            )}
             <div className="list-item-action-buttons">
               {handleRef && reorderable ? (
                 <button
