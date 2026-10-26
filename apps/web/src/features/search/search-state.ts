@@ -23,6 +23,7 @@ const datePresets: readonly DatePreset[] = [
   'nextWeek',
   'nextNextWeek',
   'month',
+  'quarter',
 ];
 export function safeSearchState(_query: string, filters: Filters) {
   const params = new URLSearchParams();

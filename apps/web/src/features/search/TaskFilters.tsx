@@ -86,11 +86,6 @@ export function TaskFilters({
   return (
     <fieldset className="filter-fields">
       <legend>Filters</legend>
-      <PriorityFilter
-        value={selectedUrgencies}
-        change={(urgencies) => change({ ...value, urgencies })}
-        {...(resultCount === undefined ? {} : { resultCount })}
-      />
       <div className="filter-control-grid">
         <fieldset className="filter-match-mode">
           <legend>Match</legend>
@@ -115,14 +110,6 @@ export function TaskFilters({
             Any
           </label>
         </fieldset>
-        <ProjectPicker
-          categories={categories}
-          projects={projects}
-          value={value.projectId ?? ''}
-          categoryId={value.categoryId}
-          allLabel="All projects"
-          onChange={(projectId) => change({ ...value, projectId })}
-        />
         <label>
           <span>Scope</span>
           <select
@@ -151,24 +138,12 @@ export function TaskFilters({
             </select>
           </label>
         ) : null}
-        <label>
-          <span>Progress</span>
-          <select
-            value={value.progress ?? 'all'}
-            onChange={(event) => {
-              change({
-                ...value,
-                progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
-              });
-            }}
-          >
-            <option value="all">Any progress</option>
-            <option value="not-started">Not started</option>
-            <option value="in-progress">In progress</option>
-            <option value="complete">100% complete</option>
-          </select>
-        </label>
       </div>
+      <PriorityFilter
+        value={selectedUrgencies}
+        change={(urgencies) => change({ ...value, urgencies })}
+        {...(resultCount === undefined ? {} : { resultCount })}
+      />
       <div className="filter-date-row">
         <div className="filter-date-inputs">
           <label>
@@ -199,6 +174,7 @@ export function TaskFilters({
               ['nextWeek', 'Next week'],
               ['nextNextWeek', 'Week after next'],
               ['month', 'This month'],
+              ['quarter', 'This quarter'],
             ] as const
           ).map(([preset, label]) => (
             <button
@@ -218,6 +194,53 @@ export function TaskFilters({
             </button>
           ))}
         </div>
+      </div>
+      <div className="filter-secondary-grid">
+        <label>
+          <span>Category</span>
+          <CategoryPicker
+            categories={categories}
+            value={value.categoryId}
+            allLabel="All categories"
+            onChange={(categoryId) =>
+              change({
+                ...value,
+                categoryId,
+                projectId:
+                  value.projectId &&
+                  projects.find((project) => project.id === value.projectId)?.categoryId !==
+                    categoryId
+                    ? ''
+                    : (value.projectId ?? ''),
+              })
+            }
+          />
+        </label>
+        <ProjectPicker
+          categories={categories}
+          projects={projects}
+          value={value.projectId ?? ''}
+          categoryId={value.categoryId}
+          allLabel="All projects"
+          onChange={(projectId) => change({ ...value, projectId })}
+        />
+        <label>
+          <span>Progress</span>
+          <select
+            value={value.progress ?? 'all'}
+            onChange={(event) => {
+              change({
+                ...value,
+                progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
+              });
+            }}
+          >
+            <option value="all">Any progress</option>
+            <option value="not-started">Not started</option>
+            <option value="in-progress">In progress</option>
+            <option value="complete">100% complete</option>
+          </select>
+        </label>
       </div>
       <div className="filter-secondary-grid">
         <label>
@@ -258,26 +281,6 @@ export function TaskFilters({
             </select>
           </label>
         ) : null}
-        <label>
-          <span>Category</span>
-          <CategoryPicker
-            categories={categories}
-            value={value.categoryId}
-            allLabel="All categories"
-            onChange={(categoryId) =>
-              change({
-                ...value,
-                categoryId,
-                projectId:
-                  value.projectId &&
-                  projects.find((project) => project.id === value.projectId)?.categoryId !==
-                    categoryId
-                    ? ''
-                    : (value.projectId ?? ''),
-              })
-            }
-          />
-        </label>
       </div>
       <div className="filter-chips" role="group" aria-label="Active filters">
         {selectedAssignees.map((id) => (

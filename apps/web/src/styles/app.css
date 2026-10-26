@@ -4710,3 +4710,36 @@ html:has(.task-undo-notices) {
     grid-template-columns: 1fr;
   }
 }
+
+/* Give task filter rows the full available width. */
+.filter-fields > .priority-filter-group {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+.filter-fields .priority-options {
+  flex-wrap: wrap;
+  overflow: visible;
+  max-width: none;
+}
+.memo-format-code,
+.memo-document code {
+  font-family: monospace;
+  white-space: pre-wrap;
+  background: #eef1f4;
+  border-radius: 4px;
+  padding: 0.15em 0.3em;
+}
+.memo-fenced-code {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 0.75rem !important;
+  margin-block: 0.5rem;
+}
+.memo-fenced-document {
+  white-space: pre-wrap;
+}
+.memo-character-count {
+  font-size: 0.85rem;
+  color: #607284;
+}

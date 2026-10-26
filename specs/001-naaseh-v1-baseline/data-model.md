@@ -122,7 +122,7 @@ are not supported in v1. Deleting a group archives it and revokes every active m
 | parentTaskId              | ULID             | Optional; must not create a cycle                                                 |
 | label                     | string           | Required, trimmed, 1–300 characters                                               |
 | link                      | URL              | Optional HTTPS URL; other schemes rejected                                        |
-| memoPlaintext             | string           | Present only when `memoHidden=false`; max 20,000 characters                       |
+| memoPlaintext             | string           | Present only when `memoHidden=false`; max 50,000 characters                       |
 | hiddenMemoPackage         | object           | Present only when `memoHidden=true`; see cryptographic contract                   |
 | memoHidden                | boolean          | Controls storage representation and PIN gate                                      |
 | dateAdded                 | timestamp        | Server-set creation time                                                          |
