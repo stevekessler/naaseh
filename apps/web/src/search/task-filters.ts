@@ -1,6 +1,13 @@
 import { matchesUrgencySet, type Task, type Urgency } from '@naaseh/domain';
 
-export type DatePreset = 'today' | 'tomorrow' | 'week' | 'nextWeek' | 'nextNextWeek' | 'month';
+export type DatePreset =
+  | 'today'
+  | 'tomorrow'
+  | 'week'
+  | 'nextWeek'
+  | 'nextNextWeek'
+  | 'month'
+  | 'quarter';
 
 const localDate = (value: Date) => {
   const year = value.getFullYear();
@@ -20,6 +27,9 @@ export function dateRangeForPreset(preset: DatePreset, now = new Date()) {
     start.setDate(start.getDate() - start.getDay() + weekOffset * 7);
     end.setTime(start.getTime());
     end.setDate(end.getDate() + 6);
+  } else if (preset === 'quarter') {
+    start.setMonth(Math.floor(start.getMonth() / 3) * 3, 1);
+    end.setFullYear(start.getFullYear(), start.getMonth() + 3, 0);
   } else if (preset === 'month') {
     start.setDate(1);
     end.setMonth(start.getMonth() + 1, 0);

@@ -9,7 +9,7 @@ Result: **PASS** — 16 files, 28 tests, 11.72 seconds. Notable p95 measurements
 NFR-006 mappings:
 
 - cached task/modal and timer interaction: browser journeys complete from local data without a network dependency; timer projection of one million elapsed repeat intervals is bounded under 50 ms;
-- editor feedback: maximum 20,000-character memo normalization and text projection must complete under 100 ms;
+- editor feedback: maximum 50,000-character memo normalization and text projection must complete under 100 ms;
 - rank feedback: a filtered permutation across 1,000 local rows must complete under 200 ms, with larger service/read/report p95 checks retained in the ranking performance suite;
 - reference search: 1,000 authorized cached choices filter and cap at 50 rendered results under 200 ms;
 - admin users: a 10,000-user source returns a stable, cursor-bearing first 100 rows under 200 ms;

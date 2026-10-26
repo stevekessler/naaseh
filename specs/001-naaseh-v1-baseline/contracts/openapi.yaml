@@ -723,7 +723,7 @@ components:
         parentId: { oneOf: [{ $ref: '#/components/schemas/Ulid' }, { type: 'null' }] }
         label: { type: string, minLength: 1, maxLength: 300 }
         link: { type: [string, 'null'], format: uri }
-        memo: { type: string, maxLength: 20000, default: '' }
+        memo: { type: string, maxLength: 50000, default: '' }
         encryptedMemo: { type: [string, 'null'] }
         memoHidden: { type: boolean }
         dueAt: { type: [string, 'null'], format: date-time }
@@ -739,7 +739,7 @@ components:
       properties:
         label: { type: string, minLength: 1, maxLength: 300 }
         link: { type: [string, 'null'], format: uri }
-        memo: { type: string, maxLength: 20000 }
+        memo: { type: string, maxLength: 50000 }
         encryptedMemo: { type: [string, 'null'] }
         memoHidden: { type: boolean }
         dueAt: { type: [string, 'null'], format: date-time }

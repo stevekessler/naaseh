@@ -130,7 +130,7 @@ export const taskPatchSchema = z
   .object({
     label: z.string().trim().min(1).max(300).optional(),
     link: taskLinkUrlSchema.or(z.literal('')).optional(),
-    memo: z.string().max(20_000).optional(),
+    memo: z.string().max(50_000).optional(),
     memoDocument: memoDocumentSchema.optional(),
     memoHidden: z.boolean().optional(),
     encryptedMemo: z.string().optional(),

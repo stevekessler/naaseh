@@ -1,3 +1,4 @@
+import { memoDocumentText } from '@naaseh/domain';
 import type { MemoDocument } from '@naaseh/domain';
 import type { ReactNode } from 'react';
 
@@ -23,17 +24,37 @@ const linkedText = (text: string, key: string) => {
   return values.length ? values : text;
 };
 
+function fencedText(text: string): ReactNode {
+  const parts: ReactNode[] = [];
+  const pattern = /('''|```)([\s\S]*?)\1/gu;
+  let start = 0;
+  for (const match of text.matchAll(pattern)) {
+    parts.push(linkedText(text.slice(start, match.index), `text-${start}`));
+    parts.push(
+      <code className="memo-fenced-code" key={match.index}>
+        {match[2]}
+      </code>,
+    );
+    start = match.index + match[0].length;
+  }
+  parts.push(linkedText(text.slice(start), `text-${start}`));
+  return parts;
+}
 export function LinkifiedText({ text }: { text: string }) {
-  return <>{linkedText(text, 'plain')}</>;
+  return <>{fencedText(text)}</>;
 }
 
 const runs = (
   values: MemoDocument['blocks'][number] extends never
     ? never
-    : Array<{ text: string; marks: Array<'bold' | 'italic' | 'strikethrough'> }>,
+    : Array<{ text: string; marks: Array<'bold' | 'italic' | 'strikethrough' | 'code'> }>,
 ) =>
   values.map((run, index) => {
-    let value: ReactNode = linkedText(run.text, String(index));
+    let value: ReactNode = run.marks.includes('code') ? (
+      <code>{run.text}</code>
+    ) : (
+      linkedText(run.text, String(index))
+    );
     if (run.marks.includes('bold')) value = <strong>{value}</strong>;
     if (run.marks.includes('italic')) value = <em>{value}</em>;
     if (run.marks.includes('strikethrough')) value = <s>{value}</s>;
@@ -41,6 +62,9 @@ const runs = (
   });
 
 export function MemoDocumentView({ document }: { document: MemoDocument }) {
+  const text = memoDocumentText(document);
+  if (/('''|```)[\s\S]*?\1/u.test(text))
+    return <div className="memo-document memo-fenced-document">{fencedText(text)}</div>;
   return (
     <div className="memo-document">
       {document.blocks.map((block, index) => {
