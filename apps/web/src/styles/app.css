@@ -4743,3 +4743,13 @@ html:has(.task-undo-notices) {
   font-size: 0.85rem;
   color: #607284;
 }
+
+/* Table memos stay compact even when the full memo contains code blocks. */
+.task-row-memo code {
+  display: inline;
+  white-space: nowrap;
+}
+.task-row-memo .memo-fenced-code {
+  margin: 0;
+  padding: 0 !important;
+}
