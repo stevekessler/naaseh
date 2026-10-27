@@ -359,6 +359,7 @@ export function App() {
         'scope',
         'categoryId',
         'projectId',
+        'parentId',
         'contentType',
         'lifecycle',
         'progress',
@@ -725,6 +726,7 @@ export function App() {
   const matchingLists = useMemo(() => {
     if (
       filters.contentType === 'todos' ||
+      Boolean(filters.parentId) ||
       (filters.progress !== undefined && filters.progress !== 'all')
     )
       return [];
@@ -1769,6 +1771,7 @@ export function App() {
                     />
                     <TaskFilters
                       value={filters}
+                      tasks={tasks}
                       change={setFilters}
                       resultCount={visible.length + matchingLists.length}
                       categories={categories}
@@ -1787,6 +1790,7 @@ export function App() {
                       filters.groupIds?.length ||
                       filters.categoryId ||
                       filters.projectId ||
+                      filters.parentId ||
                       filters.urgencies.length > 0 ||
                       (filters.contentType && filters.contentType !== 'all') ||
                       (filters.lifecycle && filters.lifecycle !== 'active') ||

@@ -74,6 +74,7 @@ export interface TaskFilters {
   match?: 'all' | 'any';
   categoryId?: string;
   projectId?: string;
+  parentId?: string;
   status?: Task['status'];
   urgencies?: Urgency[];
   datePresets?: DatePreset[];
@@ -102,6 +103,7 @@ export function matchesFilters(task: Task, filters: TaskFilters) {
       (filters.projectId === 'unassigned'
         ? !task.projectId
         : task.projectId === filters.projectId)) &&
+    (!filters.parentId || task.parentId === filters.parentId) &&
     (!filters.status || task.status === filters.status) &&
     matchesUrgencySet(task.urgency, filters.urgencies)
   );
