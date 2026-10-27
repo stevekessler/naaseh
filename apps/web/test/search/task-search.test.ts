@@ -7,7 +7,7 @@ import {
   normalizeSearch,
   searchTaskIds,
 } from '../../src/search/task-search.js';
-import { safeSearchState } from '../../src/features/search/search-state.js';
+import { filtersFromSearch, safeSearchState } from '../../src/features/search/search-state.js';
 describe('authorized task search', () => {
   const task = (label: string, extra: Parameters<typeof createTask>[0] = { label }) =>
     createTask({ label, ...extra }, 'u');
@@ -66,11 +66,23 @@ describe('authorized task search', () => {
       categoryId: '01J00000000000000000000001',
       projectId: '01J00000000000000000000002',
       urgency: 'critical',
+      parentId: '01J00000000000000000000003',
       percentComplete: 60,
       dueKind: 'date',
       dueDate: '2026-10-06',
     });
     const other = task('Other', { label: 'Other', urgency: 'low' });
+    const parentFilters = {
+      query: '',
+      from: '',
+      to: '',
+      assigneeId: '',
+      categoryId: '',
+      urgencies: [],
+      parentId: match.parentId,
+    };
+    expect(filterTasks([match, other], parentFilters)).toEqual([match]);
+    expect(filtersFromSearch(safeSearchState('', parentFilters)).parentId).toBe(match.parentId);
     expect(
       filterTasks([match, other], {
         query: 'match',
@@ -81,6 +93,7 @@ describe('authorized task search', () => {
         to: '2026-10-06',
         lifecycle: 'active',
         contentType: 'todos',
+        parentId: '01J00000000000000000000003',
         progress: 'in-progress',
         urgencies: ['critical'],
       }),

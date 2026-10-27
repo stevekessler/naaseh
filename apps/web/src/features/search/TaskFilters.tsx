@@ -1,4 +1,4 @@
-import type { CategoryRecord, Project } from '@naaseh/domain';
+import type { CategoryRecord, Project, Task } from '@naaseh/domain';
 import type { Filters } from '../../search/task-search.js';
 import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
 import { CategoryPicker } from '../../components/CategoryPicker.js';
@@ -15,6 +15,7 @@ export function TaskFilters({
   resultCount,
   categories = [],
   projects = [],
+  tasks = [],
   assignees = [],
   groups = [],
   currentUserId,
@@ -26,26 +27,34 @@ export function TaskFilters({
   resultCount?: number;
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
+  tasks?: readonly Task[];
   assignees?: readonly AssigneeOption[];
   groups?: readonly { id: string; name: string }[];
   currentUserId?: string;
   currentUserGroupIds?: readonly string[];
   contentType?: 'all' | 'tasks';
 }) {
+  const parentIds = new Set(tasks.map((task) => task.parentId).filter(Boolean));
+  const parentOptions = tasks
+    .filter((task) => parentIds.has(task.id))
+    .sort((left, right) => left.label.localeCompare(right.label));
   const selectedUrgencies = value.urgencies ?? [];
   const active = [
     ['from', value.from],
     ['to', value.to],
     ['categoryId', value.categoryId],
     ['projectId', value.projectId ?? ''],
+    ['parentId', value.parentId ?? ''],
   ] as const;
   const filterLabels: Record<(typeof active)[number][0], string> = {
     from: 'From',
     to: 'To',
     categoryId: 'Category',
     projectId: 'Project',
+    parentId: 'Parent task',
   };
   const displayFilterValue = (key: (typeof active)[number][0], current: string) => {
+    if (key === 'parentId') return tasks.find((task) => task.id === current)?.label ?? current;
     if (key === 'categoryId')
       return categories.find((category) => category.id === current)?.name ?? current;
     if (key === 'projectId')
@@ -224,6 +233,20 @@ export function TaskFilters({
           allLabel="All projects"
           onChange={(projectId) => change({ ...value, projectId })}
         />
+        <label>
+          <span>Parent task</span>
+          <select
+            value={value.parentId ?? ''}
+            onChange={(event) => change({ ...value, parentId: event.currentTarget.value })}
+          >
+            <option value="">All parent tasks</option>
+            {parentOptions.map((task) => (
+              <option key={task.id} value={task.id}>
+                {task.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           <span>Progress</span>
           <select

@@ -130,6 +130,23 @@ describe('task list sorting', () => {
           ({ label }) => label,
         ),
       ).toEqual(descending);
+      const tied = [
+        task('Zebra', { urgency: 'high' }),
+        task('Alpha', { urgency: 'high' }),
+        task('Critical', { urgency: 'critical' }),
+        task('Low', { urgency: 'low' }),
+      ];
+      for (const direction of ['ascending', 'descending'] as const) {
+        expect(
+          sortTasksForTable(tied, { key, direction }, categories, projects).map(
+            ({ label }) => label,
+          ),
+        ).toEqual(
+          key === 'priority' && direction === 'ascending'
+            ? ['Low', 'Alpha', 'Zebra', 'Critical']
+            : ['Critical', 'Alpha', 'Zebra', 'Low'],
+        );
+      }
     },
   );
 });

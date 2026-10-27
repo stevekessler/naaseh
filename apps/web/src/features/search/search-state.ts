@@ -11,6 +11,7 @@ const allowed = [
   'scope',
   'categoryId',
   'projectId',
+  'parentId',
   'contentType',
   'lifecycle',
   'progress',
@@ -52,6 +53,7 @@ export function filtersFromSearch(search: string): Filters {
     scope: params.get('scope') === 'all' ? 'all' : 'default',
     categoryId: params.get('categoryId') ?? '',
     projectId: params.get('projectId') ?? '',
+    parentId: params.get('parentId') ?? '',
     progress:
       params.get('progress') === 'not-started' ||
       params.get('progress') === 'in-progress' ||
