@@ -2,6 +2,7 @@ import { useTaskCompletionUndo } from '../features/tasks/useTaskCompletionUndo.j
 import { AdminNavigation } from '../components/AdminNavigation.js';
 import { TasksNavigation } from '../components/TasksNavigation.js';
 import { ListsNavigation } from '../components/ListsNavigation.js';
+import { FinanceNavigation } from '../components/FinanceNavigation.js';
 import {
   UserAvatar,
   UserDirectoryContext,
@@ -208,6 +209,11 @@ const CombinedSearchPage = lazy(() =>
     default: CombinedSearchPage,
   })),
 );
+const FinanceLandingPage = lazy(() =>
+  import('../features/finance/FinanceLandingPage.js').then(({ FinanceLandingPage }) => ({
+    default: FinanceLandingPage,
+  })),
+);
 
 const emptyFilters: Filters = {
   query: '',
@@ -284,6 +290,7 @@ export function App() {
   const [section, setSection] = useState<
     | 'tasks'
     | 'search'
+    | 'finance'
     | 'lists'
     | 'directory'
     | 'groups'
@@ -1261,6 +1268,10 @@ export function App() {
                 Search
               </button>
               <ListsNavigation section={section} navigate={(next) => navigate({ section: next })} />
+              <FinanceNavigation
+                active={section === 'finance'}
+                navigate={() => navigate({ section: 'finance' })}
+              />
               <AdminNavigation
                 isAdmin={session.role === 'admin'}
                 section={section}
@@ -1304,7 +1315,13 @@ export function App() {
           </div>
         </header>
         <main>
-          {section === 'journal' ? (
+          {section === 'finance' ? (
+            <FinanceLandingPage
+              ownerId={session.userId}
+              role={session.role}
+              csrfToken={session.csrfToken}
+            />
+          ) : section === 'journal' ? (
             <JournalPage
               ownerId={session.userId}
               csrfToken={session.csrfToken}

@@ -136,6 +136,8 @@ export class NaasehStack extends Stack {
         reporting: functions.reporting,
         crisisPlan: functions.crisisPlan,
         crisisPlanBroker: functions.crisisPlanBroker,
+        finance: functions.finance,
+        financeImport: functions.financeImport,
       },
       table,
       criticalAlerts,

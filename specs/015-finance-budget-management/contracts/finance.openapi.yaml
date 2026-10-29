@@ -1,0 +1,1456 @@
+openapi: 3.1.0
+info:
+  title: Na'aseh Finance API
+  version: 1.0.0
+  description: >-
+    Authenticated online boundaries for finance reads, provider connections/imports,
+    reconciliation, destructive previews/confirmation, and task creation. Offline-capable
+    entity edits also use sync contract version 7 as documented in sync.md. Finance export
+    endpoints are intentionally absent from v1.
+servers:
+  - url: /api/v1
+security:
+  - sessionCookie: []
+paths:
+  /finance/accounts:
+    get:
+      operationId: listFinanceAccounts
+      parameters:
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Accounts visible to the current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountPage'
+        '401': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createManualFinanceAccount
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualAccountInput'
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialAccount' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/accounts/{accountId}:
+    parameters:
+      - $ref: '#/components/parameters/AccountId'
+    get:
+      operationId: getFinanceAccount
+      responses:
+        '200':
+          description: Authorized account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialAccount' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: patchFinanceAccount
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                friendlyName: { type: string, minLength: 1, maxLength: 200 }
+                scope: { $ref: '#/components/schemas/FinanceScope' }
+                status: { type: string, enum: [active, archived] }
+      responses:
+        '200':
+          description: Updated account
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialAccount' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/records/{recordType}/{recordId}/deletion-preview:
+    parameters:
+      - name: recordType
+        in: path
+        required: true
+        schema: { type: string, enum: [account, transaction, budget, reusable-item, match, task-link, merchant, category] }
+      - name: recordId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Ulid' }
+    get:
+      operationId: previewFinanceRecordDeletion
+      responses:
+        '200':
+          description: Authorized impacts and the permitted archive, tombstone, or permanent-delete outcome
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeletionPreview' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /finance/records/{recordType}/{recordId}/deletion:
+    parameters:
+      - name: recordType
+        in: path
+        required: true
+        schema: { type: string, enum: [account, transaction, budget, reusable-item, match, task-link, merchant, category] }
+      - name: recordId
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/Ulid' }
+      - $ref: '#/components/parameters/Csrf'
+      - $ref: '#/components/parameters/IdempotencyKey'
+    post:
+      operationId: executeFinanceRecordDeletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion, confirmationToken]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                confirmationToken: { type: string, minLength: 1, maxLength: 2048 }
+      responses:
+        '200':
+          description: Archive or tombstone completed synchronously
+        '202':
+          description: Resumable archival/tombstone cascade accepted
+        '204':
+          description: Unreferenced draft or mistake permanently deleted
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/accounts/{accountId}/balances:
+    post:
+      operationId: recordManualFinanceBalance
+      description: >-
+        Records a new authoritative dated balance baseline for a manually maintained account
+        and returns the recomputed current balance without deleting transaction history.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualBalanceSnapshotInput' }
+      responses:
+        '201':
+          description: Balance snapshot recorded and account projection recomputed
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [snapshot, account]
+                properties:
+                  snapshot: { $ref: '#/components/schemas/BalanceSnapshot' }
+                  account: { $ref: '#/components/schemas/FinancialAccount' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/accounts/{accountId}/transactions:
+    get:
+      operationId: listFinanceTransactions
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - name: startDate
+          in: query
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          schema: { type: string, format: date }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Authorized account transaction page
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionPage' }
+        '404': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: createManualTransaction
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ManualTransactionInput' }
+      responses:
+        '201':
+          description: Manual transaction created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialTransaction' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /finance/accounts/{accountId}/csv-imports:
+    post:
+      operationId: commitFinanceCsvImportChunk
+      description: >-
+        Commits one locally parsed and reviewed chunk. Raw file bytes and filenames are never sent.
+        Offline clients queue the equivalent commitCsvChunk operation under sync contract v7.
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CsvImportChunkInput' }
+      responses:
+        '200':
+          description: Existing idempotent batch/chunk outcome
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsvImportBatch' }
+        '201':
+          description: Batch created or chunk committed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CsvImportBatch' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/transactions/{transactionId}/provider-reconciliation:
+    post:
+      operationId: decideProviderTransactionReconciliation
+      description: >-
+        transactionId identifies the provisional canonical transaction. Inaccessible provisional,
+        candidate, account, or review records return the same not-found response.
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProviderReconciliationDecisionInput' }
+      responses:
+        '200':
+          description: Reconciliation decision applied with provider identity lock
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialTransaction' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/transactions/{transactionId}/allocations:
+    put:
+      operationId: replaceTransactionAllocations
+      parameters:
+        - $ref: '#/components/parameters/TransactionId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion, allocations]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                allocations:
+                  type: array
+                  maxItems: 100
+                  items: { $ref: '#/components/schemas/TransactionAllocationInput' }
+      responses:
+        '200':
+          description: Balanced allocations accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinancialTransaction' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/connections/simplefin/claim:
+    post:
+      operationId: claimSimplefinConnection
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [setupToken, scope]
+              properties:
+                setupToken:
+                  type: string
+                  minLength: 1
+                  maxLength: 8192
+                  writeOnly: true
+                scope: { $ref: '#/components/schemas/FinanceScope' }
+      responses:
+        '201':
+          description: Connection claimed; credentials are never returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinanceConnection' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '502': { $ref: '#/components/responses/Problem' }
+  /finance/connections/{connectionId}/refresh:
+    post:
+      operationId: refreshSimplefinConnection
+      parameters:
+        - $ref: '#/components/parameters/ConnectionId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Import job queued or existing idempotent job returned
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportJob' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '429':
+          description: Connection refresh cooldown or provider throttle
+          headers:
+            Retry-After:
+              schema: { type: integer, minimum: 1 }
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+  /finance/import-jobs/{jobId}:
+    get:
+      operationId: getFinanceImportJob
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200':
+          description: Authorized sanitized progress
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImportJob' }
+        '404': { $ref: '#/components/responses/Problem' }
+  /finance/categories:
+    get:
+      operationId: listFinanceCategories
+      responses:
+        '200':
+          description: Global active and optionally archived finance categories
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/FinanceCategory' }
+    post:
+      operationId: createFinanceCategory
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+      responses:
+        '201':
+          description: Global user category created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinanceCategory' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/categories/{categoryId}:
+    patch:
+      operationId: patchFinanceCategory
+      parameters:
+        - name: categoryId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+                name: { type: string, minLength: 1, maxLength: 100 }
+                status: { type: string, enum: [active, archived] }
+      responses:
+        '200':
+          description: Creator/admin update accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FinanceCategory' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/merchants:
+    get:
+      operationId: listFinanceMerchants
+      parameters:
+        - name: query
+          in: query
+          schema: { type: string, maxLength: 200 }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Global merchant identities only; no activity counts
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MerchantPage' }
+    post:
+      operationId: createFinanceMerchant
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MerchantInput' }
+      responses:
+        '201':
+          description: Global merchant created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Merchant' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/merchants/{merchantId}:
+    get:
+      operationId: getFinanceMerchant
+      parameters:
+        - name: merchantId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Global identity plus authorization-filtered activity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [merchant, transactions, totalsComplete]
+                properties:
+                  merchant: { $ref: '#/components/schemas/Merchant' }
+                  transactions:
+                    type: array
+                    items: { $ref: '#/components/schemas/FinancialTransaction' }
+                  totalsComplete: { type: boolean, const: true }
+                  cursor: { type: [string, 'null'] }
+        '404': { $ref: '#/components/responses/Problem' }
+  /finance/budgets:
+    get:
+      operationId: listFinanceBudgets
+      parameters:
+        - name: groupId
+          in: query
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Group budgets visible to current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetPage' }
+    post:
+      operationId: createFinanceBudget
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BudgetInput' }
+      responses:
+        '201':
+          description: Group budget created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetDetail' }
+        '403': { $ref: '#/components/responses/Problem' }
+  /finance/budgets/{budgetId}:
+    get:
+      operationId: getFinanceBudget
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Authorized budget with viewer-complete flag
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetDetail' }
+        '404': { $ref: '#/components/responses/Problem' }
+    patch:
+      operationId: patchFinanceBudget
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetPatch'
+      responses:
+        '200':
+          description: Updated budget
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BudgetDetail' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/reusable-items:
+    get:
+      operationId: listFinanceReusableItems
+      parameters:
+        - name: groupId
+          in: query
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200':
+          description: Authorized reusable and future planned items
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReusableBudgetItemPage' }
+    post:
+      operationId: createFinanceReusableItem
+      parameters:
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReusableBudgetItemInput' }
+      responses:
+        '201':
+          description: Reusable source created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReusableBudgetItem' }
+  /finance/budgets/{budgetId}/reusable-offers:
+    get:
+      operationId: listFinanceReusableOffers
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+      responses:
+        '200':
+          description: Applicable, not-yet-copied occurrences
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ReusableBudgetOffer' }
+  /finance/budgets/{budgetId}/reusable-items/{reusableItemId}/copy:
+    post:
+      operationId: copyFinanceReusableOccurrence
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+        - name: reusableItemId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [occurrenceDate, expectedBudgetVersion]
+              properties:
+                occurrenceDate: { type: string, format: date }
+                expectedBudgetVersion: { type: integer, minimum: 1 }
+                budgetItemId: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '201':
+          description: Independent budget-item copy
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/transactions/{transactionId}/matches:
+    get:
+      operationId: listFinanceTransactionMatches
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+      responses:
+        '200':
+          description: Authorized match history and suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, transactionVersion]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/TransactionMatch' } }
+                  transactionVersion: { type: integer, minimum: 1 }
+  /finance/transactions/{transactionId}/matches/evaluate:
+    post:
+      operationId: evaluateFinanceTransactionMatches
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Unique exact automatic result plus user-controlled suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/TransactionMatch' } }
+  /finance/matches/{matchId}/decision:
+    post:
+      operationId: decideFinanceTransactionMatch
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision, expectedVersion, expectedTransactionVersion]
+              properties:
+                decision: { type: string, enum: [accept, reject, undo] }
+                expectedVersion: { type: integer, minimum: 1 }
+                expectedTransactionVersion: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: Updated auditable match decision
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransactionMatch' }
+        '409': { $ref: '#/components/responses/Problem' }
+  /finance/budgets/{budgetId}/reconcile:
+    post:
+      operationId: reconcileFinanceBudget
+      parameters:
+        - $ref: '#/components/parameters/BudgetId'
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expectedVersion]
+              properties:
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '201':
+          description: Immutable reconciliation record
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReconciliationRecord' }
+        '409':
+          description: Incomplete view, changed versions, or unresolved allocations
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+  /finance/budget-items/{budgetItemId}/tasks:
+    post:
+      operationId: createTaskFromBudgetItem
+      parameters:
+        - name: budgetItemId
+          in: path
+          required: true
+          schema: { $ref: '#/components/schemas/Ulid' }
+        - $ref: '#/components/parameters/Csrf'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [label, assigneeId]
+              properties:
+                label: { type: string, minLength: 1, maxLength: 300 }
+                assigneeId: { type: string, minLength: 1, maxLength: 200 }
+                dueDate: { type: string, format: date }
+      responses:
+        '200':
+          description: Idempotent replay of the existing task and Finance-audience link
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [taskId, financialTaskLinkId]
+                properties:
+                  taskId: { $ref: '#/components/schemas/Ulid' }
+                  financialTaskLinkId: { $ref: '#/components/schemas/Ulid' }
+        '201':
+          description: Task and finance-audience link created atomically
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [taskId, financialTaskLinkId]
+                properties:
+                  taskId: { $ref: '#/components/schemas/Ulid' }
+                  financialTaskLinkId: { $ref: '#/components/schemas/Ulid' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: naaseh_session
+  parameters:
+    Csrf:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      schema: { type: string, minLength: 16, maxLength: 512 }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 200 }
+    Cursor:
+      name: cursor
+      in: query
+      schema: { type: string, maxLength: 2048 }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    TransactionId:
+      name: transactionId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    ConnectionId:
+      name: connectionId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+    BudgetId:
+      name: budgetId
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Ulid' }
+  responses:
+    Problem:
+      description: RFC 9457 problem response with no protected financial content
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Ulid:
+      type: string
+      pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, correlationId]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string, maxLength: 200 }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        detail: { type: string, maxLength: 1000 }
+        correlationId: { type: string, minLength: 1, maxLength: 200 }
+        retryable: { type: boolean }
+        retryAfterSeconds: { type: integer, minimum: 1 }
+        reason:
+          type: string
+          enum:
+            - unauthorized
+            - forbidden
+            - not_found
+            - version_conflict
+            - invalid_allocation_total
+            - incomplete_budget_view
+            - refresh_cooldown
+            - provider_authentication
+            - provider_partial
+            - provider_throttled
+            - provider_unavailable
+            - identity_review_required
+            - csv_file_replayed
+            - csv_row_invalid
+            - csv_limit_exceeded
+            - duplicate_review_required
+            - reconciliation_review_required
+    FinanceScope:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [type, ownerId]
+          properties:
+            type: { type: string, const: owner }
+            ownerId: { type: string, minLength: 1, maxLength: 200 }
+        - type: object
+          additionalProperties: false
+          required: [type, groupId]
+          properties:
+            type: { type: string, const: group }
+            groupId: { $ref: '#/components/schemas/Ulid' }
+    FinancialAccount:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - scope
+        - sourceName
+        - organizationName
+        - friendlyName
+        - accountType
+        - currency
+        - currencyExponent
+        - currentBalanceMinor
+        - balanceAt
+        - status
+        - version
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        scope: { $ref: '#/components/schemas/FinanceScope' }
+        connectionId: { $ref: '#/components/schemas/Ulid' }
+        sourceName: { type: string, minLength: 1, maxLength: 200 }
+        organizationName: { type: string, minLength: 1, maxLength: 200 }
+        friendlyName: { type: string, minLength: 1, maxLength: 200 }
+        accountType: { type: string, enum: [checking, savings, credit-card, loan, other] }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        currentBalanceMinor: { type: integer }
+        availableBalanceMinor: { type: integer }
+        balanceAt: { type: string, format: date-time }
+        balanceSource: { type: string, enum: [simplefin, manual-snapshot-derived] }
+        status: { type: string, enum: [active, attention, archived, deleting] }
+        freshness:
+          type: object
+          required: [lastUpdatedAt, stale]
+          properties:
+            lastUpdatedAt: { type: string, format: date-time }
+            stale: { type: boolean }
+        version: { type: integer, minimum: 1 }
+    ManualAccountInput:
+      type: object
+      additionalProperties: false
+      required: [scope, sourceName, organizationName, accountType, currency, openingBalanceMinor, balanceAt]
+      properties:
+        scope: { $ref: '#/components/schemas/FinanceScope' }
+        sourceName: { type: string, minLength: 1, maxLength: 200 }
+        organizationName: { type: string, minLength: 1, maxLength: 200 }
+        friendlyName: { type: string, minLength: 1, maxLength: 200 }
+        accountType: { type: string, enum: [checking, savings, credit-card, loan, other] }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        openingBalanceMinor: { type: integer }
+        availableBalanceMinor: { type: integer }
+        balanceAt: { type: string, format: date-time }
+    ManualBalanceSnapshotInput:
+      type: object
+      additionalProperties: false
+      required: [expectedAccountVersion, balanceMinor, effectiveAt]
+      properties:
+        expectedAccountVersion: { type: integer, minimum: 1 }
+        balanceMinor: { type: integer }
+        availableBalanceMinor: { type: integer }
+        effectiveAt: { type: string, format: date-time }
+    BalanceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, balanceMinor, currency, currencyExponent, effectiveAt, recordedAt, source]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        accountId: { $ref: '#/components/schemas/Ulid' }
+        balanceMinor: { type: integer }
+        availableBalanceMinor: { type: integer }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        effectiveAt: { type: string, format: date-time }
+        recordedAt: { type: string, format: date-time }
+        source: { type: string, enum: [simplefin, manual] }
+    AccountPage:
+      type: object
+      required: [items, cursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/FinancialAccount' } }
+        cursor: { type: [string, 'null'] }
+    TransactionAllocationInput:
+      type: object
+      additionalProperties: false
+      required: [id, amountMinor, financeCategoryId]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        amountMinor: { type: integer }
+        financeCategoryId: { $ref: '#/components/schemas/Ulid' }
+        budgetItemId: { $ref: '#/components/schemas/Ulid' }
+        note: { type: string, maxLength: 1000 }
+    FinancialTransaction:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - accountId
+        - origin
+        - amountMinor
+        - currency
+        - currencyExponent
+        - description
+        - pending
+        - allocations
+        - reviewState
+        - reconciliationState
+        - version
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        accountId: { $ref: '#/components/schemas/Ulid' }
+        origin: { type: string, enum: [simplefin, manual, csv] }
+        csvImportBatchId: { $ref: '#/components/schemas/Ulid' }
+        csvRowOrdinal: { type: integer, minimum: 1, maximum: 50000 }
+        sourceTransactionId: { type: string, minLength: 1, maxLength: 500 }
+        entrySnapshot: { $ref: '#/components/schemas/TransactionSourceSnapshot' }
+        providerSnapshot: { $ref: '#/components/schemas/TransactionSourceSnapshot' }
+        postedAt: { type: [string, 'null'], format: date-time }
+        transactedAt: { type: string, format: date-time }
+        amountMinor: { type: integer }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        payee: { type: string, maxLength: 500 }
+        memo: { type: string, maxLength: 4000 }
+        pending: { type: boolean }
+        merchantCategoryCode: { type: string, maxLength: 20 }
+        merchantId: { $ref: '#/components/schemas/Ulid' }
+        transferId: { $ref: '#/components/schemas/Ulid' }
+        allocations:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/TransactionAllocationInput' }
+        reconciliationState:
+          type: string
+          enum: [not-applicable, provisional, reconciled, review-required, kept-separate]
+        reconciledAt: { type: string, format: date-time }
+        reconciledBy: { type: string, minLength: 1, maxLength: 200 }
+        reviewState:
+          type: string
+          enum: [none, identity-review, allocation-review, reconciliation-review, possible-duplicate]
+        version: { type: integer, minimum: 1 }
+    TransactionSourceSnapshot:
+      type: object
+      additionalProperties: false
+      required: [amountMinor, description, pending]
+      properties:
+        postedAt: { type: [string, 'null'], format: date-time }
+        transactedAt: { type: string, format: date-time }
+        amountMinor: { type: integer }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        payee: { type: string, maxLength: 500 }
+        memo: { type: string, maxLength: 4000 }
+        pending: { type: boolean }
+        merchantCategoryCode: { type: string, maxLength: 20 }
+    ManualTransactionInput:
+      type: object
+      additionalProperties: false
+      required: [amountMinor, transactedAt, description]
+      properties:
+        amountMinor: { type: integer }
+        transactedAt: { type: string, format: date-time }
+        postedAt: { type: string, format: date-time }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        payee: { type: string, maxLength: 500 }
+        memo: { type: string, maxLength: 4000 }
+        pending: { type: boolean, default: false }
+        merchantId: { $ref: '#/components/schemas/Ulid' }
+        allocations:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/TransactionAllocationInput' }
+    CsvImportRowInput:
+      type: object
+      additionalProperties: false
+      required: [ordinal, amountMinor, transactedAt, description, duplicateDisposition]
+      properties:
+        ordinal: { type: integer, minimum: 1, maximum: 50000 }
+        amountMinor: { type: integer }
+        transactedAt: { type: string, format: date-time }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        payee: { type: string, maxLength: 500 }
+        memo: { type: string, maxLength: 4000 }
+        duplicateDisposition:
+          type: string
+          enum: [not-suspected, included-after-review]
+    CsvAmountMapping:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [mode, amountColumn]
+          properties:
+            mode: { type: string, const: signed }
+            amountColumn: { type: string, minLength: 1, maxLength: 200 }
+        - type: object
+          additionalProperties: false
+          required: [mode, debitColumn, creditColumn]
+          properties:
+            mode: { type: string, const: debit-credit }
+            debitColumn: { type: string, minLength: 1, maxLength: 200 }
+            creditColumn: { type: string, minLength: 1, maxLength: 200 }
+    CsvColumnMapping:
+      type: object
+      additionalProperties: false
+      required: [dateColumn, descriptionColumn, dateFormat, amountMapping]
+      properties:
+        dateColumn: { type: string, minLength: 1, maxLength: 200 }
+        descriptionColumn: { type: string, minLength: 1, maxLength: 200 }
+        payeeColumn: { type: string, minLength: 1, maxLength: 200 }
+        memoColumn: { type: string, minLength: 1, maxLength: 200 }
+        dateFormat: { type: string, enum: [YYYY-MM-DD, MM/DD/YYYY, M/D/YYYY] }
+        amountMapping: { $ref: '#/components/schemas/CsvAmountMapping' }
+    CsvImportChunkInput:
+      type: object
+      additionalProperties: false
+      required: [batchId, fileDigest, mapping, duplicateDecisionDigest, duplicateReviewSummary, chunkIndex, finalChunk, rows]
+      properties:
+        batchId: { $ref: '#/components/schemas/Ulid' }
+        fileDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        mapping: { $ref: '#/components/schemas/CsvColumnMapping' }
+        duplicateDecisionDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        duplicateReviewSummary:
+          type: object
+          additionalProperties: false
+          required: [suspected, included, excluded, unresolved]
+          properties:
+            suspected: { type: integer, minimum: 0, maximum: 50000 }
+            included: { type: integer, minimum: 0, maximum: 50000 }
+            excluded: { type: integer, minimum: 0, maximum: 50000 }
+            unresolved: { type: integer, const: 0 }
+        chunkIndex: { type: integer, minimum: 0, maximum: 499 }
+        finalChunk: { type: boolean }
+        rows:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/CsvImportRowInput' }
+    CsvImportBatch:
+      type: object
+      additionalProperties: false
+      required: [id, accountId, fileDigest, status, counts]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        accountId: { $ref: '#/components/schemas/Ulid' }
+        fileDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        status: { type: string, enum: [staged, committing, partial, succeeded, cancelled, failed] }
+        counts:
+          type: object
+          additionalProperties: false
+          required: [accepted, committed, failed, suspectedDuplicates, includedDuplicates, excludedDuplicates]
+          properties:
+            accepted: { type: integer, minimum: 0, maximum: 50000 }
+            committed: { type: integer, minimum: 0, maximum: 50000 }
+            failed: { type: integer, minimum: 0, maximum: 50000 }
+            suspectedDuplicates: { type: integer, minimum: 0, maximum: 50000 }
+            includedDuplicates: { type: integer, minimum: 0, maximum: 50000 }
+            excludedDuplicates: { type: integer, minimum: 0, maximum: 50000 }
+        failedOrdinals:
+          type: array
+          maxItems: 100
+          items: { type: integer, minimum: 1, maximum: 50000 }
+    ProviderReconciliationDecisionInput:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - decision
+            - reviewIssueId
+            - candidateTransactionId
+            - expectedProvisionalVersion
+            - expectedCandidateVersion
+            - expectedReviewVersion
+          properties:
+            decision: { type: string, const: reconcile }
+            reviewIssueId: { $ref: '#/components/schemas/Ulid' }
+            candidateTransactionId: { $ref: '#/components/schemas/Ulid' }
+            expectedProvisionalVersion: { type: integer, minimum: 1 }
+            expectedCandidateVersion: { type: integer, minimum: 1 }
+            expectedReviewVersion: { type: integer, minimum: 1 }
+        - type: object
+          additionalProperties: false
+          required:
+            - decision
+            - reviewIssueId
+            - candidateTransactionId
+            - expectedProvisionalVersion
+            - expectedCandidateVersion
+            - expectedReviewVersion
+          properties:
+            decision: { type: string, const: keep-separate }
+            reviewIssueId: { $ref: '#/components/schemas/Ulid' }
+            candidateTransactionId: { $ref: '#/components/schemas/Ulid' }
+            expectedProvisionalVersion: { type: integer, minimum: 1 }
+            expectedCandidateVersion: { type: integer, minimum: 1 }
+            expectedReviewVersion: { type: integer, minimum: 1 }
+    TransactionPage:
+      type: object
+      required: [items, cursor, totalsComplete]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/FinancialTransaction' } }
+        cursor: { type: [string, 'null'] }
+        totalsComplete: { type: boolean }
+    FinanceConnection:
+      type: object
+      additionalProperties: false
+      required: [id, scope, provider, status, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        scope: { $ref: '#/components/schemas/FinanceScope' }
+        provider: { type: string, const: simplefin-bridge }
+        status: { type: string, enum: [active, attention, revoked, archived] }
+        lastAttemptAt: { type: string, format: date-time }
+        lastSuccessfulAt: { type: string, format: date-time }
+        lastErrorClass:
+          type: string
+          enum: [provider-authentication, provider-partial, provider-throttled, provider-unavailable, internal]
+        version: { type: integer, minimum: 1 }
+    ImportJob:
+      type: object
+      additionalProperties: false
+      required: [id, connectionId, status, counts, attempts]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        connectionId: { $ref: '#/components/schemas/Ulid' }
+        status: { type: string, enum: [queued, running, partial, succeeded, failed, cancelled] }
+        windowStart: { type: string, format: date }
+        windowEnd: { type: string, format: date }
+        counts:
+          type: object
+          additionalProperties: false
+          required: [accounts, inserted, updated, duplicateSuppressed, reviewIssues]
+          properties:
+            accounts: { type: integer, minimum: 0 }
+            inserted: { type: integer, minimum: 0 }
+            updated: { type: integer, minimum: 0 }
+            duplicateSuppressed: { type: integer, minimum: 0 }
+            reviewIssues: { type: integer, minimum: 0 }
+        errors:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            required: [class, message]
+            properties:
+              class: { type: string, maxLength: 100 }
+              message: { type: string, maxLength: 500 }
+        attempts: { type: integer, minimum: 0 }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time }
+    FinanceCategory:
+      type: object
+      additionalProperties: false
+      required: [id, name, origin, status, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        origin: { type: string, enum: [bank, user] }
+        merchantCategoryCode: { type: string, maxLength: 20 }
+        creatorId: { type: string, maxLength: 200 }
+        status: { type: string, enum: [active, archived] }
+        version: { type: integer, minimum: 1 }
+    MerchantInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        city: { type: string, maxLength: 120 }
+        region: { type: string, maxLength: 120 }
+        merchantCategoryCode: { type: string, maxLength: 20 }
+        financeCategoryId: { $ref: '#/components/schemas/Ulid' }
+    Merchant:
+      type: object
+      additionalProperties: false
+      required: [id, name, source, status, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        city: { type: string, maxLength: 120 }
+        region: { type: string, maxLength: 120 }
+        merchantCategoryCode: { type: string, maxLength: 20 }
+        financeCategoryId: { $ref: '#/components/schemas/Ulid' }
+        source: { type: string, enum: [imported, manual, merged] }
+        creatorId: { type: string, maxLength: 200 }
+        status: { type: string, enum: [active, archived, merged] }
+        mergedIntoId: { $ref: '#/components/schemas/Ulid' }
+        version: { type: integer, minimum: 1 }
+    MerchantPage:
+      type: object
+      required: [items, cursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Merchant' } }
+        cursor: { type: [string, 'null'] }
+    BudgetInput:
+      type: object
+      additionalProperties: false
+      required: [groupId, name, budgetDate, startDate]
+      properties:
+        groupId: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        budgetDate: { type: string, format: date }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, 'null'], format: date }
+        status: { type: string, enum: [draft, active, archived] }
+    BudgetPatch:
+      type: object
+      additionalProperties: false
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        budgetDate: { type: string, format: date }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, 'null'], format: date }
+        status: { type: string, enum: [draft, active, archived] }
+    BudgetDetail:
+      type: object
+      additionalProperties: false
+      required: [id, groupId, name, budgetDate, startDate, status, items, totals, totalsComplete, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        groupId: { $ref: '#/components/schemas/Ulid' }
+        name: { type: string }
+        budgetDate: { type: string, format: date }
+        startDate: { type: string, format: date }
+        endDate: { type: [string, 'null'], format: date }
+        status: { type: string, enum: [draft, active, changed-since-reconciliation, archived] }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+        totals: { type: array, items: { $ref: '#/components/schemas/CurrencyTotal' } }
+        categoryTotals:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryCurrencyTotal' }
+        totalsComplete: { type: boolean }
+        reconciliationReadiness:
+          type: object
+          additionalProperties: false
+          required: [canReconcile, reasons]
+          properties:
+            canReconcile: { type: boolean }
+            reasons: { type: array, maxItems: 10, items: { type: string, maxLength: 300 } }
+        reconciliations:
+          type: array
+          maxItems: 1000
+          items: { $ref: '#/components/schemas/ReconciliationRecord' }
+        lastReconciledAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    BudgetPage:
+      type: object
+      required: [items, cursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/BudgetDetail' } }
+        cursor: { type: [string, 'null'] }
+    CurrencyTotal:
+      type: object
+      additionalProperties: false
+      required: [currency, currencyExponent, plannedMinor, actualMinor, varianceMinor]
+      properties:
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        plannedMinor: { type: integer }
+        actualMinor: { type: integer }
+        varianceMinor: { type: integer }
+    CategoryCurrencyTotal:
+      type: object
+      additionalProperties: false
+      required: [financeCategoryId, currency, currencyExponent, plannedMinor, actualMinor, varianceMinor]
+      properties:
+        financeCategoryId: { $ref: '#/components/schemas/Ulid' }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        plannedMinor: { type: integer }
+        actualMinor: { type: integer }
+        varianceMinor: { type: integer }
+    ReusableRecurrence:
+      type: object
+      additionalProperties: false
+      required: [interval, unit, startDate]
+      properties:
+        interval: { type: integer, minimum: 1, maximum: 366 }
+        unit: { type: string, enum: [day, week, month, year] }
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+    ReusableBudgetItemInput:
+      type: object
+      additionalProperties: false
+      required: [groupId, description, financeCategoryId, plannedAmountMinor, currency, currencyExponent, relatedAccountIds]
+      properties:
+        groupId: { $ref: '#/components/schemas/Ulid' }
+        description: { type: string, minLength: 1, maxLength: 300 }
+        merchantId: { $ref: '#/components/schemas/Ulid' }
+        financeCategoryId: { $ref: '#/components/schemas/Ulid' }
+        plannedAmountMinor: { type: integer }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        relatedAccountIds: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Ulid' } }
+        applicableDate: { type: string, format: date }
+        recurrence: { $ref: '#/components/schemas/ReusableRecurrence' }
+    ReusableBudgetItem:
+      type: object
+      additionalProperties: false
+      required: [id, groupId, description, financeCategoryId, plannedAmountMinor, currency, currencyExponent, relatedAccountIds, creatorId, status, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        groupId: { $ref: '#/components/schemas/Ulid' }
+        description: { type: string, minLength: 1, maxLength: 300 }
+        merchantId: { $ref: '#/components/schemas/Ulid' }
+        financeCategoryId: { $ref: '#/components/schemas/Ulid' }
+        plannedAmountMinor: { type: integer }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+        relatedAccountIds: { type: array, maxItems: 50, items: { $ref: '#/components/schemas/Ulid' } }
+        applicableDate: { type: string, format: date }
+        recurrence: { $ref: '#/components/schemas/ReusableRecurrence' }
+        creatorId: { type: string, minLength: 1, maxLength: 200 }
+        status: { type: string, enum: [active, archived, tombstone] }
+        version: { type: integer, minimum: 1 }
+    ReusableBudgetItemPage:
+      type: object
+      required: [items, cursor]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/ReusableBudgetItem' } }
+        cursor: { type: [string, 'null'] }
+    ReusableBudgetOffer:
+      type: object
+      additionalProperties: false
+      required: [reusableItemId, occurrenceDate, description, plannedAmountMinor, currency, currencyExponent]
+      properties:
+        reusableItemId: { $ref: '#/components/schemas/Ulid' }
+        occurrenceDate: { type: string, format: date }
+        description: { type: string, minLength: 1, maxLength: 300 }
+        plannedAmountMinor: { type: integer }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        currencyExponent: { type: integer, minimum: 0, maximum: 6 }
+    TransactionMatch:
+      type: object
+      additionalProperties: false
+      required: [id, transactionId, budgetItemId, kind, scoreBasis, status, version]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        transactionId: { $ref: '#/components/schemas/Ulid' }
+        budgetItemId: { $ref: '#/components/schemas/Ulid' }
+        kind: { type: string, enum: [exact, near, manual] }
+        scoreBasis:
+          type: object
+          additionalProperties: false
+          required: [merchant, date, account, amountDifferencePercent]
+          properties:
+            merchant: { type: boolean }
+            date: { type: boolean }
+            account: { type: boolean }
+            amountDifferencePercent: { type: number, minimum: 0 }
+        status: { type: string, enum: [suggested, accepted, rejected, undone, invalidated, tombstone] }
+        decidedBy: { type: string, minLength: 1, maxLength: 200 }
+        decidedAt: { type: string, format: date-time }
+        version: { type: integer, minimum: 1 }
+    ReconciliationRecord:
+      type: object
+      additionalProperties: false
+      required: [id, budgetId, reconciledAt, reconciledBy, budgetVersion, sourceVersionDigest, totalsByCurrency, totalsByCategory]
+      properties:
+        id: { $ref: '#/components/schemas/Ulid' }
+        budgetId: { $ref: '#/components/schemas/Ulid' }
+        reconciledAt: { type: string, format: date-time }
+        reconciledBy: { type: string, minLength: 1, maxLength: 200 }
+        budgetVersion: { type: integer, minimum: 1 }
+        sourceVersionDigest: { type: string, pattern: '^[a-f0-9]{64}$' }
+        totalsByCurrency: { type: array, items: { $ref: '#/components/schemas/CurrencyTotal' } }
+        totalsByCategory:
+          type: array
+          items: { $ref: '#/components/schemas/CategoryCurrencyTotal' }
+    DeletionPreview:
+      type: object
+      additionalProperties: false
+      required: [targetType, targetId, permittedOutcome, blockers, affectedCounts, confirmationToken]
+      properties:
+        targetType: { type: string, enum: [account, transaction, budget, reusable-item, match, task-link, merchant, category] }
+        targetId: { $ref: '#/components/schemas/Ulid' }
+        permittedOutcome: { type: string, enum: [archive, tombstone, permanent-delete] }
+        blockers: { type: array, items: { type: string, maxLength: 200 } }
+        affectedCounts:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+        confirmationToken: { type: string, minLength: 1, maxLength: 2048 }

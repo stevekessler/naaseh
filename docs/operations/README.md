@@ -5,6 +5,7 @@
 - [Production deployment](production-deployment.md), [release with AWS](release-with-aws.md), and [release without AWS](release-without-aws.md)
 - [Observability](observability.md), [performance](performance.md), and [AWS cost review](aws-cost-review.md)
 - [Backup/recovery](backup-recovery.md), [restore runbook](restore-runbook.md), and [key rotation](key-rotation.md)
+- [Finance operations and recovery](../operations.md)
 - [Smoke-account setup](seed-production-smoke-account.md)
 
 Native beta builds use the existing production environment and dedicated smoke account. They do not create a beta AWS stack or another always-on service.

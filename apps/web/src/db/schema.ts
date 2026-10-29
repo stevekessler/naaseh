@@ -1,4 +1,4 @@
-export const currentSchemaVersion = 15;
+export const currentSchemaVersion = 16;
 
 const storeIntroductions = [
   {
@@ -42,6 +42,7 @@ const storeIntroductions = [
     version: 13,
     stores: ['secureCrisisPlans', 'secureCrisisPlanOutbox', 'secureCrisisPlanOwnerKeys'],
   },
+  { version: 16, stores: ['secureFinanceRecords'] },
 ] as const;
 
 export const enhancedEncryptedStores = storeIntroductions

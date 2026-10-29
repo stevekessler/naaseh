@@ -9,6 +9,8 @@ import {
   serializeJournalSyncChange,
   type JournalRepository,
 } from '../journal/journal-repository.js';
+import type { Mutation, StableMutationResult } from '@naaseh/domain';
+import { isFinanceSyncEntityType } from './types.js';
 
 export function createJournalSyncHandlers(repository: JournalRepository) {
   const service = new JournalService(repository);
@@ -51,5 +53,16 @@ export function createJournalSyncHandlers(repository: JournalRepository) {
       if (!saved) throw new Error('The journal key envelope changed.');
       return saved;
     },
+  };
+}
+
+export function createFinanceSyncHandler(
+  dispatch: (actorId: string, mutation: Mutation) => Promise<StableMutationResult>,
+) {
+  return async (actorId: string, mutation: Mutation) => {
+    if (!isFinanceSyncEntityType(mutation.entityType)) {
+      throw new Error('Unsupported Finance synchronization entity.');
+    }
+    return dispatch(actorId, mutation);
   };
 }

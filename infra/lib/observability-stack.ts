@@ -54,6 +54,8 @@ export function createOperationalVisibility(
     reporting?: lambda.IFunction;
     crisisPlan?: lambda.IFunction;
     crisisPlanBroker?: lambda.IFunction;
+    finance?: lambda.IFunction;
+    financeImport?: lambda.IFunction;
   },
   table: dynamodb.ITable,
   alerts: sns.ITopic,
@@ -140,6 +142,15 @@ export function createOperationalVisibility(
     1,
   );
   createSignalAlarm(
+    'FinanceFailureSignalAlarm',
+    [
+      { metricName: 'FinanceImportFailures', threshold: 1 },
+      { metricName: 'FinanceDataIntegrityFailures', threshold: 1 },
+      { metricName: 'FinanceAuthorizationDenials', threshold: 10 },
+    ],
+    1,
+  );
+  createSignalAlarm(
     'StackDegradationSignalAlarm',
     [
       { metricName: 'StackReorderConflicts', threshold: 10 },
@@ -168,6 +179,8 @@ export function createOperationalVisibility(
         functions.auth.metricErrors(),
         ...(functions.crisisPlan ? [functions.crisisPlan.metricErrors()] : []),
         ...(functions.crisisPlanBroker ? [functions.crisisPlanBroker.metricErrors()] : []),
+        ...(functions.finance ? [functions.finance.metricErrors()] : []),
+        ...(functions.financeImport ? [functions.financeImport.metricErrors()] : []),
       ],
       right: [
         functions.task.metricThrottles(),
@@ -175,6 +188,8 @@ export function createOperationalVisibility(
         functions.auth.metricThrottles(),
         ...(functions.crisisPlan ? [functions.crisisPlan.metricThrottles()] : []),
         ...(functions.crisisPlanBroker ? [functions.crisisPlanBroker.metricThrottles()] : []),
+        ...(functions.finance ? [functions.finance.metricThrottles()] : []),
+        ...(functions.financeImport ? [functions.financeImport.metricThrottles()] : []),
       ],
     }),
     new cloudwatch.GraphWidget({
@@ -294,9 +309,41 @@ export function createOperationalVisibility(
         applicationMetric('AttachmentMissingObjects'),
       ],
     }),
+    new cloudwatch.GraphWidget({
+      title: 'Finance synchronization and imports',
+      left: [
+        applicationMetric('FinanceImportDispatches'),
+        applicationMetric('FinanceImportDuration', 'p95'),
+        applicationMetric('FinanceCsvCommittedRows'),
+      ],
+      right: [
+        applicationMetric('FinanceImportFailures'),
+        applicationMetric('FinanceDataIntegrityFailures'),
+        applicationMetric('FinanceAuthorizationDenials'),
+      ],
+    }),
   );
   return { primaryDashboard, serviceDashboard };
 }
+
+export const financeObservabilityControls = Object.freeze({
+  logRetentionDays: 30,
+  allowedDimensions: ['operation', 'outcome', 'sourceCategory', 'retryKind'],
+  protectedFields: [
+    'accountId',
+    'transactionId',
+    'amountMinor',
+    'balanceMinor',
+    'description',
+    'payee',
+    'filename',
+    'rawCsv',
+    'setupToken',
+    'accessUrl',
+  ],
+  alarms: ['FinanceImportFailures>=1', 'FinanceDataIntegrityFailures>=1'],
+  costModel: 'reuse existing logs, dashboards, alarm topic, and low-cardinality metrics',
+});
 
 export const crisisPlanObservabilityControls = Object.freeze({
   logRetentionDays: 90,

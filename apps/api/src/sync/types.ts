@@ -13,6 +13,29 @@ export interface SyncMutationResultsEnvelope {
   results: ContractV4MutationResult[];
 }
 
+export const financeSyncContractVersion = 7 as const;
+export const financeSyncEntityTypes = [
+  'financeAccount',
+  'financeBalanceSnapshot',
+  'financeTransaction',
+  'financeAllocation',
+  'financeTransfer',
+  'financeCategory',
+  'financeMerchant',
+  'financeBudget',
+  'financeBudgetAccountLink',
+  'financeBudgetItem',
+  'financeReusableItem',
+  'financeTransactionMatch',
+  'financeReconciliation',
+  'financeTaskLink',
+  'financeReviewIssue',
+] as const;
+
+export type FinanceSyncEntityType = (typeof financeSyncEntityTypes)[number];
+export const isFinanceSyncEntityType = (value: string): value is FinanceSyncEntityType =>
+  financeSyncEntityTypes.includes(value as FinanceSyncEntityType);
+
 export function parseSyncMutationResultsEnvelope(value: unknown): SyncMutationResultsEnvelope {
   const envelope = compatibleSyncMutationResultsEnvelopeSchema.parse(value);
   return { results: envelope.results.map(normalizeMutationResult) };

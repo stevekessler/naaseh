@@ -7,8 +7,8 @@ import {
 } from '../../src/db/journal-repository.js';
 
 describe('Dexie journal migration', () => {
-  it('retains encrypted journal stores through schema version 15', () => {
-    expect(currentSchemaVersion).toBe(15);
+  it('retains encrypted journal stores through schema version 16', () => {
+    expect(currentSchemaVersion).toBe(16);
     expect(planEnhancedSchemaMigration(11).storesToAdd).toEqual([
       'secureJournalEntries',
       'secureJournalProfiles',
@@ -18,6 +18,7 @@ describe('Dexie journal migration', () => {
       'secureCrisisPlans',
       'secureCrisisPlanOutbox',
       'secureCrisisPlanOwnerKeys',
+      'secureFinanceRecords',
     ]);
     expect(journalBrowserMigration.currentVersion).toBe(13);
   });

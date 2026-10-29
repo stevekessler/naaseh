@@ -1,4 +1,56 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { FinanceAccountSearchOption } from '../../search/finance-index.js';
+import type { FinanceSearchPreferences } from './search-state.js';
+
+export function CombinedSearchTypeSettings({
+  preferences,
+  accounts,
+  update,
+}: {
+  preferences: FinanceSearchPreferences;
+  accounts: readonly FinanceAccountSearchOption[];
+  update: (patch: Partial<FinanceSearchPreferences>) => void;
+}) {
+  const types = [
+    ['includeTasks', 'Tasks'],
+    ['includeLists', 'Lists'],
+    ['includeTransactions', 'Transactions'],
+    ['includeMerchants', 'Merchants'],
+  ] as const;
+  return (
+    <fieldset className="combined-search-types">
+      <legend>Include content types</legend>
+      <div>
+        {types.map(([key, label]) => (
+          <label key={key}>
+            <input
+              type="checkbox"
+              checked={preferences[key]}
+              onChange={(event) => update({ [key]: event.currentTarget.checked })}
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+      {preferences.includeTransactions ? (
+        <label>
+          Transaction account
+          <select
+            value={preferences.accountId}
+            onChange={(event) => update({ accountId: event.currentTarget.value })}
+          >
+            <option value="all">All accessible accounts</option>
+            {accounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.friendlyName}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+    </fieldset>
+  );
+}
 
 export const combinedSearchColumns = [
   { id: 'type', label: 'Type' },

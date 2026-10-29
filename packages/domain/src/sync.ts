@@ -18,6 +18,21 @@ export const entityTypeSchema = z.enum([
   'journalEntry',
   'journalProfile',
   'crisisPlan',
+  'financeAccount',
+  'financeBalanceSnapshot',
+  'financeTransaction',
+  'financeAllocation',
+  'financeTransfer',
+  'financeCategory',
+  'financeMerchant',
+  'financeBudget',
+  'financeBudgetAccountLink',
+  'financeBudgetItem',
+  'financeReusableItem',
+  'financeTransactionMatch',
+  'financeReconciliation',
+  'financeTaskLink',
+  'financeReviewIssue',
 ]);
 export type EntityType = z.infer<typeof entityTypeSchema>;
 export const supportedEntityTypes = entityTypeSchema.options;
@@ -46,6 +61,7 @@ export const mutationOperationSchema = z.enum([
   'restoreOrganization',
   'timerCommand',
   'upsert',
+  'commitCsvChunk',
 ]);
 export type MutationOperation = z.infer<typeof mutationOperationSchema>;
 
@@ -66,9 +82,10 @@ export const supportedSyncContractVersionSchema = z.union([
   z.literal(4),
   z.literal(5),
   z.literal(6),
+  z.literal(7),
 ]);
 export type SupportedSyncContractVersion = z.infer<typeof supportedSyncContractVersionSchema>;
-export const currentSyncContractVersion = 6 as const;
+export const currentSyncContractVersion = 7 as const;
 export const minimumNegotiatedSyncContractVersion = 4 as const;
 
 const mutationResultIdSchema = z.string().min(1).max(300);
