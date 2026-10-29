@@ -58,6 +58,88 @@ test('creates a named manual account and records a later balance', async ({ page
   await expect(page.getByRole('status').filter({ hasText: 'Balance recorded.' })).toBeVisible();
 });
 
+test('lets a group owner create and reassign a typed manual account', async ({ page }) => {
+  const groupId = '01J00000000000000000000002';
+  let account: Record<string, unknown> | undefined;
+  let createdInput: Record<string, unknown> | undefined;
+  let reassignedInput: Record<string, unknown> | undefined;
+  await page.route('**/api/v1/groups', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: groupId,
+            name: 'Fixture Household',
+            ownerId: 'local-steve',
+            status: 'active',
+            hasJoinPin: false,
+            joined: true,
+            role: 'owner',
+            version: 1,
+          },
+        ],
+      }),
+    }),
+  );
+  await page.route('**/api/v1/finance/accounts', async (route) => {
+    if (route.request().method() === 'GET')
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ items: account ? [account] : [], cursor: null }),
+      });
+    createdInput = route.request().postDataJSON() as Record<string, unknown>;
+    account = {
+      ...createdInput,
+      id: accountId,
+      friendlyName: `${createdInput.organizationName} - ${createdInput.sourceName}`,
+      currencyExponent: 2,
+      currentBalanceMinor: createdInput.openingBalanceMinor,
+      status: 'active',
+      version: 1,
+    };
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify(account),
+    });
+  });
+  await page.route(`**/api/v1/finance/accounts/${accountId}`, async (route) => {
+    reassignedInput = route.request().postDataJSON() as Record<string, unknown>;
+    account = { ...account, scope: reassignedInput.scope, version: 2 };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(account),
+    });
+  });
+
+  await signIn(page);
+  await page.getByRole('button', { name: 'Finance' }).click();
+  await page.getByLabel('Organization name').fill('Fixture Credit Union');
+  await page.getByLabel('Account name').fill('Household savings');
+  await page.getByLabel('Account type').selectOption('savings');
+  await page.getByLabel('Assign account to').selectOption(groupId);
+  await page.getByLabel('Opening balance').fill('500.00');
+  await page.getByRole('button', { name: 'Add account' }).click();
+  expect(createdInput).toMatchObject({
+    accountType: 'savings',
+    scope: { type: 'group', groupId },
+  });
+
+  await page.getByLabel('Account assignment').selectOption('owner');
+  await page.getByRole('button', { name: 'Save account assignment' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Account assignment updated.' }),
+  ).toBeVisible();
+  expect(reassignedInput).toMatchObject({
+    expectedVersion: 1,
+    scope: { type: 'owner', ownerId: 'local-steve' },
+  });
+});
+
 test('walks each CSV duplicate and queues encrypted rows while offline', async ({
   page,
   context,
@@ -109,6 +191,28 @@ test('walks each CSV duplicate and queues encrypted rows while offline', async (
 test('shows protected SimpleFIN status and remains touch-friendly on a narrow screen', async ({
   page,
 }) => {
+  const groupId = '01J00000000000000000000002';
+  let claimInput: Record<string, unknown> | undefined;
+  await page.route('**/api/v1/groups', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: groupId,
+            name: 'Fixture Household',
+            ownerId: 'local-steve',
+            status: 'active',
+            hasJoinPin: false,
+            joined: true,
+            role: 'manager',
+            version: 1,
+          },
+        ],
+      }),
+    }),
+  );
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
@@ -116,8 +220,9 @@ test('shows protected SimpleFIN status and remains touch-friendly on a narrow sc
       body: JSON.stringify({ items: [], cursor: null }),
     }),
   );
-  await page.route('**/api/v1/finance/connections/simplefin/claim', (route) =>
-    route.fulfill({
+  await page.route('**/api/v1/finance/connections/simplefin/claim', async (route) => {
+    claimInput = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
       status: 201,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -126,13 +231,15 @@ test('shows protected SimpleFIN status and remains touch-friendly on a narrow sc
         provider: 'simplefin-bridge',
         version: 1,
       }),
-    }),
-  );
+    });
+  });
   await signIn(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Finance' }).click();
   await page.getByLabel('Setup token').fill('fixture-setup-token');
+  await page.getByLabel('Assign imported accounts to').selectOption(groupId);
   await page.getByRole('button', { name: 'Connect SimpleFIN Bridge' }).click();
+  expect(claimInput).toMatchObject({ scope: { type: 'group', groupId } });
   await expect(page.getByRole('status').filter({ hasText: 'cannot be redisplayed' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Refresh SimpleFIN Bridge' })).toBeVisible();
 });

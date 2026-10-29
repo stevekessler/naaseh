@@ -14,24 +14,29 @@ export function FinanceLandingPage({
   ownerId,
   role,
   csrfToken,
+  assignableGroups,
 }: {
   ownerId: string;
   role: 'admin' | 'user';
   csrfToken: string;
+  assignableGroups: Array<{ id: string; name: string }>;
 }) {
   const [connection, setConnection] = useState<SimplefinConnectionView>();
   const [view, setView] = useState<
     'accounts' | 'transactions' | 'categories' | 'merchants' | 'budgets'
   >(() => (location.pathname.startsWith('/finance/budgets') ? 'budgets' : 'accounts'));
   const [selectedMerchantId, setSelectedMerchantId] = useState<string>();
-  const claim = async (setupToken: string) => {
+  const claim = async (
+    setupToken: string,
+    scope: { type: 'owner'; ownerId: string } | { type: 'group'; groupId: string },
+  ) => {
     const claimed = await financeRequest<SimplefinConnectionView>(
       '/finance/connections/simplefin/claim',
       {
         method: 'POST',
         csrfToken,
         idempotencyKey: crypto.randomUUID(),
-        body: JSON.stringify({ scope: { type: 'owner', ownerId }, setupToken }),
+        body: JSON.stringify({ scope, setupToken }),
       },
     );
     setConnection(claimed);
@@ -91,9 +96,15 @@ export function FinanceLandingPage({
       </nav>
       {view === 'accounts' ? (
         <>
-          <FinanceAccountsPage ownerId={ownerId} csrfToken={csrfToken} />
+          <FinanceAccountsPage
+            ownerId={ownerId}
+            csrfToken={csrfToken}
+            assignableGroups={assignableGroups}
+          />
           <SimplefinConnectionPanel
             {...(connection ? { connection } : {})}
+            ownerId={ownerId}
+            assignableGroups={assignableGroups}
             onClaim={claim}
             onRefresh={refresh}
           />

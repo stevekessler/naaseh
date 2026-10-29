@@ -11,14 +11,22 @@ export interface SimplefinConnectionView {
 
 export function SimplefinConnectionPanel({
   connection,
+  ownerId,
+  assignableGroups,
   onClaim,
   onRefresh,
 }: {
   connection?: SimplefinConnectionView;
-  onClaim: (token: string) => Promise<void>;
+  ownerId: string;
+  assignableGroups: Array<{ id: string; name: string }>;
+  onClaim: (
+    token: string,
+    scope: { type: 'owner'; ownerId: string } | { type: 'group'; groupId: string },
+  ) => Promise<void>;
   onRefresh?: () => Promise<void>;
 }) {
   const [token, setToken] = useState('');
+  const [assignment, setAssignment] = useState('owner');
   const [status, setStatus] = useState('');
   const [online, setOnline] = useState(() => navigator.onLine);
   const [working, setWorking] = useState(false);
@@ -38,7 +46,12 @@ export function SimplefinConnectionPanel({
   const claim = async () => {
     setWorking(true);
     try {
-      await onClaim(token);
+      await onClaim(
+        token,
+        assignment === 'owner'
+          ? { type: 'owner', ownerId }
+          : { type: 'group', groupId: assignment },
+      );
       setToken('');
       setStatus('Connected. The credential is encrypted and cannot be redisplayed.');
     } catch {
@@ -76,6 +89,17 @@ export function SimplefinConnectionPanel({
               onChange={(event) => setToken(event.target.value)}
               autoComplete="off"
             />
+          </label>
+          <label>
+            Assign imported accounts to
+            <select value={assignment} onChange={(event) => setAssignment(event.target.value)}>
+              <option value="owner">My account</option>
+              {assignableGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
           </label>
           <button disabled={!token || !online || working} onClick={() => void claim()}>
             Connect SimpleFIN Bridge

@@ -15,15 +15,21 @@ const money = (account: Account) =>
 export function FinanceAccountsPage({
   ownerId,
   csrfToken,
+  assignableGroups,
 }: {
   ownerId: string;
   csrfToken: string;
+  assignableGroups: Array<{ id: string; name: string }>;
 }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [error, setError] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [sourceName, setSourceName] = useState('');
   const [openingBalance, setOpeningBalance] = useState('0.00');
+  const [accountType, setAccountType] = useState<
+    'checking' | 'savings' | 'credit-card' | 'loan'
+  >('checking');
+  const [assignment, setAssignment] = useState('owner');
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
   useEffect(() => {
@@ -50,10 +56,13 @@ export function FinanceAccountsPage({
         csrfToken,
         idempotencyKey: crypto.randomUUID(),
         body: JSON.stringify({
-          scope: { type: 'owner', ownerId },
+          scope:
+            assignment === 'owner'
+              ? { type: 'owner', ownerId }
+              : { type: 'group', groupId: assignment },
           organizationName: organizationName.trim(),
           sourceName: sourceName.trim(),
-          accountType: 'checking',
+          accountType,
           currency: 'USD',
           openingBalanceMinor: Math.round(value * 100),
           balanceAt: new Date().toISOString(),
@@ -64,6 +73,8 @@ export function FinanceAccountsPage({
       setOrganizationName('');
       setSourceName('');
       setOpeningBalance('0.00');
+      setAccountType('checking');
+      setAssignment('owner');
     } catch {
       setError('The account could not be added.');
     } finally {
@@ -91,6 +102,33 @@ export function FinanceAccountsPage({
               onChange={(event) => setSourceName(event.target.value)}
               required
             />
+          </label>
+          <label>
+            Account type
+            <select
+              value={accountType}
+              onChange={(event) =>
+                setAccountType(
+                  event.target.value as 'checking' | 'savings' | 'credit-card' | 'loan',
+                )
+              }
+            >
+              <option value="checking">Checking</option>
+              <option value="savings">Savings</option>
+              <option value="credit-card">Credit card</option>
+              <option value="loan">Loan</option>
+            </select>
+          </label>
+          <label>
+            Assign account to
+            <select value={assignment} onChange={(event) => setAssignment(event.target.value)}>
+              <option value="owner">My account</option>
+              {assignableGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             Opening balance
@@ -125,6 +163,8 @@ export function FinanceAccountsPage({
         <FinanceAccountDetail
           account={accounts.find(({ id }) => id === selectedId)!}
           csrfToken={csrfToken}
+          ownerId={ownerId}
+          assignableGroups={assignableGroups}
           onChange={(updated) =>
             setAccounts((current) =>
               current.map((account) => (account.id === updated.id ? updated : account)),

@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { CsvImportWizard } from '../csv/CsvImportWizard.js';
 import { createUlid } from '@naaseh/domain';
@@ -27,21 +27,30 @@ export interface FinanceAccountView {
 export function FinanceAccountDetail({
   account,
   csrfToken,
+  ownerId,
+  assignableGroups,
   onChange,
 }: {
   account: FinanceAccountView;
   csrfToken: string;
+  ownerId: string;
+  assignableGroups: Array<{ id: string; name: string }>;
   onChange: (account: FinanceAccountView) => void;
 }) {
   const [friendlyName, setFriendlyName] = useState(account.friendlyName);
   const [balance, setBalance] = useState('');
   const [message, setMessage] = useState('');
+  const assignmentValue = (value: FinanceAccountView) =>
+    value.scope?.type === 'group' ? value.scope.groupId : 'owner';
+  const [assignment, setAssignment] = useState(() => assignmentValue(account));
+  const currentGroupId = account.scope?.type === 'group' ? account.scope.groupId : undefined;
   const [preview, setPreview] = useState<{
     outcome: string;
     dependentCounts: Record<string, number>;
     preservedRecordTypes: string[];
     confirmationToken: string;
   }>();
+  useEffect(() => setAssignment(assignmentValue(account)), [account]);
   const updateName = async (event: FormEvent) => {
     event.preventDefault();
     const updated = await financeRequest<FinanceAccountView>(`/finance/accounts/${account.id}`, {
@@ -76,6 +85,23 @@ export function FinanceAccountDetail({
     onChange(result.account);
     setBalance('');
     setMessage('Balance recorded.');
+  };
+  const updateAssignment = async (event: FormEvent) => {
+    event.preventDefault();
+    const updated = await financeRequest<FinanceAccountView>(`/finance/accounts/${account.id}`, {
+      method: 'PATCH',
+      csrfToken,
+      idempotencyKey: crypto.randomUUID(),
+      body: JSON.stringify({
+        expectedVersion: account.version,
+        scope:
+          assignment === 'owner'
+            ? { type: 'owner', ownerId }
+            : { type: 'group', groupId: assignment },
+      }),
+    });
+    onChange(updated);
+    setMessage('Account assignment updated.');
   };
   const loadPreview = async () =>
     setPreview(await financeRequest(`/finance/records/account/${account.id}/deletion-preview`));
@@ -157,6 +183,22 @@ export function FinanceAccountDetail({
         </label>
         <button type="submit">Save account name</button>
       </form>
+      {!currentGroupId || assignableGroups.some(({ id }) => id === currentGroupId) ? (
+        <form onSubmit={(event) => void updateAssignment(event)}>
+          <label>
+            Account assignment
+            <select value={assignment} onChange={(event) => setAssignment(event.target.value)}>
+              <option value="owner">My account</option>
+              {assignableGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit">Save account assignment</button>
+        </form>
+      ) : null}
       {!account.connectionId ? (
         <form onSubmit={(event) => void recordBalance(event)}>
           <label>

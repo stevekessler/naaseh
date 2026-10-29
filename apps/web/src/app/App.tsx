@@ -1320,6 +1320,14 @@ export function App() {
               ownerId={session.userId}
               role={session.role}
               csrfToken={session.csrfToken}
+              assignableGroups={groups
+                .filter(
+                  (group) =>
+                    group.status === 'active' &&
+                    group.joined &&
+                    (group.role === 'owner' || group.role === 'manager'),
+                )
+                .map((group) => ({ id: group.id, name: group.name }))}
             />
           ) : section === 'journal' ? (
             <JournalPage
