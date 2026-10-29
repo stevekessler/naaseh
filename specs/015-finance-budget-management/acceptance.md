@@ -12,7 +12,7 @@ the affected workflow with that participant before marking T103 complete.
 ## Participant 1
 
 - Date:
-- Participant identifier (non-identifying): Tester H (confirmed)
+- Participant: Heather (confirmed)
 - Perspective: individual owner
 - Browser/device:
 
@@ -28,7 +28,7 @@ the affected workflow with that participant before marking T103 complete.
 ## Participant 2
 
 - Date:
-- Participant identifier (non-identifying): repository owner (confirmed)
+- Participant: Steve (confirmed)
 - Perspective: group owner or manager
 - Browser/device:
 

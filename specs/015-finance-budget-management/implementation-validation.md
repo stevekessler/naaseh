@@ -150,6 +150,6 @@ Further results will be appended as the remaining implementation tasks complete.
   `npm run test:e2e:quick` in 57s. Evidence: GitHub Actions run `40798064383`, job `123199244231`.
 - T103 requires two real representative users to complete the moderated acceptance script. Automated
   agents and repeated browser fixtures cannot substitute for the required human timing and clarity
-  evidence. The individual-owner participant is assigned as Tester H and the repository owner is
-  assigned as the group-owner participant. A ready-to-use, protected-data-safe session worksheet is
-  available in `acceptance.md`; results remain pending until both sessions are conducted.
+  evidence. Heather is assigned as the individual-owner participant and Steve is assigned as the
+  group-owner participant. A ready-to-use, protected-data-safe session worksheet is available in
+  `acceptance.md`; results remain pending until both sessions are conducted.
