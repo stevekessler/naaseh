@@ -141,16 +141,13 @@ Further results will be appended as the remaining implementation tasks complete.
   $5/month ceiling. Any forecast above $5 remains a release stop requiring an explicit flag and
   approval with cost drivers and cheaper alternatives.
 
-### Remaining external checkpoints (T101, T103)
+### Hosted validation and remaining external checkpoint (T101, T103)
 
-- The current local branch maps to already-merged PR #80. Its historical `validate` check ran from
-  2026-10-25 02:54:45Z to 02:59:06Z (**4m21s**), but that run predates and does not validate these
-  uncommitted Finance changes. T101 requires a new hosted run after the Finance work is committed and
-  pushed.
+- PR #84 validates Finance commit `d78582d5297ec43596e17e07fb73920d00a1a6c3` on the isolated
+  `codex/finance-budget-management` branch. Its required `validate` job passed on 2026-10-29 from
+  01:03:46Z to 01:09:54Z (**6m08s**). This leaves **3m52s** of headroom under the ten-minute target.
+  The full `npm run validate` step completed in 4m30s, Chromium installation in 21s, and
+  `npm run test:e2e:quick` in 57s. Evidence: GitHub Actions run `40798064383`, job `123199244231`.
 - T103 requires two real representative users to complete the moderated acceptance script. Automated
   agents and repeated browser fixtures cannot substitute for the required human timing and clarity
   evidence. A ready-to-use, protected-data-safe session worksheet is available in `acceptance.md`.
-- Publishing preflight: the working branch is the already-merged PR #80 branch and local `HEAD` is
-  one commit ahead and three commits behind the locally known `origin/main`. The working tree also
-  contains the complete uncommitted Finance feature plus earlier integrated edits, so creating a new
-  branch/commit/PR must be an explicit publishing decision rather than an automatic cleanup step.
