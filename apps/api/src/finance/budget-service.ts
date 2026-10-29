@@ -222,14 +222,19 @@ export async function addFinanceBudgetItem(
   });
   repository.budgetItems.set(item.id, item);
   bumpBudget(repository, budget);
+  const groupVisible = item.relatedAccountIds.every((id) => {
+    const scope = repository.accounts.get(id)?.scope;
+    return scope?.type === 'group' && scope.groupId === budget.groupId;
+  });
   repository.feedChanges.push({
     audience: financeAudience(budgetScope(budget)),
     entityType: 'financeBudgetItem',
     entityId: item.id,
     version: item.version,
     changedAt: new Date().toISOString(),
-    operation: 'upsert',
-    payload: item,
+    // Purge older group projections; private items use authorized direct reads.
+    operation: groupVisible ? 'upsert' : 'tombstone',
+    ...(groupVisible ? { payload: item } : {}),
   });
   return repository.remember(actor.id, mutationId, item);
 }
@@ -304,10 +309,7 @@ export function getFinanceBudget(
       budget.status === 'active' || budget.status === 'changed-since-reconciliation'
         ? financeBudgetReconciliationReadiness(repository, actor, budget.id)
         : { canReconcile: false, reasons: ['Only an active budget can be reconciled.'] },
-    reconciliations:
-      budget.status === 'archived'
-        ? repository.budgetReconciliations.filter((record) => record.budgetId === budget.id)
-        : listBudgetReconciliationHistory(repository, actor, budget.id),
+    reconciliations: listBudgetReconciliationHistory(repository, actor, budget.id),
   };
 }
 

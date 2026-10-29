@@ -230,6 +230,11 @@ export async function findFinanceRecord<T>(entityType: string, entityId: string)
   return (await getRecord<{ data: T }>(key.PK, key.SK))?.data;
 }
 
+/** Server-only authorization evidence, excluded from API and sync projections. */
+export type StoredFinanceReconciliation = import('@naaseh/domain').ReconciliationRecord & {
+  readonly sourceAccountIds?: readonly string[];
+};
+
 type FinancePersistenceInput = {
   account?: Record<string, unknown> & { id: string };
   snapshot?: Record<string, unknown> & { id: string; accountId: string };
@@ -248,7 +253,7 @@ type FinancePersistenceInput = {
   budget?: import('@naaseh/domain').Budget;
   budgetAccountLink?: import('@naaseh/domain').BudgetAccountLink;
   budgetItem?: import('@naaseh/domain').BudgetItem;
-  reconciliation?: import('@naaseh/domain').ReconciliationRecord;
+  reconciliation?: StoredFinanceReconciliation;
   financialTaskLink?: import('@naaseh/domain').FinancialTaskLink;
   reusableItem?: import('@naaseh/domain').ReusableBudgetItem;
   reusableOccurrence?: {
@@ -409,7 +414,7 @@ export async function commitFinancePersistence(input: FinancePersistenceInput) {
 
 /** One conditional write appends immutable evidence while advancing only the reviewed budget version. */
 export function buildBudgetReconciliationTransaction(input: {
-  record: import('@naaseh/domain').ReconciliationRecord;
+  record: StoredFinanceReconciliation;
   budget: import('@naaseh/domain').Budget;
   expectedBudgetVersion: number;
 }): TransactWriteCommandInput {
@@ -592,7 +597,7 @@ export class FinanceMemoryRepository {
   readonly budgets = new Map<string, import('@naaseh/domain').Budget>();
   readonly budgetAccountLinks = new Map<string, import('@naaseh/domain').BudgetAccountLink>();
   readonly budgetItems = new Map<string, import('@naaseh/domain').BudgetItem>();
-  readonly budgetReconciliations: import('@naaseh/domain').ReconciliationRecord[] = [];
+  readonly budgetReconciliations: StoredFinanceReconciliation[] = [];
   readonly financialTaskLinks = new Map<string, import('@naaseh/domain').FinancialTaskLink>();
   readonly reusableItems = new Map<string, import('@naaseh/domain').ReusableBudgetItem>();
   readonly reusableOccurrenceLocks = new Map<string, string>();

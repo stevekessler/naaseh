@@ -153,3 +153,21 @@ Further results will be appended as the remaining implementation tasks complete.
   evidence. Heather is assigned as the individual-owner participant and Steve is assigned as the
   group-owner participant. A ready-to-use, protected-data-safe session worksheet is available in
   `acceptance.md`; results remain pending until both sessions are conducted.
+
+## PR 84 security audit remediation
+
+The regression suite adds 18 cases in one security test file: reconciliation history privacy
+(active, archived, unlinked, missing-source, legacy, and revoked-replay cases), private/mixed/shared
+budget-item feeds, and account/transaction deletion after version or reference changes. Historical
+source account identifiers remain server-only and survive persistence serialization; group feeds
+carry no reconciliation totals or private budget-item content.
+
+Required test count: 404 files / 1,254 tests before; 405 files / 1,272 tests after.
+The browser quick suite and workflow timeout are unchanged. Before the expansion,
+`/usr/bin/time -p npm test` passed in 49.36 seconds locally. Final local and hosted timings are
+recorded below after validation completes. No merge is performed as part of this remediation.
+
+Local remediation result: 405 files / 1,272 tests passed; `/usr/bin/time -p npm test`
+completed in 47.53 seconds (49.36 seconds before). Node.js 24.18.0 typecheck, lint, and
+production workspace builds passed. Hosted PR validation remains to be measured on the pushed
+remediation commit; the ten-minute target and fifteen-minute safety timeout remain unchanged.

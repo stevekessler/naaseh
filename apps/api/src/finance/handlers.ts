@@ -146,6 +146,37 @@ const visible = (
   action: 'read' | 'edit' | 'connect' | 'delete' = 'read',
 ) => authorizeFinanceScope(actor, scope, action).allowed;
 
+const accountDeletionReferences = (repository: FinanceMemoryRepository, accountId: string) => ({
+  transactions: repository.transactions.filter((item) => item.accountId === accountId).length,
+  budgetLinks: [...repository.budgetAccountLinks.values()].filter(
+    (link) => link.accountId === accountId,
+  ).length,
+  budgetItems: [...repository.budgetItems.values()].filter((item) =>
+    item.relatedAccountIds.includes(accountId),
+  ).length,
+  balanceSnapshots: repository.balanceSnapshots.filter(
+    (snapshot) => snapshot.accountId === accountId && snapshot.id !== `${accountId}-opening`,
+  ).length,
+});
+const transactionDeletionReferences = (
+  repository: FinanceMemoryRepository,
+  transaction: import('@naaseh/domain').FinancialTransaction,
+) => ({
+  allocations: transaction.allocations.length,
+  merchant: transaction.merchantId ? 1 : 0,
+  transfer: transaction.transferId ? 1 : 0,
+  matches: [...repository.transactionMatches.values()].filter(
+    (match) => match.transactionId === transaction.id,
+  ).length,
+  reviewIssues: [...repository.reviewIssues.values()].filter((issue) =>
+    issue.candidateIds.includes(transaction.id),
+  ).length,
+});
+const hasDeletionReferences = (references: Record<string, number>) =>
+  Object.values(references).some((count) => count > 0);
+const visibleDeletionCounts = (references: Record<string, number>) =>
+  Object.fromEntries(Object.entries(references).filter(([, count]) => count > 0));
+
 export function registerUserStory1FinanceRoutes(
   registry: FinanceRouteRegistry,
   dependencies: UserStory1RouteDependencies,
@@ -740,16 +771,18 @@ export function registerUserStory1FinanceRoutes(
       if (recordType === 'account') {
         const account = repository.accounts.get(recordId);
         if (!account) throw new Error('Finance record not found.');
-        const related = repository.transactions.filter(
-          (item) => item.accountId === recordId,
-        ).length;
+        const references = accountDeletionReferences(repository, recordId);
+        const hasReferences = hasDeletionReferences(references);
         preview = createAuthorizedDeletionPreview(actor, account.scope, {
           recordType,
           recordId,
           expectedVersion: account.version,
-          visibleDependentCounts: related ? { transactions: related } : {},
-          hasReferences: related > 0,
-          isMistake: related === 0,
+          // Budget relationships may belong to an inaccessible group.
+          visibleDependentCounts: references.transactions
+            ? { transactions: references.transactions }
+            : {},
+          hasReferences,
+          isMistake: !hasReferences,
           now,
           signingSecret: dependencies.deletionSigningSecret,
         });
@@ -757,19 +790,17 @@ export function registerUserStory1FinanceRoutes(
         const transaction = repository.transactions.find((item) => item.id === recordId);
         const account = transaction ? repository.accounts.get(transaction.accountId) : undefined;
         if (!transaction || !account) throw new Error('Finance record not found.');
-        const references = {
-          allocations: transaction.allocations.length,
-          merchant: transaction.merchantId ? 1 : 0,
-          transfer: transaction.transferId ? 1 : 0,
-        };
-        const hasReferences = Object.values(references).some((count) => count > 0);
+        const references = transactionDeletionReferences(repository, transaction);
+        const hasReferences = hasDeletionReferences(references);
         preview = createAuthorizedDeletionPreview(actor, account.scope, {
           recordType,
           recordId,
           expectedVersion: transaction.version,
-          visibleDependentCounts: Object.fromEntries(
-            Object.entries(references).filter(([, count]) => count > 0),
-          ),
+          visibleDependentCounts: visibleDeletionCounts({
+            allocations: references.allocations,
+            merchant: references.merchant,
+            transfer: references.transfer,
+          }),
           hasReferences,
           isMistake: canPermanentlyDeleteTransaction(transaction, {
             hasReferences,
@@ -1001,7 +1032,16 @@ export function registerUserStory1FinanceRoutes(
         dependencies.now?.() ?? new Date(),
         dependencies.deletionSigningSecret,
       );
+      // No await separates the state checks below from mutation in this repository.
       if (preview.recordType === 'account') {
+        if (
+          !account ||
+          account.version !== preview.expectedVersion ||
+          (result.outcome === 'permanent-delete' &&
+            hasDeletionReferences(accountDeletionReferences(repository, account.id)))
+        ) {
+          throw new Error('Deletion preview is stale.');
+        }
         if (result.outcome === 'permanent-delete') repository.accounts.delete(preview.recordId);
         else
           changeAccountLifecycle(
@@ -1013,7 +1053,15 @@ export function registerUserStory1FinanceRoutes(
           );
       } else if (preview.recordType === 'transaction') {
         const index = repository.transactions.findIndex((item) => item.id === preview.recordId);
-        const transaction = repository.transactions[index]!;
+        const transaction = repository.transactions[index];
+        if (
+          !transaction ||
+          transaction.version !== preview.expectedVersion ||
+          (result.outcome === 'permanent-delete' &&
+            hasDeletionReferences(transactionDeletionReferences(repository, transaction)))
+        ) {
+          throw new Error('Deletion preview is stale.');
+        }
         if (result.outcome === 'permanent-delete') repository.transactions.splice(index, 1);
         else repository.transactions[index] = archiveFinancialTransaction(transaction);
         markFinanceBudgetsChangedByTransaction(repository, transaction);

@@ -12,7 +12,7 @@ import {
   type ReconciliationRecord,
 } from '@naaseh/domain';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
-import { FinanceMemoryRepository } from './repository.js';
+import { FinanceMemoryRepository, type StoredFinanceReconciliation } from './repository.js';
 
 const scopeFor = (budget: Budget) => ({ type: 'group' as const, groupId: budget.groupId });
 
@@ -161,18 +161,45 @@ export function financeBudgetReconciliationReadiness(
   return { canReconcile: snapshot.reasons.length === 0, reasons: snapshot.reasons };
 }
 
+const canReadReconciliation = (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  record: StoredFinanceReconciliation,
+) =>
+  // Current links cannot authorize historical totals after a private account is unlinked.
+  // Legacy records without source evidence fail closed.
+  Boolean(record.sourceAccountIds?.length) &&
+  record.sourceAccountIds!.every((id) => {
+    const account = repository.accounts.get(id);
+    return account && authorizeFinanceScope(actor, account.scope, 'read').allowed;
+  });
+
 export function listBudgetReconciliationHistory(
   repository: FinanceMemoryRepository,
   actor: FinanceActor,
   budgetId: string,
 ) {
-  authorizedBudget(repository, actor, budgetId);
+  const budget = repository.budgets.get(budgetId);
+  if (
+    !budget ||
+    budget.status === 'tombstone' ||
+    !authorizeFinanceScope(actor, scopeFor(budget), 'read').allowed
+  ) {
+    throw new Error('Finance record not found.');
+  }
   return repository.budgetReconciliations
-    .filter((record) => record.budgetId === budgetId)
+    .filter(
+      (record) => record.budgetId === budgetId && canReadReconciliation(repository, actor, record),
+    )
     .sort(
       (left, right) =>
         right.reconciledAt.localeCompare(left.reconciledAt) || right.id.localeCompare(left.id),
-    );
+    )
+    .map((record) => {
+      const { sourceAccountIds, ...view } = record;
+      void sourceAccountIds;
+      return view;
+    });
 }
 
 export async function reconcileFinanceBudget(
@@ -184,8 +211,18 @@ export async function reconcileFinanceBudget(
   now = new Date(),
 ) {
   const replay = repository.mutation<ReconciliationRecord>(actor.id, mutationId);
-  if (replay) return replay;
   const budget = authorizedBudget(repository, actor, budgetId);
+  if (replay) {
+    const stored = repository.budgetReconciliations.find(({ id }) => id === replay.id);
+    if (
+      !stored ||
+      stored.budgetId !== budgetId ||
+      !canReadReconciliation(repository, actor, stored)
+    ) {
+      throw new Error('Finance record not found.');
+    }
+    return replay;
+  }
   if (budget.version !== input.expectedVersion) throw new Error('Budget version conflict.');
   const snapshot = reconciliationSnapshot(repository, actor, budget);
   if (snapshot.reasons[0] === 'Complete access to every linked account is required.') {
@@ -220,7 +257,10 @@ export async function reconcileFinanceBudget(
   if (repository.budgetReconciliations.some(({ id }) => id === record.id)) {
     throw new Error('Budget reconciliation version conflict.');
   }
-  repository.budgetReconciliations.push(record);
+  repository.budgetReconciliations.push({
+    ...record,
+    sourceAccountIds: Object.freeze(snapshot.source.accounts.map(({ id }) => id)),
+  });
   repository.budgets.set(updatedBudget.id, updatedBudget);
   repository.feedChanges.push({
     audience: financeAudience(scopeFor(updatedBudget)),
@@ -229,7 +269,9 @@ export async function reconcileFinanceBudget(
     version: 1,
     changedAt: reconciledAt,
     operation: 'upsert',
-    payload: record,
+    // Group feeds cannot express the intersection of source-account permissions.
+    // Full immutable totals remain available through authorized history reads.
+    payload: { ...record, totalsByCurrency: [], totalsByCategory: [] },
   });
   recordBudgetFeed(repository, updatedBudget);
   return repository.remember(actor.id, mutationId, record);

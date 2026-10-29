@@ -137,3 +137,20 @@ Within an audience, sequence numbers remain strictly increasing. Pull pages rema
 - CSV batch payloads contain digest/mapping/counts/status only; filenames, raw bytes, and preview rows never synchronize.
 - Provider identity can attach to a provisional transaction only atomically with the identity lock, and doing so never changes immutable origin or user-owned fields.
 - Recording a manual balance snapshot and recomputing `currentBalanceMinor` occur atomically from that snapshot plus strictly later accepted transactions; older imports remain historical and do not alter the projection.
+
+### Account-dependent budget projections
+
+- A budget-item payload may enter the owning group's feed only when every related account is
+  assigned to that same group. Items involving private accounts emit a payload-free tombstone
+  to remove any earlier group projection; their full values require an authorized budget read.
+  This rule also applies to mixed private/shared account items and copied reusable items.
+- Reconciliation group-feed records contain immutable history metadata with empty currency/category
+  totals. Full totals are returned only by an authorized history read, including archived budgets.
+- Stored reconciliation records retain server-only `sourceAccountIds` alongside the immutable
+  evidence. Persistence and restoration must preserve these identifiers, even after budget links
+  are removed. History access requires current access to every original source account as well
+  as the budget. Records lacking source evidence, or referencing missing accounts, are withheld;
+  no account identifiers from this evidence enter API or sync projections.
+- Deletion confirmation rechecks the current record version and dependent references immediately
+  before mutation. A changed version or a new reference invalidates a permanent-delete preview
+  with a conflict response, even when the new reference did not increment the account version.
