@@ -47,6 +47,10 @@ export async function executeFinanceImport(
   if (!connection || connection.status === 'revoked' || connection.status === 'archived') {
     throw new Error('Finance connection not found.');
   }
+  const priorJob = dependencies.repository.importJobs.get(event.jobId);
+  if (!priorJob || priorJob.connectionId !== event.connectionId)
+    throw new Error('Finance import job not found.');
+  if (priorJob.status === 'succeeded' || priorJob.status === 'cancelled') return priorJob;
   const now = dependencies.now?.() ?? new Date();
   acquireRefreshLease(dependencies.repository, event.connectionId, event.jobId, now);
   try {
@@ -66,6 +70,15 @@ export async function executeFinanceImport(
         : undefined,
     );
     const payload = parseSimplefinV2(raw);
+    const current = dependencies.repository.connections.get(event.connectionId);
+    if (
+      !current ||
+      current.status === 'revoked' ||
+      current.status === 'archived' ||
+      current.version !== connection.version
+    ) {
+      throw new Error('Finance connection changed during refresh.');
+    }
     const imported = importSimplefinAccounts(
       dependencies.repository,
       event.connectionId,
@@ -74,10 +87,10 @@ export async function executeFinanceImport(
     );
     const partial = payload.errors.length > 0 || imported.attentionAccounts > 0;
     const counts = {
-      accounts: imported.importedAccounts + imported.attentionAccounts,
+      accounts: payload.accounts.length,
       inserted: imported.importedTransactions,
-      updated: 0,
-      duplicateSuppressed: 0,
+      updated: imported.updatedTransactions,
+      duplicateSuppressed: imported.duplicateSuppressed,
       reviewIssues: imported.attentionAccounts + payload.errors.length,
     };
     const job = completeRefreshJob(
@@ -86,14 +99,16 @@ export async function executeFinanceImport(
       partial ? 'partial' : 'succeeded',
       counts,
     );
-    dependencies.repository.connections.set(event.connectionId, {
+    const updatedConnection: Record<string, unknown> = {
       ...connection,
       status: partial ? 'attention' : 'active',
       lastSuccessfulAt: now.toISOString(),
       lastSuccessfulStartDate: job.windowStart ?? now.toISOString().slice(0, 10),
       ...(partial ? { lastErrorClass: 'provider-partial' } : {}),
       version: connection.version + 1,
-    });
+    };
+    if (!partial) delete updatedConnection.lastErrorClass;
+    dependencies.repository.connections.set(event.connectionId, updatedConnection);
     log('finance.import.completed', {
       operation: 'finance.import',
       outcome: partial ? 'partial' : 'success',
@@ -114,12 +129,20 @@ export async function executeFinanceImport(
         errors: [{ class: errorClass, message: 'The provider import could not be completed.' }],
       });
     }
-    dependencies.repository.connections.set(event.connectionId, {
-      ...connection,
-      status: 'attention',
-      lastErrorClass: errorClass,
-      version: connection.version + 1,
-    });
+    const current = dependencies.repository.connections.get(event.connectionId);
+    if (
+      current &&
+      current.status !== 'revoked' &&
+      current.status !== 'archived' &&
+      current.version === connection.version
+    ) {
+      dependencies.repository.connections.set(event.connectionId, {
+        ...current,
+        status: 'attention',
+        lastErrorClass: errorClass,
+        version: connection.version + 1,
+      });
+    }
     log('finance.import.failed', {
       operation: 'finance.import',
       outcome: 'failure',
@@ -128,7 +151,7 @@ export async function executeFinanceImport(
       errorClass,
     });
     metric('FinanceImportFailures', 1, 'Count', { errorClass });
-    throw error;
+    throw new Error(`Finance import failed (${errorClass}).`);
   }
 }
 

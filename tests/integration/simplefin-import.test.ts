@@ -82,7 +82,7 @@ describe('SimpleFIN import', () => {
     expect(refreshWindowStart('2026-01-20')).toBe('2026-01-15');
   });
 
-  it('leases refresh jobs idempotently and recovers a partial attempt', () => {
+  it('excludes concurrent refresh attempts and recovers a partial attempt', () => {
     const repository = new FinanceMemoryRepository();
     const first = acquireRefreshLease(
       repository,
@@ -90,14 +90,15 @@ describe('SimpleFIN import', () => {
       'job-1',
       new Date('2026-01-01T00:00:00.000Z'),
     );
-    expect(
+    expect(first.status).toBe('running');
+    expect(() =>
       acquireRefreshLease(
         repository,
         'connection-1',
         'job-1',
         new Date('2026-01-01T00:00:01.000Z'),
       ),
-    ).toEqual(first);
+    ).toThrow(/lease/);
     completeRefreshJob(repository, 'job-1', 'partial', {
       accounts: 1,
       inserted: 1,
@@ -236,5 +237,31 @@ describe('SimpleFIN import', () => {
     expect(repository.importJobs.get('job-failed')?.errors).toEqual([
       { class: 'provider-authentication', message: 'The provider import could not be completed.' },
     ]);
+    repository.importJobs.set('job-revoked', {
+      ...repository.importJobs.get('job-failed')!,
+      id: 'job-revoked',
+      status: 'queued',
+    });
+    await expect(
+      executeFinanceImport(
+        { connectionId: connection.id, jobId: 'job-revoked' },
+        {
+          repository,
+          allowedHosts: ['bridge.simplefin.org'],
+          kms,
+          fetcher: async () => {
+            const current = repository.connections.get(connection.id)!;
+            repository.connections.set(connection.id, {
+              ...current,
+              status: 'revoked',
+              version: Number(current.version) + 1,
+            });
+            return new Response(JSON.stringify(simplefinV2Fixture));
+          },
+        },
+      ),
+    ).rejects.toThrow('Finance import failed (internal).');
+    expect(repository.connections.get(connection.id)?.status).toBe('revoked');
+    expect(repository.accounts.size).toBe(0);
   });
 });

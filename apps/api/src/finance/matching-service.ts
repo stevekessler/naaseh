@@ -75,6 +75,24 @@ const authorizedTransaction = (
   return { index, transaction, account };
 };
 
+const canReadBudgetItem = (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  item: BudgetItem,
+) => {
+  const budget = repository.budgets.get(item.budgetId);
+  return (
+    budget &&
+    budget.status !== 'archived' &&
+    budget.status !== 'tombstone' &&
+    authorizeFinanceScope(actor, groupScope(budget.groupId), 'read').allowed &&
+    item.relatedAccountIds.every((id) => {
+      const account = repository.accounts.get(id);
+      return account && authorizeFinanceScope(actor, account.scope, 'read').allowed;
+    })
+  );
+};
+
 const recordReusableFeed = (repository: FinanceMemoryRepository, item: ReusableBudgetItem) => {
   repository.feedChanges.push({
     audience: financeAudience(groupScope(item.groupId)),
@@ -111,7 +129,7 @@ export async function createFinanceReusableItem(
   input: Omit<CreateReusableBudgetItemInput, 'creatorId'>,
   mutationId: string,
 ) {
-  const replay = repository.mutation<ReusableBudgetItem>(actor.id, mutationId);
+  const replay = repository.mutation<ReusableBudgetItem>(actor, mutationId);
   if (replay) return replay;
   if (!authorizeFinanceScope(actor, groupScope(input.groupId), 'edit').allowed) {
     throw new Error('Finance record not found.');
@@ -202,7 +220,7 @@ export async function copyReusableItemToBudget(
   expectedBudgetVersion: number,
   mutationId: string,
 ) {
-  const replay = repository.mutation<BudgetItem>(actor.id, mutationId);
+  const replay = repository.mutation<BudgetItem>(actor, mutationId);
   if (replay) return replay;
   const budget = authorizedBudget(repository, actor, budgetId, 'edit');
   const reusable = authorizedReusable(repository, actor, reusableItemId);
@@ -253,7 +271,9 @@ const candidateItems = (repository: FinanceMemoryRepository, actor: FinanceActor
   const budgetIds = new Set(budgets.map(({ id }) => id));
   return {
     budgets,
-    items: [...repository.budgetItems.values()].filter((item) => budgetIds.has(item.budgetId)),
+    items: [...repository.budgetItems.values()].filter(
+      (item) => budgetIds.has(item.budgetId) && canReadBudgetItem(repository, actor, item),
+    ),
   };
 };
 
@@ -333,7 +353,7 @@ export async function evaluateFinanceTransactionMatches(
   nextId: () => string,
   mutationId: string,
 ) {
-  const replay = repository.mutation<TransactionMatch[]>(actor.id, mutationId);
+  const replay = repository.mutation<TransactionMatch[]>(actor, mutationId);
   if (replay) return replay;
   const authorized = authorizedTransaction(repository, actor, transactionId, 'edit');
   if (authorized.transaction.allocations.some(({ budgetItemId }) => budgetItemId)) {
@@ -387,7 +407,9 @@ const authorizedMatch = (
   matchId: string,
 ) => {
   const match = repository.transactionMatches.get(matchId);
-  if (!match) throw new Error('Finance record not found.');
+  const item = match ? repository.budgetItems.get(match.budgetItemId) : undefined;
+  if (!match || !item || !canReadBudgetItem(repository, actor, item))
+    throw new Error('Finance record not found.');
   const authorized = authorizedTransaction(repository, actor, match.transactionId, 'edit');
   return { match, ...authorized };
 };
@@ -400,7 +422,13 @@ export function listFinanceTransactionMatches(
   const { transaction } = authorizedTransaction(repository, actor, transactionId);
   return {
     items: [...repository.transactionMatches.values()].filter(
-      (match) => match.transactionId === transactionId && match.status !== 'tombstone',
+      (match) =>
+        match.transactionId === transactionId &&
+        match.status !== 'tombstone' &&
+        Boolean(
+          repository.budgetItems.get(match.budgetItemId) &&
+            canReadBudgetItem(repository, actor, repository.budgetItems.get(match.budgetItemId)!),
+        ),
     ),
     transactionVersion: transaction.version,
   };
@@ -414,7 +442,7 @@ export async function acceptFinanceTransactionMatch(
   expectedTransactionVersion: number,
   mutationId: string,
 ) {
-  const replay = repository.mutation<TransactionMatch>(actor.id, mutationId);
+  const replay = repository.mutation<TransactionMatch>(actor, mutationId);
   if (replay) return replay;
   const authorized = authorizedMatch(repository, actor, matchId);
   if (
@@ -441,7 +469,7 @@ export async function rejectFinanceTransactionMatch(
   expectedTransactionVersion: number,
   mutationId: string,
 ) {
-  const replay = repository.mutation<TransactionMatch>(actor.id, mutationId);
+  const replay = repository.mutation<TransactionMatch>(actor, mutationId);
   if (replay) return replay;
   const authorized = authorizedMatch(repository, actor, matchId);
   if (
@@ -463,7 +491,7 @@ export async function undoFinanceTransactionMatch(
   expectedTransactionVersion: number,
   mutationId: string,
 ) {
-  const replay = repository.mutation<TransactionMatch>(actor.id, mutationId);
+  const replay = repository.mutation<TransactionMatch>(actor, mutationId);
   if (replay) return replay;
   const authorized = authorizedMatch(repository, actor, matchId);
   if (

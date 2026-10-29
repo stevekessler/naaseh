@@ -24,8 +24,6 @@ export function createBalancedAllocations(
   ) {
     throw new Error('Allocations must equal the transaction total.');
   }
-  if (values.length > 1 && values.length < 2)
-    throw new Error('A completed split requires at least two allocations.');
   const ids = new Set<string>();
   let sum = 0;
   for (const value of values) {

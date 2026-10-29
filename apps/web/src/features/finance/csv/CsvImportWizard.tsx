@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { mapFinanceCsvRows } from '@naaseh/domain';
 import { DuplicateReview, type CsvMappingState, type DuplicateCandidate } from './csv-import.js';
 
@@ -9,7 +9,10 @@ export function CsvImportWizard({
 }: {
   duplicates?: DuplicateCandidate[];
   currency?: string;
-  onCommit: (rows?: ReturnType<typeof mapFinanceCsvRows>) => Promise<void>;
+  onCommit: (
+    rows?: ReturnType<typeof mapFinanceCsvRows>,
+    summary?: ReturnType<DuplicateReview['summary']>,
+  ) => Promise<void>;
 }) {
   const [rawRows, setRawRows] = useState<string[][]>([]);
   const [progress, setProgress] = useState('');
@@ -23,6 +26,14 @@ export function CsvImportWizard({
   const [review] = useState(() => new DuplicateReview(duplicates));
   const [, render] = useState(0);
   const worker = useRef<Worker | undefined>(undefined);
+  const generation = useRef(0);
+  useEffect(
+    () => () => {
+      generation.current += 1;
+      worker.current?.terminate();
+    },
+    [],
+  );
   const headers = rawRows[0] ?? [];
   const mappingResult = useMemo(() => {
     if (
@@ -57,11 +68,17 @@ export function CsvImportWizard({
     </label>
   );
   const parseFile = async (file: File | undefined) => {
+    const current = ++generation.current;
     worker.current?.terminate();
     setRawRows([]);
     setError('');
     if (!file) return;
+    if (file.size > 10_000_000) {
+      setError('CSV file exceeds the size limit.');
+      return;
+    }
     const text = await file.text();
+    if (current !== generation.current) return;
     const csvWorker = new Worker(new URL('./csv.worker.ts', import.meta.url), { type: 'module' });
     worker.current = csvWorker;
     setProgress('Reading CSV…');
@@ -164,7 +181,11 @@ export function CsvImportWizard({
       ) : null}
       <button
         disabled={!review.complete || mapped.length === 0}
-        onClick={() => void onCommit(mapped)}
+        onClick={() =>
+          void onCommit(review.reviewedRows(mapped), review.summary()).catch(() =>
+            setError('The CSV import could not be saved. Review it and try again.'),
+          )
+        }
       >
         Commit reviewed import
       </button>

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { FinanceMemoryRepository } from './repository.js';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { createFinancialTransaction, deriveCurrentBalance, financeAudience } from '@naaseh/domain';
@@ -30,7 +31,8 @@ interface MemoryCsvBatch {
   fileDigest: string;
   duplicateDecisionDigest: string;
   status: 'staged' | 'committing' | 'partial' | 'succeeded';
-  chunks: Set<number>;
+  chunks: Map<number, string>;
+  finalChunkIndex?: number;
   counts: {
     accepted: number;
     committed: number;
@@ -73,11 +75,24 @@ export async function commitCsvImportChunk(
     if (prior) return responseFor(prior);
     throw new Error('CSV file replay receipt is inconsistent.');
   }
-  repository.csvFileReceipts.set(fileKey, input.batchId);
 
   const batchKey = `${input.accountId}:${input.batchId}`;
   const existing = repository.csvBatches.get(batchKey) as MemoryCsvBatch | undefined;
-  if (existing?.chunks.has(input.chunkIndex)) return responseFor(existing);
+  const chunkDigest = createHash('sha256')
+    .update(JSON.stringify({ rows: input.rows, finalChunk: input.finalChunk }))
+    .digest('hex');
+  if (
+    existing &&
+    (existing.fileDigest !== input.fileDigest ||
+      existing.duplicateDecisionDigest !== input.duplicateDecisionDigest)
+  ) {
+    throw new Error('CSV batch identity version conflict.');
+  }
+  const priorDigest = existing?.chunks.get(input.chunkIndex);
+  if (priorDigest) {
+    if (priorDigest !== chunkDigest) throw new Error('CSV chunk content version conflict.');
+    return responseFor(existing!);
+  }
   for (const row of input.rows) {
     const suspected = repository.transactions.some(
       (item) =>
@@ -98,7 +113,7 @@ export async function commitCsvImportChunk(
     fileDigest: input.fileDigest,
     duplicateDecisionDigest: input.duplicateDecisionDigest,
     status: 'staged',
-    chunks: new Set(),
+    chunks: new Map(),
     counts: {
       accepted: 0,
       committed: 0,
@@ -112,7 +127,7 @@ export async function commitCsvImportChunk(
   if (batch.duplicateDecisionDigest !== input.duplicateDecisionDigest) {
     throw new Error('CSV duplicate decisions changed during commit.');
   }
-  batch.chunks.add(input.chunkIndex);
+  repository.csvFileReceipts.set(fileKey, input.batchId);
   for (const row of input.rows) {
     const identity = `${input.batchId}:${row.ordinal}`;
     const receiptKey = `${input.accountId}:${identity}`;
@@ -122,21 +137,26 @@ export async function commitCsvImportChunk(
       continue;
     }
     const account = repository.accounts.get(input.accountId);
-    repository.transactions.push(
-      createFinancialTransaction({
-        id: identity,
-        accountId: input.accountId,
-        origin: 'csv',
-        amountMinor: row.amountMinor,
-        currency: account?.currency ?? 'USD',
-        transactedAt: row.transactedAt,
-        description: row.description,
-        pending: false,
-        connectedAccount: false,
-        csvImportBatchId: input.batchId,
-        csvRowOrdinal: row.ordinal,
-      }),
-    );
+    try {
+      repository.transactions.push(
+        createFinancialTransaction({
+          id: identity,
+          accountId: input.accountId,
+          origin: 'csv',
+          amountMinor: row.amountMinor,
+          currency: account?.currency ?? 'USD',
+          transactedAt: row.transactedAt,
+          description: row.description,
+          pending: false,
+          connectedAccount: Boolean(account?.connectionId),
+          csvImportBatchId: input.batchId,
+          csvRowOrdinal: row.ordinal,
+        }),
+      );
+    } catch {
+      repository.csvRowReceipts.set(receiptKey, 'failed');
+      continue;
+    }
     repository.csvRowReceipts.set(receiptKey, 'committed');
   }
 
@@ -151,7 +171,14 @@ export async function commitCsvImportChunk(
     .filter(([, state]) => state === 'failed')
     .map(([key]) => Number(key.slice(prefix.length)))
     .sort((left, right) => left - right);
-  batch.status = input.finalChunk ? (batch.counts.failed ? 'partial' : 'succeeded') : 'committing';
+  batch.chunks.set(input.chunkIndex, chunkDigest);
+  if (input.finalChunk) batch.finalChunkIndex = input.chunkIndex;
+  const complete =
+    batch.finalChunkIndex !== undefined &&
+    Array.from({ length: batch.finalChunkIndex + 1 }, (_, index) => index).every((index) =>
+      batch.chunks.has(index),
+    );
+  batch.status = complete ? (batch.counts.failed ? 'partial' : 'succeeded') : 'committing';
   repository.csvBatches.set(batchKey, batch);
   const account = repository.accounts.get(input.accountId);
   if (account && !account.connectionId) {

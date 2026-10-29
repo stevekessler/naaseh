@@ -73,17 +73,10 @@ const createIndex = () =>
     idField: 'id',
   });
 
-interface ClearableFinanceIndex {
-  clear(): void;
-}
-const activeIndexes = new Set<ClearableFinanceIndex>();
-
-export function registerFinanceSearchIndex(index: ClearableFinanceIndex) {
-  activeIndexes.add(index);
-  return () => {
-    activeIndexes.delete(index);
-  };
-}
+export {
+  registerFinanceSearchIndex,
+  clearFinanceSearchIndexes,
+} from './finance-index-lifecycle.js';
 
 const createMerchantIndex = () =>
   new MiniSearch<FinanceMerchantSearchDocument>({
@@ -202,6 +195,7 @@ export class FinanceSearchIndex {
   }
 
   removeAccount(accountId: string) {
+    this.generation += 1;
     this.accounts.delete(accountId);
     this.transactions.removeAccount(accountId);
     for (const [id, document] of this.transactionDocuments) {
@@ -316,10 +310,6 @@ export async function loadAuthorizedFinanceSearchSource(): Promise<FinanceSearch
   return { accounts, transactions, merchants };
 }
 
-export function clearFinanceSearchIndexes() {
-  for (const index of activeIndexes) index.clear();
-}
-
 /** Plaintext Finance search state. This class intentionally has no serialization API. */
 export class FinanceTransactionIndex {
   private index = createIndex();
@@ -388,6 +378,7 @@ export class FinanceTransactionIndex {
   }
 
   removeAccount(accountId: string) {
+    this.generation += 1;
     for (const [id, document] of this.documents) {
       if (document.accountId !== accountId) continue;
       this.index.discard(id);

@@ -2,6 +2,8 @@ import {
   createFinancialAccount,
   createFinancialTransaction,
   createImportJob,
+  insertBalanceSnapshot,
+  financeAudience,
   createUlid,
   transitionImportJob,
   type FinanceScope,
@@ -158,8 +160,8 @@ export function boundedRefreshWindow(connection: Record<string, unknown>, now = 
   const earliest = new Date(end);
   earliest.setUTCDate(earliest.getUTCDate() - 90);
   const overlap =
-    typeof connection.lastSuccessfulStartDate === 'string'
-      ? new Date(`${refreshWindowStart(connection.lastSuccessfulStartDate)}T00:00:00.000Z`)
+    typeof connection.lastSuccessfulAt === 'string'
+      ? new Date(`${refreshWindowStart(connection.lastSuccessfulAt.slice(0, 10))}T00:00:00.000Z`)
       : earliest;
   const start = overlap < earliest ? earliest : overlap;
   return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
@@ -179,7 +181,23 @@ export function acquireRefreshLease(
 ) {
   const existing = repository.importJobs.get(jobId);
   if (existing) {
-    if (existing.status === 'running') return existing;
+    if (existing.connectionId !== connectionId) throw new Error('Finance import job not found.');
+    if (
+      existing.status === 'running' &&
+      existing.leaseUntil &&
+      now < new Date(existing.leaseUntil)
+    ) {
+      throw new Error('Finance import lease is already held.');
+    }
+    if (existing.status === 'running') {
+      const resumed = {
+        ...existing,
+        attempts: existing.attempts + 1,
+        leaseUntil: new Date(now.getTime() + 5 * 60_000).toISOString(),
+      };
+      repository.importJobs.set(jobId, resumed);
+      return resumed;
+    }
     if (existing.status === 'queued') {
       const started = {
         ...transitionImportJob(existing, 'running'),
@@ -238,6 +256,8 @@ export function importSimplefinAccounts(
   let importedAccounts = 0;
   let attentionAccounts = 0;
   let importedTransactions = 0;
+  let updatedTransactions = 0;
+  let duplicateSuppressed = 0;
   for (const source of payload.accounts) {
     const providerAccountIdentity = `${source.providerConnectionId ?? 'legacy'}:${source.providerAccountId}`;
     if (source.needsIdentityCompletion || !source.sourceName || !source.organizationName) {
@@ -282,10 +302,64 @@ export function importSimplefinAccounts(
       });
       importedAccounts += 1;
     }
+    const existingAccount = repository.accounts.get(accountId)!;
+    if (existingAccount.status === 'archived' || existingAccount.status === 'deleting') continue;
+    if (existingAccount.currency !== source.currency)
+      throw new Error('Provider account currency changed.');
+    const snapshot = {
+      id: createUlid(),
+      accountId,
+      balanceMinor: source.balanceMinor,
+      currency: source.currency,
+      currencyExponent: existingAccount.currencyExponent,
+      effectiveAt: source.balanceAt,
+      recordedAt: new Date().toISOString(),
+      source: 'simplefin' as const,
+      ...(source.availableBalanceMinor === undefined
+        ? {}
+        : { availableBalanceMinor: source.availableBalanceMinor }),
+    };
+    const insertion = insertBalanceSnapshot(
+      repository.balanceSnapshots.filter((item) => item.accountId === accountId),
+      snapshot,
+    );
+    if (insertion.inserted) repository.balanceSnapshots.push(snapshot);
+    const latest = [...insertion.snapshots]
+      .sort(
+        (a, b) =>
+          a.effectiveAt.localeCompare(b.effectiveAt) || a.recordedAt.localeCompare(b.recordedAt),
+      )
+      .at(-1)!;
+    if (
+      existingAccount.currentBalanceMinor !== latest.balanceMinor ||
+      existingAccount.balanceAt !== latest.effectiveAt ||
+      existingAccount.availableBalanceMinor !== latest.availableBalanceMinor
+    ) {
+      const updated = {
+        ...existingAccount,
+        currentBalanceMinor: latest.balanceMinor,
+        balanceAt: latest.effectiveAt,
+        version: existingAccount.version + 1,
+      };
+      if (latest.availableBalanceMinor === undefined) delete updated.availableBalanceMinor;
+      else updated.availableBalanceMinor = latest.availableBalanceMinor;
+      repository.accounts.set(accountId, updated);
+      repository.feedChanges.push({
+        audience: financeAudience(updated.scope),
+        entityType: 'financeAccount',
+        entityId: accountId,
+        version: updated.version,
+        changedAt: snapshot.recordedAt,
+        operation: 'upsert',
+        payload: updated,
+      });
+    }
     for (const transaction of source.transactions) {
       const resolvedProviderConnectionId = source.providerConnectionId ?? connectionId;
       const transactionSourceId = `${resolvedProviderConnectionId}:${source.providerAccountId}:${transaction.sourceTransactionId}`;
-      if (repository.sourceIdentities.has(`${connectionId}:${transactionSourceId}`)) continue;
+      const existingTransactionId = repository.sourceIdentities.get(
+        `${connectionId}:${transactionSourceId}`,
+      );
       const transactionId = createUlid();
       const providerTransaction = createFinancialTransaction({
         id: transactionId,
@@ -303,9 +377,22 @@ export function importSimplefinAccounts(
         providerAccountId: source.providerAccountId,
         sourceTransactionId: transaction.sourceTransactionId,
       });
-      reconcileProviderImport(repository, providerTransaction, 'system');
-      importedTransactions += 1;
+      const previousVersion = existingTransactionId
+        ? repository.transactions.find(
+            ({ id }) => id === repository.resolveTransactionId(existingTransactionId),
+          )?.version
+        : undefined;
+      const canonical = reconcileProviderImport(repository, providerTransaction, 'system');
+      if (!existingTransactionId) importedTransactions += 1;
+      else if (previousVersion !== canonical.version) updatedTransactions += 1;
+      else duplicateSuppressed += 1;
     }
   }
-  return { importedAccounts, attentionAccounts, importedTransactions };
+  return {
+    importedAccounts,
+    attentionAccounts,
+    importedTransactions,
+    updatedTransactions,
+    duplicateSuppressed,
+  };
 }

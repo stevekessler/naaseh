@@ -1,6 +1,6 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { recordError, SafeApiError } from '../shared/http.js';
-import { json, problem } from '../shared/http.js';
+import { problem } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
 import { listUserMemberships } from '../groups/group-repository.js';
 import { FinanceMemoryRepository } from './repository.js';
@@ -48,13 +48,16 @@ export function createFinanceHandler(registry = createDefaultFinanceRegistry()) 
     if (!auth?.userId)
       return problem(401, 'unauthorized', 'Authentication required.', correlationId);
     try {
+      if (Buffer.byteLength(event.body ?? '', 'utf8') > 1_000_000) {
+        return problem(413, 'request_too_large', 'Request is too large.', correlationId);
+      }
       if (mutationMethods.has(event.requestContext.http.method)) {
         requireMutationSecurity(
           event.headers.origin,
           auth.csrfToken ?? '',
           event.headers['x-csrf-token'],
         );
-        if (!event.headers['idempotency-key']) {
+        if (!event.headers['idempotency-key'] || event.headers['idempotency-key'].length > 200) {
           return problem(
             400,
             'finance_idempotency_required',
@@ -67,8 +70,10 @@ export function createFinanceHandler(registry = createDefaultFinanceRegistry()) 
         event.requestContext.http.method,
         event.routeKey.split(' ').slice(1).join(' '),
       );
-      return route
-        ? await route(event)
+      if (route) return await route(event);
+      const matched = registry.match(event.requestContext.http.method, event.rawPath);
+      return matched
+        ? await matched.handler({ ...event, pathParameters: matched.parameters })
         : problem(404, 'finance_not_found', 'Finance record not found.', correlationId);
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
@@ -92,16 +97,23 @@ export function createFinanceHandler(registry = createDefaultFinanceRegistry()) 
                   'Budget reconciliation prerequisites changed. Refresh and review the budget.',
                   'conflict',
                 )
-              : message.includes('cooldown')
+              : message.startsWith('Finance page limit')
                 ? new SafeApiError(
-                    429,
-                    'finance_refresh_cooldown',
-                    'SimpleFIN refresh cooldown is active.',
-                    'throttled',
-                    false,
-                    3600,
+                    400,
+                    'invalid_request',
+                    'The page limit is invalid.',
+                    'validation',
                   )
-                : error;
+                : message.includes('cooldown')
+                  ? new SafeApiError(
+                      429,
+                      'finance_refresh_cooldown',
+                      'SimpleFIN refresh cooldown is active.',
+                      'throttled',
+                      false,
+                      3600,
+                    )
+                  : error;
       const safe = recordError(mapped, {
         correlationId,
         operation: 'finance.request',
@@ -113,4 +125,3 @@ export function createFinanceHandler(registry = createDefaultFinanceRegistry()) 
 }
 
 export const handler = createFinanceHandler();
-export const healthFinanceResponse = () => json(200, { status: 'ok' });

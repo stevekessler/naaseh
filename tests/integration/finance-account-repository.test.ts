@@ -34,6 +34,7 @@ describe('Finance account repository', () => {
 
   it('requires user-supplied SimpleFIN identity before account creation and transaction import', () => {
     const repository = new FinanceMemoryRepository();
+    repository.connections.set('connection-1', { scope: { type: 'owner', ownerId: actor.id } });
     repository.pendingSimplefinAccounts.set('connection-1:provider-1', {
       providerAccountId: 'provider-1',
       currency: 'USD',

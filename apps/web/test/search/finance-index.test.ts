@@ -77,3 +77,26 @@ describe('memory-only Finance transaction index', () => {
     unregister();
   });
 });
+
+it('does not repopulate a revoked account from an in-flight indexing batch', async () => {
+  const index = new FinanceTransactionIndex();
+  let release: (() => void) | undefined;
+  const pending = index.replaceProgressively(
+    [
+      { ...documents[0]!, id: 'first' },
+      { ...documents[0]!, id: 'later' },
+    ],
+    {
+      batchSize: 1,
+      yieldToMain: () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    },
+  );
+  await Promise.resolve();
+  index.removeAccount('account-a');
+  release?.();
+  await pending;
+  expect(index.search('fixture')).toEqual([]);
+});

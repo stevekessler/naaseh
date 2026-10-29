@@ -14,6 +14,7 @@ export interface BalanceSnapshot {
 }
 
 export interface BalanceContribution {
+  status?: 'active' | 'archived' | 'tombstone';
   amountMinor: number;
   effectiveAt: string;
 }
@@ -30,7 +31,10 @@ export function deriveCurrentBalance(
   return addMinorUnits([
     baseline.balanceMinor,
     ...transactions
-      .filter((item) => item.effectiveAt > baseline.effectiveAt)
+      .filter(
+        (item) =>
+          (!item.status || item.status === 'active') && item.effectiveAt > baseline.effectiveAt,
+      )
       .map((item) => item.amountMinor),
   ]);
 }

@@ -94,26 +94,33 @@ export function FinanceBudgetsPage({
           endDate: endDate || null,
         }),
       });
-      setBudgets((current) => [...current.filter(({ id }) => id !== created.id), created]);
+      let expectedBudgetVersion = created.version;
+      let linkingFailed = false;
+      for (const accountId of selectedAccounts) {
+        try {
+          await financeRequest(`/finance/budgets/${created.id}/accounts`, {
+            method: 'POST',
+            csrfToken,
+            idempotencyKey: crypto.randomUUID(),
+            body: JSON.stringify({ accountId, expectedBudgetVersion }),
+          });
+          expectedBudgetVersion += 1;
+        } catch {
+          linkingFailed = true;
+          break;
+        }
+      }
+      const detail = await financeRequest<BudgetDetailView>(`/finance/budgets/${created.id}`).catch(
+        () => ({ ...created, version: expectedBudgetVersion }),
+      );
+      setBudgets((current) => [...current.filter(({ id }) => id !== created.id), detail]);
       setSelectedId(created.id);
       setCreating(false);
+      if (linkingFailed)
+        setError(
+          'The budget was created, but some accounts could not be linked. Review its accounts before adding items.',
+        );
       history.pushState({}, '', `/finance/budgets/${encodeURIComponent(created.id)}`);
-      void (async () => {
-        let expectedBudgetVersion = created.version;
-        for (const accountId of selectedAccounts) {
-          try {
-            await financeRequest(`/finance/budgets/${created.id}/accounts`, {
-              method: 'POST',
-              csrfToken,
-              idempotencyKey: crypto.randomUUID(),
-              body: JSON.stringify({ accountId, expectedBudgetVersion }),
-            });
-            expectedBudgetVersion += 1;
-          } catch {
-            /* The created budget remains durable and can be completed safely. */
-          }
-        }
-      })();
     } catch {
       setError('The budget could not be created.');
     }
@@ -131,18 +138,21 @@ export function FinanceBudgetsPage({
     );
   if (selected)
     return (
-      <FinanceBudgetDetail
-        budget={selected}
-        accounts={accounts}
-        categories={categories}
-        csrfToken={csrfToken}
-        currentUserId={currentUserId}
-        onChange={(updated) =>
-          setBudgets((current) =>
-            current.map((budget) => (budget.id === updated.id ? updated : budget)),
-          )
-        }
-      />
+      <>
+        {error ? <p role="alert">{error}</p> : null}
+        <FinanceBudgetDetail
+          budget={selected}
+          accounts={accounts}
+          categories={categories}
+          csrfToken={csrfToken}
+          currentUserId={currentUserId}
+          onChange={(updated) =>
+            setBudgets((current) =>
+              current.map((budget) => (budget.id === updated.id ? updated : budget)),
+            )
+          }
+        />
+      </>
     );
 
   return (

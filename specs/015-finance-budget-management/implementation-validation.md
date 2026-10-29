@@ -175,3 +175,23 @@ audit, full validation, and the browser quick suite. This remains below the ten-
 the fifteen-minute safety timeout is unchanged.
 
 Hosted evidence: [Validate run 40886737909](https://github.com/stevekessler/naaseh/actions/runs/40886737909).
+
+## Full code audit follow-up
+
+The follow-up audit adds 34 regression cases. Required validation now contains **408 test files /
+1,306 tests**, compared with 405 files / 1,272 tests before this pass. The browser quick-suite
+membership remains 31 tests and the workflow timeout is unchanged.
+
+| Required command | Before | After | Result |
+| --- | ---: | ---: | --- |
+| `/usr/bin/time -p npm test` | 45.13 s | 44.80 s | 1,306 passed |
+| `/usr/bin/time -p npm run test:e2e:quick` | 27.72 s | 25.91 s | 31 passed |
+
+Node.js 24 typecheck, lint and workspace builds passed. Hosted validation duration is checked on
+the pushed audit-fix commit separately from these local measurements; the required target remains
+at most ten minutes. No merge or deployment is part of this audit.
+
+The [full audit report](../../docs/testing/finance-full-code-audit.md) distinguishes corrected
+service/UI defects from the remaining production persistence, synchronization and task-integration
+release blockers. Those blockers prevent treating passing mock-backed acceptance tests as proof
+that Finance is ready for production.

@@ -58,12 +58,29 @@ export function sanitizedSimplefinError(status: number) {
 
 async function boundedText(response: Response, maximumBytes: number) {
   const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maximumBytes)
+  if (Number.isFinite(declared) && declared > maximumBytes) {
+    await response.body?.cancel();
     throw new Error('SimpleFIN response exceeds the size limit.');
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > maximumBytes)
-    throw new Error('SimpleFIN response exceeds the size limit.');
-  return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > maximumBytes) {
+        await reader.cancel();
+        throw new Error('SimpleFIN response exceeds the size limit.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks, size));
 }
 
 async function fetchBridge(
@@ -77,6 +94,7 @@ async function fetchBridge(
   for (let redirects = 0; redirects <= 3; redirects += 1) {
     const response = await fetcher(url, { ...init, redirect: 'manual' });
     if (!redirectStatuses.has(response.status)) return response;
+    await response.body?.cancel();
     const location = response.headers.get('location');
     if (!location || redirects === 3)
       throw new Error('SimpleFIN redirect could not be followed safely.');

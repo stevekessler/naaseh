@@ -52,6 +52,18 @@ export class DuplicateReview {
   get complete() {
     return this.#decisions.size === this.candidates.length;
   }
+  reviewedRows<T extends { ordinal: number }>(rows: readonly T[]) {
+    if (!this.complete) throw new Error('Every suspected duplicate must be reviewed.');
+    return rows
+      .filter((row) => this.#decisions.get(row.ordinal) !== 'exclude')
+      .map((row) => ({
+        ...row,
+        duplicateDisposition:
+          this.#decisions.get(row.ordinal) === 'include'
+            ? ('included-after-review' as const)
+            : ('not-suspected' as const),
+      }));
+  }
   summary() {
     return {
       suspected: this.candidates.length,

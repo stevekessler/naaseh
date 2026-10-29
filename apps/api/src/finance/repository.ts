@@ -15,6 +15,7 @@ import {
   type GenericCurrentRecord,
 } from '../shared/store.js';
 import type { PreparedFeedChange } from '../sync/change-feed-repository.js';
+import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 
 const pad = (value: number, width: number) => String(value).padStart(width, '0');
 const prefixFor = (entityType: string) => `FINANCE#${entityType.toUpperCase()}`;
@@ -621,8 +622,93 @@ export class FinanceMemoryRepository {
   readonly feedChanges: Array<Omit<SyncChange, 'sequence'>> = [];
   readonly mutationReceipts = new Map<string, unknown>();
 
-  mutation<T>(actorId: string, mutationId: string): T | undefined {
-    return this.mutationReceipts.get(`${actorId}:${mutationId}`) as T | undefined;
+  mutation<T>(actor: string | FinanceActor, mutationId: string): T | undefined {
+    const actorId = typeof actor === 'string' ? actor : actor.id;
+    const receipt = this.mutationReceipts.get(`${actorId}:${mutationId}`);
+    if (receipt !== undefined && typeof actor !== 'string') {
+      this.assertReceiptAccess(actor, receipt);
+    }
+    return receipt as T | undefined;
+  }
+
+  private assertReceiptAccess(actor: FinanceActor, value: unknown): void {
+    const deny = () => {
+      throw new Error('Finance record not found.');
+    };
+    if (!actor.active) deny();
+    if (Array.isArray(value)) {
+      for (const item of value) this.assertReceiptAccess(actor, item);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    const accountAccess = (id: string) => {
+      const account = this.accounts.get(id);
+      if (!account || !authorizeFinanceScope(actor, account.scope, 'read').allowed) deny();
+    };
+    const budgetAccess = (id: string) => {
+      const budget = this.budgets.get(id);
+      if (
+        !budget ||
+        !authorizeFinanceScope(actor, { type: 'group', groupId: budget.groupId }, 'read').allowed
+      )
+        deny();
+    };
+    if (typeof record.id === 'string') {
+      const account = this.accounts.get(record.id);
+      const budget = this.budgets.get(record.id);
+      const reusable = this.reusableItems.get(record.id);
+      const transfer = this.transfers.get(record.id);
+      if (record.scope) {
+        const scope = account?.scope ?? transfer?.scope;
+        if (!scope || !authorizeFinanceScope(actor, scope, 'read').allowed) deny();
+      }
+      if (budget) budgetAccess(budget.id);
+      if (
+        reusable &&
+        !authorizeFinanceScope(actor, { type: 'group', groupId: reusable.groupId }, 'read').allowed
+      )
+        deny();
+    }
+    if (
+      typeof record.groupId === 'string' &&
+      !authorizeFinanceScope(actor, { type: 'group', groupId: record.groupId }, 'read').allowed
+    )
+      deny();
+    if (typeof record.accountId === 'string') accountAccess(record.accountId);
+    if (typeof record.budgetId === 'string') budgetAccess(record.budgetId);
+    if (typeof record.budgetItemId === 'string') {
+      const item = this.budgetItems.get(record.budgetItemId);
+      if (!item) deny();
+      else {
+        budgetAccess(item.budgetId);
+        for (const id of item.relatedAccountIds) accountAccess(id);
+      }
+    }
+    if (typeof record.transactionId === 'string') {
+      const transaction = this.transactions.find(
+        ({ id }) => id === this.resolveTransactionId(String(record.transactionId)),
+      );
+      if (!transaction) deny();
+      else accountAccess(transaction.accountId);
+    }
+    if (typeof record.connectionId === 'string') {
+      const connection = this.connections.get(record.connectionId) as
+        | { scope?: FinanceScope }
+        | undefined;
+      if (!connection?.scope || !authorizeFinanceScope(actor, connection.scope, 'read').allowed)
+        deny();
+    }
+    for (const field of ['relatedAccountIds', 'sourceAccountIds']) {
+      if (Array.isArray(record[field])) for (const id of record[field]) accountAccess(String(id));
+    }
+    if (Array.isArray(record.legTransactionIds))
+      for (const id of record.legTransactionIds) {
+        this.assertReceiptAccess(actor, { transactionId: id });
+      }
+    for (const field of ['account', 'snapshot', 'link']) {
+      if (record[field]) this.assertReceiptAccess(actor, record[field]);
+    }
   }
   remember<T>(actorId: string, mutationId: string, result: T): T {
     this.mutationReceipts.set(`${actorId}:${mutationId}`, result);

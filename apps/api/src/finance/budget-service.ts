@@ -61,7 +61,7 @@ export async function createFinanceBudget(
   input: CreateBudgetInput,
   mutationId: string,
 ) {
-  const replay = repository.mutation<Budget>(actor.id, mutationId);
+  const replay = repository.mutation<Budget>(actor, mutationId);
   if (replay) return replay;
   if (!authorizeFinanceScope(actor, { type: 'group', groupId: input.groupId }, 'edit').allowed) {
     throw new Error('Finance record not found.');
@@ -87,7 +87,7 @@ export async function updateFinanceBudget(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<Budget>(actor.id, mutationId);
+  const replay = repository.mutation<Budget>(actor, mutationId);
   if (replay) return replay;
   const current = authorizedBudget(
     repository,
@@ -134,10 +134,7 @@ export async function linkFinanceBudgetAccount(
   input: { id: string; accountId: string; expectedBudgetVersion: number },
   mutationId: string,
 ) {
-  const replay = repository.mutation<ReturnType<typeof createBudgetAccountLink>>(
-    actor.id,
-    mutationId,
-  );
+  const replay = repository.mutation<ReturnType<typeof createBudgetAccountLink>>(actor, mutationId);
   if (replay) return replay;
   const budget = authorizedBudget(repository, actor, budgetId, 'edit');
   const account = repository.accounts.get(input.accountId);
@@ -188,7 +185,7 @@ export async function addFinanceBudgetItem(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<BudgetItem>(actor.id, mutationId);
+  const replay = repository.mutation<BudgetItem>(actor, mutationId);
   if (replay) return replay;
   const budget = authorizedBudget(repository, actor, budgetId, 'edit');
   if (budget.version !== input.expectedBudgetVersion) throw new Error('Budget version conflict.');

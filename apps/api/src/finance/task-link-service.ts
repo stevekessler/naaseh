@@ -33,7 +33,7 @@ export function createTaskFromFinanceBudgetItem(
   mutationId: string,
   now = new Date(),
 ): CreateFinanceTaskResult {
-  const replay = repository.mutation<CreateFinanceTaskResult>(actor.id, mutationId);
+  const replay = repository.mutation<CreateFinanceTaskResult>(actor, mutationId);
   if (replay) return replay;
   const item = repository.budgetItems.get(budgetItemId);
   const budget = item ? repository.budgets.get(item.budgetId) : undefined;
@@ -43,7 +43,11 @@ export function createTaskFromFinanceBudgetItem(
     item.status !== 'active' ||
     !budget ||
     !scope ||
-    !authorizeFinanceScope(actor, scope, 'edit').allowed
+    !authorizeFinanceScope(actor, scope, 'edit').allowed ||
+    !item.relatedAccountIds.every((id) => {
+      const account = repository.accounts.get(id);
+      return account && authorizeFinanceScope(actor, account.scope, 'read').allowed;
+    })
   ) {
     throw new Error('Finance record not found.');
   }
@@ -118,6 +122,15 @@ export function authorizedFinancialTaskLinkForTask(
     active: actor.active,
     groupIds: actor.groupMemberships.map(({ groupId }) => groupId),
   }).allowed;
+  const item = repository.budgetItems.get(link.budgetItemId);
+  if (
+    !item ||
+    !item.relatedAccountIds.every((id) => {
+      const account = repository.accounts.get(id);
+      return account && authorizeFinanceScope(actor, account.scope, 'read').allowed;
+    })
+  )
+    return undefined;
   const canReadFinance = authorizeFinanceScope(
     actor,
     { type: 'group', groupId: budget.groupId },

@@ -1,3 +1,4 @@
+import { parseMajorUnits } from '@naaseh/domain';
 import { FormEvent, useMemo, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { BudgetReconciliation } from './BudgetReconciliation.js';
@@ -112,18 +113,15 @@ export function FinanceBudgetDetail({
 
   const saveItem = (event: FormEvent) => {
     event.preventDefault();
-    const major = Number(amount);
-    if (
-      !description.trim() ||
-      !categoryId ||
-      !Number.isFinite(major) ||
-      major <= 0 ||
-      !Number.isInteger(major * 100)
-    ) {
+    let minor: number;
+    try {
+      minor = parseMajorUnits(amount, 'USD');
+      if (!description.trim() || !categoryId || minor <= 0) throw new Error('Invalid item.');
+    } catch {
       setError('Enter a description, category, and exact positive amount.');
       return;
     }
-    const plannedAmountMinor = Math.round(major * 100) * (kind === 'debit' ? -1 : 1);
+    const plannedAmountMinor = minor * (kind === 'debit' ? -1 : 1);
     const optimistic: BudgetItemView = {
       id: crypto.randomUUID(),
       description: description.trim(),
@@ -158,7 +156,10 @@ export function FinanceBudgetDetail({
       .then((saved) =>
         onChange({ ...budget, items: [...budget.items, saved], version: budget.version + 1 }),
       )
-      .catch(() => setError('The item is saved locally and will need to be retried.'));
+      .catch(() => {
+        onChange(budget);
+        setError('The item could not be saved. Review it and try again.');
+      });
   };
 
   return (

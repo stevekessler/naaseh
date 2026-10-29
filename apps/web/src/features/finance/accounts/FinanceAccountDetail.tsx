@@ -1,9 +1,13 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { CsvImportWizard } from '../csv/CsvImportWizard.js';
-import { createUlid } from '@naaseh/domain';
+import { createUlid, parseMajorUnits } from '@naaseh/domain';
 import { financeDeviceKey } from '../../../db/finance-repository.js';
-import { queueEncryptedCsvChunks } from '../csv/csv-import.js';
+import {
+  queueEncryptedCsvChunks,
+  chunkReviewedRows,
+  type DuplicateReview,
+} from '../csv/csv-import.js';
 import type { DuplicateCandidate } from '../csv/csv-import.js';
 
 export interface FinanceAccountView {
@@ -64,8 +68,10 @@ export function FinanceAccountDetail({
   };
   const recordBalance = async (event: FormEvent) => {
     event.preventDefault();
-    const numeric = Number(balance);
-    if (!Number.isFinite(numeric) || !Number.isInteger(numeric * 10 ** account.currencyExponent)) {
+    let balanceMinor: number;
+    try {
+      balanceMinor = parseMajorUnits(balance, account.currency);
+    } catch {
       setMessage('Enter an exact balance.');
       return;
     }
@@ -77,7 +83,7 @@ export function FinanceAccountDetail({
         idempotencyKey: crypto.randomUUID(),
         body: JSON.stringify({
           expectedAccountVersion: account.version,
-          balanceMinor: Math.round(numeric * 10 ** account.currencyExponent),
+          balanceMinor,
           effectiveAt: new Date().toISOString(),
         }),
       },
@@ -111,7 +117,14 @@ export function FinanceAccountDetail({
       amountMinor: number;
       transactedAt: string;
       description: string;
+      duplicateDisposition?: 'not-suspected' | 'included-after-review';
     }> = [],
+    summary: ReturnType<DuplicateReview['summary']> = {
+      suspected: 0,
+      included: 0,
+      excluded: 0,
+      unresolved: 0,
+    },
   ) => {
     const batchId = createUlid();
     if (!navigator.onLine) {
@@ -135,26 +148,32 @@ export function FinanceAccountDetail({
       [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))]
         .map((byte) => byte.toString(16).padStart(2, '0'))
         .join('');
-    await financeRequest(`/finance/accounts/${account.id}/csv-imports`, {
-      method: 'POST',
-      csrfToken,
-      idempotencyKey: crypto.randomUUID(),
-      body: JSON.stringify({
-        batchId,
-        fileDigest: await digest(JSON.stringify(rows)),
-        mapping: {
-          dateColumn: 'Date',
-          descriptionColumn: 'Description',
-          dateFormat: 'YYYY-MM-DD',
-          amountMapping: { mode: 'signed', amountColumn: 'Amount' },
-        },
-        duplicateDecisionDigest: await digest('[]'),
-        duplicateReviewSummary: { suspected: 0, included: 0, excluded: 0, unresolved: 0 },
-        chunkIndex: 0,
-        finalChunk: true,
-        rows: rows.map((row) => ({ ...row, duplicateDisposition: 'not-suspected' })),
-      }),
-    });
+    const chunks = chunkReviewedRows(rows);
+    for (const [chunkIndex, chunk] of chunks.entries()) {
+      await financeRequest(`/finance/accounts/${account.id}/csv-imports`, {
+        method: 'POST',
+        csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        body: JSON.stringify({
+          batchId,
+          fileDigest: await digest(JSON.stringify(rows)),
+          mapping: {
+            dateColumn: 'Date',
+            descriptionColumn: 'Description',
+            dateFormat: 'YYYY-MM-DD',
+            amountMapping: { mode: 'signed', amountColumn: 'Amount' },
+          },
+          duplicateDecisionDigest: await digest(JSON.stringify({ summary, rows })),
+          duplicateReviewSummary: summary,
+          chunkIndex,
+          finalChunk: chunkIndex === chunks.length - 1,
+          rows: chunk.map((row) => ({
+            ...row,
+            duplicateDisposition: row.duplicateDisposition ?? 'not-suspected',
+          })),
+        }),
+      });
+    }
     setMessage('CSV import committed.');
   };
   return (

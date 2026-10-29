@@ -90,6 +90,7 @@ import {
   FinanceMemoryRepository,
 } from './repository.js';
 import {
+  accountAfterTransactionChange,
   associateTransactionMerchant,
   confirmTransactionTransfer,
   createManualTransaction,
@@ -117,6 +118,27 @@ export class FinanceRouteRegistry {
   resolve(method: string, routePath: string) {
     return this.#routes.get(routeKey(method, routePath));
   }
+
+  match(method: string, path: string) {
+    const segments = path.split('/');
+    for (const [key, handler] of this.#routes) {
+      const [registeredMethod, template] = key.split(' ');
+      if (registeredMethod !== method.toUpperCase()) continue;
+      const expected = template!.split('/');
+      if (expected.length !== segments.length) continue;
+      const parameters: Record<string, string> = {};
+      const matches = expected.every((segment, index) => {
+        const name = /^\{([^}]+)\}$/u.exec(segment)?.[1];
+        if (!name) return segment === segments[index];
+        const value = decodeURIComponent(segments[index]!);
+        if (!value || value.includes('/')) return false;
+        parameters[name] = value;
+        return true;
+      });
+      if (matches) return { handler, parameters };
+    }
+    return undefined;
+  }
 }
 
 export interface UserStory1RouteDependencies {
@@ -131,7 +153,12 @@ export interface UserStory1RouteDependencies {
   now?: () => Date;
 }
 
-const bodyOf = (event: APIGatewayProxyEventV2) => JSON.parse(event.body ?? '{}') as unknown;
+const bodyOf = (event: APIGatewayProxyEventV2) =>
+  JSON.parse(
+    event.isBase64Encoded
+      ? Buffer.from(event.body ?? '', 'base64').toString('utf8')
+      : (event.body ?? '{}'),
+  ) as unknown;
 const parameter = (event: APIGatewayProxyEventV2, name: string) => {
   const value = event.pathParameters?.[name];
   if (!value) throw new Error(`Missing Finance route parameter ${name}.`);
@@ -176,6 +203,37 @@ const hasDeletionReferences = (references: Record<string, number>) =>
   Object.values(references).some((count) => count > 0);
 const visibleDeletionCounts = (references: Record<string, number>) =>
   Object.fromEntries(Object.entries(references).filter(([, count]) => count > 0));
+
+const hasAdditionalDeletionReferences = (
+  repository: FinanceMemoryRepository,
+  type: string,
+  id: string,
+) => {
+  const items = [...repository.budgetItems.values()];
+  const reusable = [...repository.reusableItems.values()];
+  if (type === 'category')
+    return (
+      repository.transactions.some((transaction) =>
+        transaction.allocations.some((allocation) => allocation.financeCategoryId === id),
+      ) ||
+      [...repository.merchants.values()].some((merchant) => merchant.financeCategoryId === id) ||
+      [...items, ...reusable].some((item) => item.financeCategoryId === id)
+    );
+  if (type === 'merchant')
+    return (
+      repository.transactions.some((transaction) => transaction.merchantId === id) ||
+      [...items, ...reusable].some((item) => item.merchantId === id)
+    );
+  if (type === 'reusable-item') return items.some((item) => item.sourceReusableItemId === id);
+  if (type === 'budget')
+    return (
+      items.some((item) => item.budgetId === id) ||
+      [...repository.budgetAccountLinks.values()].some((link) => link.budgetId === id) ||
+      repository.budgetReconciliations.some((record) => record.budgetId === id) ||
+      [...repository.financialTaskLinks.values()].some((link) => link.budgetId === id)
+    );
+  return false;
+};
 
 export function registerUserStory1FinanceRoutes(
   registry: FinanceRouteRegistry,
@@ -633,7 +691,7 @@ export function registerUserStory1FinanceRoutes(
     const actor = await dependencies.actorFor(event);
     const input = financeTaskCreateInputSchema.parse(bodyOf(event));
     const requestMutationId = mutationId(event);
-    const replay = repository.mutation(actor.id, requestMutationId);
+    const replay = repository.mutation(actor, requestMutationId);
     const result = createTaskFromFinanceBudgetItem(
       repository,
       actor,
@@ -824,7 +882,7 @@ export function registerUserStory1FinanceRoutes(
           const account = repository.accounts.get(link.accountId);
           return account && visible(actor, account.scope);
         });
-        const hasReferences = links.length > 0 || items.length > 0;
+        const hasReferences = hasAdditionalDeletionReferences(repository, recordType, recordId);
         preview = createAuthorizedDeletionPreview(actor, scope, {
           recordType,
           recordId,
@@ -854,7 +912,7 @@ export function registerUserStory1FinanceRoutes(
           const account = repository.accounts.get(transaction.accountId);
           return account && visible(actor, account.scope);
         });
-        const hasReferences = referencedTransactions.length > 0 || referencedMerchants.length > 0;
+        const hasReferences = hasAdditionalDeletionReferences(repository, recordType, recordId);
         preview = createDeletionPreview({
           recordType,
           recordId,
@@ -879,7 +937,7 @@ export function registerUserStory1FinanceRoutes(
           const account = repository.accounts.get(transaction.accountId);
           return account && visible(actor, account.scope);
         });
-        const hasReferences = references.length > 0;
+        const hasReferences = hasAdditionalDeletionReferences(repository, recordType, recordId);
         preview = createDeletionPreview({
           recordType,
           recordId,
@@ -1032,6 +1090,12 @@ export function registerUserStory1FinanceRoutes(
         dependencies.now?.() ?? new Date(),
         dependencies.deletionSigningSecret,
       );
+      if (
+        result.outcome === 'permanent-delete' &&
+        hasAdditionalDeletionReferences(repository, preview.recordType, preview.recordId)
+      ) {
+        throw new Error('Deletion preview is stale.');
+      }
       // No await separates the state checks below from mutation in this repository.
       if (preview.recordType === 'account') {
         if (
@@ -1062,8 +1126,14 @@ export function registerUserStory1FinanceRoutes(
         ) {
           throw new Error('Deletion preview is stale.');
         }
+        const archived =
+          result.outcome === 'permanent-delete'
+            ? undefined
+            : archiveFinancialTransaction(transaction);
+        const updatedAccount = accountAfterTransactionChange(account!, transaction, archived);
         if (result.outcome === 'permanent-delete') repository.transactions.splice(index, 1);
-        else repository.transactions[index] = archiveFinancialTransaction(transaction);
+        else repository.transactions[index] = archived!;
+        repository.accounts.set(updatedAccount.id, updatedAccount);
         markFinanceBudgetsChangedByTransaction(repository, transaction);
       } else if (preview.recordType === 'budget') {
         if (!budget || budget.version !== preview.expectedVersion)
@@ -1081,6 +1151,7 @@ export function registerUserStory1FinanceRoutes(
         const category = repository.categories.get(preview.recordId);
         if (!category || category.version !== preview.expectedVersion)
           throw new Error('Deletion preview is stale.');
+        archiveFinanceCategory(category, actor);
         if (result.outcome === 'permanent-delete') {
           repository.categories.delete(category.id);
           if (repository.categoryNameLocks.get(category.canonicalName) === category.id) {
@@ -1091,6 +1162,7 @@ export function registerUserStory1FinanceRoutes(
         const merchant = repository.merchants.get(preview.recordId);
         if (!merchant || merchant.version !== preview.expectedVersion)
           throw new Error('Deletion preview is stale.');
+        archiveMerchant(merchant, actor);
         if (result.outcome === 'permanent-delete') {
           repository.merchants.delete(merchant.id);
           if (repository.merchantKeyLocks.get(merchant.canonicalKey) === merchant.id) {
@@ -1149,7 +1221,7 @@ export function registerUserStory1FinanceRoutes(
     if (!connection?.scope || !visible(actor, connection.scope, 'connect'))
       throw new Error('Finance record not found.');
     const receipt = repository.mutation<import('@naaseh/domain').ImportJob>(
-      actor.id,
+      actor,
       mutationId(event),
     );
     if (receipt) return json(202, receipt);

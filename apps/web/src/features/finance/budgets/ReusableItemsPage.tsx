@@ -1,3 +1,4 @@
+import { parseMajorUnits } from '@naaseh/domain';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { createUlid } from '@naaseh/domain';
@@ -87,8 +88,11 @@ export function ReusableItemsPage({
     event.preventDefault();
     setError('');
     setNotice('');
-    const major = Number(amount);
-    if (!Number.isFinite(major) || major <= 0 || !Number.isInteger(major * 100)) {
+    let minor: number;
+    try {
+      minor = parseMajorUnits(amount, 'USD');
+      if (minor <= 0) throw new Error('Invalid amount.');
+    } catch {
       setError('Enter an exact positive amount.');
       return;
     }
@@ -102,7 +106,7 @@ export function ReusableItemsPage({
       groupId,
       description,
       financeCategoryId: categoryId,
-      plannedAmountMinor: Math.round(major * 100) * (kind === 'debit' ? -1 : 1),
+      plannedAmountMinor: minor * (kind === 'debit' ? -1 : 1),
       currency: 'USD',
       currencyExponent: 2,
       relatedAccountIds: groupAccounts.map(({ id }) => id),

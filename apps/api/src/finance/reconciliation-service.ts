@@ -210,7 +210,7 @@ export async function reconcileFinanceBudget(
   mutationId: string,
   now = new Date(),
 ) {
-  const replay = repository.mutation<ReconciliationRecord>(actor.id, mutationId);
+  const replay = repository.mutation<ReconciliationRecord>(actor, mutationId);
   const budget = authorizedBudget(repository, actor, budgetId);
   if (replay) {
     const stored = repository.budgetReconciliations.find(({ id }) => id === replay.id);

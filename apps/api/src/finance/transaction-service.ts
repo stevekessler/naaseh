@@ -1,7 +1,8 @@
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
-import { FinanceMemoryRepository } from './repository.js';
+import { FinanceMemoryRepository, boundedFinanceLimit } from './repository.js';
 import { markFinanceBudgetsChangedByTransaction } from './reconciliation-service.js';
 import {
+  addMinorUnits,
   correctFinancialTransaction,
   createConfirmedTransfer,
   createFinancialTransaction,
@@ -33,7 +34,9 @@ const authorizeTransaction = (
     : undefined;
   if (
     !found.transaction ||
+    found.transaction.status !== 'active' ||
     !account ||
+    account.status !== 'active' ||
     !authorizeFinanceScope(actor, account.scope, 'edit').allowed
   ) {
     throw new Error('Finance record not found.');
@@ -56,6 +59,31 @@ const recordTransactionFeed = (
     payload: transaction,
   });
 
+export function accountAfterTransactionChange(
+  account: FinancialAccount,
+  before: FinancialTransaction | undefined,
+  after: FinancialTransaction | undefined,
+): FinancialAccount {
+  // Provider balances already include posted transactions and remain authoritative.
+  if (account.connectionId) return account;
+  const contribution = (transaction: FinancialTransaction | undefined) =>
+    transaction?.status === 'active' && transaction.effectiveAt > account.balanceAt
+      ? transaction.amountMinor
+      : 0;
+  const balance = addMinorUnits([
+    account.currentBalanceMinor,
+    -contribution(before),
+    contribution(after),
+  ]);
+  return balance === account.currentBalanceMinor
+    ? account
+    : {
+        ...account,
+        currentBalanceMinor: balance,
+        version: account.version + 1,
+      };
+}
+
 export async function createManualTransaction(
   repository: FinanceMemoryRepository,
   actor: FinanceActor,
@@ -72,10 +100,14 @@ export async function createManualTransaction(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<Record<string, unknown>>(actor.id, mutationId);
+  const replay = repository.mutation<Record<string, unknown>>(actor, mutationId);
   if (replay) return replay;
   const account = repository.accounts.get(accountId);
-  if (!account || !authorizeFinanceScope(actor, account.scope, 'edit').allowed)
+  if (
+    !account ||
+    account.status !== 'active' ||
+    !authorizeFinanceScope(actor, account.scope, 'edit').allowed
+  )
     throw new Error('Finance record not found.');
   if (
     input.expectedAccountVersion !== undefined &&
@@ -97,14 +129,9 @@ export async function createManualTransaction(
     pending: false,
     connectedAccount: Boolean(account.connectionId),
   });
+  const updatedAccount = accountAfterTransactionChange(account, undefined, transaction);
   repository.transactions.push(transaction);
-  if (transaction.effectiveAt > account.balanceAt) {
-    repository.accounts.set(accountId, {
-      ...account,
-      currentBalanceMinor: account.currentBalanceMinor + input.amountMinor,
-      version: account.version + 1,
-    });
-  }
+  repository.accounts.set(accountId, updatedAccount);
   recordTransactionFeed(repository, account, transaction);
   return repository.remember(actor.id, mutationId, transaction);
 }
@@ -124,7 +151,7 @@ export async function updateManualTransaction(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<Record<string, unknown>>(actor.id, mutationId);
+  const replay = repository.mutation<Record<string, unknown>>(actor, mutationId);
   if (replay) return replay;
   const {
     index,
@@ -134,7 +161,9 @@ export async function updateManualTransaction(
   if (current.origin !== 'manual') throw new Error('Finance record not found.');
   if (current.version !== input.expectedVersion) throw new Error('Transaction version conflict.');
   const updated = correctFinancialTransaction(current, input);
+  const updatedAccount = accountAfterTransactionChange(account, current, updated);
   repository.transactions[index] = updated;
+  repository.accounts.set(account.id, updatedAccount);
   markFinanceBudgetsChangedByTransaction(repository, current);
   if (updated.reviewState === 'allocation-review' && current.reviewState !== 'allocation-review') {
     const issue = createImportReviewIssue({
@@ -149,13 +178,7 @@ export async function updateManualTransaction(
     const transfer = repository.transfers.get(current.transferId);
     if (transfer) repository.transfers.set(transfer.id, invalidateTransfer(transfer));
   }
-  if (updated.effectiveAt > account.balanceAt && updated.amountMinor !== current.amountMinor) {
-    repository.accounts.set(account.id, {
-      ...account,
-      currentBalanceMinor: account.currentBalanceMinor + updated.amountMinor - current.amountMinor,
-      version: account.version + 1,
-    });
-  }
+
   recordTransactionFeed(repository, account, updated);
   return repository.remember(actor.id, mutationId, updated);
 }
@@ -168,13 +191,31 @@ export async function replaceTransactionAllocationsForActor(
   mutationId: string,
 ) {
   const replay = repository.mutation<ReturnType<typeof replaceTransactionAllocations>>(
-    actor.id,
+    actor,
     mutationId,
   );
   if (replay) return replay;
   const { index, transaction, account } = authorizeTransaction(repository, actor, transactionId);
   if (transaction.version !== input.expectedVersion)
     throw new Error('Transaction version conflict.');
+  for (const allocation of input.allocations) {
+    if (!allocation.budgetItemId) continue;
+    const item = repository.budgetItems.get(allocation.budgetItemId);
+    const budget = item ? repository.budgets.get(item.budgetId) : undefined;
+    if (
+      !item ||
+      item.status !== 'active' ||
+      !budget ||
+      budget.status === 'archived' ||
+      budget.status === 'tombstone' ||
+      !item.relatedAccountIds.includes(account.id) ||
+      item.currency !== transaction.currency ||
+      !authorizeFinanceScope(actor, { type: 'group', groupId: budget.groupId }, 'edit').allowed ||
+      !item.relatedAccountIds.every((id) => canReadAccount(repository, actor, id))
+    ) {
+      throw new Error('Finance record not found.');
+    }
+  }
   const updated = replaceTransactionAllocations(transaction, input.allocations, actor.id);
   repository.transactions[index] = updated;
   markFinanceBudgetsChangedByTransaction(repository, transaction);
@@ -191,10 +232,7 @@ export async function associateTransactionMerchant(
   expectedVersion: number,
   mutationId: string,
 ) {
-  const replay = repository.mutation<(typeof repository.transactions)[number]>(
-    actor.id,
-    mutationId,
-  );
+  const replay = repository.mutation<(typeof repository.transactions)[number]>(actor, mutationId);
   if (replay) return replay;
   const merchant = repository.merchants.get(merchantId);
   const { index, transaction, account } = authorizeTransaction(repository, actor, transactionId);
@@ -213,10 +251,7 @@ export async function confirmTransactionTransfer(
   input: { id: string; scope: FinanceScope; transactionIds: readonly string[] },
   mutationId: string,
 ) {
-  const replay = repository.mutation<ReturnType<typeof createConfirmedTransfer>>(
-    actor.id,
-    mutationId,
-  );
+  const replay = repository.mutation<ReturnType<typeof createConfirmedTransfer>>(actor, mutationId);
   if (replay) return replay;
   if (!authorizeFinanceScope(actor, input.scope, 'edit').allowed)
     throw new Error('Finance record not found.');
@@ -253,7 +288,7 @@ export function searchAuthorizedTransactions(
   input: { query: string; accountId?: string; limit?: number },
 ) {
   const query = input.query.normalize('NFC').toLocaleLowerCase('und').trim();
-  const limit = Math.min(Math.max(input.limit ?? 50, 1), 200);
+  const limit = boundedFinanceLimit(input.limit);
   const items = repository.transactions
     .filter(
       (transaction) =>

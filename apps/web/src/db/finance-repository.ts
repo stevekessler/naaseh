@@ -1,6 +1,7 @@
 import { createUlid, type EntityType, type Mutation, type MutationOperation } from '@naaseh/domain';
 import { decryptText, encryptText } from '../crypto/vault.js';
 import { createDeviceKey } from '../crypto/vault.js';
+import { clearFinanceSearchIndexes } from '../search/finance-index-lifecycle.js';
 import Dexie from 'dexie';
 import { db, type EncryptedFinanceRecord, type StoredMutation } from './database.js';
 
@@ -79,6 +80,7 @@ export async function applyFinancePull(input: {
   records: EncryptedFinanceRecord[];
   tombstones: Array<{ id: string; entityType: EntityType }>;
 }) {
+  if (input.tombstones.length) clearFinanceSearchIndexes();
   await db.transaction('rw', db.secureFinanceRecords, db.outbox, async () => {
     const pending = new Set(
       (await db.outbox.toArray())
@@ -86,10 +88,13 @@ export async function applyFinancePull(input: {
         .map((mutation) => mutation.entityId),
     );
     for (const tombstone of input.tombstones) {
-      if (!pending.has(tombstone.id)) await db.secureFinanceRecords.delete(tombstone.id);
+      await db.secureFinanceRecords.delete(tombstone.id);
+      await db.outbox.where('entityId').equals(tombstone.id).delete();
     }
+    const deleted = new Set(input.tombstones.map(({ id }) => id));
     for (const record of input.records) {
-      if (!pending.has(record.id)) await db.secureFinanceRecords.put(record);
+      if (!deleted.has(record.id) && !pending.has(record.id))
+        await db.secureFinanceRecords.put(record);
     }
   });
 }

@@ -1,4 +1,6 @@
 import {
+  correctFinancialTransaction,
+  invalidateTransfer,
   createImportReviewIssue,
   createUlid,
   exactProviderCandidates,
@@ -10,6 +12,7 @@ import {
 } from '@naaseh/domain';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceMemoryRepository } from './repository.js';
+import { markFinanceBudgetsChangedByTransaction } from './reconciliation-service.js';
 
 type ReconciliationDecision = {
   decision: 'reconcile' | 'keep-separate';
@@ -20,13 +23,18 @@ type ReconciliationDecision = {
   expectedReviewVersion: number;
 };
 
-const providerIdentity = (transaction: FinancialTransaction) => {
+const providerIdentity = (
+  transaction: FinancialTransaction,
+  repository: FinanceMemoryRepository,
+) => {
   if (!transaction.providerConnectionId || !transaction.sourceTransactionId) {
     throw new Error('Provider identity is incomplete.');
   }
   if (!transaction.providerAccountId) throw new Error('Provider identity is incomplete.');
   return {
-    connectionId: transaction.providerConnectionId,
+    connectionId:
+      repository.accounts.get(transaction.accountId)?.connectionId ??
+      transaction.providerConnectionId,
     sourceId: `${transaction.providerConnectionId}:${transaction.providerAccountId}:${transaction.sourceTransactionId}`,
   };
 };
@@ -49,7 +57,7 @@ function applyReconciliation(
   const candidate = repository.transactions[candidateIndex]!;
   if (candidateHasUserState(candidate))
     throw new Error('Provider candidate has user-owned state conflict.');
-  const identity = providerIdentity(candidate);
+  const identity = providerIdentity(candidate, repository);
   const { transaction } = reconcileProviderTransaction(provisional, candidate, actorId);
   repository.transferSourceIdentity(
     identity.connectionId,
@@ -87,14 +95,51 @@ export function reconcileProviderImport(
   provider: FinancialTransaction,
   actorId: string,
 ) {
-  const identity = providerIdentity(provider);
+  if (!provider.providerSnapshot) throw new Error('Provider source snapshot is incomplete.');
+  const identity = providerIdentity(provider, repository);
   const owner = repository.sourceIdentities.get(`${identity.connectionId}:${identity.sourceId}`);
   if (owner && owner !== provider.id) {
     const canonical = repository.transactions.find(
       ({ id }) => id === repository.resolveTransactionId(owner),
     );
-    if (!canonical) throw new Error('Finance source identity version conflict.');
-    return canonical;
+    if (!canonical || canonical.accountId !== provider.accountId)
+      throw new Error('Finance source identity version conflict.');
+    if (
+      canonical.status !== 'active' ||
+      JSON.stringify(canonical.providerSnapshot) === JSON.stringify(provider.providerSnapshot)
+    )
+      return canonical;
+    const updated = correctFinancialTransaction(canonical, {
+      source: 'provider',
+      amountMinor: provider.amountMinor,
+      description: provider.description,
+      postedAt: provider.postedAt ?? null,
+      ...(provider.transactedAt ? { transactedAt: provider.transactedAt } : {}),
+      payee: provider.payee ?? '',
+      memo: provider.memo ?? '',
+      pending: provider.pending,
+    });
+    updated.providerSnapshot = provider.providerSnapshot;
+    updated.effectiveAt = provider.effectiveAt;
+    if (!provider.transactedAt) delete updated.transactedAt;
+    const index = repository.transactions.indexOf(canonical);
+    repository.transactions[index] = updated;
+    markFinanceBudgetsChangedByTransaction(repository, updated);
+    if (canonical.transferId) {
+      const transfer = repository.transfers.get(canonical.transferId);
+      if (transfer) repository.transfers.set(transfer.id, invalidateTransfer(transfer));
+    }
+    const account = repository.accounts.get(updated.accountId)!;
+    repository.feedChanges.push({
+      audience: financeAudience(account.scope),
+      entityType: 'financeTransaction',
+      entityId: updated.id,
+      version: updated.version,
+      changedAt: new Date().toISOString(),
+      operation: 'upsert',
+      payload: updated,
+    });
+    return updated;
   }
   let candidateIndex = transactionIndex(repository, provider.id);
   if (candidateIndex < 0) {
@@ -144,7 +189,7 @@ export function decideProviderReconciliation(
   input: ReconciliationDecision,
   mutationId: string,
 ) {
-  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  const replay = repository.mutation<FinancialTransaction>(actor, mutationId);
   if (replay) return replay;
   const provisionalIndex = transactionIndex(repository, provisionalId);
   const candidateIndex = transactionIndex(repository, input.candidateTransactionId);
@@ -172,7 +217,7 @@ export function decideProviderReconciliation(
   ) {
     throw new Error('Provider reconciliation version conflict.');
   }
-  const identity = providerIdentity(candidate);
+  const identity = providerIdentity(candidate, repository);
   if (
     repository.sourceIdentities.get(`${identity.connectionId}:${identity.sourceId}`) !==
     candidate.id

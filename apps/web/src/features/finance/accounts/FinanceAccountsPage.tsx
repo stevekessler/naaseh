@@ -1,3 +1,4 @@
+import { parseMajorUnits } from '@naaseh/domain';
 import { FormEvent, useEffect, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { FinanceAccountDetail, type FinanceAccountView } from './FinanceAccountDetail.js';
@@ -26,9 +27,9 @@ export function FinanceAccountsPage({
   const [organizationName, setOrganizationName] = useState('');
   const [sourceName, setSourceName] = useState('');
   const [openingBalance, setOpeningBalance] = useState('0.00');
-  const [accountType, setAccountType] = useState<
-    'checking' | 'savings' | 'credit-card' | 'loan'
-  >('checking');
+  const [accountType, setAccountType] = useState<'checking' | 'savings' | 'credit-card' | 'loan'>(
+    'checking',
+  );
   const [assignment, setAssignment] = useState('owner');
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string>();
@@ -44,8 +45,10 @@ export function FinanceAccountsPage({
       setError('Organization name and account name are required.');
       return;
     }
-    const value = Number(openingBalance);
-    if (!Number.isFinite(value) || !Number.isInteger(value * 100)) {
+    let openingBalanceMinor: number;
+    try {
+      openingBalanceMinor = parseMajorUnits(openingBalance, 'USD');
+    } catch {
       setError('Enter an exact opening balance.');
       return;
     }
@@ -64,7 +67,7 @@ export function FinanceAccountsPage({
           sourceName: sourceName.trim(),
           accountType,
           currency: 'USD',
-          openingBalanceMinor: Math.round(value * 100),
+          openingBalanceMinor,
           balanceAt: new Date().toISOString(),
         }),
       });
