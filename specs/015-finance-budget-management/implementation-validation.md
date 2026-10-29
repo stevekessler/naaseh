@@ -165,9 +165,13 @@ carry no reconciliation totals or private budget-item content.
 Required test count: 404 files / 1,254 tests before; 405 files / 1,272 tests after.
 The browser quick suite and workflow timeout are unchanged. Before the expansion,
 `/usr/bin/time -p npm test` passed in 49.36 seconds locally. Final local and hosted timings are
-recorded below after validation completes. No merge is performed as part of this remediation.
+recorded below. No merge is performed as part of this remediation.
 
 Local remediation result: 405 files / 1,272 tests passed; `/usr/bin/time -p npm test`
 completed in 47.53 seconds (49.36 seconds before). Node.js 24.18.0 typecheck, lint, and
-production workspace builds passed. Hosted PR validation remains to be measured on the pushed
-remediation commit; the ten-minute target and fifteen-minute safety timeout remain unchanged.
+production workspace builds passed. Hosted PR validation passed on remediation commit `2f30583ee0b2ad69fdfedb9cb91bb992070b4bda`
+in **4 minutes 16 seconds** (13:57:25–14:01:41 UTC on October 29, 2026), including dependency
+audit, full validation, and the browser quick suite. This remains below the ten-minute target;
+the fifteen-minute safety timeout is unchanged.
+
+Hosted evidence: [Validate run 40886737909](https://github.com/stevekessler/naaseh/actions/runs/40886737909).
