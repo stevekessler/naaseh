@@ -12,7 +12,7 @@ the affected workflow with that participant before marking T103 complete.
 ## Participant 1
 
 - Date:
-- Participant identifier (non-identifying):
+- Participant identifier (non-identifying): Tester H (confirmed)
 - Perspective: individual owner
 - Browser/device:
 
