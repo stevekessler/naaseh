@@ -1,3 +1,5 @@
+import { FinanceLandingPage } from '../../src/features/finance/FinanceLandingPage.js';
+import { FinanceBudgetDetail } from '../../src/features/finance/budgets/FinanceBudgetDetail.js';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -59,4 +61,70 @@ it.each(['0.29', '1.001', '1e3'])('handles exact decimal account entry: %s', asy
       vi.mocked(financeRequest).mock.calls.filter(([, options]) => options?.method === 'POST'),
     ).toHaveLength(0);
   }
+});
+
+it('removes an open account view when the next Finance sync revokes its audience', async () => {
+  let permitted = true;
+  vi.mocked(financeRequest).mockImplementation(async (path) => ({
+    items:
+      path === '/finance/accounts' && permitted
+        ? [
+            {
+              id: 'private-account',
+              friendlyName: 'Sensitive checking',
+              organizationName: 'Bank',
+              sourceName: 'Checking',
+              currency: 'USD',
+              currencyExponent: 2,
+              currentBalanceMinor: 100,
+              balanceAt: '2026-01-01T00:00:00.000Z',
+              scope: { type: 'group', groupId: 'removed' },
+            },
+          ]
+        : [],
+  }));
+  render(<FinanceLandingPage ownerId="owner" role="user" csrfToken="csrf" assignableGroups={[]} />);
+  await waitFor(() => expect(screen.getByText('Sensitive checking')).toBeDefined());
+  permitted = false;
+  window.dispatchEvent(new CustomEvent('finance-sync', { detail: { authorization: 'revoked' } }));
+  await waitFor(() => expect(screen.queryByText('Sensitive checking')).toBeNull());
+});
+it('submits only linked USD accounts when adding a budget item', async () => {
+  vi.mocked(financeRequest).mockResolvedValue({ id: 'new-item' });
+  const budget = {
+    id: 'budget',
+    groupId: 'group',
+    name: 'Plan',
+    budgetDate: '2026-01-01',
+    startDate: '2026-01-01',
+    status: 'draft',
+    items: [],
+    totals: [],
+    totalsComplete: true,
+    version: 1,
+    accountLinks: [{ accountId: 'linked', status: 'active' }],
+  };
+  render(
+    <FinanceBudgetDetail
+      budget={budget}
+      accounts={[
+        { id: 'linked', friendlyName: 'Linked', currency: 'USD' },
+        { id: 'unlinked', friendlyName: 'Unlinked', currency: 'USD' },
+      ]}
+      categories={[{ id: 'category', name: 'Utilities' }]}
+      currentUserId="owner"
+      csrfToken="csrf"
+      onChange={() => undefined}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Add budget item' }));
+  expect(screen.getByRole('checkbox', { name: 'Linked' })).toBeDefined();
+  expect(screen.queryByText('Unlinked')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'Power' } });
+  fireEvent.change(screen.getByLabelText('Planned amount'), { target: { value: '10.00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save item' }));
+  await waitFor(() => expect(vi.mocked(financeRequest)).toHaveBeenCalled());
+  expect(
+    JSON.parse(String(vi.mocked(financeRequest).mock.calls[0]?.[1]?.body)).relatedAccountIds,
+  ).toEqual(['linked']);
 });

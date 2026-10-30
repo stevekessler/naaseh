@@ -1,3 +1,4 @@
+import { itemsForBudget, allocationBudgetId } from './budget-membership.js';
 import { TransactWriteCommand, type TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import type {
   EntityRevision,
@@ -597,6 +598,7 @@ export class FinanceMemoryRepository {
   readonly merchants = new Map<string, import('@naaseh/domain').FinanceMerchant>();
   readonly budgets = new Map<string, import('@naaseh/domain').Budget>();
   readonly budgetAccountLinks = new Map<string, import('@naaseh/domain').BudgetAccountLink>();
+  readonly budgetItemMemberships = new Map<string, { budgetId: string; budgetItemId: string }>();
   readonly budgetItems = new Map<string, import('@naaseh/domain').BudgetItem>();
   readonly budgetReconciliations: StoredFinanceReconciliation[] = [];
   readonly financialTaskLinks = new Map<string, import('@naaseh/domain').FinancialTaskLink>();
@@ -613,7 +615,11 @@ export class FinanceMemoryRepository {
   readonly csvRowReceipts = new Map<string, 'committed' | 'failed' | 'excluded'>();
   readonly sourceIdentities = new Map<string, string>();
   readonly connections = new Map<string, Record<string, unknown>>();
-  readonly importDispatches = new Map<string, { jobId: string; connectionId: string }>();
+  readonly importRowReceipts = new Map<string, string>();
+  readonly importDispatches = new Map<
+    string,
+    { jobId: string; connectionId: string; notBefore?: string; failures?: number }
+  >();
   readonly importJobs = new Map<
     string,
     import('@naaseh/domain').ImportJob & { leaseUntil?: string; providerOffset?: number }
@@ -760,9 +766,8 @@ export function budgetAggregateSourceForViewer(
   );
   const links = allLinks.filter((link) => visible.has(link.accountId));
   const linkedAccountIds = new Set(links.map(({ accountId }) => accountId));
-  const items = [...repository.budgetItems.values()].filter(
+  const items = itemsForBudget(repository, budgetId).filter(
     (item) =>
-      item.budgetId === budgetId &&
       item.status === 'active' &&
       item.relatedAccountIds.every((accountId) => linkedAccountIds.has(accountId)),
   );
@@ -770,7 +775,12 @@ export function budgetAggregateSourceForViewer(
   const transactions = repository.transactions.filter(
     (transaction) =>
       linkedAccountIds.has(transaction.accountId) &&
-      transaction.allocations.some(({ budgetItemId }) => budgetItemId && itemIds.has(budgetItemId)),
+      transaction.allocations.some(
+        (allocation) =>
+          allocation.budgetItemId &&
+          itemIds.has(allocation.budgetItemId) &&
+          allocationBudgetId(repository, allocation) === budgetId,
+      ),
   );
   return {
     links,

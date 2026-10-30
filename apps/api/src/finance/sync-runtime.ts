@@ -133,12 +133,38 @@ export function authorizedFinanceProjection(
         (tx) => tx.id === item.transactionId && accountIds.has(tx.accountId),
       )
     ) {
-      const budget = repository.budgets.get(
-        repository.budgetItems.get(item.budgetItemId)!.budgetId,
-      )!;
-      add('financeTransactionMatch', item, `GROUP#${budget.groupId}`);
+      const budgetId = item.budgetId ?? repository.budgetItems.get(item.budgetItemId)!.budgetId;
+      const budget = repository.budgets.get(budgetId);
+      if (budget && allowed({ type: 'group', groupId: budget.groupId }))
+        add('financeTransactionMatch', item, `GROUP#${budget.groupId}`);
     }
-  return records.sort(
+  const merged = new Map<string, FinanceProjection>();
+  for (const record of records) {
+    if (record.entityType === 'financeBudgetItem') {
+      const previous = merged.get(record.id);
+      const item = record.value as {
+        budgetId: string;
+        actualAmountMinor?: number;
+        varianceMinor?: number;
+      };
+      const old = previous?.value as
+        | { budgetIds?: string[]; actualByBudget?: Record<string, unknown> }
+        | undefined;
+      record.value = {
+        ...(record.value as object),
+        budgetIds: [...(old?.budgetIds ?? []), item.budgetId],
+        actualByBudget: {
+          ...old?.actualByBudget,
+          [item.budgetId]: {
+            actualAmountMinor: item.actualAmountMinor,
+            varianceMinor: item.varianceMinor,
+          },
+        },
+      };
+    }
+    merged.set(record.id, record);
+  }
+  return [...merged.values()].sort(
     (a, b) => a.entityType.localeCompare(b.entityType) || a.id.localeCompare(b.id),
   );
 }

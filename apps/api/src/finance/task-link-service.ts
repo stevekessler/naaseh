@@ -1,3 +1,4 @@
+import { itemBudgetIds } from './budget-membership.js';
 import {
   canReadTaskAs,
   canRevealFinancialTaskLink,
@@ -25,6 +26,7 @@ export function createTaskFromFinanceBudgetItem(
   budgetItemId: string,
   input: {
     taskId: string;
+    budgetId?: string;
     linkId: string;
     label: string;
     assigneeId: string;
@@ -36,11 +38,12 @@ export function createTaskFromFinanceBudgetItem(
   const replay = repository.mutation<CreateFinanceTaskResult>(actor, mutationId);
   if (replay) return replay;
   const item = repository.budgetItems.get(budgetItemId);
-  const budget = item ? repository.budgets.get(item.budgetId) : undefined;
+  const budget = item ? repository.budgets.get(input.budgetId ?? item.budgetId) : undefined;
   const scope = budget ? { type: 'group' as const, groupId: budget.groupId } : undefined;
   if (
     !item ||
     item.status !== 'active' ||
+    !itemBudgetIds(repository, item).includes(input.budgetId ?? item.budgetId) ||
     !budget ||
     !scope ||
     !authorizeFinanceScope(actor, scope, 'edit').allowed ||

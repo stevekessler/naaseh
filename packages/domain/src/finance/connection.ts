@@ -37,7 +37,10 @@ const simplefinAccountSchema = z
       .object({ name: z.string().max(200).optional(), domain: z.string().max(253).optional() })
       .passthrough()
       .optional(),
-    currency: z.string().regex(/^[A-Z]{3}$/),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .default('USD'),
     balance: boundedText,
     'available-balance': boundedText.optional(),
     'balance-date': z.number().int().nonnegative(),

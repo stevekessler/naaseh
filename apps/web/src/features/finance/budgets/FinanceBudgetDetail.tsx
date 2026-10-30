@@ -48,6 +48,7 @@ export interface BudgetDetailView {
   endDate?: string | null;
   status: string;
   items: BudgetItemView[];
+  accountLinks?: Array<{ accountId: string; status: string }>;
   totals: BudgetTotalView[];
   categoryTotals?: Array<BudgetTotalView & { financeCategoryId: string }>;
   totalsComplete: boolean;
@@ -82,6 +83,8 @@ export function FinanceBudgetDetail({
   csrfToken,
   currentUserId,
   onChange,
+  sharedItems = [],
+  onReload,
 }: {
   budget: BudgetDetailView;
   accounts: AccountView[];
@@ -89,14 +92,32 @@ export function FinanceBudgetDetail({
   csrfToken: string;
   currentUserId: string;
   onChange: (budget: BudgetDetailView) => void;
+  sharedItems?: BudgetItemView[];
+  onReload?: () => Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
+  const [sharedId, setSharedId] = useState('');
+  const [editing, setEditing] = useState<BudgetItemView>();
+  const [editDescription, setEditDescription] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [savingShared, setSavingShared] = useState(false);
   const [description, setDescription] = useState('');
+  const [relatedAccounts, setRelatedAccounts] = useState<string[]>([]);
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
   const [kind, setKind] = useState<'debit' | 'credit'>('debit');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
-  const accountIds = useMemo(() => accounts.map(({ id }) => id), [accounts]);
+  const accountIds = useMemo(
+    () =>
+      accounts
+        .filter(
+          ({ id, currency }) =>
+            currency === 'USD' &&
+            budget.accountLinks?.some((link) => link.accountId === id && link.status === 'active'),
+        )
+        .map(({ id }) => id),
+    [accounts, budget.accountLinks],
+  );
   const categoryTotals = useMemo(
     () =>
       budget.categoryTotals ??
@@ -132,7 +153,7 @@ export function FinanceBudgetDetail({
       varianceMinor: -plannedAmountMinor,
       currency: 'USD',
       currencyExponent: 2,
-      relatedAccountIds: accountIds,
+      relatedAccountIds: relatedAccounts,
       version: 1,
     };
     onChange({ ...budget, items: [...budget.items, optimistic], version: budget.version + 1 });
@@ -186,6 +207,47 @@ export function FinanceBudgetDetail({
       });
   };
 
+  const saveSharedEdit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!editing) return;
+    setSavingShared(true);
+    try {
+      const magnitude = parseMajorUnits(editAmount, editing.currency);
+      await financeRequest(`/finance/budget-items/${editing.id}`, {
+        method: 'PATCH',
+        csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        body: JSON.stringify({
+          expectedVersion: editing.version,
+          description: editDescription,
+          plannedAmountMinor: Math.sign(editing.plannedAmountMinor) * magnitude,
+        }),
+      });
+      await onReload?.();
+      setEditing(undefined);
+    } catch {
+      setError('The shared item could not be updated. Refresh and try again.');
+    } finally {
+      setSavingShared(false);
+    }
+  };
+  const linkShared = async () => {
+    setSavingShared(true);
+    try {
+      await financeRequest(`/finance/budgets/${budget.id}/items/${sharedId}`, {
+        method: 'POST',
+        csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        body: JSON.stringify({ expectedBudgetVersion: budget.version }),
+      });
+      await onReload?.();
+      setSharedId('');
+    } catch {
+      setError('The item could not be linked. Its accounts must be linked to this budget.');
+    } finally {
+      setSavingShared(false);
+    }
+  };
   return (
     <section className="finance-budget-detail" aria-label={`${budget.name} budget`}>
       <header>
@@ -195,7 +257,14 @@ export function FinanceBudgetDetail({
             {budget.startDate} – {budget.endDate ?? 'Open-ended'}
           </p>
         </div>
-        <button onClick={() => setAdding(true)}>Add budget item</button>
+        <button
+          onClick={() => {
+            setRelatedAccounts(accountIds);
+            setAdding(true);
+          }}
+        >
+          Add budget item
+        </button>
       </header>
       {!budget.totalsComplete ? (
         <p role="alert">
@@ -252,6 +321,54 @@ export function FinanceBudgetDetail({
           </section>
         ))}
       </div>
+      {sharedItems.length ? (
+        <div>
+          <label>
+            Existing shared item
+            <select value={sharedId} onChange={(event) => setSharedId(event.target.value)}>
+              <option value="">Choose an item</option>
+              {sharedItems
+                .filter((item) => item.relatedAccountIds.every((id) => accountIds.includes(id)))
+                .map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.description}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button
+            disabled={!sharedId || savingShared || !navigator.onLine}
+            onClick={() => void linkShared()}
+          >
+            Link existing item
+          </button>
+        </div>
+      ) : null}
+      {error && !adding ? <p role="alert">{error}</p> : null}
+      {editing ? (
+        <dialog open aria-label="Edit shared item">
+          <form onSubmit={(event) => void saveSharedEdit(event)}>
+            <p>Changes apply to every budget using this item.</p>
+            <label>
+              Item description
+              <input
+                value={editDescription}
+                onChange={(event) => setEditDescription(event.target.value)}
+              />
+            </label>
+            <label>
+              Item planned amount
+              <input value={editAmount} onChange={(event) => setEditAmount(event.target.value)} />
+            </label>
+            <button type="button" onClick={() => setEditing(undefined)}>
+              Cancel
+            </button>
+            <button disabled={savingShared} type="submit">
+              Save shared item
+            </button>
+          </form>
+        </dialog>
+      ) : null}
       <div className="finance-budget-items">
         {budget.items.map((item) => (
           <article
@@ -270,7 +387,22 @@ export function FinanceBudgetDetail({
                 item.currencyExponent,
               )}
             </p>
+            <button
+              disabled={!navigator.onLine}
+              onClick={() => {
+                setEditing(item);
+                setEditDescription(item.description);
+                setEditAmount(
+                  (Math.abs(item.plannedAmountMinor) / 10 ** item.currencyExponent).toFixed(
+                    item.currencyExponent,
+                  ),
+                );
+              }}
+            >
+              Edit shared item
+            </button>
             <CreateFinancialTask
+              budgetId={budget.id}
               budgetItemId={item.id}
               description={item.description}
               {...(item.applicableDate ? { applicableDate: item.applicableDate } : {})}
@@ -302,6 +434,27 @@ export function FinanceBudgetDetail({
                 ))}
               </select>
             </label>
+            <fieldset>
+              <legend>Linked accounts</legend>
+              {accounts
+                .filter((account) => accountIds.includes(account.id))
+                .map((account) => (
+                  <label key={account.id}>
+                    <input
+                      type="checkbox"
+                      checked={relatedAccounts.includes(account.id)}
+                      onChange={(event) =>
+                        setRelatedAccounts((current) =>
+                          event.target.checked
+                            ? [...current, account.id]
+                            : current.filter((id) => id !== account.id),
+                        )
+                      }
+                    />
+                    {account.friendlyName}
+                  </label>
+                ))}
+            </fieldset>
             <label>
               Type
               <select

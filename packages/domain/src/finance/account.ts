@@ -28,7 +28,7 @@ export interface CreateFinancialAccountInput {
   organizationName: string;
   friendlyName?: string;
   accountType: FinanceAccountType;
-  currency: string;
+  currency?: string;
   openingBalanceMinor: number;
   availableBalanceMinor?: number;
   balanceAt: string;
@@ -58,8 +58,8 @@ export function createFinancialAccount(input: CreateFinancialAccountInput): Fina
     organizationName,
     friendlyName,
     accountType: input.accountType,
-    currency: input.currency,
-    currencyExponent: currencyExponentFor(input.currency),
+    currency: input.currency ?? 'USD',
+    currencyExponent: currencyExponentFor(input.currency ?? 'USD'),
     currentBalanceMinor: input.openingBalanceMinor,
     ...(input.availableBalanceMinor === undefined
       ? {}

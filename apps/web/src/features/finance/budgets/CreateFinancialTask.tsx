@@ -3,12 +3,14 @@ import { financeRequest } from '../finance-client.js';
 
 export function CreateFinancialTask({
   budgetItemId,
+  budgetId,
   description,
   applicableDate,
   currentUserId,
   csrfToken,
 }: {
   budgetItemId: string;
+  budgetId?: string;
   description: string;
   applicableDate?: string;
   currentUserId: string;
@@ -34,6 +36,7 @@ export function CreateFinancialTask({
           idempotencyKey: crypto.randomUUID(),
           body: JSON.stringify({
             label,
+            ...(budgetId ? { budgetId } : {}),
             assigneeId: currentUserId,
             ...(dueDate ? { dueDate } : {}),
           }),

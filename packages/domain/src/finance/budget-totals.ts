@@ -8,7 +8,7 @@ export interface BudgetTotalTransaction {
   currencyExponent: number;
   transferId?: string;
   status?: 'active' | 'archived' | 'tombstone';
-  allocations: ReadonlyArray<{ budgetItemId?: string; amountMinor: number }>;
+  allocations: ReadonlyArray<{ budgetItemId?: string; budgetId?: string; amountMinor: number }>;
 }
 
 export interface BudgetCurrencyTotal {
@@ -31,6 +31,7 @@ interface Aggregate {
 }
 
 export interface CalculateBudgetTotalsInput {
+  budgetId?: string;
   items: readonly BudgetItem[];
   links: readonly BudgetAccountLink[];
   visibleAccountIds: readonly string[];
@@ -115,6 +116,7 @@ export function calculateBudgetTotals(input: CalculateBudgetTotalsInput) {
     for (const allocation of transaction.allocations) {
       if (!allocation.budgetItemId) continue;
       const item = itemById.get(allocation.budgetItemId);
+      if (input.budgetId && (allocation.budgetId ?? item?.budgetId) !== input.budgetId) continue;
       if (!item) continue;
       if (!Number.isSafeInteger(allocation.amountMinor)) {
         throw new Error('Budget actual amounts must be safe integers.');

@@ -221,3 +221,21 @@ The quick browser suite stays at **31 tests**; workflow membership and timeout a
 Before: unit/integration 44.80 seconds, quick browsers 25.91 seconds. After: unit/integration
 45.90 seconds; quick browsers 26.21 seconds (31 passed). Typecheck, lint and
 workspace builds pass on Node.js 24. Hosted duration must be checked on the pushed commit.
+
+
+## Shared-item and recovery review follow-up
+
+Items now use one shared definition with separate budget memberships. Transaction allocations name
+one budget, with guards against cross-budget allocation and match acceptance. Mounted Finance
+screens refresh their authorization state on the next sync. Provider recovery uses persisted
+canonical row hashes with atomic receipts and bounded transient retries. Offline child writes
+atomically advance the parent version. Item entry is restricted to linked accounts, and missing
+account currency defaults to USD.
+
+Required validation: **410 files / 1,330 tests before; 411 files / 1,350 tests after**.
+Quick browsers remain **31 tests**. Before measurements: `npm test` 48.68 seconds;
+`npm run test:e2e:quick` 28.38 seconds. Final measurements: `npm test` 49.35 seconds (1,350 passed); quick browsers 25.73 seconds (31 passed). Node.js 24 typecheck, lint, formatting and workspace builds passed.
+An initial browser attempt was discarded because a simultaneous workspace build replaced served
+assets; browser validation was rerun after all builds finished. Workflow membership and the
+fifteen-minute timeout remain unchanged; hosted validation must remain below ten minutes.
+No merge or deployment is included. The cost gate and other documented acceptance work remain open.

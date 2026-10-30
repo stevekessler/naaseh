@@ -1,6 +1,6 @@
+import { itemsForBudget, allocationBudgetId } from './budget-membership.js';
 import {
   acceptAutomaticTransactionMatch,
-  chooseTransactionMatchCandidates,
   copyReusableBudgetItem,
   createReusableBudgetItem,
   createTransactionMatch,
@@ -268,11 +268,12 @@ const candidateItems = (repository: FinanceMemoryRepository, actor: FinanceActor
   const budgets = [...repository.budgets.values()].filter(
     (budget) => authorizeFinanceScope(actor, groupScope(budget.groupId), 'read').allowed,
   );
-  const budgetIds = new Set(budgets.map(({ id }) => id));
   return {
     budgets,
-    items: [...repository.budgetItems.values()].filter(
-      (item) => budgetIds.has(item.budgetId) && canReadBudgetItem(repository, actor, item),
+    items: budgets.flatMap((budget) =>
+      itemsForBudget(repository, budget.id).filter((item) =>
+        canReadBudgetItem(repository, actor, item),
+      ),
     ),
   };
 };
@@ -285,6 +286,7 @@ function allocationInputsForMatch(transaction: FinancialTransaction, item: Budge
         amountMinor: transaction.amountMinor,
         financeCategoryId: item.financeCategoryId,
         budgetItemId: item.id,
+        budgetId: item.budgetId,
       },
     ];
   if (
@@ -298,15 +300,24 @@ function allocationInputsForMatch(transaction: FinancialTransaction, item: Budge
     amountMinor: allocation.amountMinor,
     financeCategoryId: allocation.financeCategoryId,
     budgetItemId: item.id,
+    budgetId: item.budgetId,
     ...(allocation.note ? { note: allocation.note } : {}),
   }));
 }
 
 function attachMatchAllocation(
+  repository: FinanceMemoryRepository,
   transaction: FinancialTransaction,
   item: BudgetItem,
   actorId: string,
 ) {
+  if (
+    transaction.allocations.some(
+      (allocation) =>
+        allocation.budgetItemId && allocationBudgetId(repository, allocation) !== item.budgetId,
+    )
+  )
+    throw new Error('A transaction can belong to only one budget.');
   return replaceTransactionAllocations(
     transaction,
     allocationInputsForMatch(transaction, item),
@@ -318,15 +329,22 @@ function detachMatchAllocation(
   transaction: FinancialTransaction,
   budgetItemId: string,
   actorId: string,
+  budgetId?: string,
 ) {
+  const matchesItem = (allocation: { budgetItemId?: string; budgetId?: string }) =>
+    allocation.budgetItemId === budgetItemId &&
+    (!budgetId || !allocation.budgetId || allocation.budgetId === budgetId);
   const values = transaction.allocations.map((allocation) => ({
     id: allocation.id,
     amountMinor: allocation.amountMinor,
     financeCategoryId: allocation.financeCategoryId,
-    ...(allocation.budgetItemId === budgetItemId
+    ...(matchesItem(allocation)
       ? {}
       : allocation.budgetItemId
-        ? { budgetItemId: allocation.budgetItemId }
+        ? {
+            budgetItemId: allocation.budgetItemId,
+            ...(allocation.budgetId ? { budgetId: allocation.budgetId } : {}),
+          }
         : {}),
     ...(allocation.note ? { note: allocation.note } : {}),
   }));
@@ -339,7 +357,10 @@ function detachMatchAllocation(
     ...transaction,
     allocations: transaction.allocations.map((allocation) => {
       const detached = { ...allocation };
-      if (detached.budgetItemId === budgetItemId) delete detached.budgetItemId;
+      if (matchesItem(detached)) {
+        delete detached.budgetItemId;
+        delete detached.budgetId;
+      }
       return { ...detached, updatedAt };
     }),
     version: transaction.version + 1,
@@ -360,37 +381,37 @@ export async function evaluateFinanceTransactionMatches(
     throw new Error('Transaction is already matched.');
   }
   const { budgets, items } = candidateItems(repository, actor);
-  const selection = chooseTransactionMatchCandidates(authorized.transaction, items, budgets);
-  const candidates = selection.automaticBudgetItemId
-    ? [
-        scoreTransactionMatch(
-          authorized.transaction,
-          items.find(({ id }) => id === selection.automaticBudgetItemId)!,
-          budgets.find(
-            ({ id }) =>
-              id === items.find(({ id }) => id === selection.automaticBudgetItemId)!.budgetId,
-          )!,
-        )!,
-        ...selection.suggestions,
-      ]
-    : selection.suggestions;
+  const candidates = items.flatMap((item) => {
+    const budget = budgets.find((budget) => budget.id === item.budgetId)!;
+    const score = scoreTransactionMatch(authorized.transaction, item, budget);
+    return score ? [{ ...score, budgetId: budget.id }] : [];
+  });
+  const exact = candidates.filter((candidate) => candidate.kind === 'exact');
+  const automatic = exact.length === 1 ? exact[0] : undefined;
   const matches = candidates.map((candidate) =>
     createTransactionMatch({
       id: nextId(),
       transactionId,
       budgetItemId: candidate.budgetItemId,
+      budgetId: candidate.budgetId,
       kind: candidate.kind,
       scoreBasis: candidate.scoreBasis,
     }),
   );
-  if (selection.automaticBudgetItemId) {
+  if (automatic) {
     const match = matches.find(
-      ({ budgetItemId }) => budgetItemId === selection.automaticBudgetItemId,
+      ({ budgetItemId, budgetId }) =>
+        budgetItemId === automatic.budgetItemId && budgetId === automatic.budgetId,
     )!;
-    const item = repository.budgetItems.get(match.budgetItemId)!;
+    const item = { ...repository.budgetItems.get(match.budgetItemId)!, budgetId: match.budgetId! };
     const accepted = acceptAutomaticTransactionMatch(match);
     matches[matches.indexOf(match)] = accepted;
-    authorized.transaction = attachMatchAllocation(authorized.transaction, item, actor.id);
+    authorized.transaction = attachMatchAllocation(
+      repository,
+      authorized.transaction,
+      item,
+      actor.id,
+    );
     repository.transactions[authorized.index] = authorized.transaction;
     markFinanceBudgetsChangedByTransaction(repository, authorized.transaction);
   }
@@ -407,7 +428,11 @@ const authorizedMatch = (
   matchId: string,
 ) => {
   const match = repository.transactionMatches.get(matchId);
-  const item = match ? repository.budgetItems.get(match.budgetItemId) : undefined;
+  const storedItem = match ? repository.budgetItems.get(match.budgetItemId) : undefined;
+  const item =
+    storedItem && match
+      ? { ...storedItem, budgetId: match.budgetId ?? storedItem.budgetId }
+      : undefined;
   if (!match || !item || !canReadBudgetItem(repository, actor, item))
     throw new Error('Finance record not found.');
   const authorized = authorizedTransaction(repository, actor, match.transactionId, 'edit');
@@ -427,7 +452,10 @@ export function listFinanceTransactionMatches(
         match.status !== 'tombstone' &&
         Boolean(
           repository.budgetItems.get(match.budgetItemId) &&
-            canReadBudgetItem(repository, actor, repository.budgetItems.get(match.budgetItemId)!),
+            canReadBudgetItem(repository, actor, {
+              ...repository.budgetItems.get(match.budgetItemId)!,
+              budgetId: match.budgetId ?? repository.budgetItems.get(match.budgetItemId)!.budgetId,
+            }),
         ),
     ),
     transactionVersion: transaction.version,
@@ -450,10 +478,13 @@ export async function acceptFinanceTransactionMatch(
     authorized.transaction.version !== expectedTransactionVersion
   )
     throw new Error('Finance match version conflict.');
-  const item = repository.budgetItems.get(authorized.match.budgetItemId);
+  const storedItem = repository.budgetItems.get(authorized.match.budgetItemId);
+  const item = storedItem
+    ? { ...storedItem, budgetId: authorized.match.budgetId ?? storedItem.budgetId }
+    : undefined;
   if (!item) throw new Error('Finance record not found.');
   const match = decideTransactionMatch(authorized.match, 'accepted', actor.id);
-  const transaction = attachMatchAllocation(authorized.transaction, item, actor.id);
+  const transaction = attachMatchAllocation(repository, authorized.transaction, item, actor.id);
   repository.transactionMatches.set(match.id, match);
   repository.transactions[authorized.index] = transaction;
   markFinanceBudgetsChangedByTransaction(repository, transaction);
@@ -500,7 +531,12 @@ export async function undoFinanceTransactionMatch(
   )
     throw new Error('Finance match version conflict.');
   const match = undoTransactionMatch(authorized.match, actor.id);
-  const transaction = detachMatchAllocation(authorized.transaction, match.budgetItemId, actor.id);
+  const transaction = detachMatchAllocation(
+    authorized.transaction,
+    match.budgetItemId,
+    actor.id,
+    match.budgetId,
+  );
   repository.transactionMatches.set(match.id, match);
   repository.transactions[authorized.index] = transaction;
   markFinanceBudgetsChangedByTransaction(repository, transaction);
@@ -520,7 +556,10 @@ export function invalidateChangedTransactionMatches(
   for (const [id, match] of repository.transactionMatches) {
     if (match.transactionId !== transactionId || !['suggested', 'accepted'].includes(match.status))
       continue;
-    const item = repository.budgetItems.get(match.budgetItemId);
+    const storedItem = repository.budgetItems.get(match.budgetItemId);
+    const item = storedItem
+      ? { ...storedItem, budgetId: match.budgetId ?? storedItem.budgetId }
+      : undefined;
     const budget = item ? repository.budgets.get(item.budgetId) : undefined;
     const score = item && budget ? scoreTransactionMatch(transaction, item, budget) : undefined;
     if (!score || score.kind !== match.kind) {
@@ -530,6 +569,7 @@ export function invalidateChangedTransactionMatches(
           transaction,
           match.budgetItemId,
           match.decidedBy ?? 'system',
+          match.budgetId,
         );
         repository.transactions[transactionIndex] = transaction;
         markFinanceBudgetsChangedByTransaction(repository, transaction);

@@ -36,7 +36,10 @@ export const manualFinanceAccountInputSchema = z
     organizationName: z.string().trim().min(1).max(200),
     friendlyName: z.string().trim().min(1).max(200).optional(),
     accountType: accountTypeSchema,
-    currency: z.string().regex(/^[A-Z]{3}$/),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .default('USD'),
     openingBalanceMinor: z.number().int().safe(),
     availableBalanceMinor: z.number().int().safe().optional(),
     balanceAt: z.string().datetime(),
@@ -87,6 +90,7 @@ export const transactionAllocationInputSchema = z
     amountMinor: z.number().int().safe(),
     financeCategoryId: ulidSchema,
     budgetItemId: ulidSchema.optional(),
+    budgetId: ulidSchema.optional(),
     note: z.string().max(1000).optional(),
   })
   .strict();
@@ -650,6 +654,7 @@ export const financeTransactionMatchSchema = z
     id: ulidSchema,
     transactionId: z.string().min(1),
     budgetItemId: ulidSchema,
+    budgetId: ulidSchema.optional(),
     kind: z.enum(['exact', 'near', 'manual']),
     scoreBasis: financeTransactionMatchScoreSchema,
     status: z.enum(['suggested', 'accepted', 'rejected', 'undone', 'invalidated', 'tombstone']),
@@ -669,6 +674,7 @@ export const financeTransactionMatchDecisionSchema = z
 
 export const financeTaskCreateInputSchema = z
   .object({
+    budgetId: ulidSchema.optional(),
     label: z.string().trim().min(1).max(300),
     assigneeId: z.string().min(1).max(200),
     dueDate: financeDateSchema.optional(),

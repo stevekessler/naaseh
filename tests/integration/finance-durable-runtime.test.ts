@@ -1,3 +1,6 @@
+import { financeImportRowHash } from '../../apps/api/src/finance/runtime-import.js';
+import { importSimplefinAccounts } from '../../apps/api/src/finance/connection-service.js';
+import { parseSimplefinV2 } from '@naaseh/domain';
 import { validateDurableFinanceRestore } from '../../apps/api/src/crypto-recovery/restore-testing-validator.js';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
@@ -439,4 +442,160 @@ it('fails a stale deletion confirmation after a transaction was committed by ano
   )) as { statusCode: number };
   expect(result.statusCode).toBe(409);
   expect((await store().load()).repository.accounts.has(account)).toBe(true);
+});
+
+async function seedHashJob() {
+  const session = await store().load();
+  session.repository.connections.set('bridge', {
+    id: 'bridge',
+    scope: { type: 'owner', ownerId: actor.id },
+    provider: 'simplefin-bridge',
+    status: 'active',
+    encryptedAccessUrl: 'AQID',
+    credentialKeyId: 'key',
+    credentialContextVersion: 1,
+    version: 1,
+  });
+  session.repository.importJobs.set('job', createImportJob('job', 'bridge'));
+  session.repository.importDispatches.set('job', { jobId: 'job', connectionId: 'bridge' });
+  await session.commit();
+  vi.spyOn(KMSClient.prototype, 'send').mockResolvedValue({
+    Plaintext: new TextEncoder().encode('https://user:pass@bridge.simplefin.org/simplefin'),
+  } as never);
+}
+it('hashes canonical provider rows independently of property order and detects corrections', () => {
+  expect(financeImportRowHash({ id: 'row', amountMinor: 1 })).toBe(
+    financeImportRowHash({ amountMinor: 1, id: 'row' }),
+  );
+  expect(financeImportRowHash({ id: 'row', amountMinor: 2 })).not.toBe(
+    financeImportRowHash({ id: 'row', amountMinor: 1 }),
+  );
+});
+it('resumes by row hashes when provider rows are inserted before an old checkpoint', async () => {
+  await seedHashJob();
+  const payload = structuredClone(simplefinV2Fixture);
+  const template = payload.accounts[0]!.transactions[0]!;
+  payload.accounts[0]!.transactions = ['b', 'c', 'd', 'e', 'f', 'g'].map((id) => ({
+    ...template,
+    id,
+  }));
+  const parsed = parseSimplefinV2(payload);
+  const session = await store().load();
+  const source = parsed.accounts[0]!;
+  importSimplefinAccounts(
+    session.repository,
+    'bridge',
+    { type: 'owner', ownerId: actor.id },
+    { ...parsed, accounts: [{ ...source, transactions: source.transactions.slice(0, 5) }] },
+  );
+  const prefix = JSON.stringify(['job', source.providerConnectionId, source.providerAccountId]);
+  for (const row of source.transactions.slice(0, 5))
+    session.repository.importRowReceipts.set(
+      `${prefix}:row:${row.sourceTransactionId}`,
+      financeImportRowHash(row),
+    );
+  session.repository.importJobs.set('job', {
+    ...session.repository.importJobs.get('job')!,
+    status: 'running',
+    attempts: 1,
+    leaseUntil: new Date(0).toISOString(),
+    providerOffset: 1,
+  });
+  await session.commit();
+  payload.accounts[0]!.transactions.unshift({ ...template, id: 'a' });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(payload))),
+  );
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  const fresh = await store().load();
+  expect(fresh.repository.transactions.map((row) => row.sourceTransactionId).sort()).toEqual([
+    'a',
+    'b',
+    'c',
+    'd',
+    'e',
+    'f',
+    'g',
+  ]);
+  expect(fresh.repository.importJobs.get('job')?.status).toBe('succeeded');
+});
+it('keeps a transiently conflicting import queued and safely retries uncommitted rows', async () => {
+  await seedHashJob();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(simplefinV2Fixture))),
+  );
+  let writes = 0;
+  const send = async (command: unknown) => {
+    if (
+      (command as { constructor: { name: string } }).constructor.name === 'TransactWriteCommand' &&
+      ++writes === 2
+    )
+      throw Object.assign(new Error('Concurrent update'), { name: 'TransactionCanceledException' });
+    return db.send(command);
+  };
+  await runDurableFinanceImport(
+    { jobId: 'job', connectionId: 'bridge' },
+    new DynamoFinanceRepository({ send } as never),
+  );
+  let fresh = await store().load();
+  expect(fresh.repository.importJobs.get('job')?.status).toBe('running');
+  expect(fresh.repository.importDispatches.get('job')?.failures).toBe(1);
+  expect(fresh.repository.transactions).toHaveLength(0);
+  expect(fresh.repository.importRowReceipts.size).toBe(0);
+  fresh.repository.importJobs.set('job', {
+    ...fresh.repository.importJobs.get('job')!,
+    leaseUntil: new Date(0).toISOString(),
+  });
+  fresh.repository.importDispatches.set('job', {
+    ...fresh.repository.importDispatches.get('job')!,
+    notBefore: new Date(0).toISOString(),
+  });
+  await fresh.commit();
+  await runDurableFinanceImport({ dispatchPending: true }, store());
+  fresh = await store().load();
+  expect(fresh.repository.transactions).toHaveLength(1);
+  expect(fresh.repository.importJobs.get('job')?.status).toBe('succeeded');
+  fresh.repository.importJobs.set('job', {
+    ...fresh.repository.importJobs.get('job')!,
+    status: 'running',
+    leaseUntil: new Date(0).toISOString(),
+  });
+  fresh.repository.importDispatches.set('job', { jobId: 'job', connectionId: 'bridge' });
+  await fresh.commit();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new TypeError('Network unavailable');
+    }),
+  );
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  const networkRetry = await store().load();
+  expect(networkRetry.repository.importDispatches.get('job')?.failures).toBe(1);
+  expect(networkRetry.repository.importJobs.get('job')?.status).toBe('running');
+});
+it('processes a changed provider row even when its identity already has a committed hash', async () => {
+  await seedHashJob();
+  let payload = structuredClone(simplefinV2Fixture);
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(payload))),
+  );
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  const session = await store().load();
+  session.repository.importJobs.set('job', {
+    ...session.repository.importJobs.get('job')!,
+    status: 'running',
+    leaseUntil: new Date(0).toISOString(),
+  });
+  session.repository.importDispatches.set('job', { jobId: 'job', connectionId: 'bridge' });
+  await session.commit();
+  payload = structuredClone(payload);
+  payload.accounts[0]!.transactions[0]!.amount = '-90.00';
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  const fresh = await store().load();
+  expect(fresh.repository.transactions).toHaveLength(1);
+  expect(fresh.repository.transactions[0]?.amountMinor).toBe(-9000);
+  expect(fresh.repository.importJobs.get('job')?.counts.updated).toBe(1);
 });

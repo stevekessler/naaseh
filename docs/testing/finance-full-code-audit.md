@@ -103,3 +103,38 @@ on the pushed audit-fix commit; passing local tests alone does not establish its
 
 These checks test the fixed services and browser behaviors. They are not a deployed penetration
 test or a substitute for the remaining production integration and two-user acceptance work.
+
+## Additional review remediation: shared items and recovery
+
+The additional review's six findings are addressed. Budget item definitions are shared through
+separate budget memberships: linking an existing item never overwrites its definition, and shared
+edits validate access to every participating budget and update each budget version. An explicit
+transaction allocation budget prevents counting one transaction in multiple budgets. Older
+allocations retain their original budget attribution. Reusing an existing account-link or transaction
+identifier is rejected. A shared definition remains active when another participating budget is
+archived, and restore validation checks its membership references.
+
+The next authorized Finance sync refreshes mounted screens when their accessible account, budget,
+item or task-link set changes. Authentication failure also clears the Finance cache token and
+invalidates the mounted view. Budget item entry uses only active linked accounts of the item's
+currency. Missing account currency defaults to USD in domain/API/provider input; explicit currencies
+remain authoritative.
+
+Provider imports retain SHA-256 receipts for canonical row contents, committed atomically with
+imported rows. Resumption examines the fetched response against these receipts rather than skipping
+a numerical offset. Newly inserted, reordered and corrected rows are processed; already committed
+unchanged rows are skipped. Incomplete-identity pending rows are accumulated across chunks.
+Transient database conflicts retain the dispatch and durable progress, reload state and retry with
+bounded exponential backoff (up to five transient failures). Permanent errors and exhausted retries
+remain visible failures. Hashes make retries idempotent; they do not replace retry scheduling.
+
+Offline child mutations and the parent's optimistic version are written in one local transaction.
+A reopen therefore restores the version needed for the next queued command, and snapshot hydration
+preserves the optimistic parent while its children are pending. Sharing and editing shared items
+currently use online commands.
+
+This pass adds 20 regression cases: required validation becomes **411 files / 1,350 tests**.
+The required browser quick suite remains **31 tests**. Before-change measured timings were
+48.68 seconds for unit/integration and 28.38 seconds for browser quick validation. Final timings
+are recorded in the implementation validation notes. The earlier $5/month deployment cost review,
+real AWS restore exercise, large-account profiling and human acceptance remain open.

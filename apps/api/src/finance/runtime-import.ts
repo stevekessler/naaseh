@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { parseSimplefinV2, transitionImportJob } from '@naaseh/domain';
 import { DynamoFinanceRepository } from './durable-repository.js';
 import {
@@ -16,7 +17,15 @@ export async function runDurableFinanceImport(
   if (event.dispatchPending) {
     const session = await store.load();
     // One scheduled invocation is bounded; remaining jobs stay durably queued.
-    const jobs = [...session.repository.importDispatches.values()].slice(0, 1);
+    const jobs = [...session.repository.importDispatches.values()]
+      .filter((dispatch) => {
+        const job = session.repository.importJobs.get(dispatch.jobId);
+        return (
+          (!dispatch.notBefore || Date.parse(dispatch.notBefore) <= Date.now()) &&
+          (!job?.leaseUntil || Date.parse(job.leaseUntil) <= Date.now())
+        );
+      })
+      .slice(0, 1);
     for (const job of jobs) {
       try {
         await runDurableFinanceImport(job, store);
@@ -79,8 +88,7 @@ export async function runDurableFinanceImport(
       reviewIssues: Math.max(job.counts.reviewIssues, payload.errors.length),
     };
     const started = Date.now();
-    let offset = 0;
-    const resume = job.providerOffset ?? 0;
+
     for (const account of [...payload.accounts].sort((a, b) =>
       `${a.providerConnectionId}:${a.providerAccountId}`.localeCompare(
         `${b.providerConnectionId}:${b.providerAccountId}`,
@@ -89,12 +97,30 @@ export async function runDurableFinanceImport(
       account.transactions.sort((a, b) =>
         a.sourceTransactionId.localeCompare(b.sourceTransactionId),
       );
+      const receiptPrefix = JSON.stringify([
+        jobId,
+        account.providerConnectionId,
+        account.providerAccountId,
+      ]);
+      const { transactions: sourceRows, ...metadata } = account;
+      const metadataHash = financeImportRowHash(metadata);
+      const metadataKey = `${receiptPrefix}:metadata`;
+      const unprocessed = sourceRows.filter(
+        (row) =>
+          session.repository.importRowReceipts.get(
+            `${receiptPrefix}:row:${row.sourceTransactionId}`,
+          ) !== financeImportRowHash(row),
+      );
+      if (
+        !unprocessed.length &&
+        session.repository.importRowReceipts.get(metadataKey) === metadataHash
+      )
+        continue;
       const chunks = Array.from(
-        { length: Math.max(1, Math.ceil(account.transactions.length / 5)) },
-        (_, index) => account.transactions.slice(index * 5, (index + 1) * 5),
+        { length: Math.max(1, Math.ceil(unprocessed.length / 5)) },
+        (_, index) => unprocessed.slice(index * 5, (index + 1) * 5),
       );
       for (const transactions of chunks) {
-        if (offset++ < resume) continue;
         if (Date.now() - started > 60_000) {
           const running = session.repository.importJobs.get(jobId)!;
           session.repository.importJobs.set(jobId, {
@@ -126,9 +152,14 @@ export async function runDurableFinanceImport(
         session.repository.importJobs.set(jobId, {
           ...running,
           counts: { ...counts },
-          providerOffset: offset,
           leaseUntil: new Date(Date.now() + 300_000).toISOString(),
         });
+        for (const row of transactions)
+          session.repository.importRowReceipts.set(
+            `${receiptPrefix}:row:${row.sourceTransactionId}`,
+            financeImportRowHash(row),
+          );
+        session.repository.importRowReceipts.set(metadataKey, metadataHash);
         await session.commit();
       }
     }
@@ -156,9 +187,20 @@ export async function runDurableFinanceImport(
     session.repository.importDispatches.delete(jobId);
     await session.commit();
     return completed;
-  } catch {
+  } catch (error) {
     session = await store.load();
     const current = session.repository.importJobs.get(jobId);
+    const dispatch = session.repository.importDispatches.get(jobId);
+    const failures = (dispatch?.failures ?? 0) + 1;
+    if (current?.status === 'running' && retryableFinanceImportError(error) && failures <= 5) {
+      const notBefore = new Date(
+        Date.now() + Math.min(300_000, 60_000 * 2 ** (failures - 1)),
+      ).toISOString();
+      session.repository.importJobs.set(jobId, { ...current, leaseUntil: notBefore });
+      session.repository.importDispatches.set(jobId, { jobId, connectionId, failures, notBefore });
+      await session.commit();
+      return session.repository.importJobs.get(jobId);
+    }
     if (current?.status === 'running') {
       const failed = completeRefreshJob(session.repository, jobId, 'failed', current.counts);
       session.repository.importJobs.set(jobId, {
@@ -172,4 +214,38 @@ export async function runDurableFinanceImport(
     await session.commit();
     throw new Error('Finance import failed.');
   }
+}
+
+export function financeImportRowHash(value: unknown): string {
+  const canonical = (input: unknown): unknown =>
+    Array.isArray(input)
+      ? input.map(canonical)
+      : input && typeof input === 'object'
+        ? Object.fromEntries(
+            Object.entries(input)
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([key, value]) => [key, canonical(value)]),
+          )
+        : input;
+  return createHash('sha256')
+    .update(JSON.stringify(canonical(value)))
+    .digest('hex');
+}
+function retryableFinanceImportError(error: unknown) {
+  return (
+    error instanceof Error &&
+    ([
+      'TransactionCanceledException',
+      'ConditionalCheckFailedException',
+      'ThrottlingException',
+      'ProvisionedThroughputExceededException',
+      'TimeoutError',
+      'RequestTimeout',
+      'InternalServerError',
+      'ServiceUnavailable',
+      'AbortError',
+      'SimplefinNetworkError',
+    ].includes(error.name) ||
+      /Finance read version conflict|provider-throttled|provider-unavailable/.test(error.message))
+  );
 }

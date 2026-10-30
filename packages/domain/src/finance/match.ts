@@ -21,6 +21,7 @@ export interface TransactionMatch {
   id: string;
   transactionId: string;
   budgetItemId: string;
+  budgetId?: string;
   kind: TransactionMatchKind;
   scoreBasis: TransactionMatchScoreBasis;
   status: TransactionMatchStatus;
@@ -31,6 +32,7 @@ export interface TransactionMatch {
 
 export interface MatchCandidate {
   budgetItemId: string;
+  budgetId?: string;
   kind: 'exact' | 'near';
   scoreBasis: TransactionMatchScoreBasis;
 }

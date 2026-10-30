@@ -104,6 +104,7 @@ export function FinanceBudgetsPage({
           ...command,
           status: 'draft',
           items: [],
+          accountLinks: selectedAccounts.map((accountId) => ({ accountId, status: 'active' })),
           totals: [],
           categoryTotals: [],
           totalsComplete: true,
@@ -201,8 +202,21 @@ export function FinanceBudgetsPage({
         {error ? <p role="alert">{error}</p> : null}
         <FinanceBudgetDetail
           budget={selected}
-          accounts={accounts}
+          accounts={accounts.filter(({ id }) =>
+            selected.accountLinks?.some(
+              (link) => link.accountId === id && link.status === 'active',
+            ),
+          )}
           categories={categories}
+          sharedItems={[
+            ...new Map(
+              budgets.flatMap((budget) => budget.items).map((item) => [item.id, item]),
+            ).values(),
+          ].filter((item) => !selected.items.some((current) => current.id === item.id))}
+          onReload={async () => {
+            const page = await financeRequest<{ items: BudgetDetailView[] }>('/finance/budgets');
+            setBudgets(page.items);
+          }}
           csrfToken={csrfToken}
           currentUserId={currentUserId}
           onChange={(updated) =>

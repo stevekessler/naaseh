@@ -262,7 +262,18 @@ export function importSimplefinAccounts(
   for (const source of payload.accounts) {
     const providerAccountIdentity = `${source.providerConnectionId ?? 'legacy'}:${source.providerAccountId}`;
     if (source.needsIdentityCompletion || !source.sourceName || !source.organizationName) {
-      repository.pendingSimplefinAccounts.set(`${connectionId}:${providerAccountIdentity}`, source);
+      const pendingKey = `${connectionId}:${providerAccountIdentity}`;
+      const previous = repository.pendingSimplefinAccounts.get(pendingKey);
+      const previousRows = Array.isArray(previous?.transactions)
+        ? (previous.transactions as typeof source.transactions)
+        : [];
+      const rows = new Map(
+        [...previousRows, ...source.transactions].map((row) => [row.sourceTransactionId, row]),
+      );
+      repository.pendingSimplefinAccounts.set(pendingKey, {
+        ...source,
+        transactions: [...rows.values()],
+      });
       attentionAccounts += 1;
       continue;
     }

@@ -1,3 +1,6 @@
+import { z } from 'zod';
+import { itemsForBudget, itemBudgetIds } from './budget-membership.js';
+import { linkSharedFinanceBudgetItem, updateSharedFinanceBudgetItem } from './budget-service.js';
 import { authorizedFinanceProjection, projectionDigest } from './sync-runtime.js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import {
@@ -230,7 +233,7 @@ const hasAdditionalDeletionReferences = (
   if (type === 'reusable-item') return items.some((item) => item.sourceReusableItemId === id);
   if (type === 'budget')
     return (
-      items.some((item) => item.budgetId === id) ||
+      itemsForBudget(repository, id).length > 0 ||
       [...repository.budgetAccountLinks.values()].some((link) => link.budgetId === id) ||
       repository.budgetReconciliations.some((record) => record.budgetId === id) ||
       [...repository.financialTaskLinks.values()].some((link) => link.budgetId === id)
@@ -443,6 +446,7 @@ export function registerUserStory1FinanceRoutes(
               amountMinor: allocation.amountMinor,
               financeCategoryId: allocation.financeCategoryId,
               ...(allocation.budgetItemId ? { budgetItemId: allocation.budgetItemId } : {}),
+              ...(allocation.budgetId ? { budgetId: allocation.budgetId } : {}),
               ...(allocation.note ? { note: allocation.note } : {}),
             })),
           },
@@ -713,6 +717,43 @@ export function registerUserStory1FinanceRoutes(
     );
     return json(201, item);
   });
+  registry.register('POST', '/api/v1/finance/budgets/{budgetId}/items/{itemId}', async (event) => {
+    const input = z
+      .object({ expectedBudgetVersion: z.number().int().positive() })
+      .strict()
+      .parse(bodyOf(event));
+    return json(
+      201,
+      await linkSharedFinanceBudgetItem(
+        repository,
+        await dependencies.actorFor(event),
+        parameter(event, 'budgetId'),
+        parameter(event, 'itemId'),
+        input.expectedBudgetVersion,
+        mutationId(event),
+      ),
+    );
+  });
+  registry.register('PATCH', '/api/v1/finance/budget-items/{budgetItemId}', async (event) => {
+    const input = z
+      .object({
+        expectedVersion: z.number().int().positive(),
+        description: z.string().trim().min(1).max(1000),
+        plannedAmountMinor: z.number().int().safe(),
+      })
+      .strict()
+      .parse(bodyOf(event));
+    return json(
+      200,
+      await updateSharedFinanceBudgetItem(
+        repository,
+        await dependencies.actorFor(event),
+        parameter(event, 'budgetItemId'),
+        input,
+        mutationId(event),
+      ),
+    );
+  });
   registry.register('POST', '/api/v1/finance/budgets/{budgetId}/reconcile', async (event) => {
     const actor = await dependencies.actorFor(event);
     const input = financeBudgetReconciliationInputSchema.parse(bodyOf(event));
@@ -741,6 +782,7 @@ export function registerUserStory1FinanceRoutes(
       parameter(event, 'budgetItemId'),
       {
         taskId: createUlid(),
+        ...(input.budgetId ? { budgetId: input.budgetId } : {}),
         linkId: createUlid(),
         label: input.label,
         assigneeId: input.assigneeId,
@@ -918,8 +960,8 @@ export function registerUserStory1FinanceRoutes(
         const links = [...repository.budgetAccountLinks.values()].filter(
           (link) => link.budgetId === budget.id && link.status === 'active',
         );
-        const items = [...repository.budgetItems.values()].filter(
-          (item) => item.budgetId === budget.id && item.status === 'active',
+        const items = itemsForBudget(repository, budget.id).filter(
+          (item) => item.status === 'active',
         );
         const visibleLinks = links.filter((link) => {
           const account = repository.accounts.get(link.accountId);
@@ -1185,8 +1227,10 @@ export function registerUserStory1FinanceRoutes(
         else {
           repository.budgets.set(budget.id, archiveBudget(budget));
           for (const [id, item] of repository.budgetItems) {
-            if (item.budgetId === budget.id && item.status === 'active') {
-              repository.budgetItems.set(id, archiveBudgetItem(item));
+            if (itemBudgetIds(repository, item).includes(budget.id) && item.status === 'active') {
+              const remaining = itemBudgetIds(repository, item).filter((id) => id !== budget.id);
+              repository.budgetItemMemberships.delete(`${budget.id}:${id}`);
+              if (!remaining.length) repository.budgetItems.set(id, archiveBudgetItem(item));
             }
           }
         }

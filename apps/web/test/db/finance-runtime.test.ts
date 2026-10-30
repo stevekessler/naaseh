@@ -1,3 +1,4 @@
+import { loadLocalFinanceBudgets } from '../../src/sync/finance-local.js';
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { webcrypto } from 'node:crypto';
 const state = vi.hoisted(() => ({
@@ -14,12 +15,15 @@ vi.mock('../../src/db/database.js', () => ({
       add: async (value: { id: string }) => state.keys.set(value.id, value),
     },
     secureFinanceRecords: {
+      get: async (id: string) => state.records.get(id),
       toArray: async () => [...state.records.values()],
       put: async (value: { id: string }) => state.records.set(value.id, value),
       delete: async (id: string) => state.records.delete(id),
       clear: async () => state.records.clear(),
     },
     outbox: {
+      add: async (value: { id: string; entityId: string; entityType: string }) =>
+        state.pending.set(value.id, value),
       toArray: async () => [...state.pending.values()],
       where: () => ({
         equals: (id: string) => ({
@@ -37,6 +41,7 @@ vi.mock('../../src/db/database.js', () => ({
     },
     secureConflicts: { toArray: async () => [], delete: async () => undefined },
     settings: {
+      delete: async (key: string) => state.settings.delete(key),
       get: async (key: string) => state.settings.get(key),
       put: async (value: { key: string }) => state.settings.set(value.key, value),
     },
@@ -47,6 +52,7 @@ import {
   financeDeviceKey,
   encryptFinanceRecord,
   decryptFinanceRecord,
+  queueEncryptedBudgetMutation,
 } from '../../src/db/finance-repository.js';
 import type { EncryptedFinanceRecord } from '../../src/db/database.js';
 beforeEach(() => {
@@ -150,4 +156,88 @@ it('clears protected state after session authorization is rejected', async () =>
   ).rejects.toThrow(/synchronization/);
   expect(state.records.size).toBe(0);
   expect(state.pending.size).toBe(0);
+});
+
+it('persists budget version progress with queued children across offline reopen', async () => {
+  const key = await financeDeviceKey();
+  const parent = await encryptFinanceRecord({
+    id: 'budget',
+    entityType: 'financeBudget',
+    scopeKey: 'GROUP#group',
+    version: 3,
+    updatedAt: 'now',
+    value: { id: 'budget', version: 3 },
+    key,
+  });
+  state.records.set(parent.id, parent);
+  await queueEncryptedBudgetMutation({
+    entityId: 'first',
+    entityType: 'financeBudgetItem',
+    budgetId: 'budget',
+    scopeKey: 'GROUP#group',
+    baseVersion: 3,
+    value: { id: 'first', budgetId: 'budget' },
+    key,
+  });
+  const reopened = await loadLocalFinanceBudgets();
+  expect(reopened.budgets[0]?.version).toBe(4);
+  await queueEncryptedBudgetMutation({
+    entityId: 'second',
+    entityType: 'financeBudgetItem',
+    budgetId: 'budget',
+    scopeKey: 'GROUP#group',
+    baseVersion: 4,
+    value: { id: 'second', budgetId: 'budget' },
+    key,
+  });
+  expect((await loadLocalFinanceBudgets()).budgets[0]?.version).toBe(5);
+  expect(
+    [...state.pending.values()].map(
+      (row) => (row as unknown as { baseVersion: number }).baseVersion,
+    ),
+  ).toEqual([3, 4]);
+});
+it('preserves a parent optimistic version while its child remains pending', async () => {
+  const key = await financeDeviceKey();
+  for (const value of [
+    { id: 'budget', entityType: 'financeBudget', version: 4, value: { id: 'budget', version: 4 } },
+    {
+      id: 'child',
+      entityType: 'financeBudgetItem',
+      version: 1,
+      value: { id: 'child', budgetId: 'budget', relatedAccountIds: [] },
+    },
+  ])
+    state.records.set(
+      value.id,
+      await encryptFinanceRecord({
+        ...value,
+        scopeKey: 'GROUP#group',
+        budgetId: 'budget',
+        updatedAt: 'now',
+        key,
+      }),
+    );
+  state.pending.set('pending', {
+    id: 'pending',
+    entityId: 'child',
+    entityType: 'financeBudgetItem',
+  });
+  await pullFinanceSnapshot(async () =>
+    response(
+      [
+        {
+          id: 'budget',
+          entityType: 'financeBudget',
+          scopeKey: 'GROUP#group',
+          version: 3,
+          value: { id: 'budget', version: 3 },
+        },
+      ],
+      null,
+      'digest',
+      ['GROUP#group'],
+    ),
+  );
+  expect((state.records.get('budget') as EncryptedFinanceRecord).version).toBe(4);
 });

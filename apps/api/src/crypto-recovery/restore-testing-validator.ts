@@ -545,6 +545,16 @@ export function validateDurableFinanceRestore(items: RestoredItem[]) {
         .map((receipt) => Number(receipt.key.split(':').at(-1)));
     financeRows.push({ entityType: type, id: String(data.id), data });
   }
+  for (const membership of stored.filter((row) => row.collection === 'budgetItemMemberships')) {
+    const link = membership.data as { budgetId?: string; budgetItemId?: string };
+    if (
+      !financeRows.some((row) => row.entityType === 'financeBudget' && row.id === link.budgetId) ||
+      !financeRows.some(
+        (row) => row.entityType === 'financeBudgetItem' && row.id === link.budgetItemId,
+      )
+    )
+      throw new Error('Restored Finance membership is inconsistent.');
+  }
   const financeIntegrity = validateFinanceRestore(financeRows);
   const taskIds = new Set(
     items

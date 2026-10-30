@@ -141,40 +141,47 @@ export function createFinanceHandler(registry?: FinanceRouteRegistry) {
       const mapped =
         message === 'Finance record not found.' || message === 'Finance connection not found.'
           ? new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'not_found')
-          : message.includes('version conflict') || message.includes('stale')
+          : message.includes('only one budget') || message.includes('Choose one budget')
             ? new SafeApiError(
                 409,
-                'finance_conflict',
-                'The Finance record changed. Refresh and try again.',
+                'finance_budget_assignment_conflict',
+                'Choose one budget for this transaction. Unlink an existing match before moving it to another budget.',
                 'conflict',
               )
-            : message.includes('Budget reconciliation') ||
-                message.includes('contributing transaction') ||
-                message.includes('transaction allocation') ||
-                message.includes('refreshes to finish')
+            : message.includes('version conflict') || message.includes('stale')
               ? new SafeApiError(
                   409,
-                  'finance_reconciliation_blocked',
-                  'Budget reconciliation prerequisites changed. Refresh and review the budget.',
+                  'finance_conflict',
+                  'The Finance record changed. Refresh and try again.',
                   'conflict',
                 )
-              : message.startsWith('Finance page limit')
+              : message.includes('Budget reconciliation') ||
+                  message.includes('contributing transaction') ||
+                  message.includes('transaction allocation') ||
+                  message.includes('refreshes to finish')
                 ? new SafeApiError(
-                    400,
-                    'invalid_request',
-                    'The page limit is invalid.',
-                    'validation',
+                    409,
+                    'finance_reconciliation_blocked',
+                    'Budget reconciliation prerequisites changed. Refresh and review the budget.',
+                    'conflict',
                   )
-                : message.includes('cooldown')
+                : message.startsWith('Finance page limit')
                   ? new SafeApiError(
-                      429,
-                      'finance_refresh_cooldown',
-                      'SimpleFIN refresh cooldown is active.',
-                      'throttled',
-                      false,
-                      3600,
+                      400,
+                      'invalid_request',
+                      'The page limit is invalid.',
+                      'validation',
                     )
-                  : error;
+                  : message.includes('cooldown')
+                    ? new SafeApiError(
+                        429,
+                        'finance_refresh_cooldown',
+                        'SimpleFIN refresh cooldown is active.',
+                        'throttled',
+                        false,
+                        3600,
+                      )
+                    : error;
       const safe = recordError(mapped, {
         correlationId,
         operation: 'finance.request',

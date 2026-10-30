@@ -92,7 +92,11 @@ async function fetchBridge(
 ) {
   let url = initialUrl;
   for (let redirects = 0; redirects <= 3; redirects += 1) {
-    const response = await fetcher(url, { ...init, redirect: 'manual' });
+    const response = await fetcher(url, { ...init, redirect: 'manual' }).catch(() => {
+      throw Object.assign(new Error('SimpleFIN network request failed.'), {
+        name: 'SimplefinNetworkError',
+      });
+    });
     if (!redirectStatuses.has(response.status)) return response;
     await response.body?.cancel();
     const location = response.headers.get('location');

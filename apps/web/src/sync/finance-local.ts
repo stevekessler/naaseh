@@ -20,20 +20,40 @@ export async function loadLocalFinanceBudgets() {
         .filter(
           (row) =>
             row.type === 'financeBudgetItem' &&
-            (row.value as { budgetId?: string }).budgetId === item.id,
+            (
+              (row.value as { budgetId?: string; budgetIds?: string[] }).budgetIds ?? [
+                (row.value as { budgetId?: string }).budgetId,
+              ]
+            ).includes(item.id),
         )
-        .map((row) => row.value as BudgetDetailView['items'][number]);
+        .map((row) => {
+          const value = row.value as BudgetDetailView['items'][number] & {
+            actualByBudget?: Record<string, object>;
+          };
+          return { ...value, ...value.actualByBudget?.[item.id] };
+        });
       const reconciliations = decoded
         .filter(
           (row) =>
             row.type === 'financeReconciliation' &&
-            (row.value as { budgetId?: string }).budgetId === item.id,
+            (
+              (row.value as { budgetId?: string; budgetIds?: string[] }).budgetIds ?? [
+                (row.value as { budgetId?: string }).budgetId,
+              ]
+            ).includes(item.id),
         )
         .map((row) => row.value as NonNullable<BudgetDetailView['reconciliations']>[number]);
       return {
         ...budget,
         id: item.id,
         items,
+        accountLinks: decoded
+          .filter(
+            (row) =>
+              row.type === 'financeBudgetAccountLink' &&
+              (row.value as { budgetId?: string }).budgetId === item.id,
+          )
+          .map((row) => row.value as { accountId: string; status: string }),
         totals: budget.totals ?? [],
         totalsComplete: budget.totalsComplete ?? false,
         reconciliations,

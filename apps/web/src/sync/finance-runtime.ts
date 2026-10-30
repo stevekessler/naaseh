@@ -32,11 +32,17 @@ export async function pullFinanceSnapshot(fetcher: typeof fetch = fetch) {
     clearFinanceSearchIndexes();
     if (!response.ok) {
       clearFinanceSearchIndexes();
-      if (response.status === 401 || response.status === 403)
-        await db.transaction('rw', db.secureFinanceRecords, db.outbox, async () => {
+      if (response.status === 401 || response.status === 403) {
+        await db.transaction('rw', db.secureFinanceRecords, db.outbox, db.settings, async () => {
           await db.secureFinanceRecords.clear();
           await db.outbox.filter((row) => row.entityType.startsWith('finance')).delete();
+          await db.settings.delete('finance-snapshot-token');
         });
+        if (typeof window !== 'undefined')
+          window.dispatchEvent(
+            new CustomEvent('finance-sync', { detail: { authorization: 'denied' } }),
+          );
+      }
       throw new Error('Finance synchronization could not be completed.');
     }
     const page = (await response.json()) as {
@@ -102,6 +108,8 @@ export async function pullFinanceSnapshot(fetcher: typeof fetch = fetch) {
           .filter((item) => item.entityType.startsWith('finance'))
           .map((item) => item.entityId),
       );
+      // A queued child advances its parent's optimistic version as well.
+      for (const row of local) if (pending.has(row.id) && row.budgetId) pending.add(row.budgetId);
       for (const row of local)
         if (revoked.has(row.id) || (!ids.has(row.id) && !pending.has(row.id)))
           await db.secureFinanceRecords.delete(row.id);
@@ -110,5 +118,24 @@ export async function pullFinanceSnapshot(fetcher: typeof fetch = fetch) {
       if (token) await db.settings.put({ key: 'finance-snapshot-token', value: token });
     },
   );
-  if (typeof window !== 'undefined') window.dispatchEvent(new Event('finance-sync'));
+  if (typeof window !== 'undefined')
+    window.dispatchEvent(
+      new CustomEvent('finance-sync', {
+        detail: {
+          authorization: JSON.stringify(
+            records
+              .filter((record) =>
+                [
+                  'financeAccount',
+                  'financeBudget',
+                  'financeBudgetItem',
+                  'financeTaskLink',
+                ].includes(record.entityType),
+              )
+              .map((record) => [record.id, record.scopeKey])
+              .sort(),
+          ),
+        },
+      }),
+    );
 }

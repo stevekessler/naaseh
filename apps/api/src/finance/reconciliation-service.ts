@@ -1,3 +1,4 @@
+import { itemsForBudget, allocationBudgetId } from './budget-membership.js';
 import {
   calculateBudgetTotals,
   canonicalBudgetReconciliationSource,
@@ -77,15 +78,18 @@ function reconciliationSnapshot(
 
   const activeAccounts = accounts.flatMap((account) => (account ? [account] : []));
   const accountIds = new Set(activeAccounts.map(({ id }) => id));
-  const items = [...repository.budgetItems.values()].filter(
-    (item) => item.budgetId === budget.id && item.status === 'active',
-  );
+  const items = itemsForBudget(repository, budget.id).filter((item) => item.status === 'active');
   const itemIds = new Set(items.map(({ id }) => id));
   const transactions = repository.transactions.filter(
     (transaction) =>
       transaction.status === 'active' &&
       accountIds.has(transaction.accountId) &&
-      transaction.allocations.some(({ budgetItemId }) => budgetItemId && itemIds.has(budgetItemId)),
+      transaction.allocations.some(
+        (allocation) =>
+          allocation.budgetItemId &&
+          itemIds.has(allocation.budgetItemId) &&
+          allocationBudgetId(repository, allocation) === budget.id,
+      ),
   );
   const reasons: string[] = [];
   if (transactions.length === 0)
@@ -116,6 +120,7 @@ function reconciliationSnapshot(
     .filter(({ status }) => status === 'confirmed')
     .map(({ id }) => id);
   const totals = calculateBudgetTotals({
+    budgetId: budget.id,
     items,
     links,
     visibleAccountIds: [...accountIds],
@@ -291,9 +296,9 @@ export function markFinanceBudgetsChangedByTransaction(
   transaction: FinancialTransaction,
 ) {
   const budgetIds = new Set(
-    transaction.allocations.flatMap(({ budgetItemId }) => {
-      const item = budgetItemId ? repository.budgetItems.get(budgetItemId) : undefined;
-      return item ? [item.budgetId] : [];
+    transaction.allocations.flatMap((allocation) => {
+      const budgetId = allocationBudgetId(repository, allocation);
+      return budgetId ? [budgetId] : [];
     }),
   );
   for (const budgetId of budgetIds) markFinanceBudgetChanged(repository, budgetId);

@@ -21,11 +21,22 @@ export function FinanceLandingPage({
   csrfToken: string;
   assignableGroups: Array<{ id: string; name: string }>;
 }) {
+  const [authorization, setAuthorization] = useState('initial');
+  useEffect(() => {
+    const refresh = (event: Event) => {
+      const next = (event as CustomEvent<{ authorization?: string }>).detail?.authorization;
+      if (next) setAuthorization(next);
+    };
+    window.addEventListener('finance-sync', refresh);
+    return () => window.removeEventListener('finance-sync', refresh);
+  }, []);
   const [connection, setConnection] = useState<SimplefinConnectionView>();
   const [jobId, setJobId] = useState<string>();
   const [accountGeneration, setAccountGeneration] = useState(0);
   useEffect(() => {
     let active = true;
+    setConnection(undefined);
+    setJobId(undefined);
     void financeRequest<{ items: SimplefinConnectionView[] }>('/finance/connections')
       .then((page) => {
         if (active) setConnection((current) => current ?? page.items[0]);
@@ -34,7 +45,7 @@ export function FinanceLandingPage({
     return () => {
       active = false;
     };
-  }, []);
+  }, [authorization]);
   useEffect(() => {
     if (!jobId) return;
     let active = true;
@@ -134,42 +145,48 @@ export function FinanceLandingPage({
           Budgets
         </button>
       </nav>
-      {view === 'accounts' ? (
-        <>
-          <FinanceAccountsPage
-            key={accountGeneration}
-            ownerId={ownerId}
+      <div key={authorization}>
+        {view === 'accounts' ? (
+          <>
+            <FinanceAccountsPage
+              key={accountGeneration}
+              ownerId={ownerId}
+              csrfToken={csrfToken}
+              assignableGroups={assignableGroups}
+            />
+            <SimplefinConnectionPanel
+              {...(connection ? { connection } : {})}
+              ownerId={ownerId}
+              assignableGroups={assignableGroups}
+              onClaim={claim}
+              onRefresh={refresh}
+            />
+          </>
+        ) : view === 'transactions' ? (
+          <FinanceTransactionsPage
             csrfToken={csrfToken}
-            assignableGroups={assignableGroups}
+            onOpenMerchant={(merchantId) => {
+              setSelectedMerchantId(merchantId);
+              setView('merchants');
+            }}
           />
-          <SimplefinConnectionPanel
-            {...(connection ? { connection } : {})}
-            ownerId={ownerId}
-            assignableGroups={assignableGroups}
-            onClaim={claim}
-            onRefresh={refresh}
+        ) : view === 'categories' ? (
+          <FinanceCategoryManager
+            userId={ownerId}
+            isAdmin={role === 'admin'}
+            csrfToken={csrfToken}
           />
-        </>
-      ) : view === 'transactions' ? (
-        <FinanceTransactionsPage
-          csrfToken={csrfToken}
-          onOpenMerchant={(merchantId) => {
-            setSelectedMerchantId(merchantId);
-            setView('merchants');
-          }}
-        />
-      ) : view === 'categories' ? (
-        <FinanceCategoryManager userId={ownerId} isAdmin={role === 'admin'} csrfToken={csrfToken} />
-      ) : view === 'merchants' ? (
-        <FinanceMerchantPage
-          userId={ownerId}
-          isAdmin={role === 'admin'}
-          csrfToken={csrfToken}
-          {...(selectedMerchantId ? { initialMerchantId: selectedMerchantId } : {})}
-        />
-      ) : (
-        <FinanceBudgetsPage csrfToken={csrfToken} currentUserId={ownerId} />
-      )}
+        ) : view === 'merchants' ? (
+          <FinanceMerchantPage
+            userId={ownerId}
+            isAdmin={role === 'admin'}
+            csrfToken={csrfToken}
+            {...(selectedMerchantId ? { initialMerchantId: selectedMerchantId } : {})}
+          />
+        ) : (
+          <FinanceBudgetsPage csrfToken={csrfToken} currentUserId={ownerId} />
+        )}
+      </div>
     </section>
   );
 }

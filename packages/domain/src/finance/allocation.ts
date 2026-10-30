@@ -3,6 +3,7 @@ export interface TransactionAllocationInput {
   amountMinor: number;
   financeCategoryId: string;
   budgetItemId?: string;
+  budgetId?: string;
   note?: string;
 }
 
@@ -18,6 +19,10 @@ export function createBalancedAllocations(
   actorId: string,
   now: Date,
 ): TransactionAllocation[] {
+  if (new Set(values.flatMap((value) => (value.budgetId ? [value.budgetId] : []))).size > 1)
+    throw new Error('A transaction can belong to only one budget.');
+  if (values.some((value) => value.budgetId && !value.budgetItemId))
+    throw new Error('A budget allocation requires an item.');
   if (
     values.length > 100 ||
     (values.length === 1 && values[0]?.amountMinor !== transactionAmountMinor)

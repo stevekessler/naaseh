@@ -1,3 +1,4 @@
+import { itemBudgetIds } from './budget-membership.js';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceMemoryRepository, boundedFinanceLimit } from './repository.js';
 import { markFinanceBudgetsChangedByTransaction } from './reconciliation-service.js';
@@ -115,6 +116,8 @@ export async function createManualTransaction(
   ) {
     throw new Error('Account version conflict.');
   }
+  if (repository.transactions.some((transaction) => transaction.id === input.id))
+    throw new Error('Transaction already exists.');
   const transaction = createFinancialTransaction({
     id: input.id,
     accountId,
@@ -198,10 +201,26 @@ export async function replaceTransactionAllocationsForActor(
   const { index, transaction, account } = authorizeTransaction(repository, actor, transactionId);
   if (transaction.version !== input.expectedVersion)
     throw new Error('Transaction version conflict.');
-  for (const allocation of input.allocations) {
+  const allocations = input.allocations.map((allocation) => {
+    if (!allocation.budgetItemId) return allocation;
+    const item = repository.budgetItems.get(allocation.budgetItemId);
+    if (!item) throw new Error('Finance record not found.');
+    const budgets = itemBudgetIds(repository, item);
+    if (!allocation.budgetId && budgets.length > 1)
+      throw new Error('Choose one budget for the transaction.');
+    const budgetId = allocation.budgetId ?? item.budgetId;
+    if (!budgets.includes(budgetId)) throw new Error('Finance record not found.');
+    return { ...allocation, budgetId };
+  });
+  if (
+    new Set(allocations.flatMap((allocation) => (allocation.budgetId ? [allocation.budgetId] : [])))
+      .size > 1
+  )
+    throw new Error('A transaction can belong to only one budget.');
+  for (const allocation of allocations) {
     if (!allocation.budgetItemId) continue;
     const item = repository.budgetItems.get(allocation.budgetItemId);
-    const budget = item ? repository.budgets.get(item.budgetId) : undefined;
+    const budget = item ? repository.budgets.get(allocation.budgetId ?? item.budgetId) : undefined;
     if (
       !item ||
       item.status !== 'active' ||
@@ -216,7 +235,7 @@ export async function replaceTransactionAllocationsForActor(
       throw new Error('Finance record not found.');
     }
   }
-  const updated = replaceTransactionAllocations(transaction, input.allocations, actor.id);
+  const updated = replaceTransactionAllocations(transaction, allocations, actor.id);
   repository.transactions[index] = updated;
   markFinanceBudgetsChangedByTransaction(repository, transaction);
   markFinanceBudgetsChangedByTransaction(repository, updated);

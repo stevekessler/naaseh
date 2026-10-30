@@ -145,15 +145,38 @@ export async function queueEncryptedBudgetMutation(input: {
     key,
     `mutation:${mutationId}`,
   );
-  await putFinanceRecordWithMutation(record, {
-    id: mutationId,
-    entityId: input.entityId,
-    entityType: input.entityType,
-    operation: input.operation ?? (input.baseVersion === 0 ? 'create' : 'update'),
-    baseVersion: input.baseVersion,
-    payload,
-    createdAt,
-    attempts: 0,
+  const parent =
+    input.entityType !== 'financeBudget'
+      ? await db.secureFinanceRecords.get(input.budgetId)
+      : undefined;
+  let updatedParent: EncryptedFinanceRecord | undefined;
+  if (parent) {
+    if (parent.version !== input.baseVersion)
+      throw new Error('The saved budget changed. Reopen it and try again.');
+    const value = (await decryptFinanceRecord(parent, key)) as Record<string, unknown>;
+    updatedParent = await encryptFinanceRecord({
+      ...parent,
+      version: input.baseVersion + 1,
+      updatedAt: createdAt,
+      value: { ...value, version: input.baseVersion + 1 },
+      key,
+    });
+  }
+  await db.transaction('rw', db.secureFinanceRecords, db.outbox, async () => {
+    if (parent && (await db.secureFinanceRecords.get(parent.id))?.version !== parent.version)
+      throw new Error('The saved budget changed. Reopen it and try again.');
+    if (updatedParent) await db.secureFinanceRecords.put(updatedParent);
+    await db.secureFinanceRecords.put(record);
+    await db.outbox.add({
+      id: mutationId,
+      entityId: input.entityId,
+      entityType: input.entityType,
+      operation: input.operation ?? (input.baseVersion === 0 ? 'create' : 'update'),
+      baseVersion: input.baseVersion,
+      payload,
+      createdAt,
+      attempts: 0,
+    });
   });
   return { mutationId, record };
 }
