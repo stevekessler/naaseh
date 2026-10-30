@@ -70,6 +70,12 @@ export function CombinedSearchPage({
     complete: false,
   });
   const [financeError, setFinanceError] = useState(false);
+  const [financeGeneration, setFinanceGeneration] = useState(0);
+  useEffect(() => {
+    const refresh = () => setFinanceGeneration((value) => value + 1);
+    window.addEventListener('finance-sync', refresh);
+    return () => window.removeEventListener('finance-sync', refresh);
+  }, []);
   const financeIndex = useRef(new FinanceSearchIndex());
   const columns = useCombinedSearchColumns();
 
@@ -99,7 +105,7 @@ export function CombinedSearchPage({
       active = false;
       financeIndex.current.clear();
     };
-  }, [loadFinanceSource]);
+  }, [loadFinanceSource, financeGeneration]);
 
   useEffect(() => {
     if (!financeProgress.complete) return;

@@ -1,3 +1,4 @@
+import { authorizedFinanceProjection, projectionDigest } from './sync-runtime.js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import {
   csvImportChunkInputSchema,
@@ -151,6 +152,8 @@ export interface UserStory1RouteDependencies {
   lambda?: Parameters<typeof dispatchSimplefinRefresh>[4];
   importFunctionName?: string;
   now?: () => Date;
+  validateAssignee?: (id: string) => Promise<void>;
+  snapshotToken?: string;
 }
 
 const bodyOf = (event: APIGatewayProxyEventV2) =>
@@ -240,6 +243,45 @@ export function registerUserStory1FinanceRoutes(
   dependencies: UserStory1RouteDependencies,
 ) {
   const { repository } = dependencies;
+  registry.register('GET', '/api/v1/finance/sync/bootstrap', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const records = authorizedFinanceProjection(repository, actor);
+    const digest = projectionDigest(records);
+    const cursor = query(event, 'cursor');
+    let offset = 0;
+    if (cursor) {
+      const parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')) as {
+        offset: number;
+        digest: string;
+      };
+      if (!Number.isSafeInteger(parsed.offset) || parsed.offset < 0 || parsed.digest !== digest)
+        throw new Error('Finance snapshot version conflict.');
+      offset = parsed.offset;
+    }
+    const page: typeof records = [];
+    let bytes = 0;
+    while (offset + page.length < records.length && page.length < 100) {
+      const record: (typeof records)[number] = records[offset + page.length]!;
+      const size = Buffer.byteLength(JSON.stringify(record));
+      if (page.length && bytes + size > 1_000_000) break;
+      page.push(record);
+      bytes += size;
+    }
+    const next = offset + page.length;
+    return json(200, {
+      records: page,
+      digest,
+      ...(dependencies.snapshotToken ? { token: dependencies.snapshotToken } : {}),
+      scopes:
+        actor.role === 'admin'
+          ? []
+          : [`OWNER#${actor.id}`, ...actor.groupMemberships.map((item) => `GROUP#${item.groupId}`)],
+      nextCursor:
+        next < records.length
+          ? Buffer.from(JSON.stringify({ offset: next, digest })).toString('base64url')
+          : null,
+    });
+  });
   registry.register('GET', '/api/v1/finance/accounts', async (event) => {
     const actor = await dependencies.actorFor(event);
     const items = [...repository.accounts.values()].filter((account) =>
@@ -690,6 +732,7 @@ export function registerUserStory1FinanceRoutes(
   registry.register('POST', '/api/v1/finance/budget-items/{budgetItemId}/tasks', async (event) => {
     const actor = await dependencies.actorFor(event);
     const input = financeTaskCreateInputSchema.parse(bodyOf(event));
+    await dependencies.validateAssignee?.(input.assigneeId);
     const requestMutationId = mutationId(event);
     const replay = repository.mutation(actor, requestMutationId);
     const result = createTaskFromFinanceBudgetItem(
@@ -1193,6 +1236,24 @@ export function registerUserStory1FinanceRoutes(
       return json(200, result);
     },
   );
+  registry.register('GET', '/api/v1/finance/connections', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const items = [...repository.connections.values()]
+      .filter(
+        (connection) =>
+          connection.scope &&
+          visible(actor, connection.scope as import('@naaseh/domain').FinanceScope, 'connect'),
+      )
+      .map((connection) => ({
+        id: connection.id,
+        scope: connection.scope,
+        provider: connection.provider,
+        status: connection.status,
+        version: connection.version,
+        lastSuccessfulAt: connection.lastSuccessfulAt,
+      }));
+    return json(200, { items });
+  });
   registry.register('POST', '/api/v1/finance/connections/simplefin/claim', async (event) => {
     const actor = await dependencies.actorFor(event);
     const input = simplefinClaimInputSchema.parse(bodyOf(event));

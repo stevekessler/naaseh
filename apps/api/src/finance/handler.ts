@@ -2,30 +2,34 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import { recordError, SafeApiError } from '../shared/http.js';
 import { problem } from '../shared/http.js';
 import { requireMutationSecurity } from '../shared/security.js';
-import { listUserMemberships } from '../groups/group-repository.js';
+import { financeActorFor } from './actor.js';
+import type { FinanceActor } from './authorization.js';
+import { commitDurableCsv, financeSnapshotToken } from './sync-runtime.js';
+import { csvImportChunkInputSchema } from '@naaseh/contracts';
+import { json } from '../shared/http.js';
+import { getRecord } from '../shared/store.js';
 import { FinanceMemoryRepository } from './repository.js';
+import { DynamoFinanceRepository } from './durable-repository.js';
 import { FinanceRouteRegistry, registerUserStory1FinanceRoutes } from './handlers.js';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
-const runtimeRepository = new FinanceMemoryRepository();
+const durable = new DynamoFinanceRepository();
 
-export function createDefaultFinanceRegistry() {
+export function createDefaultFinanceRegistry(
+  repository: FinanceMemoryRepository,
+  actor?: FinanceActor,
+  snapshotToken?: string,
+) {
   return registerUserStory1FinanceRoutes(new FinanceRouteRegistry(), {
-    repository: runtimeRepository,
-    actorFor: async (event) => {
-      const auth = (
-        event.requestContext as { authorizer?: { lambda?: { userId?: string; role?: string } } }
-      ).authorizer?.lambda;
-      const memberships = auth?.userId ? await listUserMemberships(auth.userId) : [];
-      return {
-        id: auth?.userId ?? '',
-        role: auth?.role === 'admin' ? 'admin' : 'user',
-        active: true,
-        groupMemberships: memberships
-          .filter((membership) => membership.status === 'active')
-          .map(({ groupId, role }) => ({ groupId, role })),
-      };
+    repository,
+    // Dispatch follows a durable outbox; the scheduled worker drains committed jobs.
+    lambda: { send: async () => ({}) },
+    actorFor: (event) => actor ?? financeActorFor(event),
+    ...(snapshotToken ? { snapshotToken } : {}),
+    validateAssignee: async (id) => {
+      const user = await getRecord<{ data?: { active?: boolean } }>(`USER#${id}`, 'PROFILE');
+      if (!user?.data?.active) throw new Error('Finance record not found.');
     },
     deletionSigningSecret: process.env.CURSOR_SIGNING_SECRET ?? 'local-finance-deletion-secret',
     allowedSimplefinHosts: (
@@ -40,7 +44,7 @@ export function createDefaultFinanceRegistry() {
   });
 }
 
-export function createFinanceHandler(registry = createDefaultFinanceRegistry()) {
+export function createFinanceHandler(registry?: FinanceRouteRegistry) {
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
     const correlationId = event.requestContext.requestId;
     const auth = (event.requestContext as { authorizer?: { lambda?: unknown } }).authorizer
@@ -66,15 +70,72 @@ export function createFinanceHandler(registry = createDefaultFinanceRegistry()) 
           );
         }
       }
-      const route = registry.resolve(
+      const csvAccount =
+        !registry && event.requestContext.http.method === 'POST'
+          ? /^\/api\/v1\/finance\/accounts\/([^/]+)\/csv-imports$/u.exec(event.rawPath)?.[1]
+          : undefined;
+      if (csvAccount) {
+        const input = csvImportChunkInputSchema.parse(
+          JSON.parse(
+            event.isBase64Encoded
+              ? Buffer.from(event.body ?? '', 'base64').toString('utf8')
+              : (event.body ?? '{}'),
+          ),
+        );
+        return json(
+          201,
+          await commitDurableCsv(
+            await financeActorFor(event),
+            { ...input, accountId: decodeURIComponent(csvAccount) },
+            durable,
+          ),
+        );
+      }
+      const snapshotRequest = !registry && event.rawPath === '/api/v1/finance/sync/bootstrap';
+      const snapshotActor = snapshotRequest ? await financeActorFor(event) : undefined;
+      // Ordinary task privacy can change without advancing the Finance epoch.
+      const taskPolicy = snapshotActor ? await durable.load(['financialTaskLinks']) : undefined;
+      if (
+        snapshotActor &&
+        taskPolicy?.repository.financialTaskLinks.size === 0 &&
+        event.queryStringParameters?.known ===
+          financeSnapshotToken(snapshotActor, await durable.clock())
+      )
+        return json(304, undefined);
+      const accountRoute = /^\/api\/v1\/finance\/accounts(?:\/[^/]+)?$/u.test(event.rawPath);
+      const simpleTransactionCreate =
+        event.requestContext.http.method === 'POST' &&
+        /^\/api\/v1\/finance\/accounts\/[^/]+\/transactions$/u.test(event.rawPath);
+      const collections = accountRoute || simpleTransactionCreate ? ['accounts'] : undefined;
+      const session = registry
+        ? undefined
+        : await durable.load(
+            collections,
+            `${auth.userId}:${event.headers['idempotency-key'] ?? ''}`,
+          );
+      const routes =
+        registry ??
+        createDefaultFinanceRegistry(
+          session!.repository,
+          snapshotActor,
+          snapshotActor ? financeSnapshotToken(snapshotActor, session!.version) : undefined,
+        );
+      const route = routes.resolve(
         event.requestContext.http.method,
         event.routeKey.split(' ').slice(1).join(' '),
       );
-      if (route) return await route(event);
-      const matched = registry.match(event.requestContext.http.method, event.rawPath);
-      return matched
-        ? await matched.handler({ ...event, pathParameters: matched.parameters })
+      const matched = route
+        ? { handler: route, parameters: event.pathParameters }
+        : routes.match(event.requestContext.http.method, event.rawPath);
+      const response = matched
+        ? await matched.handler({
+            ...event,
+            ...(matched.parameters ? { pathParameters: matched.parameters } : {}),
+          })
         : problem(404, 'finance_not_found', 'Finance record not found.', correlationId);
+      if (session && typeof response === 'object' && Number(response.statusCode) < 400)
+        await session.commit();
+      return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
       const mapped =

@@ -117,10 +117,14 @@ export function createApplicationApi(
     reservedConcurrentExecutions: 10,
     logGroup: options.logGroups.sync,
   });
+  const financeCredentialKey = new kms.Key(scope, 'FinanceCredentialKey', {
+    enableKeyRotation: true,
+    removalPolicy: RemovalPolicy.RETAIN,
+  });
   const financeImport = new nodejs.NodejsFunction(scope, 'FinanceImportFunction', {
     ...sharedLambdaDefaults({
       ...options.environment,
-      NAASEH_FINANCE_KMS_KEY_ARN: options.dataKey.keyArn,
+      NAASEH_FINANCE_KMS_KEY_ARN: financeCredentialKey.keyArn,
     }),
     entry: fileURLToPath(new URL('../../apps/api/src/finance/import-handler.ts', import.meta.url)),
     handler: 'handler',
@@ -133,7 +137,7 @@ export function createApplicationApi(
     ...sharedLambdaDefaults({
       ...options.environment,
       NAASEH_FINANCE_IMPORT_FUNCTION_NAME: financeImport.functionName,
-      NAASEH_FINANCE_KMS_KEY_ARN: options.dataKey.keyArn,
+      NAASEH_FINANCE_KMS_KEY_ARN: financeCredentialKey.keyArn,
     }),
     entry: fileURLToPath(new URL('../../apps/api/src/finance/handler.ts', import.meta.url)),
     handler: 'handler',
@@ -143,6 +147,15 @@ export function createApplicationApi(
     logGroup: options.logGroups.sync,
   });
   financeImport.grantInvoke(finance);
+  new events.Rule(scope, 'FinanceImportDispatchSchedule', {
+    schedule: events.Schedule.rate(Duration.minutes(1)),
+    targets: [
+      new eventTargets.LambdaFunction(financeImport, {
+        event: events.RuleTargetInput.fromObject({ dispatchPending: true }),
+      }),
+    ],
+  });
+
   const stackCompactor = new nodejs.NodejsFunction(scope, 'StackCompactorFunction', {
     ...defaults,
     entry: fileURLToPath(new URL('../../apps/api/src/ranking/stack-compactor.ts', import.meta.url)),
@@ -333,30 +346,7 @@ export function createApplicationApi(
   ];
   for (const fn of functions) {
     fn.addEnvironment('ALLOWED_ORIGINS', options.allowedOrigin);
-    if (fn === finance || fn === financeImport) {
-      // DynamoDB encrypts and decrypts table data as the service principal. Granting through
-      // Table.grantReadWriteData would also leak the table key's unrestricted KMS permissions
-      // into these roles and defeat the Finance connection-envelope encryption boundary below.
-      fn.addToRolePolicy(
-        new iam.PolicyStatement({
-          actions: [
-            'dynamodb:BatchGetItem',
-            'dynamodb:Query',
-            'dynamodb:GetItem',
-            'dynamodb:Scan',
-            'dynamodb:ConditionCheckItem',
-            'dynamodb:BatchWriteItem',
-            'dynamodb:PutItem',
-            'dynamodb:UpdateItem',
-            'dynamodb:DeleteItem',
-            'dynamodb:DescribeTable',
-          ],
-          resources: [options.table.tableArn, `${options.table.tableArn}/index/*`],
-        }),
-      );
-    } else {
-      options.table.grantReadWriteData(fn);
-    }
+    options.table.grantReadWriteData(fn);
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         effect: iam.Effect.DENY,
@@ -401,7 +391,7 @@ export function createApplicationApi(
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         actions: fn === finance ? ['kms:Encrypt'] : ['kms:Decrypt'],
-        resources: [options.dataKey.keyArn],
+        resources: [financeCredentialKey.keyArn],
         conditions: {
           StringEquals: { 'kms:EncryptionContext:purpose': 'naaseh-finance-connection' },
         },

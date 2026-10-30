@@ -1,3 +1,4 @@
+import { pullFinanceSnapshot } from './finance-runtime.js';
 import type { EntityType, StackConflictReason, Task, VectorCursor } from '@naaseh/domain';
 import {
   attachmentSchema,
@@ -405,13 +406,15 @@ async function pushMutation(
         ? 6
         : isTimerMutation || isJournalMutation
           ? 5
-          : ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
-            ? 3
-            : isStackMutation
-              ? 4
-              : ['task', 'category', 'group'].includes(mutation.entityType)
-                ? 1
-                : 2,
+          : mutation.entityType.startsWith('finance')
+            ? 7
+            : ['project', 'completionEvent', 'deletionJob'].includes(mutation.entityType)
+              ? 3
+              : isStackMutation
+                ? 4
+                : ['task', 'category', 'group'].includes(mutation.entityType)
+                  ? 1
+                  : 2,
       mutations: [wireMutation],
       ...(isStackMutation ? {} : { backlog }),
     }),
@@ -433,6 +436,15 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
     for (const item of queue) {
       try {
         const mutation = await decryptMutation(item);
+        if (item.entityType.startsWith('finance')) {
+          const parent = (mutation.payload as { budgetId?: string }).budgetId;
+          if (
+            parent &&
+            item.entityId !== parent &&
+            (await db.outbox.where('entityId').equals(parent).count())
+          )
+            continue;
+        }
         if (item.entityType === 'project') {
           const payload = mutation.payload as { categoryId?: string };
           const localProject = await db.secureProjects.get(item.entityId);
@@ -466,7 +478,11 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
               ...(result.version === undefined ? {} : { version: result.version }),
             });
           } else {
-            await markRevisionSynced(item.id, result.status === 'applied' ? 'applied' : 'replayed');
+            if (!item.entityType.startsWith('finance'))
+              await markRevisionSynced(
+                item.id,
+                result.status === 'applied' ? 'applied' : 'replayed',
+              );
             await db.outbox.delete(item.id);
           }
           continue;
@@ -510,8 +526,24 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
                   ? { ...result, reason: result.reason ?? 'validation_failed' }
                   : result,
             });
+            const financeRecord = item.entityType.startsWith('finance')
+              ? await db.secureFinanceRecords.get(item.entityId)
+              : undefined;
+            const financePayload = mutation.payload as {
+              relatedAccountIds?: string[];
+              accountId?: string;
+            };
             await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
               await db.secureConflicts.put({
+                ...(financeRecord
+                  ? {
+                      financeEntityId: item.entityId,
+                      financeScopeKey: financeRecord.scopeKey,
+                      financeAccountIds:
+                        financePayload.relatedAccountIds ??
+                        (financePayload.accountId ? [financePayload.accountId] : []),
+                    }
+                  : {}),
                 id: item.id,
                 updatedAt: new Date().toISOString(),
                 value,
@@ -547,6 +579,7 @@ export async function pullChanges(): Promise<boolean> {
   });
   if (!response.ok) throw await syncHttpResponseError('Synchronization pull', response);
   const body = (await response.json()) as {
+    financeSyncVersion?: number;
     changes: Array<{
       audience?: string;
       entityType?: string;
@@ -557,6 +590,7 @@ export async function pullChanges(): Promise<boolean> {
     }>;
     cursor: VectorCursor;
   };
+  if (body.financeSyncVersion === 1) await pullFinanceSnapshot();
   const records = [];
   const tombstones = [];
   const enhanced = [];

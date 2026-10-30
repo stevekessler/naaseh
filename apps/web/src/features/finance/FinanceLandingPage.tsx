@@ -4,7 +4,7 @@ import {
   type SimplefinConnectionView,
 } from './accounts/SimplefinConnectionPanel.js';
 import { financeRequest } from './finance-client.js';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { FinanceTransactionsPage } from './transactions/FinanceTransactionsPage.js';
 import { FinanceCategoryManager } from './catalog/FinanceCategoryManager.js';
 import { FinanceMerchantPage } from './catalog/FinanceMerchantPage.js';
@@ -22,6 +22,44 @@ export function FinanceLandingPage({
   assignableGroups: Array<{ id: string; name: string }>;
 }) {
   const [connection, setConnection] = useState<SimplefinConnectionView>();
+  const [jobId, setJobId] = useState<string>();
+  const [accountGeneration, setAccountGeneration] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void financeRequest<{ items: SimplefinConnectionView[] }>('/finance/connections')
+      .then((page) => {
+        if (active) setConnection((current) => current ?? page.items[0]);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!jobId) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const job = await financeRequest<{
+          status: NonNullable<SimplefinConnectionView['importStatus']>;
+        }>(`/finance/import-jobs/${jobId}`);
+        if (!active) return;
+        setConnection((current) => (current ? { ...current, importStatus: job.status } : current));
+        if (!['queued', 'running'].includes(job.status)) {
+          setJobId(undefined);
+          setAccountGeneration((value) => value + 1);
+        }
+      } catch {
+        /* A transient network failure is retried without changing the saved job. */
+      }
+    };
+    const timer = window.setInterval(() => void poll(), 3000);
+    void poll();
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [jobId]);
   const [view, setView] = useState<
     'accounts' | 'transactions' | 'categories' | 'merchants' | 'budgets'
   >(() => (location.pathname.startsWith('/finance/budgets') ? 'budgets' : 'accounts'));
@@ -44,6 +82,7 @@ export function FinanceLandingPage({
   const refresh = async () => {
     if (!connection) return;
     const job = await financeRequest<{
+      id: string;
       status: NonNullable<SimplefinConnectionView['importStatus']>;
     }>(`/finance/connections/${connection.id}/refresh`, {
       method: 'POST',
@@ -51,6 +90,7 @@ export function FinanceLandingPage({
       idempotencyKey: crypto.randomUUID(),
       body: '{}',
     });
+    setJobId(job.id);
     setConnection((current) => (current ? { ...current, importStatus: job.status } : current));
   };
   return (
@@ -97,6 +137,7 @@ export function FinanceLandingPage({
       {view === 'accounts' ? (
         <>
           <FinanceAccountsPage
+            key={accountGeneration}
             ownerId={ownerId}
             csrfToken={csrfToken}
             assignableGroups={assignableGroups}

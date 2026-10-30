@@ -1,3 +1,5 @@
+import { dispatchFinanceMutation } from '../finance/sync-runtime.js';
+import { financeActorFor } from '../finance/actor.js';
 import { saveSyncedTask } from './task-sync.js';
 import type {
   APIGatewayProxyEventV2,
@@ -160,6 +162,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     const listItems = (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat();
     const keyRegistry = await loadPublicKeyRegistry();
     return json(200, {
+      financeSyncVersion: 1,
       tasks: [...shared, ...owned].map((task) => taskSchema.parse(task)),
       categories: categories.map((category) => categorySchema.parse(category)),
       projects: projects.map((project) => projectSchema.parse(project)),
@@ -237,9 +240,14 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           deduped.set(key, change);
       }
     return json(200, {
-      changes: [...deduped.values()].map((change) =>
-        change.entityType === 'personalStackOperation' ? change : serializeSharedWorkChange(change),
-      ),
+      financeSyncVersion: 1,
+      changes: [...deduped.values()]
+        .filter((change) => !change.entityType?.startsWith('finance'))
+        .map((change) =>
+          change.entityType === 'personalStackOperation'
+            ? change
+            : serializeSharedWorkChange(change),
+        ),
       cursor: Object.fromEntries(
         pulled.map(({ name, after, changes }) => [name, changes.at(-1)?.sequence ?? after]),
       ),
@@ -294,6 +302,20 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       event.requestContext.requestId,
     );
   if (includesPersonalStackOperation || includesTaskTimer) pushRequestSchema.parse(parsed);
+  if (
+    body.mutations.some(
+      (mutation) =>
+        typeof mutation.entityType === 'string' && mutation.entityType.startsWith('finance'),
+    ) &&
+    Number(body.contractVersion ?? body.version ?? 0) < 7
+  ) {
+    return problem(
+      426,
+      'finance_client_upgrade_required',
+      'Refresh Naaseh before synchronizing Finance data.',
+      event.requestContext.requestId,
+    );
+  }
   const results = [];
   const serverRecordPresence = new Map<number, boolean>();
   const backlogDepth = Number(body.backlog?.depth);
@@ -310,6 +332,11 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     metric('SyncOldestPendingAge', oldestAgeSeconds, 'Seconds');
   }
   for (const [mutationIndex, mutation] of body.mutations.entries()) {
+    if (mutation.entityType?.startsWith('finance')) {
+      results.push(await dispatchFinanceMutation(await financeActorFor(event), mutation));
+      continue;
+    }
+
     recordSyncMutationAttempt({
       mutation,
       actorRole: actor.role,

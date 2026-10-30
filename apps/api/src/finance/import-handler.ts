@@ -161,13 +161,4 @@ export function createFinanceImportHandler(
   return (event) => executeFinanceImport(event, dependencies);
 }
 
-const runtimeRepository = new FinanceMemoryRepository();
-export const handler = createFinanceImportHandler({
-  repository: runtimeRepository,
-  allowedHosts: (
-    process.env.NAASEH_SIMPLEFIN_ALLOWED_HOSTS ?? 'bridge.simplefin.org,beta-bridge.simplefin.org'
-  )
-    .split(',')
-    .map((host) => host.trim().toLowerCase())
-    .filter(Boolean),
-});
+export { runDurableFinanceImport as handler } from './runtime-import.js';

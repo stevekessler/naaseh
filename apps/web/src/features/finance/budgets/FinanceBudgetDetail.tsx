@@ -1,4 +1,5 @@
-import { parseMajorUnits } from '@naaseh/domain';
+import { queueEncryptedBudgetMutation } from '../../../db/finance-repository.js';
+import { parseMajorUnits, createUlid } from '@naaseh/domain';
 import { FormEvent, useMemo, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { BudgetReconciliation } from './BudgetReconciliation.js';
@@ -123,7 +124,7 @@ export function FinanceBudgetDetail({
     }
     const plannedAmountMinor = minor * (kind === 'debit' ? -1 : 1);
     const optimistic: BudgetItemView = {
-      id: crypto.randomUUID(),
+      id: createUlid(),
       description: description.trim(),
       financeCategoryId: categoryId,
       plannedAmountMinor,
@@ -139,6 +140,29 @@ export function FinanceBudgetDetail({
     setDescription('');
     setAmount('');
     setError('');
+    if (!navigator.onLine) {
+      void queueEncryptedBudgetMutation({
+        entityId: optimistic.id,
+        entityType: 'financeBudgetItem',
+        budgetId: budget.id,
+        scopeKey: `GROUP#${budget.groupId}`,
+        baseVersion: budget.version,
+        value: { ...optimistic, budgetId: budget.id, status: 'active' },
+        command: {
+          budgetId: budget.id,
+          description: optimistic.description,
+          financeCategoryId: optimistic.financeCategoryId,
+          plannedAmountMinor,
+          currency: optimistic.currency,
+          currencyExponent: optimistic.currencyExponent,
+          relatedAccountIds: optimistic.relatedAccountIds,
+        },
+      }).catch(() => {
+        onChange(budget);
+        setError('The item could not be saved on this device.');
+      });
+      return;
+    }
     void financeRequest<BudgetItemView>(`/finance/budgets/${budget.id}/items`, {
       method: 'POST',
       csrfToken,

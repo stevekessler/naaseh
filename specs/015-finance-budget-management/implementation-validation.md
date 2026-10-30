@@ -2,7 +2,16 @@
 
 ## Foundational AWS Cost Gate
 
-**Status:** PASS — implementation may continue.
+**Status:** REASSESS BEFORE DEPLOYMENT — the production wiring supersedes the original estimate below.
+
+The dedicated Finance credential key adds $1/month before requests; the old $3.98 forecast
+therefore becomes at least $4.98 before scheduled polling and additional database reads.
+KMS rotation can add another $1/month for each of the first two rotations. Complex Finance
+operations currently load complete collections, so the 100,000-transaction reference workload
+needs measured read/compute costs and partition-scoped loading before certifying the $5 ceiling.
+No deployment is authorized by this report. Review lower-cost loading/polling alternatives and
+obtain explicit approval if the revised forecast exceeds $5. The original estimate is retained
+below as historical evidence, not a current cost certification.
 
 **Estimate date:** 2026-10-25
 **Reference scale:** two users, up to 50 accounts, 100,000 retained transactions, 20 active budgets, four refreshes per account per day, 100,000 Finance HTTP requests per month, 120,000 Lambda invocations per month, 500,000 DynamoDB transactional write units, 1,000,000 read units, 10,000 KMS operations, and 0.5 GB of additional structured logs per month.
@@ -193,5 +202,22 @@ at most ten minutes. No merge or deployment is part of this audit.
 
 The [full audit report](../../docs/testing/finance-full-code-audit.md) distinguishes corrected
 service/UI defects from the remaining production persistence, synchronization and task-integration
-release blockers. Those blockers prevent treating passing mock-backed acceptance tests as proof
-that Finance is ready for production.
+release acceptance work. The three integration blockers are implemented in the follow-up below;
+local fixtures do not establish deployed AWS behavior or production readiness.
+
+
+## Production integration follow-up
+
+The three integration blockers now have production implementations: per-record conditional DynamoDB
+persistence and resumable scheduled import dispatch, authorized encrypted Finance synchronization,
+and atomic ordinary task creation with its Finance relationship. The restore-testing validator now
+checks persisted Finance relationships. SDK-level fixtures cover cold starts, concurrent commits,
+worker handoff, sync dispatch, revocation, restore decoding and ordinary task reads. Actual AWS
+restore/deployment, large-account profiling, revised cost approval where needed, remaining UI gaps
+and human acceptance remain release gates.
+
+Required validation grows from **408 files / 1,306 tests** to **410 files / 1,330 tests**.
+The quick browser suite stays at **31 tests**; workflow membership and timeout are unchanged.
+Before: unit/integration 44.80 seconds, quick browsers 25.91 seconds. After: unit/integration
+45.90 seconds; quick browsers 26.21 seconds (31 passed). Typecheck, lint and
+workspace builds pass on Node.js 24. Hosted duration must be checked on the pushed commit.

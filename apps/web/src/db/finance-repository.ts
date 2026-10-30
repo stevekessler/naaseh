@@ -121,6 +121,7 @@ export async function queueEncryptedBudgetMutation(input: {
   scopeKey: string;
   baseVersion: number;
   value: unknown;
+  command?: unknown;
   operation?: Extract<MutationOperation, 'create' | 'update' | 'upsert' | 'archive'>;
   createdAt?: string;
   key?: CryptoKey;
@@ -139,7 +140,11 @@ export async function queueEncryptedBudgetMutation(input: {
     value: input.value,
     key,
   });
-  const payload = await encryptText(JSON.stringify(input.value), key, `mutation:${mutationId}`);
+  const payload = await encryptText(
+    JSON.stringify(input.command ?? input.value),
+    key,
+    `mutation:${mutationId}`,
+  );
   await putFinanceRecordWithMutation(record, {
     id: mutationId,
     entityId: input.entityId,

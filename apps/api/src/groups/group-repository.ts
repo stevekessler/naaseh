@@ -190,10 +190,11 @@ export async function listMemberships(groupId: string) {
   return (result.Items ?? []).map((item) => item.data as GroupMembership);
 }
 
-export async function listUserMemberships(userId: string) {
+export async function listUserMemberships(userId: string, consistentRead = false) {
   const result = await dynamodb.send(
     new QueryCommand({
       TableName: tableName,
+      ConsistentRead: consistentRead,
       KeyConditionExpression: 'PK=:pk AND begins_with(SK,:group)',
       ExpressionAttributeValues: { ':pk': `USER#${userId}`, ':group': 'GROUP#' },
     }),

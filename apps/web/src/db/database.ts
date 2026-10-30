@@ -37,6 +37,9 @@ export interface StoredCryptoKey {
 }
 export interface EncryptedEntityRecord {
   id: string;
+  financeEntityId?: string;
+  financeScopeKey?: string;
+  financeAccountIds?: string[];
   taskId?: string;
   ownerId?: string;
   projectId?: string;

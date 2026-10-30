@@ -86,10 +86,36 @@ export async function queueEncryptedCsvChunks(input: {
   batchId: string;
   scopeKey: string;
   rows: readonly unknown[];
+  duplicateReviewSummary?: ReturnType<DuplicateReview['summary']>;
   key: CryptoKey;
   createdAt?: string;
 }) {
   const createdAt = input.createdAt ?? new Date().toISOString();
+  const digest = async (value: unknown) =>
+    [
+      ...new Uint8Array(
+        await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value))),
+      ),
+    ]
+      .map((byte) => byte.toString(16).padStart(2, '0'))
+      .join('');
+  const metadata = {
+    accountId: input.accountId,
+    fileDigest: await digest(input.rows),
+    duplicateDecisionDigest: await digest(input.rows),
+    duplicateReviewSummary: input.duplicateReviewSummary ?? {
+      suspected: 0,
+      included: 0,
+      excluded: 0,
+      unresolved: 0,
+    },
+    mapping: {
+      dateColumn: 'Date',
+      descriptionColumn: 'Description',
+      dateFormat: 'YYYY-MM-DD',
+      amountMapping: { mode: 'signed', amountColumn: 'Amount' },
+    },
+  };
   const chunks = chunkReviewedRows(input.rows);
   for (const [chunkIndex, rows] of chunks.entries()) {
     const entityId = `${input.batchId}:${chunkIndex}`;
@@ -102,6 +128,7 @@ export async function queueEncryptedCsvChunks(input: {
       version: 1,
       updatedAt: createdAt,
       value: {
+        ...metadata,
         batchId: input.batchId,
         chunkIndex,
         finalChunk: chunkIndex === chunks.length - 1,
@@ -111,6 +138,7 @@ export async function queueEncryptedCsvChunks(input: {
     });
     const payload = await encryptText(
       JSON.stringify({
+        ...metadata,
         batchId: input.batchId,
         chunkIndex,
         finalChunk: chunkIndex === chunks.length - 1,

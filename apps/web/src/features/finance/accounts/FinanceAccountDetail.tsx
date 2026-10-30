@@ -139,6 +139,7 @@ export function FinanceAccountDetail({
         batchId,
         scopeKey,
         rows,
+        duplicateReviewSummary: summary,
         key: await financeDeviceKey(),
       });
       setMessage('CSV import queued securely for synchronization.');

@@ -1,3 +1,6 @@
+import { createUlid } from '@naaseh/domain';
+import { queueEncryptedBudgetMutation } from '../../../db/finance-repository.js';
+import { loadLocalFinanceBudgets } from '../../../sync/finance-local.js';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { FinanceBudgetDetail, type BudgetDetailView } from './FinanceBudgetDetail.js';
@@ -38,6 +41,16 @@ export function FinanceBudgetsPage({
   const [error, setError] = useState('');
 
   useEffect(() => {
+    if (!navigator.onLine) {
+      void loadLocalFinanceBudgets()
+        .then(({ budgets, accounts, categories }) => {
+          setBudgets(budgets);
+          setAccounts(accounts);
+          setCategories(categories);
+        })
+        .catch(() => setError('Saved budgets could not be opened.'));
+      return;
+    }
     void Promise.all([
       financeRequest<{ items: BudgetDetailView[]; cursor: string | null }>('/finance/budgets'),
       financeRequest<{ items: AccountView[] }>('/finance/accounts'),
@@ -82,6 +95,52 @@ export function FinanceBudgetsPage({
     event.preventDefault();
     setError('');
     try {
+      if (!navigator.onLine) {
+        const id = createUlid(),
+          scopeKey = `GROUP#${groupId}`;
+        const command = { groupId, name, budgetDate, startDate, endDate: endDate || null };
+        const created: BudgetDetailView = {
+          id,
+          ...command,
+          status: 'draft',
+          items: [],
+          totals: [],
+          categoryTotals: [],
+          totalsComplete: true,
+          version: 1,
+        };
+        const started = Date.now();
+        await queueEncryptedBudgetMutation({
+          entityId: id,
+          entityType: 'financeBudget',
+          budgetId: id,
+          scopeKey,
+          baseVersion: 0,
+          value: created,
+          command,
+          createdAt: new Date(started).toISOString(),
+        });
+        let version = 1;
+        for (const accountId of selectedAccounts) {
+          const linkId = createUlid();
+          await queueEncryptedBudgetMutation({
+            entityId: linkId,
+            entityType: 'financeBudgetAccountLink',
+            budgetId: id,
+            scopeKey,
+            baseVersion: version,
+            value: { id: linkId, budgetId: id, accountId, status: 'active', version: 1 },
+            command: { budgetId: id, accountId },
+            createdAt: new Date(started + version).toISOString(),
+          });
+          version++;
+        }
+        created.version = version;
+        setBudgets((current) => [...current, created]);
+        setSelectedId(id);
+        setCreating(false);
+        return;
+      }
       const created = await financeRequest<BudgetDetailView>('/finance/budgets', {
         method: 'POST',
         csrfToken,

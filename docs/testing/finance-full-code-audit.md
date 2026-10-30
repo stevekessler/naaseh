@@ -4,51 +4,49 @@ Audit scope: Finance domain rules, API handlers/services, provider and CSV inges
 components/cache/search, contracts, infrastructure and operational integration in PR 84, compared
 with base `17fc0ee4d08cb6d9c3754e48e8445a5d4e737576`. This extends the earlier security audit.
 
-**Disposition: the focused defects below are fixed, but the PR is not ready to release. Three
-production integration blockers remain.** Passing mock-backed and service tests does not establish
-that those integrations work in production. Completing them requires the larger implementation
-scope described below, rather than a cosmetic cleanup.
+**Disposition: the three production integration blockers are now implemented.** Local SDK-level
+integration tests cover cold starts, conditional commits, import handoff, sync dispatch, authorized
+client hydration and ordinary task reads. Deployment, a real AWS restore exercise, large-account
+profiling, the cost gate and the remaining UI follow-ups below are still release acceptance work.
 
-## Remaining release blockers
+## Resolved production integration blockers
 
-### P1 — Production Finance state is not durable or shared with the import worker
+### Durable Finance state and import handoff
 
-`apps/api/src/finance/handler.ts` and `apps/api/src/finance/import-handler.ts` each instantiate a
-separate `FinanceMemoryRepository`. The live paths do not call the DynamoDB persistence helpers.
-API instances can return different data, cold starts lose state, and the import worker cannot
-load a connection/job created in the API process. This also means the infrastructure backup
-selection cannot back up the Finance data users entered in those processes. The corrected
-service-level lease/version checks still need conditional durable writes when this is wired up.
+Both production entry points now use `DynamoFinanceRepository`. Canonical records, source identity
+locks, receipts, deletion previews, CSV progress and reconciliation provenance are separate table
+items. Conditional commits advance a scalar read-set epoch and atomically update changed records
+and audience feeds; there is no serialized application-wide state blob. Record size and the
+100-write transaction ceiling are enforced. Account reads/creation and simple transaction creation
+load only their required collections and receipt, rather than every retained transaction.
 
-Required completion: implement the durable repository and transactional unit of work; use it in
-both entry points; persist source identities, mutation receipts, CSV row receipts, reconciliation
-account provenance, and feed changes; verify cold-start reads, concurrent writes, API-to-worker
-handoff, and a real restore. Do not resolve this with a serialized global in-memory snapshot.
+Refresh requests persist an import-dispatch record together with the queued job. A once-per-minute
+worker drains committed jobs, acquires a durable lease, imports bounded chunks, saves progress and
+can resume after interruption. Completed deliveries are idempotent. Provider credentials use a
+separate retained KMS key, since granting table access must not grant credential decryption.
+The actual AWS Backup restore-testing path decodes and validates Finance relationships and task
+references. The integration restore exercise uses a copied database fixture; no AWS restore job
+was launched by this implementation.
 
-### P1 — Offline Finance synchronization has helpers but no end-to-end dispatcher
+### End-to-end Finance synchronization
 
-The browser can enqueue Finance commands, but `apps/web/src/sync/sync-engine.ts` does not hydrate
-Finance entities and rejects unsupported synchronized entity types. The server's production
-`apps/api/src/sync/handler.ts` has no Finance mutation/bootstrap dispatch; unhandled non-task
-mutations are rejected. `createFinanceSyncHandler`, hydration ordering and feed helpers are not
-connected to these paths. Queued edits therefore cannot complete synchronization, and the local
-Finance search/task-link stores are not populated by the production sync path.
+The production `/sync/push` dispatcher now accepts version-7 Finance commands. Offline budgets,
+links, items, reusable items and CSV imports use encrypted outbox commands with complete payloads.
+Parent commands are acknowledged before dependent writes, and transient failures remain retryable.
+Finance snapshots are authorized per viewer, paginated, validated before local replacement and
+encrypted with the device key. Current membership is read consistently. Snapshot tokens allow an
+unchanged response when no ordinary task policy needs refreshing, and include the actor's current membership/role, so revocation still
+invalidates the cache. Removed permissions purge local projections, dependent outbox work, indexed
+plaintext and tagged Finance conflicts. General content feeds do not deliver historical Finance
+payloads; current authorized Finance snapshots are the hydration boundary.
 
-Required completion: wire authorized Finance mutation dispatch, bootstrap and pull projections,
-client decryption/hydration, receipt acknowledgements, conflicts and audience revocation. Verify
-an actual browser outbox edit against the API and a second client, including membership removal.
-CSV outbox commands must include every field required by the server contract, not just rows.
+### Atomic ordinary task persistence
 
-### P1 — Financial task creation does not create an ordinary persisted task
-
-`apps/api/src/finance/task-link-service.ts` updates `repository.tasks` and appends in-memory feed
-changes. It never calls `buildFinancialTaskCreationTransaction` or the ordinary task repository.
-A successful Finance response therefore does not make the task available through normal task
-reads/synchronization. The ordinary task and Finance-only relationship must commit atomically.
-
-Required completion: use the shared task persistence/revision/feed transaction, retain separate
-audiences, validate the assignee through the normal task policy, and test creation through Finance
-followed by an ordinary task API read and a task-only viewer's sync pull.
+A Finance task command now commits the ordinary task, validated revision, ordinary mutation receipt,
+reporting/work-view projections, task audience feeds and Finance-only relationship in one database
+transaction. The assignee must still be active at commit. Ordinary task API reads use the same
+canonical task record. Finance metadata stays outside ordinary task feeds, and task-link snapshots
+require both current task access and Finance access.
 
 ## Other functional gaps to complete
 
@@ -93,14 +91,13 @@ followed by an ordinary task API read and a task-only viewer's sync pull.
 
 ## Validation
 
-Added 34 regression cases across integration, browser-component, local-cache and search tests.
-Required unit/integration suite grows from **405 files / 1,272 tests** to
-**408 files / 1,306 tests**. Browser quick-suite membership remains **31 tests**; no workflow
+The focused audit added 34 cases; production wiring adds another 24 SDK/client integration cases.
+Required unit/integration validation now contains **410 files / 1,330 tests**. Browser quick-suite membership remains **31 tests**; no workflow
 or browser-project expansion was made. The hosted target remains ten minutes with the existing
 fifteen-minute safety timeout.
 
-Before this pass, `/usr/bin/time -p npm test` passed in **45.13 seconds** and
-`/usr/bin/time -p npm run test:e2e:quick` passed in **27.72 seconds**. Final after-change timings
+Before this pass, `/usr/bin/time -p npm test` passed in **44.80 seconds** and
+`/usr/bin/time -p npm run test:e2e:quick` passed in **25.91 seconds**. Final after-change timings
 are recorded in the implementation validation notes. The hosted PR check must also be inspected
 on the pushed audit-fix commit; passing local tests alone does not establish its duration.
 

@@ -141,6 +141,7 @@ export function queueRefreshJob(
   const window = boundedRefreshWindow(connection, now);
   const job = createImportJob(jobId, connectionId, window.startDate, window.endDate);
   repository.importJobs.set(jobId, job);
+  repository.importDispatches.set(jobId, { jobId, connectionId });
   repository.connections.set(connectionId, { ...connection, lastAttemptAt: now.toISOString() });
   return job;
 }

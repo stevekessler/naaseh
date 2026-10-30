@@ -613,9 +613,10 @@ export class FinanceMemoryRepository {
   readonly csvRowReceipts = new Map<string, 'committed' | 'failed' | 'excluded'>();
   readonly sourceIdentities = new Map<string, string>();
   readonly connections = new Map<string, Record<string, unknown>>();
+  readonly importDispatches = new Map<string, { jobId: string; connectionId: string }>();
   readonly importJobs = new Map<
     string,
-    import('@naaseh/domain').ImportJob & { leaseUntil?: string }
+    import('@naaseh/domain').ImportJob & { leaseUntil?: string; providerOffset?: number }
   >();
   readonly pendingSimplefinAccounts = new Map<string, Record<string, unknown>>();
   readonly deletionPreviews = new Map<string, import('./deletion-service.js').DeletionPreview>();

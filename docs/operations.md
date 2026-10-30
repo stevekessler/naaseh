@@ -57,11 +57,15 @@ Deleting transactions never deletes categories.
 
 ## Cost guardrail
 
-At the two-user reference scale, the implemented incremental Finance design is estimated at
-**$3.98 per normal month**, below the approved **$5 per month** ceiling. Review the estimate when
-traffic, retained data, refresh frequency, alarms, or architecture changes. If the forecast exceeds
-$5, pause the change and flag the amount, cost drivers, and cheaper alternatives for Steve before
-deployment. One-time development, migration, and restore-test costs are tracked separately.
+The original $3.98/month Finance estimate is superseded by the production integration changes.
+A dedicated credential key adds $1/month before requests, leaving only $0.02 under the approved
+$5 ceiling before the scheduled worker and additional reads are counted. KMS rotation adds further
+key charges ([AWS KMS pricing](https://aws.amazon.com/kms/pricing/)). Complex operations currently
+read full collections; measure the retained-data workload and review partition-scoped loading and
+polling costs before deployment. The current design is not certified within the $5 ceiling. If the
+revised forecast exceeds $5, flag the amount, cost drivers and cheaper alternatives for Steve's
+explicit approval before deployment. One-time development, migration and restore-test costs are
+tracked separately.
 
 ## Release evidence
 
