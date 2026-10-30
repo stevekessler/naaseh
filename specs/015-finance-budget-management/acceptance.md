@@ -9,6 +9,26 @@ Both participants must pass every workflow and the clarity review. If either par
 criterion, record the observed problem and follow-up, correct the product or instructions, and rerun
 the affected workflow with that participant before marking T103 complete.
 
+## Where to run acceptance
+
+Use a running copy of the release candidate with its backend: a local test instance or a controlled
+test deployment. General release and real bank credentials are not prerequisites. `npm run dev`
+alone starts the frontend; confirm that the test API and shared data store are running too.
+Canned browser-test responses cannot establish persistence or cross-user authorization.
+
+Heather and Steve need separate test accounts, plus a shared test group with the second account
+as owner or manager. Use separate browser profiles and invented records. Reset the fixture before
+each participant's timed session. Verify that saved work survives reload and that private records
+remain hidden from the other account before starting the moderated timing.
+
+For remote sessions, use an isolated test deployment. If the first controlled deployment is used
+for acceptance, finish these checks before permitting real Finance use. Record the tested commit,
+URL/environment, and browser below; do not mark acceptance complete until both people pass.
+
+- Tested release commit:
+- Test environment / URL:
+- Backend and separate-account access verified:
+
 ## Participant 1
 
 - Date:

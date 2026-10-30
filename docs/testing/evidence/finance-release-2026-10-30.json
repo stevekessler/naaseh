@@ -1,0 +1,91 @@
+{
+  "commit": "78d3831751c64f877489a7f4e6bf16bed703128f",
+  "region": "us-west-2",
+  "startedAt": "2026-10-30T17:31:47.566Z",
+  "completedAt": "2026-10-30T17:36:24.335Z",
+  "checks": [
+    {
+      "name": "create isolated on-demand DynamoDB table",
+      "passed": true,
+      "durationMs": 16959
+    },
+    {
+      "name": "greedy-route account creation survives independent handler instances",
+      "passed": true,
+      "durationMs": 1290
+    },
+    {
+      "name": "100-row CSV request uses real atomic writes and survives replay",
+      "passed": true,
+      "durationMs": 2023
+    },
+    {
+      "name": "offline budget command reaches production sync dispatcher and replays once",
+      "passed": true,
+      "durationMs": 517
+    },
+    {
+      "name": "private accounts and dependent budget items stay absent from another member snapshot",
+      "passed": true,
+      "durationMs": 1876
+    },
+    {
+      "name": "Finance task and ordinary task API share an atomic canonical record",
+      "passed": true,
+      "durationMs": 1246
+    },
+    {
+      "name": "fresh membership removal rejects replay and clears the member authorized projection",
+      "passed": true,
+      "durationMs": 930
+    },
+    {
+      "name": "real DynamoDB conditional transaction rejects a stale writer",
+      "passed": true,
+      "durationMs": 596
+    },
+    {
+      "name": "real KMS envelope and separate persisted import worker keep provider credentials server-only",
+      "passed": true,
+      "durationMs": 4189
+    },
+    {
+      "name": "synthetic DynamoDB backup restores into an isolated table and passes the deployed Finance validator",
+      "passed": true,
+      "durationMs": 225620
+    }
+  ],
+  "restore": {
+    "durationMs": 225316,
+    "recordCount": 267,
+    "financeCounts": {
+      "financeAccount": 2,
+      "financeBalanceSnapshot": 2,
+      "financeBudgetAccountLink": 1,
+      "financeBudgetItem": 1,
+      "financeBudget": 1,
+      "financeCsvImportBatch": 1,
+      "financeTaskLink": 1,
+      "financeTransaction": 101
+    }
+  },
+  "cleanup": [
+    {
+      "resource": "naaseh-finance-verification-20261030-01a18d30-restore",
+      "status": "deleted"
+    },
+    {
+      "resource": "naaseh-finance-verification-20261030-01a18d30",
+      "status": "deleted"
+    },
+    {
+      "resource": "synthetic-backup",
+      "status": "deleted"
+    },
+    {
+      "resource": "synthetic-credential-key",
+      "status": "pending-deletion",
+      "deletionDate": "2026-11-06T17:36:24.305Z"
+    }
+  ]
+}

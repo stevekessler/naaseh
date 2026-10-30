@@ -7,7 +7,9 @@ with base `17fc0ee4d08cb6d9c3754e48e8445a5d4e737576`. This extends the earlier s
 **Disposition: the three production integration blockers are now implemented.** Local SDK-level
 integration tests cover cold starts, conditional commits, import handoff, sync dispatch, authorized
 client hydration and ordinary task reads. Deployment, a real AWS restore exercise, large-account
-profiling, the cost gate and the remaining UI follow-ups below are still release acceptance work.
+profiling and the remaining UI follow-ups below are still release acceptance work. Steve accepted
+the current Finance price on 2026-10-30; historical cost-approval requests below are superseded.
+Current verification evidence is in `finance-release-verification-2026-10-30.md`.
 
 ## Resolved production integration blockers
 

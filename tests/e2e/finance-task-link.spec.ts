@@ -85,6 +85,7 @@ test('creates a task from a budget item and navigates to the ordinary task', asy
     const request = route.request();
     const body = request.postDataJSON() as Record<string, unknown>;
     expect(body).toEqual({
+      budgetId: ids.budget,
       label: 'Pay utility bill',
       assigneeId: 'local-steve',
       dueDate: '2028-01-15',

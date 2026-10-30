@@ -2,16 +2,15 @@
 
 ## Foundational AWS Cost Gate
 
-**Status:** REASSESS BEFORE DEPLOYMENT — the production wiring supersedes the original estimate below.
+**Status:** ACCEPTED BY STEVE — current Finance design, 2026-10-30.
 
-The dedicated Finance credential key adds $1/month before requests; the old $3.98 forecast
-therefore becomes at least $4.98 before scheduled polling and additional database reads.
-KMS rotation can add another $1/month for each of the first two rotations. Complex Finance
-operations currently load complete collections, so the 100,000-transaction reference workload
-needs measured read/compute costs and partition-scoped loading before certifying the $5 ceiling.
-No deployment is authorized by this report. Review lower-cost loading/polling alternatives and
-obtain explicit approval if the revised forecast exceeds $5. The original estimate is retained
-below as historical evidence, not a current cost certification.
+Steve explicitly accepted the Finance price in the release-verification chat on 2026-10-30.
+The current design's dedicated credential key brings the historical $3.98 estimate to at least
+$4.98 before polling, database reads, and rotation charges. This acceptance resolves the additional
+price-approval gate for the reviewed design; it does not certify an exact monthly bill. Continue
+measuring usage and release-scale latency as operational evidence. The original $5 ceiling and
+estimate below are historical, superseded for this design by that acceptance.
+No merge or deployment was requested as part of this verification.
 
 **Estimate date:** 2026-10-25
 **Reference scale:** two users, up to 50 accounts, 100,000 retained transactions, 20 active budgets, four refreshes per account per day, 100,000 Finance HTTP requests per month, 120,000 Lambda invocations per month, 500,000 DynamoDB transactional write units, 1,000,000 read units, 10,000 KMS operations, and 0.5 GB of additional structured logs per month.
@@ -254,3 +253,37 @@ passed in **52.13 seconds**; `/usr/bin/time -p npm run test:e2e:quick` passed in
 After-change timings: unit/integration **48.70 seconds** (1,362 passed), quick browsers **25.81 seconds** (31 passed). Node.js 24 typecheck, lint, formatting and workspace builds passed. Hosted duration is verified on the pushed follow-up commit. The ten-minute hosted target and
 fifteen-minute safety timeout are unchanged. No merge or deployment is included, and the previously
 recorded cost/restore/scale/human acceptance gates remain open.
+
+
+## Release-path verification of the current PR (2026-10-30)
+
+Verification uses PR #84 commit `78d3831751c64f877489a7f4e6bf16bed703128f` in an isolated
+checkout. The old task-upload checkout is not the release candidate and its missing synchronization
+wiring is not a finding against this PR.
+
+GitHub's required `validate` job `124110919723`, run `41069897750`, completed successfully on
+that exact commit from 14:13:06 to 14:18:12 UTC: **5 minutes 6 seconds**. Dependency audit,
+application validation, and all required quick browser checks passed. T101 is satisfied for this
+commit; another code review is not needed merely to satisfy automated validation.
+
+Fresh Node.js 24 local checks and the remaining live-system boundaries are recorded in
+`docs/testing/finance-release-verification-2026-10-30.md`. The local storage, import, synchronization,
+permission, and restore evidence uses conditional SDK fixtures and encrypted browser data; it must
+not be described as an AWS restore drill or a production bank connection. The initial identity check found an expired SSO session; Steve refreshed it. All ten isolated
+live DynamoDB/KMS checks then passed, including a 267-record synthetic backup restored and
+validated in 225.316 seconds. Both test tables and the backup were deleted, and the temporary key
+was scheduled for deletion. Production records and deployments were not changed. This is an
+isolated DynamoDB restore exercise, not an AWS Backup Restore Testing drill on production data.
+
+Two-user acceptance remains pending. It requires a running test application with its backend,
+either local or deployed as a controlled pilot; it does not require general release to real financial
+data first. The existing browser fixtures are not a substitute for Heather and Steve completing
+the acceptance worksheet.
+
+
+Final local evidence: **411 files / 1,362 tests**, coverage thresholds, 25 Python operator checks,
+workspace builds and CDK synthesis passed. The initial 548-case browser run had 522 passes,
+20 intentional skips and six failures; all six passed in an isolated 24-case rerun after updating
+one stale task-creation request assertion. The complete Finance matrix then passed **104 of 104**
+cases in 71.27 seconds wall time. Final TypeScript, lint, formatting and whitespace checks passed.
+Required quick membership remains 31 cases; no required command or test count was expanded.

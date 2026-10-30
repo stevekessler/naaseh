@@ -55,17 +55,13 @@ available for an unreferenced draft or mistake after explicit confirmation. Larg
 existing checkpointed deletion workflow so retries cannot duplicate work or erase required history.
 Deleting transactions never deletes categories.
 
-## Cost guardrail
+## Cost acceptance
 
-The original $3.98/month Finance estimate is superseded by the production integration changes.
-A dedicated credential key adds $1/month before requests, leaving only $0.02 under the approved
-$5 ceiling before the scheduled worker and additional reads are counted. KMS rotation adds further
-key charges ([AWS KMS pricing](https://aws.amazon.com/kms/pricing/)). Complex operations currently
-read full collections; measure the retained-data workload and review partition-scoped loading and
-polling costs before deployment. The current design is not certified within the $5 ceiling. If the
-revised forecast exceeds $5, flag the amount, cost drivers and cheaper alternatives for Steve's
-explicit approval before deployment. One-time development, migration and restore-test costs are
-tracked separately.
+Steve accepted the current Finance design's price on 2026-10-30. The historical $3.98/month estimate
+is superseded: the dedicated credential key brings the baseline to at least $4.98 before polling,
+additional reads, and rotation charges. The previous request for another approval above $5 is
+resolved for this reviewed design. This is acceptance of the price, not certification of an exact
+monthly bill. Measure retained-data read volume and latency, and track actual charges in operation.
 
 ## Release evidence
 
