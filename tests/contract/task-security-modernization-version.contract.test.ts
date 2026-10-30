@@ -13,7 +13,7 @@ import {
 
 describe('feature 009 version negotiation contract', () => {
   it('uses sync v6 while retaining v5 compatibility reads', () => {
-    expect(currentSyncContractVersion).toBe(6);
+    expect(currentSyncContractVersion).toBe(7);
     expect(supportedSyncContractVersionSchema.parse(5)).toBe(5);
     expect(
       pushRequestSchema.safeParse({

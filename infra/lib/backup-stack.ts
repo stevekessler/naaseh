@@ -55,12 +55,13 @@ export function createBackupResources(
           NaasehPersonalStackSnapshots: backupControls.personalStack.snapshots,
           NaasehJournalCiphertext: 'included',
           NaasehCrisisPlanCiphertext: 'included',
+          NaasehFinanceCanonicalData: 'included',
         },
       }),
     ],
   });
 
-  // Journal entries, Crisis Plans, grants, mutation receipts, and the personal-stack operation log
+  // Journal entries, Crisis Plans, Finance records, grants, mutation receipts, and the personal-stack operation log
   // share this durable table. Selecting its ARN guarantees row-level additions cannot be omitted
   // from backup or quarterly restore testing.
   const backupSelection = plan.addSelection('CanonicalOperationsAndDurableResources', {

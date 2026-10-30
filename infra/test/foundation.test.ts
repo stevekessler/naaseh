@@ -36,8 +36,8 @@ describe('foundation infrastructure', () => {
   it('keeps the production template below the resource budget', () => {
     const resourceCount = Object.keys(template.toJSON().Resources ?? {}).length;
     expect(resourceCount).toBeLessThanOrEqual(400);
-    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 20);
-    template.resourceCountIs('AWS::Lambda::Permission', 25);
+    template.resourceCountIs('AWS::ApiGatewayV2::Integration', 21);
+    template.resourceCountIs('AWS::Lambda::Permission', 27);
   });
 
   it('keeps focused helpers inside one deployable stack', () => {
@@ -294,7 +294,7 @@ describe('foundation infrastructure', () => {
     expect(rendered).toContain('logs.us-west-2.');
     expect(rendered).toContain('AWS::URLSuffix');
     expect(rendered).toContain('Test-RestoreWorkflowLogs*');
-    template.resourceCountIs('AWS::CloudWatch::Alarm', 10);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 11);
     template.resourceCountIs('AWS::SNS::Topic', 1);
     template.resourceCountIs('AWS::SNS::TopicPolicy', 1);
     template.hasResourceProperties('AWS::SNS::Subscription', {
@@ -302,7 +302,7 @@ describe('foundation infrastructure', () => {
       Endpoint: 'alerts@example.com',
     });
     const alarms = Object.values(template.findResources('AWS::CloudWatch::Alarm'));
-    expect(alarms).toHaveLength(10);
+    expect(alarms).toHaveLength(11);
     for (const alarm of alarms) expect(alarm.Properties?.AlarmActions).toHaveLength(1);
     const [, runtimeSecretPolicyChangeAlarm] =
       Object.entries(template.findResources('AWS::CloudWatch::Alarm')).find(([logicalId]) =>

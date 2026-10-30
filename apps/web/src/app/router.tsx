@@ -3,6 +3,12 @@ import type { ReactNode } from 'react';
 export type AppRoute =
   | { section: 'tasks'; taskId?: string }
   | { section: 'search' }
+  | {
+      section: 'finance';
+      accountId?: string;
+      budgetId?: string;
+      view?: 'accounts' | 'transactions' | 'merchants' | 'budgets';
+    }
   | { section: 'lists'; listId?: string }
   | { section: 'directory' }
   | { section: 'groups' }
@@ -48,6 +54,25 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (task)
     return { section: 'tasks', ...(task[1] ? { taskId: decodeURIComponent(task[1]) } : {}) };
   if (/^\/search\/?$/.test(pathname)) return { section: 'search' };
+  const financeBudget = pathname.match(/^\/finance\/budgets(?:\/([^/]+))?\/?$/u);
+  if (financeBudget)
+    return {
+      section: 'finance',
+      view: 'budgets',
+      ...(financeBudget[1] ? { budgetId: decodeURIComponent(financeBudget[1]) } : {}),
+    };
+  const financeAccount = pathname.match(/^\/finance\/accounts(?:\/([^/]+))?\/?$/u);
+  if (financeAccount)
+    return {
+      section: 'finance',
+      view: 'accounts',
+      ...(financeAccount[1] ? { accountId: decodeURIComponent(financeAccount[1]) } : {}),
+    };
+  if (/^\/finance\/transactions\/?$/u.test(pathname))
+    return { section: 'finance', view: 'transactions' };
+  if (/^\/finance\/merchants(?:\/[^/]+)?\/?$/u.test(pathname))
+    return { section: 'finance', view: 'merchants' };
+  if (/^\/finance\/?$/u.test(pathname)) return { section: 'finance' };
   if (/^\/groups\/?$/.test(pathname)) return { section: 'groups' };
   if (/^\/directory\/?$/.test(pathname)) return { section: 'directory' };
   if (/^\/archive\/?$/.test(pathname)) return { section: 'archive' };
@@ -65,6 +90,14 @@ export function routePath(route: AppRoute): string {
     return route.listId ? `/lists/${encodeURIComponent(route.listId)}` : '/lists';
   if (route.section === 'tasks')
     return route.taskId ? `/tasks/${encodeURIComponent(route.taskId)}` : '/tasks';
+  if (route.section === 'finance')
+    return route.budgetId
+      ? `/finance/budgets/${encodeURIComponent(route.budgetId)}`
+      : route.accountId
+        ? `/finance/accounts/${encodeURIComponent(route.accountId)}`
+        : route.view
+          ? `/finance/${route.view}`
+          : '/finance';
   if (route.section === 'journal')
     return route.sharedPlanId
       ? `/journal/crisis-plans/shared/${encodeURIComponent(route.sharedPlanId)}`

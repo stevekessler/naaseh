@@ -1,5 +1,7 @@
 # Testing index
 
+- [Finance release-path verification](finance-release-verification-2026-10-30.md)
+
 - [Four-client and exactly-once results](native-four-client-results.md)
 - [Native/web interoperability](native-web-interoperability-results.md)
 - [Native platform and accessibility results](native-platform-experience-results.md)

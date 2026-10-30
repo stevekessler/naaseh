@@ -1,4 +1,20 @@
 import type { List, ListItem } from '@naaseh/domain';
+import type { CombinedSearchRow } from './combined-search.js';
+
+export function MixedSearchResultTitle({ row }: { row: CombinedSearchRow }) {
+  if (row.kind === 'transaction') {
+    return <a href={`/finance/transactions/${encodeURIComponent(row.id)}`}>{row.title}</a>;
+  }
+  if (row.kind === 'merchant') {
+    return <a href={`/finance/merchants/${encodeURIComponent(row.id)}`}>{row.title}</a>;
+  }
+  return null;
+}
+
+export function searchResultTypeLabel(kind: CombinedSearchRow['kind']) {
+  if (kind === 'listItem') return 'List item';
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
+}
 export function SearchResults({
   lists,
   items,

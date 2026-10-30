@@ -4,8 +4,29 @@ import {
   removeLocalStackMembership,
 } from '../db/personal-stack-repository.js';
 import { purgeLocalTaskTimer } from '../db/task-timer-repository.js';
+import { purgeFinanceScope } from '../db/finance-repository.js';
+import { clearFinanceSearchIndexes } from '../search/finance-index.js';
+import { clearFinanceSearchPreferences } from '../features/search/search-state.js';
 
 export const purgePrivateStackStateForSession = purgeLocalPersonalStack;
+export const purgeRevokedFinanceScope = purgeFinanceScope;
+
+/**
+ * Revocation must invalidate both durable encrypted projections and derived plaintext search
+ * state. The search index is deliberately supplied by the caller because it exists only in
+ * memory and must never become another persistent store.
+ */
+export async function purgeRevokedFinanceAudience(options: {
+  scopeKey: string;
+  purgeEncryptedScope?: (scopeKey: string) => Promise<void>;
+  clearMemorySearchIndex?: () => void | Promise<void>;
+}) {
+  await Promise.all([
+    (options.purgeEncryptedScope ?? purgeFinanceScope)(options.scopeKey),
+    (options.clearMemorySearchIndex ?? clearFinanceSearchIndexes)(),
+  ]);
+  clearFinanceSearchPreferences();
+}
 
 export async function purgeRevokedOrDeletedStackWork(
   ownerId: string,
@@ -85,4 +106,12 @@ export async function purgeAllAuthorizedData() {
   await db.transaction('rw', protectedTables, async () => {
     for (const table of protectedTables) await table.clear();
   });
+  clearFinanceSearchIndexes();
+  clearFinanceSearchPreferences();
 }
+
+/** Sign-out, explicit cache purge, and storage recovery share this plaintext boundary. */
+export const purgeFinanceSearchState = () => {
+  clearFinanceSearchIndexes();
+  clearFinanceSearchPreferences();
+};

@@ -43,6 +43,18 @@ const projectedTask = (task: Task | undefined): ProjectedWorkView | undefined =>
       }
     : undefined;
 
+/** Shared projections used by compound task commands that must commit atomically. */
+export function taskProjectionWrites(task: Task, previous?: Task) {
+  return [
+    ...workloadProjectionWrites(
+      workloadProjectionChanges(projectedTask(previous), projectedTask(task)),
+    ),
+    ...workViewProjectionWrites(
+      workViewProjectionChanges(projectedTask(previous), projectedTask(task)),
+    ),
+  ];
+}
+
 export interface StoredTaskMutationResult {
   mutationId: string;
   status: 'applied';

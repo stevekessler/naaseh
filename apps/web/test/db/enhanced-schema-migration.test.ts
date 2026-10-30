@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { enhancedEncryptedStores, planEnhancedSchemaMigration } from '../../src/db/schema.js';
+import {
+  currentSchemaVersion,
+  enhancedEncryptedStores,
+  planEnhancedSchemaMigration,
+} from '../../src/db/schema.js';
 
 describe('enhanced encrypted database migration', () => {
   it('adds every enhanced encrypted store without dropping the outbox', () => {
@@ -13,25 +17,26 @@ describe('enhanced encrypted database migration', () => {
         'secureProjects',
         'secureCompletionEvents',
         'secureDeletionJobs',
+        'secureFinanceRecords',
       ]),
     );
     expect(planEnhancedSchemaMigration(6)).toMatchObject({
       from: 6,
-      to: 15,
+      to: currentSchemaVersion,
       preserveOutbox: true,
       storesToDelete: ['secureGoogleSync'],
     });
   });
 
   it('is idempotent and blocks unsupported future schemas', () => {
-    expect(planEnhancedSchemaMigration(15)).toEqual({
-      from: 15,
-      to: 15,
+    expect(planEnhancedSchemaMigration(currentSchemaVersion)).toEqual({
+      from: currentSchemaVersion,
+      to: currentSchemaVersion,
       preserveOutbox: true,
       preservedStores: ['settings', 'cryptoKeys', 'outbox', 'secureConflicts'],
       storesToAdd: [],
       storesToDelete: [],
     });
-    expect(() => planEnhancedSchemaMigration(16)).toThrow('newer');
+    expect(() => planEnhancedSchemaMigration(currentSchemaVersion + 1)).toThrow('newer');
   });
 });

@@ -21,6 +21,7 @@ const chromiumJourneys = [
   'journal-full.spec.ts',
   'crisis-plan-sharing.spec.ts',
   'crisis-plan-connectivity.spec.ts',
+  'finance-quick.spec.ts',
 ];
 
 export default defineConfig({

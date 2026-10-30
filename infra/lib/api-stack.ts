@@ -117,6 +117,45 @@ export function createApplicationApi(
     reservedConcurrentExecutions: 10,
     logGroup: options.logGroups.sync,
   });
+  const financeCredentialKey = new kms.Key(scope, 'FinanceCredentialKey', {
+    enableKeyRotation: true,
+    removalPolicy: RemovalPolicy.RETAIN,
+  });
+  const financeImport = new nodejs.NodejsFunction(scope, 'FinanceImportFunction', {
+    ...sharedLambdaDefaults({
+      ...options.environment,
+      NAASEH_FINANCE_KMS_KEY_ARN: financeCredentialKey.keyArn,
+    }),
+    entry: fileURLToPath(new URL('../../apps/api/src/finance/import-handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    timeout: Duration.minutes(2),
+    reservedConcurrentExecutions: 1,
+    logGroup: options.logGroups.sync,
+  });
+  const finance = new nodejs.NodejsFunction(scope, 'FinanceApiFunction', {
+    ...sharedLambdaDefaults({
+      ...options.environment,
+      NAASEH_FINANCE_IMPORT_FUNCTION_NAME: financeImport.functionName,
+      NAASEH_FINANCE_KMS_KEY_ARN: financeCredentialKey.keyArn,
+    }),
+    entry: fileURLToPath(new URL('../../apps/api/src/finance/handler.ts', import.meta.url)),
+    handler: 'handler',
+    memorySize: 512,
+    timeout: Duration.seconds(30),
+    reservedConcurrentExecutions: 5,
+    logGroup: options.logGroups.sync,
+  });
+  financeImport.grantInvoke(finance);
+  new events.Rule(scope, 'FinanceImportDispatchSchedule', {
+    schedule: events.Schedule.rate(Duration.minutes(1)),
+    targets: [
+      new eventTargets.LambdaFunction(financeImport, {
+        event: events.RuleTargetInput.fromObject({ dispatchPending: true }),
+      }),
+    ],
+  });
+
   const stackCompactor = new nodejs.NodejsFunction(scope, 'StackCompactorFunction', {
     ...defaults,
     entry: fileURLToPath(new URL('../../apps/api/src/ranking/stack-compactor.ts', import.meta.url)),
@@ -302,6 +341,8 @@ export function createApplicationApi(
     attachmentReconcile,
     exportCoordinator,
     deletion.apiHandler,
+    finance,
+    financeImport,
   ];
   for (const fn of functions) {
     fn.addEnvironment('ALLOWED_ORIGINS', options.allowedOrigin);
@@ -346,6 +387,21 @@ export function createApplicationApi(
   options.dataKey.grantEncryptDecrypt(task);
   options.dataKey.grantEncryptDecrypt(ranking);
   options.dataKey.grantEncryptDecrypt(stackCompactor);
+  for (const fn of [finance, financeImport])
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: fn === finance ? ['kms:Encrypt'] : ['kms:Decrypt'],
+        resources: [financeCredentialKey.keyArn],
+        conditions: {
+          StringEquals: { 'kms:EncryptionContext:purpose': 'naaseh-finance-connection' },
+        },
+      }),
+    );
+  finance.addEnvironment(
+    'FINANCE_DELETION_STATE_MACHINE_ARN',
+    deletion.stateMachine.stateMachineArn,
+  );
+  deletion.stateMachine.grantStartExecution(finance);
   options.recoveryWrappingKey.grant(sync, 'kms:GetPublicKey');
   options.manifestSigningKey.grant(sync, 'kms:GetPublicKey', 'kms:Sign');
   options.media.grantReadWrite(task);
@@ -574,6 +630,24 @@ export function createApplicationApi(
   route('SyncIntegration', '/api/v1/sync/push', [apigwv2.HttpMethod.POST], sync);
   route('SyncPullIntegration', '/api/v1/sync/pull', [apigwv2.HttpMethod.POST], sync);
   route('SyncBootstrapIntegration', '/api/v1/sync/bootstrap', [apigwv2.HttpMethod.GET], sync);
+  route(
+    'FinanceRootIntegration',
+    '/api/v1/finance',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.POST],
+    finance,
+  );
+  route(
+    'FinanceProxyIntegration',
+    '/api/v1/finance/{proxy+}',
+    [
+      apigwv2.HttpMethod.GET,
+      apigwv2.HttpMethod.POST,
+      apigwv2.HttpMethod.PUT,
+      apigwv2.HttpMethod.PATCH,
+      apigwv2.HttpMethod.DELETE,
+    ],
+    finance,
+  );
   route(
     'WebShellRecoveryIntegration',
     '/api/v1/client/recover-shell',
@@ -829,6 +903,8 @@ export function createApplicationApi(
       auth,
       authCalibration,
       sync,
+      finance,
+      financeImport,
       ranking,
       stackCompactor,
       group,

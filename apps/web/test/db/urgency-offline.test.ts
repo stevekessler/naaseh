@@ -1,3 +1,4 @@
+import { queueEncryptedBudgetMutation } from '../../src/db/finance-repository.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Row = Record<string, any>;
@@ -17,6 +18,7 @@ const state = vi.hoisted(() => ({
   conflicts: new Map<string, Row>(),
   settings: new Map<string, Row>(),
   cryptoKeys: new Map<string, Row>(),
+  financeRecords: new Map<string, Row>(),
 }));
 
 const database = vi.hoisted(() => {
@@ -82,6 +84,7 @@ const database = vi.hoisted(() => {
     secureListItems: table(state.listItems),
     outbox: table(state.outbox),
     secureConflicts: table(state.conflicts),
+    secureFinanceRecords: table(state.financeRecords),
     settings: table(state.settings, 'key'),
     cryptoKeys: table(state.cryptoKeys),
   };
@@ -402,3 +405,33 @@ describe('offline Task/List urgency persistence', () => {
     expect(await listConflicts()).toHaveLength(1);
   });
 });
+
+it.each(['applied', 'conflict', 'rejected'] as const)(
+  'invalidates the Finance snapshot token atomically when a command is %s',
+  async (status) => {
+    await queueEncryptedBudgetMutation({
+      entityId: 'budget',
+      entityType: 'financeBudget',
+      budgetId: 'budget',
+      scopeKey: 'GROUP#group',
+      baseVersion: 0,
+      value: { id: 'budget', groupId: 'group', name: 'Local' },
+    });
+    state.settings.set('finance-snapshot-token', { key: 'finance-snapshot-token', value: 'T' });
+    vi.mocked(fetch).mockImplementationOnce(async (_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify({
+          results: body.mutations.map((mutation: { id: string }) => ({
+            mutationId: mutation.id,
+            status,
+          })),
+        }),
+      );
+    });
+    await drainOutbox('csrf');
+    expect(state.outbox.size).toBe(0);
+    expect(state.settings.has('finance-snapshot-token')).toBe(false);
+    expect(state.conflicts.size).toBe(status === 'applied' ? 0 : 1);
+  },
+);

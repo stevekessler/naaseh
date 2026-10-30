@@ -1,3 +1,5 @@
+import { decodeFinanceValue } from '../finance/storage-codec.js';
+import { validateFinanceRestore, type FinanceRestoreRow } from './restore-validator.js';
 import {
   BackupClient,
   DescribeRestoreJobCommand,
@@ -417,6 +419,7 @@ export type RestoredItem = {
   GSI1PK?: unknown;
   GSI1SK?: unknown;
   data?: unknown;
+  value?: unknown;
   count?: unknown;
 };
 
@@ -501,6 +504,76 @@ async function readDynamoItems(tableName: string, client: CommandClient) {
   return items;
 }
 
+/** Uses the same decoder and relationship checks for actual AWS Backup table restores. */
+export function validateDurableFinanceRestore(items: RestoredItem[]) {
+  const financeRows: FinanceRestoreRow[] = [];
+  const collections: Record<string, FinanceRestoreRow['entityType']> = {
+    accounts: 'financeAccount',
+    balanceSnapshots: 'financeBalanceSnapshot',
+    transactions: 'financeTransaction',
+    csvBatches: 'financeCsvImportBatch',
+    budgets: 'financeBudget',
+    budgetAccountLinks: 'financeBudgetAccountLink',
+    budgetItems: 'financeBudgetItem',
+    financialTaskLinks: 'financeTaskLink',
+    budgetReconciliations: 'financeReconciliation',
+  };
+  const stored = items
+    .filter(
+      (item) =>
+        item.PK === 'FINANCE#RECORDS' &&
+        typeof item.SK === 'string' &&
+        item.SK.startsWith('RECORD#'),
+    )
+    .map((item) => ({
+      collection: String(item.SK).split('#')[1]!,
+      key: decodeURIComponent(String(item.SK).split('#')[2]!),
+      data: decodeFinanceValue(String(item.value)),
+    }));
+  for (const row of stored) {
+    const type = collections[row.collection];
+    if (!type) continue;
+    const data = row.data as Record<string, unknown>;
+    if (type === 'financeCsvImportBatch')
+      data.committedOrdinals = stored
+        .filter(
+          (receipt) =>
+            receipt.collection === 'csvRowReceipts' &&
+            receipt.data === 'committed' &&
+            receipt.key.startsWith(`${String(data.accountId)}:${String(data.id)}:`),
+        )
+        .map((receipt) => Number(receipt.key.split(':').at(-1)));
+    financeRows.push({ entityType: type, id: String(data.id), data });
+  }
+  for (const membership of stored.filter((row) => row.collection === 'budgetItemMemberships')) {
+    const link = membership.data as { budgetId?: string; budgetItemId?: string };
+    if (
+      !financeRows.some((row) => row.entityType === 'financeBudget' && row.id === link.budgetId) ||
+      !financeRows.some(
+        (row) => row.entityType === 'financeBudgetItem' && row.id === link.budgetItemId,
+      )
+    )
+      throw new Error('Restored Finance membership is inconsistent.');
+  }
+  const financeIntegrity = validateFinanceRestore(financeRows);
+  const taskIds = new Set(
+    items
+      .filter(
+        (item) =>
+          typeof item.PK === 'string' && item.PK.startsWith('TASK#') && item.SK === 'CURRENT',
+      )
+      .map((item) => String(item.PK).slice(5)),
+  );
+  if (
+    !financeIntegrity.passed ||
+    financeRows.some(
+      (row) => row.entityType === 'financeTaskLink' && !taskIds.has(String(row.data.taskId)),
+    )
+  )
+    throw new Error('Restored Finance relationships are inconsistent.');
+  return financeIntegrity;
+}
+
 export async function validateRestoredInventory(
   items: RestoredItem[],
   evidence: z.infer<typeof restoreEvidenceSchema>,
@@ -524,6 +597,7 @@ export async function validateRestoredInventory(
   if (!(await dependencies.verifyManifest(manifest, dependencies.manifestSigningKeyId)))
     throw new Error('Restored backup manifest signature or hash is invalid.');
 
+  const financeIntegrity = validateDurableFinanceRestore(items);
   const actualCounts = countRestoredEntities(items);
   const enhancedIntegrity = validateEnhancedRecoveryRows(items);
   const personalStackRows = items
@@ -593,6 +667,7 @@ export async function validateRestoredInventory(
     recoveryWrapVersions: [...observedVersions].sort(),
     manifestVerified: true as const,
     enhancedIntegrity,
+    financeIntegrity,
     personalStackIntegrity: {
       canonicalOperationsVerified: true as const,
       snapshotsRebuildable: true as const,
@@ -793,7 +868,8 @@ function countRestoredEntities(items: RestoredItem[]) {
   for (const item of items) {
     const pk = typeof item.PK === 'string' ? item.PK : '';
     const sk = typeof item.SK === 'string' ? item.SK : '';
-    if (pk.startsWith('TASK#') && sk === 'CURRENT') {
+    if (pk === 'FINANCE#RECORDS' && sk.startsWith('RECORD#')) add('financerecords');
+    else if (pk.startsWith('TASK#') && sk === 'CURRENT') {
       add('tasks');
       const task = taskSchema.safeParse(item.data);
       if (task.success && task.data.memoHidden) add('hiddenmemos');

@@ -181,6 +181,126 @@
   gap: 0.4rem;
   font-weight: 650;
 }
+
+.finance-budgets > header,
+.finance-budget-detail > header,
+.finance-reusable-items > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.finance-budget-list,
+.finance-budget-items,
+.finance-budget-totals,
+.finance-budget-categories,
+.finance-reusable-list,
+.finance-match-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+  margin-block: 1rem;
+}
+.finance-budget-list article,
+.finance-budget-items article,
+.finance-budget-totals section,
+.finance-budget-categories section,
+.finance-reusable-list article,
+.finance-match-list article {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1rem;
+  background: white;
+}
+
+.finance-budget-reconciliation {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--border-color, #d6d6d6);
+  border-radius: 0.75rem;
+}
+
+.finance-budget-reconciliation > header,
+.finance-reconciliation-history li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.finance-reconciliation-reasons {
+  margin-block: 0.75rem;
+}
+
+.finance-reconciliation-history {
+  display: grid;
+  gap: 0.5rem;
+  padding-left: 1.25rem;
+}
+
+@media (max-width: 40rem) {
+  .finance-budget-reconciliation > header,
+  .finance-reconciliation-history li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+.finance-budget-totals dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.finance-budgets dialog,
+.finance-budget-detail dialog,
+.finance-reusable-items dialog {
+  position: fixed;
+  inset: 1rem;
+  box-sizing: border-box;
+  width: min(42rem, calc(100vw - 2rem));
+  height: fit-content;
+  margin: auto;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+.finance-budgets dialog form,
+.finance-budget-detail dialog form,
+.finance-reusable-items dialog form,
+.finance-transaction-matches form {
+  display: grid;
+  gap: 0.8rem;
+}
+.finance-budgets dialog label,
+.finance-budget-detail dialog label,
+.finance-reusable-items dialog label,
+.finance-transaction-matches label {
+  display: grid;
+  gap: 0.35rem;
+}
+.finance-budget-account-option {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  display: grid;
+  gap: 0.5rem;
+}
+.finance-budget-account-option label {
+  display: contents !important;
+}
+@media (max-width: 520px) {
+  .finance-budgets > header,
+  .finance-budget-detail > header,
+  .finance-reusable-items > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .finance-budget-account-option {
+    grid-template-columns: auto 1fr;
+  }
+  .finance-budget-account-option span {
+    grid-column: 2;
+  }
+}
 .task-quick-fields {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1875,6 +1995,32 @@ main {
   color: var(--muted);
   font-size: 0.86rem;
   white-space: nowrap;
+}
+.combined-search-types {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 52rem;
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #f8faf8;
+}
+.combined-search-types > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.1rem;
+}
+.combined-search-types label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: var(--control-min-size);
+}
+.combined-search-types > label {
+  display: grid;
+  align-items: start;
+  max-width: 24rem;
 }
 .combined-search-toolbar {
   margin-block-end: -1rem;

@@ -1,0 +1,171 @@
+# PR 84 full code audit
+
+Audit scope: Finance domain rules, API handlers/services, provider and CSV ingestion, browser
+components/cache/search, contracts, infrastructure and operational integration in PR 84, compared
+with base `17fc0ee4d08cb6d9c3754e48e8445a5d4e737576`. This extends the earlier security audit.
+
+**Disposition: the three production integration blockers are now implemented.** Local SDK-level
+integration tests cover cold starts, conditional commits, import handoff, sync dispatch, authorized
+client hydration and ordinary task reads. Deployment, a real AWS restore exercise, large-account
+profiling and the remaining UI follow-ups below are still release acceptance work. Steve accepted
+the current Finance price on 2026-10-30; historical cost-approval requests below are superseded.
+Current verification evidence is in `finance-release-verification-2026-10-30.md`.
+
+## Resolved production integration blockers
+
+### Durable Finance state and import handoff
+
+Both production entry points now use `DynamoFinanceRepository`. Canonical records, source identity
+locks, receipts, deletion previews, CSV progress and reconciliation provenance are separate table
+items. Conditional commits advance a scalar read-set epoch and atomically update changed records
+and audience feeds; there is no serialized application-wide state blob. Record size and the
+100-write transaction ceiling are enforced. Account reads/creation and simple transaction creation
+load only their required collections and receipt, rather than every retained transaction.
+
+Refresh requests persist an import-dispatch record together with the queued job. A once-per-minute
+worker drains committed jobs, acquires a durable lease, imports bounded chunks, saves progress and
+can resume after interruption. Completed deliveries are idempotent. Provider credentials use a
+separate retained KMS key, since granting table access must not grant credential decryption.
+The actual AWS Backup restore-testing path decodes and validates Finance relationships and task
+references. The integration restore exercise uses a copied database fixture; no AWS restore job
+was launched by this implementation.
+
+### End-to-end Finance synchronization
+
+The production `/sync/push` dispatcher now accepts version-7 Finance commands. Offline budgets,
+links, items, reusable items and CSV imports use encrypted outbox commands with complete payloads.
+Parent commands are acknowledged before dependent writes, and transient failures remain retryable.
+Finance snapshots are authorized per viewer, paginated, validated before local replacement and
+encrypted with the device key. Current membership is read consistently. Snapshot tokens allow an
+unchanged response when no ordinary task policy needs refreshing, and include the actor's current membership/role, so revocation still
+invalidates the cache. Removed permissions purge local projections, dependent outbox work, indexed
+plaintext and tagged Finance conflicts. General content feeds do not deliver historical Finance
+payloads; current authorized Finance snapshots are the hydration boundary.
+
+### Atomic ordinary task persistence
+
+A Finance task command now commits the ordinary task, validated revision, ordinary mutation receipt,
+reporting/work-view projections, task audience feeds and Finance-only relationship in one database
+transaction. The assignee must still be active at commit. Ordinary task API reads use the same
+canonical task record. Finance metadata stays outside ordinary task feeds, and task-link snapshots
+require both current task access and Finance access.
+
+## Other functional gaps to complete
+
+- `updateManualTransaction` and `completeSimplefinAccountIdentity` have service implementations but
+  no registered HTTP routes. The corresponding correction and incomplete-provider-identity flows
+  cannot be completed through the public API.
+- Account and transaction removal components currently render impact previews without a final
+  confirmation action. The secured deletion endpoints exist, but these UI journeys stop early.
+- The router recognizes account/transaction/merchant Finance deep links, while the landing page
+  initializes only the budget deep-link view. Direct links and browser navigation need end-to-end
+  coverage rather than assuming route parsing alone opens the requested record.
+- The account-transaction endpoint and merchant activity endpoint still return unbounded arrays.
+  `listFinanceTransactionPage` is not used by the route. A large imported account can exceed API
+  response/memory limits; wire pagination together with client consumption before claiming the
+  large-account acceptance target.
+- Several Finance dashboard metrics have no corresponding producer in the live services. Alarms
+  and the backup selection alone do not establish operational coverage for unpersisted data.
+
+## Fixed findings
+
+| Area                   | Failure before this pass                                                                                               | Result                                                                                                      |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| API routing            | API Gateway supplies a catch-all route key, while the registry expected an exact template                              | Matches the real path and extracts decoded parameters                                                       |
+| Request handling       | Base64 bodies were parsed as JSON text; request bodies/receipt keys had no local bound                                 | Decodes bodies and bounds request size and idempotency key length                                           |
+| Mutation replay        | Receipts were returned before fresh access checks                                                                      | Rechecks current account, group, budget-item, transaction and connection permissions for cached values      |
+| Matching/task links    | A group member could reference an item that also involves an inaccessible private account                              | Checks every related account before suggesting, allocating or revealing a link                              |
+| Identity completion    | Permission to assign a new account did not prove access to the original provider connection                            | Requires original-connection and destination-scope access                                                   |
+| Manual balances        | Moving a transaction across the balance date kept the old contribution; provisional entries changed provider balances  | Applies safe integer deltas using both old/new dates; provider balances stay authoritative                  |
+| Balance history        | An older snapshot could move the effective baseline date backwards; archived transactions were counted                 | Keeps the latest baseline and excludes inactive contributions                                               |
+| Provider refresh       | Existing account balances and repeated transaction identities were never updated                                       | Updates snapshots/effective values while preserving classifications and immutable entry evidence            |
+| Provider identity      | Source locks were keyed by remote provider IDs rather than the local Bridge connection                                 | Isolates otherwise identical provider identities across Bridge connections                                  |
+| Refresh lifecycle      | Completed deliveries repeated work, active leases could run twice, windows repeatedly requested the initial history    | Makes terminal delivery idempotent, checks job/connection binding and leases, advances the five-day overlap |
+| Import failure         | Raw errors could enter Lambda logs; a connection revoked during a request could be resurrected                         | Throws sanitized classifications and checks current connection state before importing/updating              |
+| Streaming bounds       | Provider bodies were fully buffered before enforcing their byte limit                                                  | Counts streamed bytes and cancels oversized bodies                                                          |
+| CSV retry/finalization | Failed review claimed a file receipt; changed chunk contents replayed silently; final chunks could finish out of order | Claims receipts after review, checks chunk content, tracks missing chunks and recoverable invalid dates     |
+| CSV UI                 | Excluded duplicates were still submitted and large online files exceeded the 100-row endpoint limit                    | Applies include/exclude decisions and sends bounded chunks                                                  |
+| Browser revocation     | Pending optimistic state could override a tombstone; in-flight indexing could repopulate removed accounts              | Deletes dependent pending mutations and stops stale indexing generations                                    |
+| Catalog deletion       | Confirmation skipped creator/admin checks for permanent deletion and did not recheck new references                    | Rechecks permissions/references immediately before mutation; preserves referenced records                   |
+| Money entry            | Floating-point multiplication rejected ordinary values such as 0.29                                                    | Uses exact decimal parsing with currency precision                                                          |
+| Save feedback          | Failed budget-item requests were described as saved locally; account linking raced subsequent edits                    | Rolls back failed optimistic items and awaits account linking/refreshes the version                         |
+| Cleanup                | Allocation code contained an impossible condition; CSV workers could outlive their component/file selection            | Removes the dead branch and terminates or supersedes stale workers                                          |
+
+## Validation
+
+The focused audit added 34 cases; production wiring adds another 24 SDK/client integration cases.
+Required unit/integration validation now contains **410 files / 1,330 tests**. Browser quick-suite membership remains **31 tests**; no workflow
+or browser-project expansion was made. The hosted target remains ten minutes with the existing
+fifteen-minute safety timeout.
+
+Before this pass, `/usr/bin/time -p npm test` passed in **44.80 seconds** and
+`/usr/bin/time -p npm run test:e2e:quick` passed in **25.91 seconds**. Final after-change timings
+are recorded in the implementation validation notes. The hosted PR check must also be inspected
+on the pushed audit-fix commit; passing local tests alone does not establish its duration.
+
+These checks test the fixed services and browser behaviors. They are not a deployed penetration
+test or a substitute for the remaining production integration and two-user acceptance work.
+
+## Additional review remediation: shared items and recovery
+
+The additional review's six findings are addressed. Budget item definitions are shared through
+separate budget memberships: linking an existing item never overwrites its definition, and shared
+edits validate access to every participating budget and update each budget version. An explicit
+transaction allocation budget prevents counting one transaction in multiple budgets. Older
+allocations retain their original budget attribution. Reusing an existing account-link or transaction
+identifier is rejected. A shared definition remains active when another participating budget is
+archived, and restore validation checks its membership references.
+
+The next authorized Finance sync refreshes mounted screens when their accessible account, budget,
+item or task-link set changes. Authentication failure also clears the Finance cache token and
+invalidates the mounted view. Budget item entry uses only active linked accounts of the item's
+currency. Missing account currency defaults to USD in domain/API/provider input; explicit currencies
+remain authoritative.
+
+Provider imports retain SHA-256 receipts for canonical row contents, committed atomically with
+imported rows. Resumption examines the fetched response against these receipts rather than skipping
+a numerical offset. Newly inserted, reordered and corrected rows are processed; already committed
+unchanged rows are skipped. Incomplete-identity pending rows are accumulated across chunks.
+Transient database conflicts retain the dispatch and durable progress, reload state and retry with
+bounded exponential backoff (up to five transient failures). Permanent errors and exhausted retries
+remain visible failures. Hashes make retries idempotent; they do not replace retry scheduling.
+
+Offline child mutations and the parent's optimistic version are written in one local transaction.
+A reopen therefore restores the version needed for the next queued command, and snapshot hydration
+preserves the optimistic parent while its children are pending. Sharing and editing shared items
+currently use online commands.
+
+This pass adds 20 regression cases: required validation becomes **411 files / 1,350 tests**.
+The required browser quick suite remains **31 tests**. Before-change measured timings were
+48.68 seconds for unit/integration and 28.38 seconds for browser quick validation. Final timings
+are recorded in the implementation validation notes. The earlier $5/month deployment cost review,
+real AWS restore exercise, large-account profiling and human acceptance remain open.
+
+## Additional recovery and stale-match fixes
+
+Four subsequent P2 findings are corrected:
+
+- Provider row receipts now distinguish deferred from imported rows. A bare legacy hash is replayed
+  once instead of being trusted as proof of import. When identity becomes complete, retained pending
+  rows are merged with the provider response; pending rows omitted by that later response are still
+  recovered. Each bounded chunk clears only its own committed rows, including corrections to existing
+  source identities. The job's final attention count reflects remaining pending identities.
+- A snapshot token is not retained while optimistic records are protected from replacement. Successful,
+  rejected and conflicting Finance command removal also invalidates the token in the same local
+  transaction. The next pull therefore replaces rejected creations/updates and restores canonical
+  parent versions instead of accepting an unchanged response for a divergent cache.
+- A running import tracks its connection and survives changes to the accessible Finance record set
+  and transient polling failures. Losing connection-management rights alone does not prove that job
+  read access was revoked. Confirmed authentication/access failure, explicit connection revocation or
+  normal job completion ends polling.
+- Match authorization rechecks current item membership in the selected budget before receipt replay
+  or acceptance. Removing budget memberships through archiving invalidates outstanding suggestions;
+  reactivation cannot resurrect them. Membership checks also protect suggestions that were not
+  previously invalidated and changed-transaction revalidation.
+
+Twelve new cases cover these failures and their recovery boundaries. Required validation grows from
+**411 files / 1,350 tests** to **411 files / 1,362 tests**. The required quick browser suite remains
+**31 tests**, with unchanged workflow membership and timeout. Measured before timings were 52.13
+seconds for unit/integration and 28.86 seconds for quick browsers; final local and hosted evidence is
+recorded with this PR. Existing deployment cost review, real AWS restore, large-account profiling and
+human acceptance requirements remain open.
