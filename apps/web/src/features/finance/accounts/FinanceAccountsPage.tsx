@@ -49,7 +49,9 @@ export function FinanceAccountsPage({
     try {
       openingBalanceMinor = parseMajorUnits(openingBalance, 'USD');
     } catch {
-      setError('Enter an exact opening balance.');
+      setError(
+        'Enter an opening balance with at most 2 decimal places, between -90,071,992,547,409.91 and 90,071,992,547,409.91. Use a period for decimals and no commas or currency symbols.',
+      );
       return;
     }
     setSaving(true);

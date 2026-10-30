@@ -60,7 +60,8 @@ it.each(['0.29', '1.001', '1e3'])('handles exact decimal account entry: %s', asy
       expect(JSON.parse(String(call![1]!.body)).openingBalanceMinor).toBe(29);
     });
   else {
-    expect(screen.getByRole('alert').textContent).toContain('exact');
+    expect(screen.getByRole('alert').textContent).toContain('at most 2 decimal places');
+    expect(screen.getByRole('alert').textContent).toContain('90,071,992,547,409.91');
     expect(
       vi.mocked(financeRequest).mock.calls.filter(([, options]) => options?.method === 'POST'),
     ).toHaveLength(0);

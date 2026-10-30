@@ -680,3 +680,66 @@ describe('Finance US1 HTTP routes', () => {
     expect(conflict.body).not.toMatch(/Utilities|Checking|-4500/u);
   });
 });
+
+it('lets an administrator create and synchronize their own and managed-group accounts only', async () => {
+  const repository = new FinanceMemoryRepository();
+  const groupId = '01J00000000000000000000001';
+  const memberGroupId = '01J00000000000000000000002';
+  const administrator = {
+    ...actor,
+    role: 'admin' as const,
+    groupMemberships: [
+      { groupId, role: 'owner' as const },
+      { groupId: memberGroupId, role: 'member' as const },
+    ],
+  };
+  const handler = createFinanceHandler(
+    registerUserStory1FinanceRoutes(new FinanceRouteRegistry(), {
+      repository,
+      actorFor: () => administrator,
+      deletionSigningSecret: 'test-secret',
+      allowedSimplefinHosts: [],
+    }),
+  );
+  const scopes = [
+    { type: 'owner', ownerId: actor.id },
+    { type: 'group', groupId },
+    { type: 'owner', ownerId: 'someone-else' },
+    { type: 'group', groupId: memberGroupId },
+    { type: 'group', groupId: '01J00000000000000000000003' },
+  ];
+  for (const [index, scope] of scopes.entries()) {
+    const event = request('POST', '/api/v1/finance/accounts', {
+      scope,
+      sourceName: 'Checking',
+      organizationName: 'Test',
+      accountType: 'checking',
+      currency: 'USD',
+      openingBalanceMinor: 99999999,
+      balanceAt: '2026-01-01T00:00:00.000Z',
+    });
+    event.headers['idempotency-key'] = `administrator-account-${index}`;
+    expect((await handler(event)).statusCode).toBe(index < 2 ? 201 : 404);
+  }
+  const listed = parsed(await handler(request('GET', '/api/v1/finance/accounts')));
+  expect(listed.items).toHaveLength(2);
+  const bootstrap = parsed(await handler(request('GET', '/api/v1/finance/sync/bootstrap')));
+  expect(bootstrap.scopes).toEqual([
+    `OWNER#${actor.id}`,
+    `GROUP#${groupId}`,
+    `GROUP#${memberGroupId}`,
+  ]);
+  expect(bootstrap.records).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        entityType: 'financeAccount',
+        value: expect.objectContaining({ scope: scopes[0] }),
+      }),
+      expect.objectContaining({
+        entityType: 'financeAccount',
+        value: expect.objectContaining({ scope: scopes[1] }),
+      }),
+    ]),
+  );
+  expect(repository.accounts.size).toBe(2);
+});

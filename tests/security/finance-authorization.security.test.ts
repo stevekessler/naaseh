@@ -45,3 +45,35 @@ describe('Finance authorization boundaries', () => {
     });
   });
 });
+
+it('applies ownership and group permissions equally to administrators for every action', () => {
+  const administrator: FinanceActor = { ...owner, role: 'admin' };
+  const groupId = '01J00000000000000000000001';
+  const groupScope = { type: 'group' as const, groupId };
+  for (const action of ['read', 'edit', 'connect', 'reassign', 'delete'] as const) {
+    expect(
+      authorizeFinanceScope(administrator, { type: 'owner', ownerId: owner.id }, action).allowed,
+    ).toBe(true);
+    expect(
+      authorizeFinanceScope(administrator, { type: 'owner', ownerId: 'someone-else' }, action)
+        .allowed,
+    ).toBe(false);
+    expect(authorizeFinanceScope(administrator, groupScope, action).allowed).toBe(false);
+    for (const role of ['member', 'manager', 'owner'] as const) {
+      const member = { ...administrator, groupMemberships: [{ groupId, role }] };
+      expect(authorizeFinanceScope(member, groupScope, action).allowed).toBe(
+        role !== 'member' || action === 'read' || action === 'edit',
+      );
+      expect(authorizeFinanceScope({ ...member, active: false }, groupScope, action).allowed).toBe(
+        false,
+      );
+    }
+    expect(
+      authorizeFinanceScope(
+        { ...administrator, active: false },
+        { type: 'owner', ownerId: owner.id },
+        action,
+      ).allowed,
+    ).toBe(false);
+  }
+});

@@ -36,10 +36,12 @@ export function parseMajorUnits(value: string, currency: string): number {
   if (fraction.length > exponent) {
     throw new Error(`Currency ${currency} supports at most ${exponent} fraction digits.`);
   }
-  const scale = 10 ** exponent;
-  const magnitude = Number(whole) * scale + Number(fraction.padEnd(exponent, '0'));
-  if (!Number.isSafeInteger(magnitude)) throw new Error('Money value is outside the safe range.');
-  return sign === '-' ? -magnitude : magnitude;
+  const magnitude =
+    BigInt(whole) * 10n ** BigInt(exponent) + BigInt(fraction.padEnd(exponent, '0'));
+  if (magnitude > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error('Money value is outside the safe range.');
+  }
+  return sign === '-' ? -Number(magnitude) : Number(magnitude);
 }
 
 export function addMinorUnits(values: readonly number[]): number {
