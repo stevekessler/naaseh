@@ -138,3 +138,32 @@ The required browser quick suite remains **31 tests**. Before-change measured ti
 48.68 seconds for unit/integration and 28.38 seconds for browser quick validation. Final timings
 are recorded in the implementation validation notes. The earlier $5/month deployment cost review,
 real AWS restore exercise, large-account profiling and human acceptance remain open.
+
+## Additional recovery and stale-match fixes
+
+Four subsequent P2 findings are corrected:
+
+- Provider row receipts now distinguish deferred from imported rows. A bare legacy hash is replayed
+  once instead of being trusted as proof of import. When identity becomes complete, retained pending
+  rows are merged with the provider response; pending rows omitted by that later response are still
+  recovered. Each bounded chunk clears only its own committed rows, including corrections to existing
+  source identities. The job's final attention count reflects remaining pending identities.
+- A snapshot token is not retained while optimistic records are protected from replacement. Successful,
+  rejected and conflicting Finance command removal also invalidates the token in the same local
+  transaction. The next pull therefore replaces rejected creations/updates and restores canonical
+  parent versions instead of accepting an unchanged response for a divergent cache.
+- A running import tracks its connection and survives changes to the accessible Finance record set
+  and transient polling failures. Losing connection-management rights alone does not prove that job
+  read access was revoked. Confirmed authentication/access failure, explicit connection revocation or
+  normal job completion ends polling.
+- Match authorization rechecks current item membership in the selected budget before receipt replay
+  or acceptance. Removing budget memberships through archiving invalidates outstanding suggestions;
+  reactivation cannot resurrect them. Membership checks also protect suggestions that were not
+  previously invalidated and changed-transaction revalidation.
+
+Twelve new cases cover these failures and their recovery boundaries. Required validation grows from
+**411 files / 1,350 tests** to **411 files / 1,362 tests**. The required quick browser suite remains
+**31 tests**, with unchanged workflow membership and timeout. Measured before timings were 52.13
+seconds for unit/integration and 28.86 seconds for quick browsers; final local and hosted evidence is
+recorded with this PR. Existing deployment cost review, real AWS restore, large-account profiling and
+human acceptance requirements remain open.

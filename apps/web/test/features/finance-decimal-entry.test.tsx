@@ -2,13 +2,17 @@ import { FinanceLandingPage } from '../../src/features/finance/FinanceLandingPag
 import { FinanceBudgetDetail } from '../../src/features/finance/budgets/FinanceBudgetDetail.js';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FinanceAccountsPage } from '../../src/features/finance/accounts/FinanceAccountsPage.js';
 import { DuplicateReview, chunkReviewedRows } from '../../src/features/finance/csv/csv-import.js';
-import { financeRequest } from '../../src/features/finance/finance-client.js';
-vi.mock('../../src/features/finance/finance-client.js', () => ({ financeRequest: vi.fn() }));
+import { financeRequest, FinanceClientError } from '../../src/features/finance/finance-client.js';
+vi.mock('../../src/features/finance/finance-client.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/features/finance/finance-client.js')>()),
+  financeRequest: vi.fn(),
+}));
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.resetAllMocks();
 });
 it.each(['0.29', '1.001', '1e3'])('handles exact decimal account entry: %s', async (amount) => {
@@ -127,4 +131,111 @@ it('submits only linked USD accounts when adding a budget item', async () => {
   expect(
     JSON.parse(String(vi.mocked(financeRequest).mock.calls[0]?.[1]?.body)).relatedAccountIds,
   ).toEqual(['linked']);
+});
+
+it('preserves a running import through sync refreshes and transient polling failures', async () => {
+  vi.useFakeTimers();
+  let failOnce = false;
+  vi.mocked(financeRequest).mockImplementation(async (path) => {
+    if (path === '/finance/connections')
+      return {
+        items: [
+          {
+            id: 'bridge',
+            provider: 'simplefin-bridge',
+            scope: { type: 'owner', ownerId: 'owner' },
+            status: 'active',
+            version: 1,
+          },
+        ],
+      };
+    if (path === '/finance/connections/bridge/refresh') return { id: 'job', status: 'running' };
+    if (path === '/finance/import-jobs/job') {
+      if (failOnce) {
+        failOnce = false;
+        throw new Error('Temporary network failure');
+      }
+      return { status: 'running' };
+    }
+    return { items: [] };
+  });
+  await act(async () => {
+    render(
+      <FinanceLandingPage ownerId="owner" role="user" csrfToken="csrf" assignableGroups={[]} />,
+    );
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh SimpleFIN Bridge' }));
+  });
+  const polls = () =>
+    vi.mocked(financeRequest).mock.calls.filter(([path]) => path === '/finance/import-jobs/job')
+      .length;
+  expect(polls()).toBe(1);
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent('finance-sync', { detail: { authorization: 'new-account' } }),
+    );
+  });
+  failOnce = true;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(6000);
+  });
+  expect(polls()).toBe(3);
+  expect(screen.getByText(/Import running/)).toBeDefined();
+});
+it('stops import polling only when the connection is no longer accessible', async () => {
+  vi.useFakeTimers();
+  let permitted = true;
+  vi.mocked(financeRequest).mockImplementation(async (path) => {
+    if (path === '/finance/connections')
+      return {
+        items: permitted
+          ? [
+              {
+                id: 'bridge',
+                provider: 'simplefin-bridge',
+                scope: { type: 'owner', ownerId: 'owner' },
+                status: 'active',
+                version: 1,
+              },
+            ]
+          : [],
+      };
+    if (path === '/finance/connections/bridge/refresh') return { id: 'job', status: 'running' };
+    if (path === '/finance/import-jobs/job') {
+      if (!permitted)
+        throw new FinanceClientError({
+          status: 404,
+          code: 'finance_not_found',
+          message: 'Not found',
+        });
+      return { status: 'running' };
+    }
+    return { items: [] };
+  });
+  await act(async () => {
+    render(
+      <FinanceLandingPage ownerId="owner" role="user" csrfToken="csrf" assignableGroups={[]} />,
+    );
+  });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh SimpleFIN Bridge' }));
+  });
+  permitted = false;
+  await act(async () => {
+    window.dispatchEvent(
+      new CustomEvent('finance-sync', { detail: { authorization: 'removed-group' } }),
+    );
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  const before = vi
+    .mocked(financeRequest)
+    .mock.calls.filter(([path]) => path === '/finance/import-jobs/job').length;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(6000);
+  });
+  expect(
+    vi.mocked(financeRequest).mock.calls.filter(([path]) => path === '/finance/import-jobs/job'),
+  ).toHaveLength(before);
+  expect(screen.queryByText(/Import running/)).toBeNull();
 });

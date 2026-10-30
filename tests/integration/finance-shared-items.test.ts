@@ -21,6 +21,7 @@ import {
   addFinanceBudgetItem,
   linkSharedFinanceBudgetItem,
   updateSharedFinanceBudgetItem,
+  updateFinanceBudget,
   getFinanceBudget,
 } from '../../apps/api/src/finance/budget-service.js';
 import { replaceTransactionAllocationsForActor } from '../../apps/api/src/finance/transaction-service.js';
@@ -300,4 +301,76 @@ it('defaults provider accounts without a currency to USD', () => {
   };
   delete payload.accounts[0]!.currency;
   expect(parseSimplefinV2(payload).accounts[0]?.currency).toBe('USD');
+});
+
+const suggestionForSecond = () =>
+  createTransactionMatch({
+    id: createUlid(),
+    transactionId: transaction,
+    budgetItemId: item,
+    budgetId: second,
+    kind: 'manual',
+    scoreBasis: { merchant: false, date: true, account: true, amountDifferencePercent: 0 },
+  });
+async function archiveSecondBudget() {
+  const handler = createFinanceHandler(createDefaultFinanceRegistry(repository, actor));
+  const request = (method: string, path: string, body?: unknown) =>
+    ({
+      version: '2.0',
+      rawPath: path,
+      routeKey: `${method} /api/v1/finance/{proxy+}`,
+      headers: {
+        origin: 'http://localhost:4173',
+        'x-csrf-token': 'csrf',
+        'idempotency-key': createUlid(),
+      },
+      requestContext: {
+        requestId: 'test',
+        http: { method },
+        authorizer: { lambda: { userId: actor.id, csrfToken: 'csrf' } },
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    }) as APIGatewayProxyEventV2;
+  const response = (await handler(
+    request('GET', `/api/v1/finance/records/budget/${second}/deletion-preview`),
+  )) as { statusCode: number; body: string };
+  expect(response.statusCode).toBe(200);
+  const preview = JSON.parse(response.body);
+  const archived = (await handler(
+    request('POST', `/api/v1/finance/records/budget/${second}/deletion`, {
+      expectedVersion: preview.expectedVersion,
+      confirmationToken: preview.confirmationToken,
+    }),
+  )) as { statusCode: number };
+  expect(archived.statusCode).toBe(200);
+}
+it('invalidates obsolete suggestions when a budget removes its shared membership', async () => {
+  await share();
+  const match = suggestionForSecond();
+  repository.transactionMatches.set(match.id, match);
+  await archiveSecondBudget();
+  expect(repository.transactionMatches.get(match.id)?.status).toBe('invalidated');
+  await updateFinanceBudget(
+    repository,
+    actor,
+    second,
+    { expectedVersion: repository.budgets.get(second)!.version, status: 'active' },
+    createUlid(),
+  );
+  await expect(
+    acceptFinanceTransactionMatch(repository, actor, match.id, 1, 1, createUlid()),
+  ).rejects.toThrow('not found');
+  expect(repository.transactions[0]?.allocations).toEqual([]);
+  expect(getFinanceBudget(repository, actor, second).items).toEqual([]);
+});
+it('rechecks membership before accepting a suggestion even if it was not previously invalidated', async () => {
+  await share();
+  const match = suggestionForSecond();
+  repository.transactionMatches.set(match.id, match);
+  repository.budgetItemMemberships.delete(`${second}:${item}`);
+  await expect(
+    acceptFinanceTransactionMatch(repository, actor, match.id, 1, 1, createUlid()),
+  ).rejects.toThrow('not found');
+  expect(repository.transactionMatches.get(match.id)?.status).toBe('suggested');
+  expect(repository.transactions[0]?.version).toBe(1);
 });

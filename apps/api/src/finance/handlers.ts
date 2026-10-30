@@ -71,6 +71,7 @@ import {
 import { decideProviderReconciliation } from './provider-reconciliation-service.js';
 import {
   acceptFinanceTransactionMatch,
+  invalidateBudgetTransactionSuggestions,
   copyReusableItemToBudget,
   createFinanceReusableItem,
   evaluateFinanceTransactionMatches,
@@ -1226,6 +1227,7 @@ export function registerUserStory1FinanceRoutes(
         if (result.outcome === 'permanent-delete') repository.budgets.delete(budget.id);
         else {
           repository.budgets.set(budget.id, archiveBudget(budget));
+          invalidateBudgetTransactionSuggestions(repository, budget.id);
           for (const [id, item] of repository.budgetItems) {
             if (itemBudgetIds(repository, item).includes(budget.id) && item.status === 'active') {
               const remaining = itemBudgetIds(repository, item).filter((id) => id !== budget.id);

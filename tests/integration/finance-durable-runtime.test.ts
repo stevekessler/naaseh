@@ -599,3 +599,150 @@ it('processes a changed provider row even when its identity already has a commit
   expect(fresh.repository.transactions[0]?.amountMinor).toBe(-9000);
   expect(fresh.repository.importJobs.get('job')?.counts.updated).toBe(1);
 });
+
+it.each(['legacy', 'deferred'] as const)(
+  'imports retained rows after identity completion with %s receipts',
+  async (receiptFormat) => {
+    await seedHashJob();
+    const incomplete = structuredClone(simplefinV2Fixture) as unknown as {
+      accounts: Array<Record<string, unknown>>;
+    };
+    delete incomplete.accounts[0]!.name;
+    const payload = parseSimplefinV2(incomplete);
+    const source = payload.accounts[0]!;
+    const session = await store().load();
+    importSimplefinAccounts(
+      session.repository,
+      'bridge',
+      { type: 'owner', ownerId: actor.id },
+      payload,
+    );
+    session.repository.importJobs.set('job', {
+      ...session.repository.importJobs.get('job')!,
+      status: 'running',
+      attempts: 1,
+      counts: { ...session.repository.importJobs.get('job')!.counts, reviewIssues: 1 },
+      leaseUntil: new Date(0).toISOString(),
+    });
+    const prefix = JSON.stringify(['job', source.providerConnectionId, source.providerAccountId]);
+    const rowKey = `${prefix}:row:${source.transactions[0]!.sourceTransactionId}`;
+    const hash = financeImportRowHash(source.transactions[0]);
+    session.repository.importRowReceipts.set(
+      rowKey,
+      receiptFormat === 'legacy' ? hash : `deferred:${hash}`,
+    );
+    await session.commit();
+    const complete = structuredClone(simplefinV2Fixture);
+    if (receiptFormat === 'deferred') complete.accounts[0]!.transactions = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(complete))),
+    );
+    await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+    let fresh = await store().load();
+    expect(fresh.repository.transactions).toHaveLength(1);
+    expect(fresh.repository.pendingSimplefinAccounts.size).toBe(0);
+    expect(fresh.repository.importRowReceipts.get(rowKey)).toBe(`imported:${hash}`);
+    expect(fresh.repository.importJobs.get('job')?.status).toBe('succeeded');
+    fresh.repository.importJobs.set('job', {
+      ...fresh.repository.importJobs.get('job')!,
+      status: 'running',
+      leaseUntil: new Date(0).toISOString(),
+    });
+    fresh.repository.importDispatches.set('job', { jobId: 'job', connectionId: 'bridge' });
+    await fresh.commit();
+    await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+    fresh = await store().load();
+    expect(fresh.repository.transactions).toHaveLength(1);
+  },
+);
+it('keeps deferred corrections pending across bounded chunks until each row is committed', async () => {
+  await seedHashJob();
+  const complete = structuredClone(simplefinV2Fixture);
+  const template = complete.accounts[0]!.transactions[0]!;
+  complete.accounts[0]!.transactions = Array.from({ length: 7 }, (_, index) => ({
+    ...template,
+    id: `row-${index}`,
+  }));
+  const existing = await store().load();
+  importSimplefinAccounts(
+    existing.repository,
+    'bridge',
+    { type: 'owner', ownerId: actor.id },
+    parseSimplefinV2(complete),
+  );
+  await existing.commit();
+  const incomplete = structuredClone(complete) as unknown as {
+    accounts: Array<Record<string, unknown>>;
+  };
+  delete incomplete.accounts[0]!.name;
+  for (const row of incomplete.accounts[0]!.transactions as Array<Record<string, unknown>>)
+    row.amount = '-90.00';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(incomplete))),
+  );
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  let fresh = await store().load();
+  expect([...fresh.repository.pendingSimplefinAccounts.values()][0]?.transactions).toHaveLength(7);
+  expect(
+    [...fresh.repository.importRowReceipts.values()].every((receipt) =>
+      receipt.startsWith('deferred:'),
+    ),
+  ).toBe(true);
+  fresh.repository.importJobs.set('job', {
+    ...fresh.repository.importJobs.get('job')!,
+    status: 'running',
+    leaseUntil: new Date(0).toISOString(),
+  });
+  fresh.repository.importDispatches.set('job', { jobId: 'job', connectionId: 'bridge' });
+  await fresh.commit();
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  fresh = await store().load();
+  expect(fresh.repository.transactions.every((row) => row.amountMinor === -8425)).toBe(true);
+  expect([...fresh.repository.pendingSimplefinAccounts.values()][0]?.transactions).toHaveLength(7);
+  fresh.repository.importJobs.set('job', {
+    ...fresh.repository.importJobs.get('job')!,
+    status: 'running',
+    leaseUntil: new Date(0).toISOString(),
+  });
+  fresh.repository.importDispatches.set('job', { jobId: 'job', connectionId: 'bridge' });
+  await fresh.commit();
+  complete.accounts[0]!.transactions = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify(complete))),
+  );
+  let now = Date.now(),
+    advanced = false;
+  const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const send = async (command: unknown) => {
+    const result = await db.send(command);
+    const writes = (
+      command as { input?: { TransactItems?: Array<{ Put?: { Item?: { SK?: string } } }> } }
+    ).input?.TransactItems;
+    if (
+      !advanced &&
+      writes?.some((write) => decodeURIComponent(write.Put?.Item?.SK ?? '').includes(':row:'))
+    ) {
+      advanced = true;
+      now += 61000;
+    }
+    return result;
+  };
+  await runDurableFinanceImport(
+    { jobId: 'job', connectionId: 'bridge' },
+    new DynamoFinanceRepository({ send } as never),
+  );
+  clock.mockRestore();
+  fresh = await store().load();
+  expect(fresh.repository.importJobs.get('job')?.status).toBe('running');
+  expect([...fresh.repository.pendingSimplefinAccounts.values()][0]?.transactions).toHaveLength(2);
+  expect(fresh.repository.transactions.filter((row) => row.amountMinor === -9000)).toHaveLength(5);
+  await runDurableFinanceImport({ jobId: 'job', connectionId: 'bridge' }, store());
+  fresh = await store().load();
+  expect(fresh.repository.transactions).toHaveLength(7);
+  expect(fresh.repository.transactions.every((row) => row.amountMinor === -9000)).toBe(true);
+  expect(fresh.repository.pendingSimplefinAccounts.size).toBe(0);
+  expect(fresh.repository.importJobs.get('job')?.status).toBe('succeeded');
+});

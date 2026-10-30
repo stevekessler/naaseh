@@ -239,3 +239,18 @@ An initial browser attempt was discarded because a simultaneous workspace build 
 assets; browser validation was rerun after all builds finished. Workflow membership and the
 fifteen-minute timeout remain unchanged; hosted validation must remain below ten minutes.
 No merge or deployment is included. The cost gate and other documented acceptance work remain open.
+
+
+## Deferred-row, snapshot and polling recovery follow-up
+
+The next audit's four P2 findings are corrected: receipts distinguish deferred/imported rows and
+recover retained rows across bounded resumptions; divergent optimistic caches do not retain a
+server snapshot token; running import polling survives unrelated authorization refreshes; and match
+acceptance revalidates budget membership while archiving invalidates obsolete suggestions.
+
+Required validation counts: **411 files / 1,350 tests before; 411 files / 1,362 tests after**.
+The required browser quick suite stays at **31 tests**. Before-change `/usr/bin/time -p npm test`
+passed in **52.13 seconds**; `/usr/bin/time -p npm run test:e2e:quick` passed in **28.86 seconds**.
+After-change timings: unit/integration **48.70 seconds** (1,362 passed), quick browsers **25.81 seconds** (31 passed). Node.js 24 typecheck, lint, formatting and workspace builds passed. Hosted duration is verified on the pushed follow-up commit. The ten-minute hosted target and
+fifteen-minute safety timeout are unchanged. No merge or deployment is included, and the previously
+recorded cost/restore/scale/human acceptance gates remain open.

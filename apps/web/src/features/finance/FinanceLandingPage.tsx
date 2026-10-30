@@ -3,7 +3,7 @@ import {
   SimplefinConnectionPanel,
   type SimplefinConnectionView,
 } from './accounts/SimplefinConnectionPanel.js';
-import { financeRequest } from './finance-client.js';
+import { FinanceClientError, financeRequest } from './finance-client.js';
 import { useEffect, useState } from 'react';
 import { FinanceTransactionsPage } from './transactions/FinanceTransactionsPage.js';
 import { FinanceCategoryManager } from './catalog/FinanceCategoryManager.js';
@@ -26,26 +26,66 @@ export function FinanceLandingPage({
     const refresh = (event: Event) => {
       const next = (event as CustomEvent<{ authorization?: string }>).detail?.authorization;
       if (next) setAuthorization(next);
+      if (next === 'denied') {
+        setRunningJob(undefined);
+        setConnection(undefined);
+      }
     };
     window.addEventListener('finance-sync', refresh);
     return () => window.removeEventListener('finance-sync', refresh);
   }, []);
   const [connection, setConnection] = useState<SimplefinConnectionView>();
-  const [jobId, setJobId] = useState<string>();
+  const [runningJob, setRunningJob] = useState<{ id: string; connectionId: string }>();
+  const jobId = runningJob?.id;
   const [accountGeneration, setAccountGeneration] = useState(0);
   useEffect(() => {
     let active = true;
-    setConnection(undefined);
-    setJobId(undefined);
     void financeRequest<{ items: SimplefinConnectionView[] }>('/finance/connections')
       .then((page) => {
-        if (active) setConnection((current) => current ?? page.items[0]);
+        if (
+          active &&
+          runningJob &&
+          page.items.some(
+            (item) =>
+              item.id === runningJob.connectionId && ['revoked', 'archived'].includes(item.status),
+          )
+        )
+          setRunningJob(undefined);
+        if (active)
+          setConnection((current) => {
+            const authorized = page.items.filter(
+              (item) => !['revoked', 'archived'].includes(item.status),
+            );
+            const fresh = authorized.find((item) => item.id === current?.id);
+            if (fresh)
+              return {
+                ...fresh,
+                ...(current?.importStatus ? { importStatus: current.importStatus } : {}),
+              };
+            // Losing management rights does not imply losing read access to a running job.
+            return current &&
+              runningJob?.connectionId === current.id &&
+              !page.items.some(
+                (item) => item.id === current.id && ['revoked', 'archived'].includes(item.status),
+              )
+              ? current
+              : authorized[0];
+          });
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (
+          active &&
+          error instanceof FinanceClientError &&
+          [401, 403].includes(error.problem.status)
+        ) {
+          setRunningJob(undefined);
+          setConnection(undefined);
+        }
+      });
     return () => {
       active = false;
     };
-  }, [authorization]);
+  }, [authorization, runningJob?.connectionId]);
   useEffect(() => {
     if (!jobId) return;
     let active = true;
@@ -57,11 +97,19 @@ export function FinanceLandingPage({
         if (!active) return;
         setConnection((current) => (current ? { ...current, importStatus: job.status } : current));
         if (!['queued', 'running'].includes(job.status)) {
-          setJobId(undefined);
+          setRunningJob(undefined);
           setAccountGeneration((value) => value + 1);
         }
-      } catch {
-        /* A transient network failure is retried without changing the saved job. */
+      } catch (error) {
+        if (
+          active &&
+          error instanceof FinanceClientError &&
+          [401, 403, 404].includes(error.problem.status)
+        ) {
+          setRunningJob(undefined);
+          setConnection(undefined);
+        }
+        // Transient failures preserve the running job for the next poll.
       }
     };
     const timer = window.setInterval(() => void poll(), 3000);
@@ -101,7 +149,7 @@ export function FinanceLandingPage({
       idempotencyKey: crypto.randomUUID(),
       body: '{}',
     });
-    setJobId(job.id);
+    setRunningJob({ id: job.id, connectionId: connection.id });
     setConnection((current) => (current ? { ...current, importStatus: job.status } : current));
   };
   return (

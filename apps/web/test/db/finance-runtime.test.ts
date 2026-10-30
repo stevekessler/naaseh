@@ -241,3 +241,97 @@ it('preserves a parent optimistic version while its child remains pending', asyn
   );
   expect((state.records.get('budget') as EncryptedFinanceRecord).version).toBe(4);
 });
+
+it('refreshes a rejected optimistic creation and its parent after a protected snapshot', async () => {
+  const key = await financeDeviceKey();
+  for (const row of [
+    { id: 'budget', entityType: 'financeBudget', version: 4, value: { id: 'budget', version: 4 } },
+    {
+      id: 'child',
+      entityType: 'financeBudgetItem',
+      version: 1,
+      value: { id: 'child', budgetId: 'budget', relatedAccountIds: [] },
+    },
+  ])
+    state.records.set(
+      row.id,
+      await encryptFinanceRecord({
+        ...row,
+        scopeKey: 'GROUP#group',
+        budgetId: 'budget',
+        updatedAt: 'now',
+        key,
+      }),
+    );
+  state.pending.set('pending', {
+    id: 'pending',
+    entityId: 'child',
+    entityType: 'financeBudgetItem',
+  });
+  const canonical = () =>
+    new Response(
+      JSON.stringify({
+        records: [
+          {
+            id: 'budget',
+            entityType: 'financeBudget',
+            scopeKey: 'GROUP#group',
+            version: 3,
+            value: { id: 'budget', version: 3 },
+          },
+        ],
+        scopes: ['GROUP#group'],
+        digest: 'unchanged',
+        token: 'T',
+        nextCursor: null,
+      }),
+    );
+  await pullFinanceSnapshot(async () => canonical());
+  expect(state.settings.has('finance-snapshot-token')).toBe(false);
+  state.pending.clear();
+  await pullFinanceSnapshot(async (url) => {
+    expect(String(url)).not.toContain('known=');
+    return canonical();
+  });
+  expect(state.records.has('child')).toBe(false);
+  expect((state.records.get('budget') as EncryptedFinanceRecord).version).toBe(3);
+});
+it('replaces a rejected optimistic update with the canonical record despite an unchanged server epoch', async () => {
+  const key = await financeDeviceKey();
+  state.records.set(
+    'account',
+    await encryptFinanceRecord({
+      id: 'account',
+      entityType: 'financeAccount',
+      scopeKey: 'OWNER#owner',
+      version: 2,
+      updatedAt: 'now',
+      value: { id: 'account', friendlyName: 'Rejected local name' },
+      key,
+    }),
+  );
+  state.pending.set('pending', {
+    id: 'pending',
+    entityId: 'account',
+    entityType: 'financeAccount',
+  });
+  const canonical = () =>
+    new Response(
+      JSON.stringify({
+        records: [record('account')],
+        scopes: ['OWNER#owner'],
+        digest: 'unchanged',
+        token: 'T',
+        nextCursor: null,
+      }),
+    );
+  await pullFinanceSnapshot(async () => canonical());
+  state.pending.clear();
+  await pullFinanceSnapshot(async (url) => {
+    expect(String(url)).not.toContain('known=');
+    return canonical();
+  });
+  expect(
+    await decryptFinanceRecord(state.records.get('account') as EncryptedFinanceRecord, key),
+  ).toMatchObject({ friendlyName: 'Checking' });
+});

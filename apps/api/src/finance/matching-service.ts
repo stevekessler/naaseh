@@ -1,4 +1,4 @@
-import { itemsForBudget, allocationBudgetId } from './budget-membership.js';
+import { itemsForBudget, allocationBudgetId, itemBudgetIds } from './budget-membership.js';
 import {
   acceptAutomaticTransactionMatch,
   copyReusableBudgetItem,
@@ -85,6 +85,10 @@ const canReadBudgetItem = (
     budget &&
     budget.status !== 'archived' &&
     budget.status !== 'tombstone' &&
+    Boolean(
+      repository.budgetItems.get(item.id) &&
+        itemBudgetIds(repository, repository.budgetItems.get(item.id)!).includes(budget.id),
+    ) &&
     authorizeFinanceScope(actor, groupScope(budget.groupId), 'read').allowed &&
     item.relatedAccountIds.every((id) => {
       const account = repository.accounts.get(id);
@@ -470,9 +474,9 @@ export async function acceptFinanceTransactionMatch(
   expectedTransactionVersion: number,
   mutationId: string,
 ) {
+  const authorized = authorizedMatch(repository, actor, matchId);
   const replay = repository.mutation<TransactionMatch>(actor, mutationId);
   if (replay) return replay;
-  const authorized = authorizedMatch(repository, actor, matchId);
   if (
     authorized.match.version !== expectedVersion ||
     authorized.transaction.version !== expectedTransactionVersion
@@ -561,7 +565,10 @@ export function invalidateChangedTransactionMatches(
       ? { ...storedItem, budgetId: match.budgetId ?? storedItem.budgetId }
       : undefined;
     const budget = item ? repository.budgets.get(item.budgetId) : undefined;
-    const score = item && budget ? scoreTransactionMatch(transaction, item, budget) : undefined;
+    const score =
+      item && storedItem && budget && itemBudgetIds(repository, storedItem).includes(budget.id)
+        ? scoreTransactionMatch(transaction, item, budget)
+        : undefined;
     if (!score || score.kind !== match.kind) {
       const changed = invalidateTransactionMatch(match);
       if (match.status === 'accepted') {
@@ -580,4 +587,20 @@ export function invalidateChangedTransactionMatches(
     }
   }
   return invalidated;
+}
+
+export function invalidateBudgetTransactionSuggestions(
+  repository: FinanceMemoryRepository,
+  budgetId: string,
+) {
+  for (const [id, match] of repository.transactionMatches) {
+    const item = repository.budgetItems.get(match.budgetItemId);
+    if (match.status !== 'suggested' || (match.budgetId ?? item?.budgetId) !== budgetId) continue;
+    const changed = invalidateTransactionMatch(match);
+    repository.transactionMatches.set(id, changed);
+    const transaction = repository.transactions.find(
+      (transaction) => transaction.id === match.transactionId,
+    );
+    if (transaction) recordMatchFeed(repository, transaction, changed);
+  }
 }

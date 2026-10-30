@@ -483,7 +483,12 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
                 item.id,
                 result.status === 'applied' ? 'applied' : 'replayed',
               );
-            await db.outbox.delete(item.id);
+            if (item.entityType.startsWith('finance')) {
+              await db.transaction('rw', db.outbox, db.settings, async () => {
+                await db.outbox.delete(item.id);
+                await db.settings.delete('finance-snapshot-token');
+              });
+            } else await db.outbox.delete(item.id);
           }
           continue;
         }
@@ -533,7 +538,7 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
               relatedAccountIds?: string[];
               accountId?: string;
             };
-            await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
+            await db.transaction('rw', db.secureConflicts, db.outbox, db.settings, async () => {
               await db.secureConflicts.put({
                 ...(financeRecord
                   ? {
@@ -549,6 +554,8 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
                 value,
               });
               await db.outbox.delete(item.id);
+              if (item.entityType.startsWith('finance'))
+                await db.settings.delete('finance-snapshot-token');
             });
           }
           continue;

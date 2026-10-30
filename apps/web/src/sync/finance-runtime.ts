@@ -115,7 +115,9 @@ export async function pullFinanceSnapshot(fetcher: typeof fetch = fetch) {
           await db.secureFinanceRecords.delete(row.id);
       for (const row of encrypted) if (!pending.has(row.id)) await db.secureFinanceRecords.put(row);
       await db.settings.put({ key: 'finance-snapshot-digest', value: digest });
-      if (token) await db.settings.put({ key: 'finance-snapshot-token', value: token });
+      // Protected optimistic rows mean the local cache is not this server snapshot yet.
+      if (pending.size) await db.settings.delete('finance-snapshot-token');
+      else if (token) await db.settings.put({ key: 'finance-snapshot-token', value: token });
     },
   );
   if (typeof window !== 'undefined')

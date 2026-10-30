@@ -102,18 +102,45 @@ export async function runDurableFinanceImport(
         account.providerConnectionId,
         account.providerAccountId,
       ]);
-      const { transactions: sourceRows, ...metadata } = account;
+      const { transactions: fetchedRows, ...metadata } = account;
+      const identityReady =
+        !account.needsIdentityCompletion && Boolean(account.sourceName && account.organizationName);
+      const pendingKey = `${connectionId}:${account.providerConnectionId ?? 'legacy'}:${account.providerAccountId}`;
+      const pending = session.repository.pendingSimplefinAccounts.get(pendingKey);
+      const deferredRows = Array.isArray(pending?.transactions)
+        ? (pending.transactions as typeof fetchedRows)
+        : [];
+      // Recover retained rows even when a later provider response no longer returns them.
+      const sourceRows = identityReady
+        ? [
+            ...new Map(
+              [...deferredRows, ...fetchedRows].map((row) => [row.sourceTransactionId, row]),
+            ).values(),
+          ]
+        : fetchedRows;
+      const pendingRowIds = new Set(deferredRows.map((row) => row.sourceTransactionId));
+      const sourceIdentity = (rowId: string) =>
+        `${connectionId}:${account.providerConnectionId ?? connectionId}:${account.providerAccountId}:${rowId}`;
       const metadataHash = financeImportRowHash(metadata);
       const metadataKey = `${receiptPrefix}:metadata`;
-      const unprocessed = sourceRows.filter(
-        (row) =>
-          session.repository.importRowReceipts.get(
-            `${receiptPrefix}:row:${row.sourceTransactionId}`,
-          ) !== financeImportRowHash(row),
-      );
+      const unprocessed = sourceRows.filter((row) => {
+        const hash = financeImportRowHash(row);
+        const receipt = session.repository.importRowReceipts.get(
+          `${receiptPrefix}:row:${row.sourceTransactionId}`,
+        );
+        if (!identityReady) return receipt !== `deferred:${hash}` && receipt !== hash;
+        // Bare legacy hashes did not distinguish deferral; replay them once safely.
+        return (
+          pendingRowIds.has(row.sourceTransactionId) ||
+          !session.repository.sourceIdentities.has(sourceIdentity(row.sourceTransactionId)) ||
+          receipt !== `imported:${hash}`
+        );
+      });
+      const metadataReceipt = session.repository.importRowReceipts.get(metadataKey);
       if (
         !unprocessed.length &&
-        session.repository.importRowReceipts.get(metadataKey) === metadataHash
+        (metadataReceipt === `${identityReady ? 'imported' : 'deferred'}:${metadataHash}` ||
+          metadataReceipt === metadataHash)
       )
         continue;
       const chunks = Array.from(
@@ -154,12 +181,42 @@ export async function runDurableFinanceImport(
           counts: { ...counts },
           leaseUntil: new Date(Date.now() + 300_000).toISOString(),
         });
+        const accountId = session.repository.sourceIdentities.get(
+          `${connectionId}:account:${account.providerConnectionId ?? 'legacy'}:${account.providerAccountId}`,
+        );
+        const rowsImported =
+          identityReady &&
+          Boolean(accountId && session.repository.accounts.get(accountId)?.status === 'active');
         for (const row of transactions)
           session.repository.importRowReceipts.set(
             `${receiptPrefix}:row:${row.sourceTransactionId}`,
-            financeImportRowHash(row),
+            `${rowsImported && session.repository.sourceIdentities.has(sourceIdentity(row.sourceTransactionId)) ? 'imported' : 'deferred'}:${financeImportRowHash(row)}`,
           );
-        session.repository.importRowReceipts.set(metadataKey, metadataHash);
+        session.repository.importRowReceipts.set(
+          metadataKey,
+          `${rowsImported ? 'imported' : 'deferred'}:${metadataHash}`,
+        );
+        if (rowsImported) {
+          const pendingAccount = session.repository.pendingSimplefinAccounts.get(pendingKey);
+          if (pendingAccount && Array.isArray(pendingAccount.transactions)) {
+            const committedRows = new Set(
+              transactions
+                .filter((row) =>
+                  session.repository.sourceIdentities.has(sourceIdentity(row.sourceTransactionId)),
+                )
+                .map((row) => row.sourceTransactionId),
+            );
+            const remaining = (pendingAccount.transactions as typeof fetchedRows).filter(
+              (row) => !committedRows.has(row.sourceTransactionId),
+            );
+            if (remaining.length)
+              session.repository.pendingSimplefinAccounts.set(pendingKey, {
+                ...pendingAccount,
+                transactions: remaining,
+              });
+            else session.repository.pendingSimplefinAccounts.delete(pendingKey);
+          }
+        }
         await session.commit();
       }
     }
@@ -171,6 +228,11 @@ export async function runDurableFinanceImport(
       current.version !== connection.version
     )
       throw new Error('Finance connection changed.');
+    counts.reviewIssues =
+      payload.errors.length +
+      [...session.repository.pendingSimplefinAccounts.keys()].filter((key) =>
+        key.startsWith(`${connectionId}:`),
+      ).length;
     const partial = counts.reviewIssues > 0;
     const completed = completeRefreshJob(
       session.repository,
