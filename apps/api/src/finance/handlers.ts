@@ -276,10 +276,9 @@ export function registerUserStory1FinanceRoutes(
       records: page,
       digest,
       ...(dependencies.snapshotToken ? { token: dependencies.snapshotToken } : {}),
-      scopes:
-        actor.role === 'admin'
-          ? []
-          : [`OWNER#${actor.id}`, ...actor.groupMemberships.map((item) => `GROUP#${item.groupId}`)],
+      scopes: actor.active
+        ? [`OWNER#${actor.id}`, ...actor.groupMemberships.map((item) => `GROUP#${item.groupId}`)]
+        : [],
       nextCursor:
         next < records.length
           ? Buffer.from(JSON.stringify({ offset: next, digest })).toString('base64url')

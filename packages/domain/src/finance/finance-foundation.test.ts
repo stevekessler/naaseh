@@ -12,6 +12,12 @@ describe('finance foundation', () => {
     expect(currencyExponentFor('BHD')).toBe(3);
     expect(parseMajorUnits('12.345', 'BHD')).toBe(12_345);
     expect(parseMajorUnits('-84.25', 'USD')).toBe(-8_425);
+    expect(parseMajorUnits('0.29', 'USD')).toBe(29);
+    expect(parseMajorUnits('90071992547409.91', 'USD')).toBe(Number.MAX_SAFE_INTEGER);
+    expect(parseMajorUnits('-90071992547409.91', 'USD')).toBe(-Number.MAX_SAFE_INTEGER);
+    expect(parseMajorUnits('90071992547409.89', 'USD')).toBe(9_007_199_254_740_989);
+    expect(() => parseMajorUnits('90071992547409.92', 'USD')).toThrow(/safe range/i);
+    expect(() => parseMajorUnits('99999999999999.99', 'USD')).toThrow(/safe range/i);
     expect(() => parseMajorUnits('1.001', 'USD')).toThrow(/decimal|fraction/i);
     expect(() => addMinorUnits([Number.MAX_SAFE_INTEGER, 1])).toThrow(/safe/i);
   });
