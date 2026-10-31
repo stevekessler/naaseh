@@ -740,6 +740,7 @@ components:
         label: { type: string, minLength: 1, maxLength: 300 }
         link: { type: [string, 'null'], format: uri }
         memo: { type: string, maxLength: 50000 }
+        memoDocument: { type: [object, 'null'], description: 'Structured memo document; null explicitly clears formatting when protecting a memo.' }
         encryptedMemo: { type: [string, 'null'] }
         memoHidden: { type: boolean }
         dueAt: { type: [string, 'null'], format: date-time }

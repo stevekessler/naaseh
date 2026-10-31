@@ -10,6 +10,31 @@ describe('post-it color task mutation', () => {
     expect(taskPatchSchema.safeParse({ postItColor: null }).success).toBe(true);
     expect(taskPatchSchema.safeParse({ postItColor: '#123456' }).success).toBe(false);
     expect(sanitizeTaskPatch({ postItColor: null })).toEqual({ postItColor: undefined });
+    expect(taskPatchSchema.safeParse({ memoDocument: null }).success).toBe(true);
+    expect(sanitizeTaskPatch({ memoDocument: null })).toEqual({ memoDocument: undefined });
+    expect(taskPatchSchema.safeParse({ categoryId: null }).success).toBe(true);
+    const before = createTask(
+      {
+        label: 'Note',
+        memo: 'Formatted',
+        memoDocument: {
+          version: 1,
+          blocks: [{ type: 'paragraph', runs: [{ text: 'Formatted', marks: ['bold'] }] }],
+        },
+        categoryId: '01J00000000000000000000001',
+      },
+      'owner',
+    );
+    const prepared = prepareTaskUpdate(
+      before,
+      sanitizeTaskPatch({ memoDocument: null, categoryId: null }),
+      'owner',
+      new Map([[before.id, before]]),
+    );
+    expect(prepared.task.memoDocument).toBeUndefined();
+    expect(prepared.task.categoryId).toBeUndefined();
+    expect(prepared.task.memo).toBe('Formatted');
+    expect(prepared.changedFields).toEqual(['memoDocument', 'categoryId']);
   });
 
   it('records the color in the same task revision transaction', async () => {
