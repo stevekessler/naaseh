@@ -32,6 +32,7 @@ public struct VoiceTaskResult: Codable, Equatable, Sendable {
 
 public enum VoiceTaskError: Error, Equatable, Sendable {
     case locked
+    case disabled
     case signedOut
     case cancelled
     case invalidTitle
@@ -43,7 +44,7 @@ public enum VoiceTaskError: Error, Equatable, Sendable {
 public actor VoiceTaskService {
     public typealias TaskCreator = @Sendable (TaskCreateCommand) async throws -> TaskRecord
 
-    private let projects: AuthorizedProjectQuery
+    private var projects: AuthorizedProjectQuery
     private let createTask: TaskCreator
     private let access: @Sendable () async -> VoiceTaskAccess
     private let timeZone: TimeZone
@@ -74,13 +75,13 @@ public actor VoiceTaskService {
     }
 
     public func create(_ request: VoiceTaskRequest) async throws -> VoiceTaskResult {
-        if let receipt = receipts[request.invocationID] { return receipt }
         if request.isCancelled { throw VoiceTaskError.cancelled }
         switch await access() {
         case .unlocked: break
         case .locked: throw VoiceTaskError.locked
         case .signedOut: throw VoiceTaskError.signedOut
         }
+        if let receipt = receipts[request.invocationID] { return receipt }
         let title = request.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty, title.count <= 300 else { throw VoiceTaskError.invalidTitle }
 
@@ -110,32 +111,20 @@ public actor VoiceTaskService {
 
     public func currentAccess() async -> VoiceTaskAccess { await access() }
 
+    public func updateProjects(_ projects: AuthorizedProjectQuery) { self.projects = projects }
+    public func purge() { receipts = [:]; projects = AuthorizedProjectQuery(projects: []) }
+
     private func dueValue(date: String?, time: String?) throws -> TaskDueValue? {
         guard date != nil || time != nil else { return nil }
-        guard let date else { throw VoiceTaskError.invalidDateOrTime }
-        if time == nil { return try? TaskDueValue.date(date) }
-        guard let time,
-              let day = Self.dayFormatter.date(from: date),
-              let clock = Self.timeFormatter.date(from: time)
-        else { throw VoiceTaskError.invalidDateOrTime }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = timeZone
-        let dayParts = calendar.dateComponents([.year, .month, .day], from: day)
-        let timeParts = calendar.dateComponents([.hour, .minute], from: clock)
-        var parts = dayParts
-        parts.hour = timeParts.hour; parts.minute = timeParts.minute
-        guard let instant = calendar.date(from: parts) else { throw VoiceTaskError.invalidDateOrTime }
+        guard let date, let day = try? TaskDueValue.date(date) else { throw VoiceTaskError.invalidDateOrTime }
+        guard let time else { return day }
+        let dates = date.split(separator: "-").compactMap { Int($0) }
+        let times = time.split(separator: ":").compactMap { Int($0) }
+        guard dates.count == 3, times.count == 2, (0...23).contains(times[0]), (0...59).contains(times[1]) else { throw VoiceTaskError.invalidDateOrTime }
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = timeZone
+        let parts = DateComponents(timeZone: timeZone, year: dates[0], month: dates[1], day: dates[2], hour: times[0], minute: times[1])
+        guard let instant = calendar.date(from: parts), calendar.component(.hour, from: instant) == times[0],
+              calendar.component(.day, from: instant) == dates[2] else { throw VoiceTaskError.invalidDateOrTime }
         return try TaskDueValue.timed(instant, timeZoneIdentifier: timeZone.identifier)
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let value = DateFormatter(); value.locale = Locale(identifier: "en_US_POSIX")
-        value.timeZone = TimeZone(secondsFromGMT: 0); value.dateFormat = "yyyy-MM-dd"; value.isLenient = false
-        return value
-    }()
-    private static let timeFormatter: DateFormatter = {
-        let value = DateFormatter(); value.locale = Locale(identifier: "en_US_POSIX")
-        value.timeZone = TimeZone(secondsFromGMT: 0); value.dateFormat = "HH:mm"; value.isLenient = false
-        return value
-    }()
 }

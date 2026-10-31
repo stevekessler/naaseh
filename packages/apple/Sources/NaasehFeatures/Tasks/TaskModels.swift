@@ -14,6 +14,10 @@ public enum TaskValidationError: Error, Equatable, Sendable {
     case labelTooLong
     case memoTooLong
     case invalidDueValue
+    case invalidLink
+    case invalidRepeat
+    case invalidProgress
+    case invalidMemoDocument
     case hiddenMemoContainsPlaintext
     case unauthorized
     case hierarchyCycle
@@ -61,6 +65,10 @@ public struct TaskRecord: Codable, Equatable, Identifiable, Sendable {
     public var memo: String
     public var memoHidden: Bool
     public var encryptedMemo: String?
+    public var memoDocument: TaskMemoDocument?
+    public var repeatInterval: Int?
+    public var repeatUnit: TaskRepeatUnit?
+    public var stackMembershipEpoch: String?
     public var due: TaskDueValue?
     public var assigneeID: String?
     public var categoryID: String?
@@ -104,7 +112,7 @@ public struct TaskRecord: Codable, Equatable, Identifiable, Sendable {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw TaskValidationError.emptyLabel }
         guard trimmed.count <= 300 else { throw TaskValidationError.labelTooLong }
-        guard memo.count <= 20_000 else { throw TaskValidationError.memoTooLong }
+        guard memo.utf16.count <= 50_000 else { throw TaskValidationError.memoTooLong }
         guard !(memoHidden && !memo.isEmpty), memoHidden || encryptedMemo == nil else {
             throw TaskValidationError.hiddenMemoContainsPlaintext
         }
@@ -200,6 +208,19 @@ public struct TaskRecord: Codable, Equatable, Identifiable, Sendable {
         copy.currentCompletionEventID = eventID
         copy.updatedAt = now
         copy.version += 1
+        if let interval = repeatInterval, let unit = repeatUnit, let due {
+            copy.due = try due.advanced(interval: interval, unit: unit)
+            copy.lifecycle = .active
+            copy.completionState = .open
+            copy.percentComplete = 0
+            copy.archiveReason = nil
+            copy.archivedAt = nil
+            copy.archivedBy = nil
+            copy.completedAt = nil
+            copy.completedBy = nil
+            copy.currentCompletionEventID = nil
+            copy.stackMembershipEpoch = Self.dateString(now)
+        }
         return (copy, completion)
     }
 }
@@ -208,6 +229,7 @@ extension TaskRecord {
     private enum CodingKeys: String, CodingKey {
         case id, label, link, memo, memoHidden, encryptedMemo, createdAt, updatedAt
         case dueAt, dueKind, dueDate, dueTimeZone
+        case memoDocument, repeatInterval, repeatUnit, stackMembershipEpoch
         case visibility, urgency, postItColor, percentComplete, status, lifecycle
         case archiveReason, archivedAt, archivedBy, completedAt, completedBy, version
         case ownerID = "ownerId"
@@ -227,6 +249,10 @@ extension TaskRecord {
         label = try values.decode(String.self, forKey: .label)
         link = try values.decodeIfPresent(URL.self, forKey: .link)
         memo = try values.decodeIfPresent(String.self, forKey: .memo) ?? ""
+        memoDocument = try values.decodeIfPresent(TaskMemoDocument.self, forKey: .memoDocument)
+        repeatInterval = try values.decodeIfPresent(Int.self, forKey: .repeatInterval)
+        repeatUnit = try values.decodeIfPresent(TaskRepeatUnit.self, forKey: .repeatUnit)
+        stackMembershipEpoch = try values.decodeIfPresent(String.self, forKey: .stackMembershipEpoch)
         memoHidden = try values.decodeIfPresent(Bool.self, forKey: .memoHidden) ?? false
         encryptedMemo = try values.decodeIfPresent(String.self, forKey: .encryptedMemo)
         assigneeID = try values.decodeIfPresent(String.self, forKey: .assigneeID) ?? ownerID
@@ -266,7 +292,10 @@ extension TaskRecord {
                 due = try TaskDueValue.timed(instant, timeZoneIdentifier: zone)
             } else { due = nil }
         case nil:
-            due = nil
+            if let instant = try Self.decodeDate(values, forKey: .dueAt),
+               let zone = try values.decodeIfPresent(String.self, forKey: .dueTimeZone) {
+                due = try TaskDueValue.timed(instant, timeZoneIdentifier: zone)
+            } else { due = nil }
         }
     }
 
@@ -277,6 +306,10 @@ extension TaskRecord {
         try values.encode(label, forKey: .label)
         try values.encodeIfPresent(link, forKey: .link)
         try values.encode(memo, forKey: .memo)
+        try values.encodeIfPresent(memoDocument, forKey: .memoDocument)
+        try values.encodeIfPresent(repeatInterval, forKey: .repeatInterval)
+        try values.encodeIfPresent(repeatUnit, forKey: .repeatUnit)
+        try values.encodeIfPresent(stackMembershipEpoch, forKey: .stackMembershipEpoch)
         try values.encode(memoHidden, forKey: .memoHidden)
         try values.encodeIfPresent(encryptedMemo, forKey: .encryptedMemo)
         try values.encode(Self.dateString(createdAt), forKey: .createdAt)
@@ -384,5 +417,20 @@ public enum TaskHierarchy {
             guard visited.insert(current).inserted else { throw TaskValidationError.hierarchyCycle }
             cursor = parentByTaskID[current]
         }
+    }
+}
+
+public extension TaskRecord {
+    func protectingMemo(_ package: HiddenMemoPackage) throws -> Self {
+        guard package.taskId == id, [1, 2].contains(package.version), !package.recoveryWraps.isEmpty,
+              package.recoveryWraps.allSatisfy({ $0.authority == "recovery" && $0.algorithm == "RSA-OAEP-256" }),
+              package.aad == "naaseh:hidden-memo:\(package.version):\(id):\(package.memoId)"
+                || (package.version == 2 && package.aad == "naaseh:hidden-memo:1:\(id):\(package.memoId)") else {
+            throw HiddenMemoError.malformedPackage
+        }
+        var next = self
+        next.memo = ""; next.memoDocument = nil; next.memoHidden = true
+        next.encryptedMemo = String(decoding: try JSONEncoder().encode(package), as: UTF8.self)
+        return next
     }
 }

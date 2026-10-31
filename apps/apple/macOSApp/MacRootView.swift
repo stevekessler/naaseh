@@ -22,11 +22,16 @@ public struct MacRootView: View {
             case let .ready(connectivity):
                 desktop(connectivity: connectivity)
             case .locked:
-                ContentUnavailableView(
-                    "Na’aseh Is Locked",
-                    systemImage: "lock.shield",
-                    description: Text("Unlock with Touch ID or your Mac password.")
-                )
+                ContentUnavailableView {
+                    Label("Na’aseh Is Locked", systemImage: "lock.shield")
+                } description: { Text("Unlock with Touch ID or your Mac password.") } actions: {
+                    Button("Unlock") {
+                        Task {
+                            await core.start(); await tasks.reload()
+                            _ = try? await IntentDependencies.shared.resumePendingContinuation()
+                        }
+                    }.accessibilityIdentifier("authentication.unlock")
+                }
             case .signedOut:
                 if let authentication { AuthenticationRootView(model: authentication) }
                 else {
@@ -35,6 +40,14 @@ public struct MacRootView: View {
                         systemImage: "person.crop.circle",
                         description: Text("Use your existing account to access your work.")
                     )
+                }
+            case .blocked(.sessionValidationRequired):
+                ContentUnavailableView {
+                    Label("Connect to Validate This Device", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text("Offline access lasts seven days after validation. Your encrypted data and unsynced changes are kept on this device.")
+                } actions: {
+                    Button("Try Again") { Task { await core.start(); await tasks.reload() } }
                 }
             case let .blocked(reason):
                 NaasehErrorState(detail: "Na’aseh cannot open safely (\(reason.rawValue)).")
@@ -46,7 +59,7 @@ public struct MacRootView: View {
         }
         .frame(minWidth: 820, minHeight: 560)
         .task {
-            if core.state == .launching { await core.start() }
+            if core.state == .launching { await core.start(); await tasks.reload() }
         }
     }
 
@@ -62,6 +75,10 @@ public struct MacRootView: View {
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
+                Button("Sign Out") { Task { try? await core.signOut() } }
+                    .disabled(core.isSigningOut)
+                    .accessibilityIdentifier("account.signOut")
+                    .padding()
             }
             .padding(.top, NaasehSpacing.standard)
             .background(.background)
@@ -75,7 +92,9 @@ public struct MacRootView: View {
                     TaskBrowserView(model: tasks, showsDetailInline: true)
                 } else if core.router.selectedSection == .journal {
                     MacJournalScene()
-                } else if [.lists, .directory, .reports].contains(core.router.selectedSection) {
+                } else if core.router.selectedSection == .reports {
+                        NativeTaskReportsView(model: tasks)
+                    } else if [.lists, .directory, .reports].contains(core.router.selectedSection) {
                     MacProductParityScene(section: core.router.selectedSection)
                 } else if core.router.selectedSection == .settings {
                     MacProfileScene()
@@ -100,7 +119,7 @@ public struct MacRootView: View {
         }
         .toolbar {
             ToolbarItem {
-                Button("New task", systemImage: "plus") { tasks.beginCreate() }
+                Button("New task", systemImage: "plus") { core.router.selectedSection = .tasks; tasks.beginCreate() }
                     .keyboardShortcut("n", modifiers: .command)
             }
         }
@@ -139,12 +158,18 @@ private extension AppSection {
 @MainActor
 public struct NaasehMacCommands: Commands {
     private let core: AppCore
+    private let tasks: TaskWorkspaceModel
 
-    public init(core: AppCore) { self.core = core }
+    public init(core: AppCore, tasks: TaskWorkspaceModel) { self.core = core; self.tasks = tasks }
 
     public var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("New Task") {}
+            Button("New Task") {
+                guard case .ready = core.state else { return }
+                core.router.selectedSection = .tasks
+                tasks.beginCreate()
+            }
+            .disabled({ if case .ready = core.state { return false }; return true }())
                 .keyboardShortcut("n", modifiers: .command)
             Divider()
             Button("Lock Na’aseh") { Task { await core.lock() } }

@@ -7,6 +7,7 @@ import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParen
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from './TaskEditDialog.js';
 import { TaskColumnSettings, useTaskColumns } from './TaskColumnSettings.js';
+import { FinancialTaskLink } from './FinancialTaskLink.js';
 export function TaskListPage({
   tasks,
   loading = false,
@@ -102,6 +103,7 @@ export function TaskListPage({
                 aria-label="Task details"
                 data-task-id={selected.id}
               >
+                <FinancialTaskLink taskId={selected.id} />
                 <TaskActions
                   task={selected}
                   csrfToken={csrfToken}

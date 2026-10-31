@@ -163,6 +163,34 @@ public actor PersistenceController {
         health = .closed
     }
 
+    /// Removes only this account, including recovery comparisons and scene/alert state.
+    public func purge(accountNamespace: String) throws {
+        guard let container else { throw SafeStoreFailure.storeOpenFailed }
+        let context = ModelContext(container)
+        for value in try context.fetch(FetchDescriptor<EncryptedRecord>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        for value in try context.fetch(FetchDescriptor<PendingOperation>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        for value in try context.fetch(FetchDescriptor<SyncCursor>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        for value in try context.fetch(FetchDescriptor<SyncConflict>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        for value in try context.fetch(FetchDescriptor<NativeSceneState>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        for value in try context.fetch(FetchDescriptor<MigrationJournal>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        for value in try context.fetch(FetchDescriptor<AlertOccurrence>(
+            predicate: #Predicate { $0.accountNamespace == accountNamespace }
+        )) { context.delete(value) }
+        try context.save()
+    }
+
     public func commit(record: EncryptedRecord, operation: PendingOperation) throws {
         guard let container else { throw SafeStoreFailure.storeOpenFailed }
         let context = ModelContext(container)
@@ -205,9 +233,25 @@ public actor PersistenceController {
                 })
             )
             for operation in pending { context.delete(operation) }
+            let conflicts = try context.fetch(
+                FetchDescriptor<SyncConflict>(predicate: #Predicate {
+                    $0.accountNamespace == accountNamespace
+                        && $0.targetKind == targetKind && $0.targetId == targetID
+                })
+            )
+            for conflict in conflicts { context.delete(conflict) }
         }
         for value in records {
             let storageKey = "\(value.accountNamespace):\(value.kind.rawValue):\(value.recordID)"
+            let accountNamespace = value.accountNamespace
+            let targetKind = value.kind.rawValue
+            let targetID = value.recordID
+            let outstanding = try context.fetch(FetchDescriptor<PendingOperation>(predicate: #Predicate {
+                $0.accountNamespace == accountNamespace && $0.targetKind == targetKind && $0.targetId == targetID
+            }))
+            // Pull-before-push and projection refreshes must not replace unsynchronized drafts.
+            // Conflicted/rejected work remains available until explicitly resolved.
+            if outstanding.contains(where: { $0.state != PendingOperationState.applied.rawValue }) { continue }
             let existing = try context.fetch(
                 FetchDescriptor<EncryptedRecord>(predicate: #Predicate { $0.storageKey == storageKey })
             )
@@ -251,10 +295,23 @@ public actor PersistenceController {
         return try ModelContext(container).fetch(descriptor).first?.cursor
     }
 
+    public func operationCounts(accountNamespace: String) throws -> NativeOperationCounts {
+        guard let container else { throw SafeStoreFailure.storeOpenFailed }
+        let operations = try ModelContext(container).fetch(FetchDescriptor<PendingOperation>(predicate: #Predicate {
+            $0.accountNamespace == accountNamespace
+        }))
+        return NativeOperationCounts(
+            pending: operations.filter { $0.state == PendingOperationState.queued.rawValue || $0.state == PendingOperationState.retryScheduled.rawValue }.count,
+            conflicted: operations.filter { $0.state == PendingOperationState.conflicted.rawValue }.count,
+            rejected: operations.filter { $0.state == PendingOperationState.rejected.rawValue }.count
+        )
+    }
+
     public func pendingOperations(
         accountNamespace: String,
         readyAt: Date,
-        limit: Int
+        limit: Int,
+        includeIssues: Bool = false
     ) throws -> [PendingOperationSnapshot] {
         guard let container else { throw SafeStoreFailure.storeOpenFailed }
         let descriptor = FetchDescriptor<PendingOperation>(
@@ -267,11 +324,37 @@ public actor PersistenceController {
         return try ModelContext(container).fetch(descriptor)
             .filter {
                 ($0.state == PendingOperationState.queued.rawValue
-                    || $0.state == PendingOperationState.retryScheduled.rawValue)
+                    || $0.state == PendingOperationState.retryScheduled.rawValue
+                    || (includeIssues && ($0.state == PendingOperationState.conflicted.rawValue || $0.state == PendingOperationState.rejected.rawValue)))
                     && ($0.nextAttemptAt.map { $0 <= readyAt } ?? true)
             }
             .prefix(max(0, limit))
             .map(PendingOperationSnapshot.init)
+    }
+
+    public func replacePendingTarget(account: String, kind: LocalRecordKind, id: String, expectedIDs: [String],
+                                     operations: [PendingOperationRewrite], record: EncryptedRecordWrite?) throws {
+        guard let container else { throw SafeStoreFailure.storeOpenFailed }
+        let context = ModelContext(container)
+        let targetKind = kind.rawValue
+        let old = try context.fetch(FetchDescriptor<PendingOperation>(predicate: #Predicate {
+            $0.accountNamespace == account && $0.targetKind == targetKind && $0.targetId == id
+        }))
+        guard Set(old.map(\.mutationId)) == Set(expectedIDs) else { throw SafeStoreFailure.migrationValidationFailed }
+        for value in old { context.delete(value) }
+        for value in operations {
+            context.insert(PendingOperation(accountNamespace: account, mutationId: value.id, operationKind: value.operation,
+                targetKind: targetKind, targetId: id, baseVersion: value.baseVersion, createdAt: value.createdAt,
+                state: .queued, envelopeVersion: 1, nonce: value.nonce, ciphertextAndTag: value.ciphertextAndTag))
+        }
+        let key = "\(account):\(targetKind):\(id)"
+        for value in try context.fetch(FetchDescriptor<EncryptedRecord>(predicate: #Predicate { $0.storageKey == key })) { context.delete(value) }
+        if let record {
+            context.insert(EncryptedRecord(accountNamespace: account, recordKind: kind, recordId: id, serverVersion: record.serverVersion,
+                syncState: operations.isEmpty ? .synced : .pending, updatedAt: record.updatedAt, envelopeVersion: 1,
+                nonce: record.nonce, ciphertextAndTag: record.ciphertextAndTag))
+        }
+        try context.save()
     }
 
     public func setOperationState(
@@ -393,6 +476,7 @@ public struct EncryptedRecordSnapshot: Sendable {
 }
 
 public struct PendingOperationSnapshot: Sendable {
+    public let state: String
     public let mutationID: String
     public let operationKind: String
     public let targetKind: String
@@ -404,6 +488,7 @@ public struct PendingOperationSnapshot: Sendable {
     public let ciphertextAndTag: Data
 
     init(_ operation: PendingOperation) {
+        state = operation.state
         mutationID = operation.mutationId
         operationKind = operation.operationKind
         targetKind = operation.targetKind
@@ -454,6 +539,15 @@ public struct SyncConflictWrite: Sendable {
     public let localMutationID: String
     public let detectedAt: Date
     public let envelopeVersion: Int
+    public let nonce: Data
+    public let ciphertextAndTag: Data
+}
+
+public struct PendingOperationRewrite: Sendable {
+    public let id: String
+    public let operation: String
+    public let baseVersion: Int
+    public let createdAt: Date
     public let nonce: Data
     public let ciphertextAndTag: Data
 }

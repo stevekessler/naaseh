@@ -75,7 +75,8 @@ export function eligibleParentTasks(task: Task | undefined, parentTasks: readonl
         !descendantIds.has(candidate.id) &&
         candidate.status === 'open' &&
         (candidate.lifecycle ?? 'active') === 'active' &&
-        candidate.completionState !== 'completed',
+        candidate.completionState !== 'completed' &&
+        (candidate.percentComplete ?? 0) < 100,
     )
     .sort((left, right) => left.label.localeCompare(right.label));
 }

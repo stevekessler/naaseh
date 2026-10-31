@@ -154,13 +154,25 @@ describe('shared assignment controls', () => {
         save={vi.fn()}
         assignees={assignees}
         defaultAssigneeId="user-steve"
-        parentTasks={[openParent, completedParent]}
+        parentTasks={[
+          openParent,
+          completedParent,
+          {
+            ...completedParent,
+            id: 'progress-complete',
+            status: 'open',
+            completionState: 'open',
+            percentComplete: 100,
+          },
+        ]}
       />,
     );
 
     expect(html).toContain('<option value="user-steve" selected="">Steve (@steve)</option>');
     expect(html).toContain('name="parentId"');
     expect(eligibleParentTasks(undefined, [openParent, completedParent])).toEqual([openParent]);
+    expect(html).not.toContain('<option value="progress-complete">');
+    expect(eligibleParentTasks(undefined, [{ ...openParent, percentComplete: 100 }])).toEqual([]);
     expect(html).toContain('>Link<');
     expect(html).not.toContain('HTTPS link');
     expect(html).toContain('<details class="task-form-details">');

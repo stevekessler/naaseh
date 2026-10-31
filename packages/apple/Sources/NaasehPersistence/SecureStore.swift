@@ -1,4 +1,5 @@
 import Foundation
+import NaasehContracts
 import NaasehCrypto
 
 public enum SecureStoreError: Error, Equatable, Sendable {
@@ -10,6 +11,7 @@ public actor SecureStore {
 
     private let controller: PersistenceController
     private let accountNamespace: String
+    public nonisolated var accountID: String { accountNamespace }
     private let key: Data?
     private let capacityCheck: CapacityCheck
 
@@ -131,6 +133,12 @@ public actor SecureStore {
         _ type: Value.Type,
         kind: LocalRecordKind
     ) async throws -> [Value] {
+        try await recordValues(type, kind: kind).map(\.value)
+    }
+
+    public func recordValues<Value: Decodable & Sendable>(
+        _ type: Value.Type, kind: LocalRecordKind
+    ) async throws -> [(id: String, value: Value)] {
         guard let key else { throw SecureStoreError.missingKey }
         let derived = try accountKey(rootKey: key)
         return try await controller.records(accountNamespace: accountNamespace, kind: kind).map {
@@ -144,8 +152,12 @@ public actor SecureStore {
                 key: derived,
                 authenticatedData: authenticatedData(kind: kind, recordID: $0.recordID)
             )
-            return try JSONDecoder().decode(type, from: plaintext)
+            return ($0.recordID, try JSONDecoder().decode(type, from: plaintext))
         }
+    }
+
+    public func operationCounts() async throws -> NativeOperationCounts {
+        try await controller.operationCounts(accountNamespace: accountNamespace)
     }
 
     public func counts() async throws -> (records: Int, operations: Int) {
@@ -156,13 +168,13 @@ public actor SecureStore {
         try await controller.cursor(accountNamespace: accountNamespace, audience: audience)
     }
 
-    public func pendingOperations(readyAt: Date, limit: Int) async throws -> [DecryptedPendingOperation] {
+    public func pendingOperations(readyAt: Date, limit: Int, includeIssues: Bool = false) async throws -> [DecryptedPendingOperation] {
         guard let key else { throw SecureStoreError.missingKey }
         let derived = try accountKey(rootKey: key)
         return try await controller.pendingOperations(
             accountNamespace: accountNamespace,
             readyAt: readyAt,
-            limit: limit
+            limit: limit, includeIssues: includeIssues
         ).map { operation in
             guard operation.ciphertextAndTag.count >= 16,
                   let kind = LocalRecordKind(rawValue: operation.targetKind)
@@ -177,6 +189,7 @@ public actor SecureStore {
                 authenticatedData: authenticatedData(kind: kind, recordID: operation.targetID)
             )
             return DecryptedPendingOperation(
+                state: operation.state,
                 mutationID: operation.mutationID,
                 targetKind: operation.targetKind,
                 targetID: operation.targetID,
@@ -187,6 +200,42 @@ public actor SecureStore {
                 attemptCount: operation.attemptCount
             )
         }
+    }
+
+    public func resolveTarget(kind: LocalRecordKind, id: String, remote: JSONValue, version: Int,
+                              retry: Bool, mutationIDs: [String]) async throws {
+        guard let key else { throw SecureStoreError.missingKey }
+        let pending = try await pendingOperations(readyAt: .distantFuture, limit: 100_000, includeIssues: true)
+            .filter { $0.targetKind == kind.rawValue && $0.targetID == id }
+        guard !pending.isEmpty, !retry || mutationIDs.count == pending.count else { throw SecureStoreError.corruptEnvelope }
+        let derived = try accountKey(rootKey: key)
+        let aad = authenticatedData(kind: kind, recordID: id)
+        var rewrites: [PendingOperationRewrite] = []
+        var replacement = remote
+        if retry {
+            for (index, operation) in pending.enumerated() {
+                var payload = try JSONDecoder().decode(JSONValue.self, from: operation.payload)
+                if case var .object(fields) = payload {
+                    if kind == .stack { fields["baseVersion"] = .number(Decimal(version + index)); payload = .object(fields) }
+                    if kind == .task, case let .object(patch) = fields["patch"], case var .object(record) = replacement {
+                        for (field, value) in patch { if value == .null { record.removeValue(forKey: field) } else { record[field] = value } }
+                        replacement = .object(record)
+                    }
+                }
+                let nonce = randomNonce()
+                let sealed = try NaasehCrypto.aesGCMSeal(plaintext: JSONEncoder().encode(payload), key: derived, nonce: nonce, authenticatedData: aad)
+                rewrites.append(.init(id: mutationIDs[index], operation: operation.operationKind, baseVersion: version + index,
+                    createdAt: Date().addingTimeInterval(Double(index) / 1000), nonce: nonce, ciphertextAndTag: sealed.ciphertext + sealed.tag))
+            }
+            if kind != .task { replacement = try await read(JSONValue.self, kind: kind, recordID: id) ?? remote }
+            if case var .object(fields) = replacement { fields["version"] = .number(Decimal(version + pending.count)); replacement = .object(fields) }
+        }
+        let nonce = randomNonce()
+        let sealed = try NaasehCrypto.aesGCMSeal(plaintext: JSONEncoder().encode(replacement), key: derived, nonce: nonce, authenticatedData: aad)
+        let record: EncryptedRecordWrite? = replacement == .null ? nil : EncryptedRecordWrite(accountNamespace: accountNamespace, kind: kind, recordID: id, serverVersion: version,
+            updatedAt: Date(), envelopeVersion: 1, nonce: nonce, ciphertextAndTag: sealed.ciphertext + sealed.tag)
+        try await controller.replacePendingTarget(account: accountNamespace, kind: kind, id: id,
+            expectedIDs: pending.map(\.mutationID), operations: rewrites, record: record)
     }
 
     public func markOperationsApplied(_ mutationIDs: [String]) async throws {
@@ -331,6 +380,7 @@ public actor SecureStore {
 }
 
 public struct DecryptedPendingOperation: Sendable {
+    public let state: String
     public let mutationID: String
     public let targetKind: String
     public let targetID: String

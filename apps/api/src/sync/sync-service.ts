@@ -249,3 +249,54 @@ export function stableReplayResult(
 export function uniqueAudiences(audiences: readonly string[]): string[] {
   return [...new Set(audiences.filter(Boolean))].sort();
 }
+
+const financeBootstrapOrder = new Map<string, number>([
+  ['financeAccount', 0],
+  ['financeCategory', 1],
+  ['financeMerchant', 2],
+  ['financeBudget', 3],
+  ['financeBudgetAccountLink', 4],
+  ['financeBudgetItem', 5],
+  ['financeTransaction', 6],
+  ['financeAllocation', 7],
+  ['financeTransfer', 8],
+  ['financeReusableItem', 9],
+  ['financeTransactionMatch', 10],
+  ['financeReconciliation', 11],
+  ['financeTaskLink', 12],
+  ['financeReviewIssue', 13],
+  ['financeBalanceSnapshot', 14],
+]);
+
+/** Parents and global labels hydrate before dependent protected records. */
+export function orderFinanceBootstrapChanges(changes: readonly SyncChange[]): SyncChange[] {
+  return [...changes].sort(
+    (left, right) =>
+      (financeBootstrapOrder.get(left.entityType ?? '') ?? 100) -
+        (financeBootstrapOrder.get(right.entityType ?? '') ?? 100) ||
+      left.sequence - right.sequence,
+  );
+}
+
+export function financeRevocationTombstone(input: {
+  audience: string;
+  entityType: EntityType;
+  entityId: string;
+  version: number;
+  changedAt: string;
+}): Omit<SyncChange, 'sequence'> {
+  return { ...input, operation: 'tombstone' };
+}
+
+/** Finance conflicts reveal only versions and a stable reason, never protected values. */
+export function contentFreeFinanceConflict(
+  mutationId: string,
+  currentVersion: number,
+): ContractV4MutationResult {
+  return contractV4MutationResultSchema.parse({
+    mutationId,
+    status: 'conflict',
+    reason: 'version_mismatch',
+    currentVersion,
+  });
+}

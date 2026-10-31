@@ -30,6 +30,16 @@ private actor FileTransportFixture: FileUploadTransport {
         #expect(String(decoding: encrypted, as: UTF8.self).contains("private attachment") == false)
         let preview = try await service.preview(encryptedBody: encrypted, attachment: attachment)
         #expect(try String(contentsOf: preview, encoding: .utf8) == "synthetic private attachment")
+        let malicious = NativeAttachment(
+            id: attachment.id,
+            filename: "../../../escaped.txt",
+            contentType: attachment.contentType,
+            byteSize: attachment.byteSize,
+            scanState: .clean
+        )
+        let confined = try await service.preview(encryptedBody: encrypted, attachment: malicious)
+        #expect(confined.deletingLastPathComponent().standardizedFileURL == root.appendingPathComponent("staging").standardizedFileURL)
+        #expect(FileManager.default.fileExists(atPath: root.deletingLastPathComponent().appendingPathComponent("escaped.txt").path) == false)
         try await service.cleanup()
         #expect(FileManager.default.fileExists(atPath: preview.path) == false)
     }

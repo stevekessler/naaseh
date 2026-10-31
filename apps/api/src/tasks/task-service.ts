@@ -54,6 +54,8 @@ export function sanitizeTaskPatch(value: unknown): Partial<Task> {
   if (entries.some(([field]) => !mutableTaskFields.has(field as keyof Task)))
     throw new Error('Task patch contains a protected field.');
   const clearable = new Set([
+    'memoDocument',
+    'categoryId',
     'dueKind',
     'dueDate',
     'dueAt',

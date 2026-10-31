@@ -6,6 +6,7 @@ import {
   mergeCursor,
 } from '../../src/db/outbox.js';
 import { supportedLocalSchema } from '../../src/db/sync-cursor.js';
+import { currentSchemaVersion } from '../../src/db/schema.js';
 import { assertStorageCapacity } from '../../src/db/storage-health.js';
 import {
   shouldBootstrapListSnapshot,
@@ -35,8 +36,8 @@ describe('durable local outbox rules', () => {
     expect(cursorAdvanced({ public: 5, owner: 2 }, { public: 5, owner: 2 })).toBe(false);
   });
   it('recognizes only the current encrypted database schema', () => {
-    expect(supportedLocalSchema(15)).toBe(true);
-    expect(supportedLocalSchema(14)).toBe(false);
+    expect(supportedLocalSchema(currentSchemaVersion)).toBe(true);
+    expect(supportedLocalSchema(currentSchemaVersion - 1)).toBe(false);
   });
   it('blocks saves before quota exhaustion and uses bounded jittered retries', () => {
     expect(() => assertStorageCapacity(96, 100, 1)).toThrow('cannot be saved safely');

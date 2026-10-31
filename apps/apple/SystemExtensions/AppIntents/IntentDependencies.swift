@@ -19,7 +19,10 @@ actor IntentDependencies {
         self.projectQuery = projectQuery
     }
 
+    func updateProjects(_ query: AuthorizedProjectQuery) async { projectQuery = query; await voiceService?.updateProjects(query) }
+
     func create(_ request: VoiceTaskRequest) async throws -> VoiceTaskResult {
+        guard UserDefaults.standard.bool(forKey: "naaseh.siri-task-creation") else { throw VoiceTaskError.disabled }
         guard let voiceService else { throw VoiceTaskError.signedOut }
         return try await voiceService.create(request)
     }
@@ -47,6 +50,9 @@ actor IntentDependencies {
     @discardableResult
     func resumePendingContinuation() async throws -> VoiceTaskResult? {
         guard let token = pendingContinuationToken else { return nil }
+        guard UserDefaults.standard.bool(forKey: "naaseh.siri-task-creation") else {
+            pendingContinuationToken = nil; throw VoiceTaskError.disabled
+        }
         guard let continuationStore, let voiceService else { throw VoiceContinuationError.missing }
         switch await voiceService.currentAccess() {
         case .unlocked: break
@@ -69,17 +75,21 @@ actor IntentDependencies {
     func purge() async {
         pendingContinuationToken = nil
         await continuationStore?.purge()
+        await voiceService?.purge()
+        projectQuery = AuthorizedProjectQuery(projects: [])
     }
 
-    func projects(identifiers: [String]) -> [ExistingProjectEntity] {
-        identifiers.compactMap { identifier in
+    func projects(identifiers: [String]) async -> [ExistingProjectEntity] {
+        guard UserDefaults.standard.bool(forKey: "naaseh.siri-task-creation"), await voiceService?.currentAccess() == .unlocked else { return [] }
+        return identifiers.compactMap { identifier in
             guard case let .resolved(project) = projectQuery.resolve(identifier) else { return nil }
             return ExistingProjectEntity(id: project.id, name: project.name)
         }
     }
 
-    func projects(matching term: String) -> [ExistingProjectEntity] {
-        projectQuery.suggestedProjects(matching: term).map {
+    func projects(matching term: String) async -> [ExistingProjectEntity] {
+        guard UserDefaults.standard.bool(forKey: "naaseh.siri-task-creation"), await voiceService?.currentAccess() == .unlocked else { return [] }
+        return projectQuery.suggestedProjects(matching: term).map {
             ExistingProjectEntity(id: $0.id, name: $0.name)
         }
     }

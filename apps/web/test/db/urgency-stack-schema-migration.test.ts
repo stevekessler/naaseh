@@ -3,13 +3,13 @@ import { currentSchemaVersion, planEnhancedSchemaMigration } from '../../src/db/
 import { supportedLocalSchema } from '../../src/db/sync-cursor.js';
 
 describe('urgency and personal-stack encrypted schema migration', () => {
-  it('reconciles the existing v9 database through the v15 Journal lifecycle schema', () => {
-    expect(currentSchemaVersion).toBe(15);
-    expect(supportedLocalSchema(15)).toBe(true);
+  it('reconciles the existing v9 database through the v17 Finance schema', () => {
+    expect(currentSchemaVersion).toBe(17);
+    expect(supportedLocalSchema(17)).toBe(true);
     expect(supportedLocalSchema(10)).toBe(false);
     expect(planEnhancedSchemaMigration(9)).toMatchObject({
       from: 9,
-      to: 15,
+      to: 17,
       preserveOutbox: true,
     });
   });
@@ -36,13 +36,13 @@ describe('urgency and personal-stack encrypted schema migration', () => {
     );
   });
 
-  it('is idempotent at v15 and still rejects future schemas', () => {
-    expect(planEnhancedSchemaMigration(15)).toMatchObject({
-      from: 15,
-      to: 15,
+  it('is idempotent at v17 and still rejects future schemas', () => {
+    expect(planEnhancedSchemaMigration(17)).toMatchObject({
+      from: 17,
+      to: 17,
       storesToAdd: [],
       storesToDelete: [],
     });
-    expect(() => planEnhancedSchemaMigration(16)).toThrow('newer');
+    expect(() => planEnhancedSchemaMigration(18)).toThrow('newer');
   });
 });

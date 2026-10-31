@@ -34,7 +34,7 @@ const taskObjectSchema = z
     ownerId: z.string().min(1),
     label: z.string().trim().min(1).max(300),
     link: taskLinkSchema.optional().or(z.literal('')),
-    memo: z.string().max(20_000).default(''),
+    memo: z.string().max(50_000).default(''),
     memoDocument: memoDocumentSchema.optional(),
     memoHidden: z.boolean().default(false),
     encryptedMemo: z.string().optional(),

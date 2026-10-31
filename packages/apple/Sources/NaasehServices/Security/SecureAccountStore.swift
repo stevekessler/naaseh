@@ -3,7 +3,7 @@ import NaasehCrypto
 import Security
 
 public enum SecureItemKind: String, CaseIterable, Sendable {
-    case sessionCookie, csrfToken, preAuthentication, trustedDevice, deviceRootKey, telemetryKey
+    case sessionCookie, csrfToken, preAuthentication, trustedDevice, deviceRootKey, telemetryKey, offlineSession
 
     var service: String { "link.thepandas.naaseh.\(rawValue)" }
 }
@@ -102,6 +102,31 @@ public actor SecureAccountStore {
         try await save(.csrfToken, Data(session.csrfToken.utf8), accountID: session.user.id)
     }
 
+    public struct OfflineSession: Codable, Sendable {
+        public let session: NativeAuthenticatedSession
+        public let validatedAt: Date
+        public init(session: NativeAuthenticatedSession, validatedAt: Date) {
+            self.session = session
+            self.validatedAt = validatedAt
+        }
+    }
+
+    // A fixed Keychain lookup permits cold offline launches without a plaintext account index.
+    public func saveOfflineSession(_ value: OfflineSession) async throws {
+        try await save(.offlineSession, JSONEncoder().encode(value), accountID: "active-session")
+    }
+
+    public func loadOfflineSession() async throws -> OfflineSession? {
+        guard let data = try await load(.offlineSession, accountID: "active-session") else { return nil }
+        return try JSONDecoder().decode(OfflineSession.self, from: data)
+    }
+
+    public func clearOfflineSession(accountID: String) async throws {
+        if try await loadOfflineSession()?.session.user.id == accountID {
+            try await backend.remove(service: SecureItemKind.offlineSession.service, account: "active-session")
+        }
+    }
+
     public func savePreAuthentication(_ value: String, accountID: String) async throws {
         try await save(.preAuthentication, Data(value.utf8), accountID: accountID)
     }
@@ -111,9 +136,15 @@ public actor SecureAccountStore {
     }
 
     public func purge(accountID: String) async throws {
-        for kind in SecureItemKind.allCases {
-            try await backend.remove(service: kind.service, account: accountID)
+        var failure: Error?
+        do { try await clearOfflineSession(accountID: accountID) } catch { failure = error }
+        // Continue through every item even if one Keychain deletion fails.
+        let kinds = [SecureItemKind.deviceRootKey] + SecureItemKind.allCases.filter { $0 != .deviceRootKey }
+        for kind in kinds {
+            do { try await backend.remove(service: kind.service, account: accountID) }
+            catch { failure = error }
         }
+        if let failure { throw failure }
     }
 }
 

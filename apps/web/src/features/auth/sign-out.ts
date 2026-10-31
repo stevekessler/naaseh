@@ -1,4 +1,4 @@
-import { purgeAllAuthorizedData } from '../../sync/privacy-purge.js';
+import { purgeAllAuthorizedData, purgeFinanceSearchState } from '../../sync/privacy-purge.js';
 import { clearSessionView } from './session.js';
 
 type SignOutDependencies = {
@@ -54,5 +54,6 @@ export async function signOutBrowser(
     // Local sign-out must remain available while the network is unavailable.
   }
   await dependencies.purge();
+  purgeFinanceSearchState();
   dependencies.clearSession();
 }

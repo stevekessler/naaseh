@@ -4,7 +4,6 @@ import SwiftUI
 @MainActor
 struct MacTaskScene: View {
     @Bindable var model: TaskWorkspaceModel
-    @State private var feedback = CompletionFeedbackController()
 
     var body: some View {
         NavigationSplitView {
@@ -27,23 +26,6 @@ struct MacTaskScene: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .toolbar {
-            ToolbarItemGroup {
-                Button("Move task", systemImage: "arrow.up.arrow.down") {}
-                    .help("Reorder using drag, Move Up/Down, or a direct position.")
-                Menu("Move alternatives") {
-                    Button("Move to first position") {}
-                    Button("Move up") {}
-                    Button("Move down") {}
-                    Button("Move to last position") {}
-                }
-            }
-        }
-        .task(id: model.completionMutationID) {
-            if let mutationID = model.completionMutationID {
-                feedback.present(mutationID: mutationID, soundEnabled: true)
-            }
-        }
-        .taskCompletionFeedback(feedback)
+
     }
 }

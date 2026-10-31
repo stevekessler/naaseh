@@ -95,3 +95,20 @@ export function createDeletionResources(
   failureAlarm.addAlarmAction(new actions.SnsAction(options.alerts));
   return { apiHandler, worker, stateMachine, secret };
 }
+
+export const financeDeletionControls = Object.freeze({
+  sharedPreviewAndConfirmation: true,
+  supportedRecordTypes: [
+    'account',
+    'transaction',
+    'budget',
+    'reusable-item',
+    'match',
+    'task-link',
+    'merchant',
+    'category',
+  ],
+  referencedOutcome: 'archive-or-tombstone',
+  permanentDeleteEligibility: 'unreferenced-draft-or-mistake',
+  transactionDeletionPreservesCategories: true,
+});

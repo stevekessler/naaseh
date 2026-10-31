@@ -62,7 +62,7 @@ public struct NativeSessionUser: Codable, Equatable, Sendable {
     }
 }
 
-public struct NativeAuthenticatedSession: Equatable, Sendable {
+public struct NativeAuthenticatedSession: Codable, Equatable, Sendable {
     public let user: NativeSessionUser
     public let csrfToken: String
     public let credential: NativeSessionCredential
@@ -91,6 +91,7 @@ public enum AuthenticationError: Error, Equatable, Sendable {
     case server(code: String, correlationID: String)
     case missingPreAuthentication
     case noSession
+    case offlineValidationRequired
 }
 
 public struct TFAEnrollment: Decodable, Sendable {
@@ -117,13 +118,33 @@ private struct NextPayload: Decodable {
 
 public actor AuthenticationService {
     public private(set) var session: NativeAuthenticatedSession?
+    public static let offlineAccessLifetime: TimeInterval = 7 * 24 * 60 * 60
+    public private(set) var lastValidatedAt: Date?
     public private(set) var isLocallyLocked = false
     private let transport: any AuthenticationTransport
     private var preAuthenticationCookie: String?
 
     public init(transport: any AuthenticationTransport) { self.transport = transport }
 
-    public func restore(_ session: NativeAuthenticatedSession) { self.session = session }
+    public func restore(_ session: NativeAuthenticatedSession, validatedAt: Date? = nil) {
+        self.session = session
+        lastValidatedAt = validatedAt
+    }
+
+    public func recordValidation(at date: Date) { lastValidatedAt = date }
+
+    public func clearLocalSession() {
+        session = nil
+        preAuthenticationCookie = nil
+        lastValidatedAt = nil
+        isLocallyLocked = true
+    }
+
+    public func permitsOfflineAccess(at date: Date) -> Bool {
+        guard session != nil, let lastValidatedAt else { return false }
+        let age = date.timeIntervalSince(lastValidatedAt)
+        return age >= 0 && age < Self.offlineAccessLifetime
+    }
 
     public func lockLocally() { isLocallyLocked = true }
     public func unlockLocally() throws {
@@ -299,6 +320,7 @@ public actor AuthenticationService {
         try validateStatus(response)
         self.session = nil
         preAuthenticationCookie = nil
+        lastValidatedAt = nil
         isLocallyLocked = false
     }
 
@@ -342,11 +364,13 @@ public actor AuthenticationService {
             credential: .init(cookieValue: cookieValue, csrfToken: payload.csrfToken)
         )
         session = authenticated
+        lastValidatedAt = nil
         preAuthenticationCookie = nil
         return authenticated
     }
 
     private func validateStatus(_ response: AuthenticationHTTPResponse) throws {
+        if response.statusCode == 401 { throw AuthenticationError.sessionExpired }
         if (300 ... 399).contains(response.statusCode) { throw AuthenticationError.redirectRejected }
         guard (200 ... 299).contains(response.statusCode) else {
             guard let problem = try? JSONDecoder().decode(APIProblem.self, from: response.body) else {
@@ -379,5 +403,25 @@ public actor AuthenticationService {
         let value = JSONDecoder()
         value.dateDecodingStrategy = .iso8601
         return value
+    }
+}
+
+public extension AuthenticationError {
+    var invalidatesLocalSession: Bool {
+        self == .sessionExpired || self == .accountDisabled
+    }
+}
+
+public extension APIResponse {
+    /// A resource-level 403 is not necessarily a session revocation.
+    func requireValidSession() throws {
+        if statusCode == 401 { throw AuthenticationError.sessionExpired }
+        guard statusCode == 403,
+              let problem = try? JSONDecoder().decode(APIProblem.self, from: body) else { return }
+        switch problem.code {
+        case "account_disabled": throw AuthenticationError.accountDisabled
+        case "session_expired", "unauthorized": throw AuthenticationError.sessionExpired
+        default: break
+        }
     }
 }

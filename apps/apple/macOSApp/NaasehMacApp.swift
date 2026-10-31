@@ -5,30 +5,40 @@ import NaasehServices
 import NaasehSync
 import Security
 import SwiftUI
+import UserNotifications
 
 @main
 @MainActor
 struct NaasehMacApp: App {
+    @NSApplicationDelegateAdaptor(TaskNotificationDelegate.self) private var notificationDelegate
     @Environment(\.scenePhase) private var scenePhase
+    private let isUITesting: Bool
     private let core: AppCore
     private let authentication: AuthenticationViewModel
     private let tasks: TaskWorkspaceModel
-    private let timer: MacTimerModel
 
     init() {
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+        NativeTaskAttachmentTemporaryFiles.cleanupAfterLaunch()
         let buildNumber = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "") ?? 1
         let identity = NativeClientIdentity(
             platform: .macos,
             buildNumber: buildNumber,
             contractVersion: NaasehSyncModule.contractVersion
         )
-        let client = try! APIClient(baseURL: URL(string: "https://gsd.thepandas.link")!, identity: identity)
+        let clientID = UserDefaults.standard.string(forKey: "naaseh.native.client-id") ?? UUID().uuidString
+        UserDefaults.standard.set(clientID, forKey: "naaseh.native.client-id")
+        let client = try! APIClient(baseURL: URL(string: "https://gsd.thepandas.link")!, identity: identity, clientID: clientID)
         let authenticationService = AuthenticationService(
             transport: APIAuthenticationTransport(client: client)
         )
         let credential: @Sendable () async throws -> NativeSessionCredential = {
             guard let value = await authenticationService.session?.credential else {
                 throw AuthenticationError.noSession
+            }
+            guard await authenticationService.permitsOfflineAccess(at: Date()),
+                  await !authenticationService.isLocallyLocked else {
+                throw AuthenticationError.offlineValidationRequired
             }
             return value
         }
@@ -42,7 +52,7 @@ struct NaasehMacApp: App {
             for: .cachesDirectory,
             in: .userDomainMask
         )[0].appendingPathComponent("NaasehTelemetry", isDirectory: true)
-        let telemetryBuffer = (try? NativeTelemetryBuffer(
+        let telemetryBuffer = isUITesting ? NativeTelemetryBuffer(memoryOnlyMaximumCount: 100) : (try? NativeTelemetryBuffer(
                 directory: telemetryDirectory,
                 encryptionKey: try? NativeTelemetryKeyStore.loadOrCreate()
             )) ?? NativeTelemetryBuffer(memoryOnlyMaximumCount: 100)
@@ -60,9 +70,14 @@ struct NaasehMacApp: App {
             syncStore: syncStore,
             sync: sync,
             telemetry: telemetry,
-            appGroupIdentifier: "group.link.thepandas.naaseh"
+            appGroupIdentifier: "group.link.thepandas.naaseh",
+            onSessionClosed: {
+                await IntentDependencies.shared.purge()
+                UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+                UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+            }
         )
-        let isUITesting = ProcessInfo.processInfo.arguments.contains("-ui-testing")
+        self.isUITesting = isUITesting
         let core = AppCore(dependencies: AppDependencies(lifecycle: runtime))
         if isUITesting {
             core.updateState(.ready(connectivity: .online))
@@ -72,7 +87,7 @@ struct NaasehMacApp: App {
         if isUITesting {
             tasks = TaskWorkspaceModel(actorID: "ui-testing")
         } else {
-            let taskStorage = SyncedTaskWorkspaceStore(syncStore: syncStore) {
+            let taskStorage = SyncedTaskWorkspaceStore(syncStore: syncStore, stackClient: NativeTaskStackClient(client: client, credential: credential), timerNow: { await client.currentServerTime() }) {
                 guard let userID = await authenticationService.session?.user.id else {
                     throw AuthenticationError.noSession
                 }
@@ -80,17 +95,35 @@ struct NaasehMacApp: App {
             }
             tasks = TaskWorkspaceModel(
                 storage: taskStorage,
-                afterMutation: { try? await sync.manualRefresh() }
+                afterMutation: { [weak core] in await core?.refresh() }
             )
+        }
+        if !isUITesting {
+            let features = NativeTaskFeatureClient(client: client, credential: credential)
+            tasks.featureClient = features
+            let notifications = NativeTaskNotificationCoordinator(client: features, clientID: clientID)
+            notifications.openTask = { [weak core, weak tasks] id in
+                guard let core, let tasks, case .ready = core.state, tasks.tasks.contains(where: { $0.id == id }) else { return }
+                core.router.selectedSection = .tasks
+                core.router.path = [.section(.tasks)]
+                tasks.selectedTaskID = id
+            }
+            tasks.notifications = notifications
         }
         authentication.onAuthenticated = { [weak core, weak tasks] in
             await core?.start()
             await tasks?.reload()
             _ = try? await IntentDependencies.shared.resumePendingContinuation()
         }
+        tasks.onReferencesChanged = { references in
+            guard references.actorID == (await authenticationService.session?.user.id) else { return }
+            let projects = references.projects.map { AuthorizedProject(id: $0.id, name: $0.name, isActive: true, isAuthorized: true) }
+            await IntentDependencies.shared.updateProjects(AuthorizedProjectQuery(projects: projects))
+        }
         let projectQuery = AuthorizedProjectQuery(projects: [])
         let voiceService = tasks.voiceService(projects: projectQuery) {
             guard await authenticationService.session != nil else { return .signedOut }
+            guard await authenticationService.permitsOfflineAccess(at: Date()) else { return .locked }
             return await authenticationService.isLocallyLocked ? .locked : .unlocked
         }
         var continuationKey = Data(repeating: 0, count: 32)
@@ -108,7 +141,6 @@ struct NaasehMacApp: App {
         self.core = core
         self.authentication = authentication
         self.tasks = tasks
-        timer = MacTimerModel()
     }
 
     var body: some Scene {
@@ -121,7 +153,24 @@ struct NaasehMacApp: App {
                         }
                     }
                 }
+                .alert("Couldn’t Sign Out", isPresented: Binding(
+                    get: { core.signOutError != nil },
+                    set: { if !$0 { core.signOutError = nil } }
+                )) {
+                    Button("OK", role: .cancel) { core.signOutError = nil }
+                } message: {
+                    Text(core.signOutError ?? "")
+                }
+                .onChange(of: core.state) { _, state in
+                    if case .ready = state {} else { tasks.clearProtectedContent() }
+                    if state == .signedOut { authentication.resetForSignIn() }
+                }
                 .task(id: scenePhase) {
+                    if scenePhase == .background {
+                        if !isUITesting, case .ready = core.state { await core.lock(); tasks.clearProtectedContent() }
+                        await NativeTaskLiveActivityController.shared.redact()
+                        return
+                    }
                     guard scenePhase == .active else { return }
                     try? await syncAndReload()
                     while !Task.isCancelled {
@@ -131,25 +180,24 @@ struct NaasehMacApp: App {
                     }
                 }
         }
-        .commands { NaasehMacCommands(core: core) }
+        .defaultLaunchBehavior(.presented)
+        .commands { NaasehMacCommands(core: core, tasks: tasks) }
 
         Window("Timer", id: "timer") {
-            MacTimerScene(model: timer)
+            if case .ready = core.state { NativeTaskTimerView(model: tasks).frame(minWidth: 360, minHeight: 280) }
+            else { Text("Unlock Na’aseh to use the timer.") }
         }
 
         MenuBarExtra("Na’aseh Timer", systemImage: "timer") {
-            Text(timer.state?.phase.rawValue.capitalized ?? "Timer ready")
-            Divider()
-            Button("Start") { Task { await timer.start() } }
-            Button("Pause") { Task { await timer.pause() } }
-            Button("Resume") { Task { await timer.resume() } }
-            Button("Reset") { Task { await timer.reset() } }
-            Button("Switch Work/Rest") { Task { await timer.switchPhase() } }
-        }
+            if case .ready = core.state { NativeTaskTimerView(model: tasks).frame(width: 360) }
+            else { Text("Unlock Na’aseh to use the timer.") }
+        }.menuBarExtraStyle(.window)
     }
 
     private func syncAndReload() async throws {
-        try await core.dependencies.lifecycle.refresh()
-        await tasks.reload()
+        if isUITesting { await tasks.reload(); return }
+        await core.refresh()
+        if case .ready = core.state { await tasks.reload() }
+        else { tasks.clearProtectedContent() }
     }
 }

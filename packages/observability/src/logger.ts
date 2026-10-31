@@ -33,17 +33,36 @@ export function createLogger(
 ) {
   const verbose = environment.VERBOSE_LOGGING === 'true' && options.verbose !== false;
   const sink = options.sink ?? ((line: string) => console.info(line));
-  const write = (level: 'INFO' | 'ERROR', operation: string, fields: Record<string, unknown>) =>
+  const write = (
+    level: 'INFO' | 'ERROR',
+    operation: string,
+    fields: Record<string, unknown>,
+    metric?: { name: string; value: number; unit: string },
+  ) =>
     sink(
-      JSON.stringify(
-        redact({
+      JSON.stringify({
+        ...(redact({
           level,
           timestamp: new Date().toISOString(),
           operation,
           ...fields,
           ...(verbose ? { verbose: true } : {}),
-        }),
-      ),
+        }) as Record<string, unknown>),
+        ...(metric
+          ? {
+              _aws: {
+                Timestamp: Date.now(),
+                CloudWatchMetrics: [
+                  {
+                    Namespace: 'Naaseh',
+                    Dimensions: [[]],
+                    Metrics: [{ Name: metric.name, Unit: metric.unit }],
+                  },
+                ],
+              },
+            }
+          : {}),
+      }),
     );
   return {
     info(operation: string, fields: Record<string, unknown> = {}) {
@@ -53,16 +72,21 @@ export function createLogger(
       write('ERROR', operation, fields);
     },
     metric(name: string, value: number, unit = 'Count', fields: Record<string, unknown> = {}) {
-      write('INFO', 'metric', {
-        ...fields,
-        _aws: {
-          Timestamp: Date.now(),
-          CloudWatchMetrics: [
-            { Namespace: 'Naaseh', Dimensions: [[]], Metrics: [{ Name: name, Unit: unit }] },
-          ],
+      if (
+        !/^[A-Za-z][A-Za-z0-9_]{0,254}$/.test(name) ||
+        !Number.isFinite(value) ||
+        !/^[A-Za-z][A-Za-z0-9/]{0,30}$/.test(unit)
+      )
+        throw new Error('Invalid operational metric descriptor.');
+      write(
+        'INFO',
+        'metric',
+        {
+          ...fields,
+          [name]: value,
         },
-        [name]: value,
-      });
+        { name, value, unit },
+      );
     },
     admin(
       event: AdminAuditEvent,

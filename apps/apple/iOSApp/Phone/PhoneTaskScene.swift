@@ -4,7 +4,6 @@ import SwiftUI
 @MainActor
 struct PhoneTaskScene: View {
     @Bindable var model: TaskWorkspaceModel
-    @State private var feedback = CompletionFeedbackController()
 
     var body: some View {
         TaskBrowserView(model: model)
@@ -21,11 +20,5 @@ struct PhoneTaskScene: View {
                     NavigationLink("Archive", destination: TaskArchiveView(model: model))
                 }
             }
-            .task(id: model.completionMutationID) {
-                if let mutationID = model.completionMutationID {
-                    feedback.present(mutationID: mutationID, soundEnabled: true)
-                }
-            }
-            .taskCompletionFeedback(feedback)
     }
 }

@@ -4,6 +4,10 @@ import SwiftData
 public enum LocalRecordKind: String, Codable, CaseIterable, Sendable {
     case task, taskRevision, completion, list, listItem, directoryItem, group, category, project
     case stack, timer, reminder, report, journalProfile, journalEntry, crisisPlan, attachment, setting
+    case copyJob, accessControl, deletionJob
+    case financeAccount, financeBalanceSnapshot, financeTransaction, financeAllocation, financeTransfer
+    case financeCategory, financeMerchant, financeBudget, financeBudgetAccountLink, financeBudgetItem
+    case financeReusableItem, financeTransactionMatch, financeReconciliation, financeTaskLink, financeReviewIssue
 }
 
 public enum LocalSyncState: String, Codable, Sendable {
@@ -290,4 +294,13 @@ public enum NaasehPersistenceSchema {
         AlertOccurrence.self,
         ClientCompatibilityState.self,
     ]
+}
+
+public struct NativeOperationCounts: Equatable, Sendable {
+    public var pending: Int
+    public var conflicted: Int
+    public var rejected: Int
+    public init(pending: Int = 0, conflicted: Int = 0, rejected: Int = 0) {
+        self.pending = pending; self.conflicted = conflicted; self.rejected = rejected
+    }
 }

@@ -26,7 +26,7 @@ struct ExistingProjectEntityQuery: EntityStringQuery {
 struct CreateTaskIntent: AppIntent {
     static let title: LocalizedStringResource = "Add a Task"
     static let description = IntentDescription("Adds one task to your existing Na’aseh account, including while offline.")
-    static let openAppWhenRun = false
+    static let openAppWhenRun = true
     static let safeSuccessDialog = "Task added to Na’aseh."
 
     @Parameter(title: "Task") var taskTitle: String
@@ -56,11 +56,13 @@ struct CreateTaskIntent: AppIntent {
         do {
             _ = try await IntentDependencies.shared.create(request)
             return .result(dialog: IntentDialog(stringLiteral: Self.safeSuccessDialog))
+        } catch VoiceTaskError.disabled {
+            return .result(dialog: "Enable Siri task creation in Na’aseh task settings first.")
         } catch VoiceTaskError.ambiguousProject {
             return .result(dialog: "I found more than one authorized project with that name. Please choose one.")
         } catch VoiceTaskError.projectNotFound {
             return .result(dialog: "I couldn’t find an authorized existing project with that name.")
-        } catch VoiceTaskError.locked {
+        } catch let error as VoiceTaskError where error == .locked || error == .signedOut {
             if let token = try? await IntentDependencies.shared.saveContinuation(request),
                let url = URL(string: "naaseh://voice/continue?token=\(token)") {
                 return .result(

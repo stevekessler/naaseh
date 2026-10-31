@@ -96,5 +96,5 @@ public actor AppLifecycleCoordinator: AppLifecycleService {
 }
 
 public enum AppLifecycleError: Error, Equatable, Sendable {
-    case upgradeRequired, betaExpired, temporarilyUnavailable
+    case upgradeRequired, betaExpired, temporarilyUnavailable, offlineAccessAllowed
 }

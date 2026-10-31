@@ -35,11 +35,20 @@ public struct PhoneRootView: View {
                     )
                 }
             case .locked:
-                launchState(
-                    title: "Na’aseh Is Locked",
-                    detail: "Unlock with Face ID, Touch ID, or your device passcode.",
-                    symbol: "lock.shield"
-                )
+                ContentUnavailableView {
+                    Label("Na’aseh Is Locked", systemImage: "lock.shield")
+                } description: {
+                    Text("Unlock with Face ID, Touch ID, or your device passcode.")
+                } actions: {
+                    Button("Unlock") {
+                        Task {
+                            await core.start(); await tasks.reload()
+                            _ = try? await IntentDependencies.shared.resumePendingContinuation()
+                        }
+                    }.accessibilityIdentifier("authentication.unlock")
+                }
+            case .blocked(.sessionValidationRequired):
+                validationRequired
             case let .blocked(reason):
                 blockedView(reason)
             case let .ready(connectivity):
@@ -51,7 +60,7 @@ public struct PhoneRootView: View {
             return nil
         }())
         .task {
-            if core.state == .launching { await core.start() }
+            if core.state == .launching { await core.start(); await tasks.reload() }
         }
     }
 
@@ -95,6 +104,9 @@ public struct PhoneRootView: View {
                         .buttonStyle(.plain)
                         .naasehAccessibleTarget()
                     }
+                    Button("Sign Out") { Task { try? await core.signOut() } }
+                        .disabled(core.isSigningOut)
+                        .accessibilityIdentifier("account.signOut")
                 }
                 .padding()
             }
@@ -107,6 +119,8 @@ public struct PhoneRootView: View {
                         PhoneTaskScene(model: tasks)
                     } else if section == .journal {
                         JournalScene()
+                    } else if section == .reports {
+                        NativeTaskReportsView(model: tasks)
                     } else if [.lists, .directory, .reports].contains(section) {
                         PhoneProductParityScene(section: section)
                     } else if section == .settings {
@@ -142,11 +156,22 @@ public struct PhoneRootView: View {
         ContentUnavailableView(title, systemImage: symbol, description: Text(detail))
     }
 
+    private var validationRequired: some View {
+        ContentUnavailableView {
+            Label("Connect to Validate This Device", systemImage: "wifi.exclamationmark")
+        } description: {
+            Text("Offline access lasts seven days after validation. Your encrypted data and unsynced changes are kept on this device.")
+        } actions: {
+            Button("Try Again") { Task { await core.start(); await tasks.reload() } }
+        }
+    }
+
     private func blockedView(_ reason: BlockedApplicationReason) -> some View {
         let detail: LocalizedStringKey = switch reason {
         case .upgradeRequired: "Install the latest TestFlight build before making more changes."
         case .betaExpired: "This TestFlight build has expired. Install a current build to continue."
         case .temporarilyUnavailable: "Na’aseh is temporarily unavailable. Your local data is unchanged."
+        case .sessionValidationRequired: "Connect to the internet to validate this device."
         case .storeUnavailable: "The encrypted local store could not be opened safely."
         }
         return NaasehErrorState(detail: detail)

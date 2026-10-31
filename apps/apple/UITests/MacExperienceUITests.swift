@@ -4,7 +4,7 @@ import XCTest
 final class MacExperienceUITests: XCTestCase {
     func testResizableWindowsMenusFocusContextAndRestoration() {
         let app = XCUIApplication()
-        app.launchArguments += ["-ui-testing", "mac-experience"]
+        app.launchArguments += ["-ui-testing", "mac-experience", "-ApplePersistenceIgnoreState", "YES"]
         app.launch()
 
         let window = app.windows.firstMatch
@@ -18,12 +18,23 @@ final class MacExperienceUITests: XCTestCase {
 
     func testPrimaryTaskActionIsAvailable() {
         let app = XCUIApplication()
-        app.launchArguments += ["-ui-testing", "mac-experience"]
+        app.launchArguments += ["-ui-testing", "mac-experience", "-ApplePersistenceIgnoreState", "YES"]
         app.launch()
 
         let window = app.windows.firstMatch
         XCTAssertTrue(window.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["New task"].waitForExistence(timeout: 5))
+        let create = app.buttons["New task"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.click()
+        let title = app.textFields["task.label"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.click(); title.typeText("Parity task journey")
+        app.buttons["Save task"].click()
+        XCTAssertTrue(app.buttons["Complete Parity task journey"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Complete Parity task journey"].click()
+        XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 5))
+        app.buttons["Undo"].click()
+        XCTAssertTrue(app.buttons["Complete Parity task journey"].waitForExistence(timeout: 5))
         app.activate()
         attachScreenshot(named: "Mac-Web-Style-Workspace", window: window)
     }

@@ -4,7 +4,6 @@ import SwiftUI
 @MainActor
 struct PadTaskScene: View {
     @Bindable var model: TaskWorkspaceModel
-    @State private var feedback = CompletionFeedbackController()
 
     var body: some View {
         NavigationSplitView {
@@ -32,11 +31,5 @@ struct PadTaskScene: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
-        .task(id: model.completionMutationID) {
-            if let mutationID = model.completionMutationID {
-                feedback.present(mutationID: mutationID, soundEnabled: true)
-            }
-        }
-        .taskCompletionFeedback(feedback)
     }
 }

@@ -92,7 +92,34 @@ export interface EncryptedCrisisPlanRecord {
   updatedAt: string;
   value: unknown;
 }
+export interface EncryptedFinanceRecord {
+  id: string;
+  entityType: string;
+  scopeKey: string;
+  accountId?: string;
+  budgetId?: string;
+  occurredAt?: string;
+  lifecycle?: string;
+  version: number;
+  updatedAt: string;
+  value: Ciphertext;
+}
 
+export interface EncryptedFinancePendingBytes {
+  id: string;
+  ownerId: string;
+  transactionId: string;
+  mutationId: string;
+  version: number;
+  updatedAt: string;
+  value: Ciphertext;
+}
+export interface EncryptedFinanceOfflineSecurity {
+  ownerId: string;
+  revision: number;
+  updatedAt: string;
+  value: Ciphertext;
+}
 class NaasehDatabase extends Dexie {
   tasks!: EntityTable<Task, 'id'>;
   revisions!: EntityTable<TaskRevision, 'id'>;
@@ -129,6 +156,9 @@ class NaasehDatabase extends Dexie {
   secureCrisisPlans!: EntityTable<EncryptedCrisisPlanRecord, 'id'>;
   secureCrisisPlanOutbox!: EntityTable<EncryptedCrisisPlanRecord, 'id'>;
   secureCrisisPlanOwnerKeys!: EntityTable<EncryptedCrisisPlanRecord, 'id'>;
+  secureFinanceRecords!: EntityTable<EncryptedFinanceRecord, 'id'>;
+  secureFinancePendingBytes!: EntityTable<EncryptedFinancePendingBytes, 'id'>;
+  secureFinanceOfflineSecurity!: EntityTable<EncryptedFinanceOfflineSecurity, 'ownerId'>;
   constructor() {
     super('naaseh');
     this.version(1).stores({
@@ -370,6 +400,14 @@ class NaasehDatabase extends Dexie {
     this.version(14).stores({ secureGoogleSync: null });
     this.version(15).stores({
       secureJournalEntries: 'id,ownerId,lifecycle,&[ownerId+dateToken],updatedAt',
+    });
+    this.version(16).stores({
+      secureFinanceRecords:
+        'id,entityType,scopeKey,accountId,budgetId,occurredAt,lifecycle,updatedAt,[accountId+occurredAt]',
+    });
+    this.version(17).stores({
+      secureFinancePendingBytes: 'id,ownerId,transactionId,mutationId,updatedAt',
+      secureFinanceOfflineSecurity: '&ownerId,revision,updatedAt',
     });
   }
 }

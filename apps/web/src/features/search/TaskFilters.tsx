@@ -1,4 +1,4 @@
-import type { CategoryRecord, Project } from '@naaseh/domain';
+import type { CategoryRecord, Project, Task } from '@naaseh/domain';
 import type { Filters } from '../../search/task-search.js';
 import { AssigneePicker, type AssigneeOption } from '../../components/AssigneePicker.js';
 import { CategoryPicker } from '../../components/CategoryPicker.js';
@@ -15,6 +15,7 @@ export function TaskFilters({
   resultCount,
   categories = [],
   projects = [],
+  tasks = [],
   assignees = [],
   groups = [],
   currentUserId,
@@ -26,26 +27,34 @@ export function TaskFilters({
   resultCount?: number;
   categories?: readonly CategoryRecord[];
   projects?: readonly Project[];
+  tasks?: readonly Task[];
   assignees?: readonly AssigneeOption[];
   groups?: readonly { id: string; name: string }[];
   currentUserId?: string;
   currentUserGroupIds?: readonly string[];
   contentType?: 'all' | 'tasks';
 }) {
+  const parentIds = new Set(tasks.map((task) => task.parentId).filter(Boolean));
+  const parentOptions = tasks
+    .filter((task) => parentIds.has(task.id))
+    .sort((left, right) => left.label.localeCompare(right.label));
   const selectedUrgencies = value.urgencies ?? [];
   const active = [
     ['from', value.from],
     ['to', value.to],
     ['categoryId', value.categoryId],
     ['projectId', value.projectId ?? ''],
+    ['parentId', value.parentId ?? ''],
   ] as const;
   const filterLabels: Record<(typeof active)[number][0], string> = {
     from: 'From',
     to: 'To',
     categoryId: 'Category',
     projectId: 'Project',
+    parentId: 'Parent task',
   };
   const displayFilterValue = (key: (typeof active)[number][0], current: string) => {
+    if (key === 'parentId') return tasks.find((task) => task.id === current)?.label ?? current;
     if (key === 'categoryId')
       return categories.find((category) => category.id === current)?.name ?? current;
     if (key === 'projectId')
@@ -86,11 +95,6 @@ export function TaskFilters({
   return (
     <fieldset className="filter-fields">
       <legend>Filters</legend>
-      <PriorityFilter
-        value={selectedUrgencies}
-        change={(urgencies) => change({ ...value, urgencies })}
-        {...(resultCount === undefined ? {} : { resultCount })}
-      />
       <div className="filter-control-grid">
         <fieldset className="filter-match-mode">
           <legend>Match</legend>
@@ -115,14 +119,6 @@ export function TaskFilters({
             Any
           </label>
         </fieldset>
-        <ProjectPicker
-          categories={categories}
-          projects={projects}
-          value={value.projectId ?? ''}
-          categoryId={value.categoryId}
-          allLabel="All projects"
-          onChange={(projectId) => change({ ...value, projectId })}
-        />
         <label>
           <span>Scope</span>
           <select
@@ -151,24 +147,12 @@ export function TaskFilters({
             </select>
           </label>
         ) : null}
-        <label>
-          <span>Progress</span>
-          <select
-            value={value.progress ?? 'all'}
-            onChange={(event) => {
-              change({
-                ...value,
-                progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
-              });
-            }}
-          >
-            <option value="all">Any progress</option>
-            <option value="not-started">Not started</option>
-            <option value="in-progress">In progress</option>
-            <option value="complete">100% complete</option>
-          </select>
-        </label>
       </div>
+      <PriorityFilter
+        value={selectedUrgencies}
+        change={(urgencies) => change({ ...value, urgencies })}
+        {...(resultCount === undefined ? {} : { resultCount })}
+      />
       <div className="filter-date-row">
         <div className="filter-date-inputs">
           <label>
@@ -199,6 +183,7 @@ export function TaskFilters({
               ['nextWeek', 'Next week'],
               ['nextNextWeek', 'Week after next'],
               ['month', 'This month'],
+              ['quarter', 'This quarter'],
             ] as const
           ).map(([preset, label]) => (
             <button
@@ -218,6 +203,67 @@ export function TaskFilters({
             </button>
           ))}
         </div>
+      </div>
+      <div className="filter-secondary-grid">
+        <label>
+          <span>Category</span>
+          <CategoryPicker
+            categories={categories}
+            value={value.categoryId}
+            allLabel="All categories"
+            onChange={(categoryId) =>
+              change({
+                ...value,
+                categoryId,
+                projectId:
+                  value.projectId &&
+                  projects.find((project) => project.id === value.projectId)?.categoryId !==
+                    categoryId
+                    ? ''
+                    : (value.projectId ?? ''),
+              })
+            }
+          />
+        </label>
+        <ProjectPicker
+          categories={categories}
+          projects={projects}
+          value={value.projectId ?? ''}
+          categoryId={value.categoryId}
+          allLabel="All projects"
+          onChange={(projectId) => change({ ...value, projectId })}
+        />
+        <label>
+          <span>Parent task</span>
+          <select
+            value={value.parentId ?? ''}
+            onChange={(event) => change({ ...value, parentId: event.currentTarget.value })}
+          >
+            <option value="">All parent tasks</option>
+            {parentOptions.map((task) => (
+              <option key={task.id} value={task.id}>
+                {task.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Progress</span>
+          <select
+            value={value.progress ?? 'all'}
+            onChange={(event) => {
+              change({
+                ...value,
+                progress: event.currentTarget.value as Exclude<Filters['progress'], undefined>,
+              });
+            }}
+          >
+            <option value="all">Any progress</option>
+            <option value="not-started">Not started</option>
+            <option value="in-progress">In progress</option>
+            <option value="complete">100% complete</option>
+          </select>
+        </label>
       </div>
       <div className="filter-secondary-grid">
         <label>
@@ -258,26 +304,6 @@ export function TaskFilters({
             </select>
           </label>
         ) : null}
-        <label>
-          <span>Category</span>
-          <CategoryPicker
-            categories={categories}
-            value={value.categoryId}
-            allLabel="All categories"
-            onChange={(categoryId) =>
-              change({
-                ...value,
-                categoryId,
-                projectId:
-                  value.projectId &&
-                  projects.find((project) => project.id === value.projectId)?.categoryId !==
-                    categoryId
-                    ? ''
-                    : (value.projectId ?? ''),
-              })
-            }
-          />
-        </label>
       </div>
       <div className="filter-chips" role="group" aria-label="Active filters">
         {selectedAssignees.map((id) => (

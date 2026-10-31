@@ -18,6 +18,7 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             path: "/api/v1/sync/bootstrap",
             session: try await credential()
         )
+        try response.requireValidSession()
         guard (200 ..< 300).contains(response.statusCode) else { throw SyncEngineError.transport }
         return try Self.page(from: response.body, bootstrap: true)
     }
@@ -33,16 +34,30 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             session: try await credential(),
             idempotencyKey: UUID().uuidString
         )
+        try response.requireValidSession()
         guard (200 ..< 300).contains(response.statusCode) else { throw SyncEngineError.transport }
         return try Self.page(from: response.body, bootstrap: false)
     }
 
     public func push(_ operations: [NativeSyncOperation]) async throws -> [NativePushResult] {
+        var batches: [[NativeSyncOperation]] = []
+        for operation in operations {
+            let version = operation.targetKind == "timer" ? 5 : 4
+            if let last = batches.last, (last.first?.targetKind == "timer" ? 5 : 4) == version {
+                batches[batches.count - 1].append(operation)
+            } else { batches.append([operation]) }
+        }
+        var results: [NativePushResult] = []
+        for batch in batches { results += try await pushBatch(batch) }
+        return results
+    }
+
+    private func pushBatch(_ operations: [NativeSyncOperation]) async throws -> [NativePushResult] {
         let mutations = try operations.map { operation -> [String: Any] in
             let payload = try JSONSerialization.jsonObject(with: operation.payload)
             let mutation: [String: Any] = [
                 "id": operation.id,
-                "entityType": operation.targetKind,
+                "entityType": operation.targetKind == "timer" ? "taskTimer" : (operation.targetKind == "stack" ? "personalStackOperation" : operation.targetKind),
                 "entityId": operation.targetID,
                 "operation": operation.operation,
                 "baseVersion": operation.baseVersion ?? 0,
@@ -53,7 +68,7 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             return mutation
         }
         let body = try JSONSerialization.data(withJSONObject: [
-            "contractVersion": 4,
+            "contractVersion": operations.first?.targetKind == "timer" ? 5 : 4,
             "mutations": mutations,
         ])
         let response = try await client.request(
@@ -63,6 +78,7 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             session: try await credential(),
             idempotencyKey: operations.first?.id
         )
+        try response.requireValidSession()
         guard (200 ..< 300).contains(response.statusCode) else {
             throw SyncEngineError.transport
         }
@@ -93,7 +109,8 @@ public actor APINativeSyncTransport: NativeSyncTransport {
         if bootstrap {
             for (key, kind) in [
                 ("tasks", "task"), ("categories", "category"), ("projects", "project"),
-                ("lists", "list"), ("listItems", "listItem"),
+                ("lists", "list"), ("listItems", "listItem"), ("groups", "group"),
+                ("attachments", "attachment"), ("completionEvents", "completionEvent"), ("reminders", "reminder"),
             ] {
                 for value in object[key] as? [[String: Any]] ?? [] {
                     guard let id = value["id"] as? String else { continue }
@@ -106,6 +123,10 @@ public actor APINativeSyncTransport: NativeSyncTransport {
                         )
                     )
                 }
+            }
+            if let timer = object["taskTimer"] as? [String: Any], let id = timer["id"] as? String {
+                records.append(.init(kind: "taskTimer", id: id, version: timer["version"] as? Int ?? 1,
+                                     payload: try JSONSerialization.data(withJSONObject: timer)))
             }
         } else {
             for change in object["changes"] as? [[String: Any]] ?? [] {
@@ -133,6 +154,6 @@ public actor APINativeSyncTransport: NativeSyncTransport {
             decoding: try JSONSerialization.data(withJSONObject: cursorObject),
             as: UTF8.self
         )
-        return NativeSyncPage(records: records, tombstones: tombstones, cursor: cursor)
+        return NativeSyncPage(records: records, tombstones: tombstones, cursor: cursor, revokedAudiences: object["revokedAudiences"] as? [String] ?? [], isBootstrap: bootstrap)
     }
 }

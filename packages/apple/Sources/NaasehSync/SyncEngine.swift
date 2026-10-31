@@ -1,4 +1,5 @@
 import Foundation
+import NaasehServices
 
 public struct NativeSyncRecord: Equatable, Sendable {
     public let kind: String
@@ -63,17 +64,20 @@ public struct NativeSyncPage: Sendable {
     public let tombstones: [NativeSyncTombstone]
     public let cursor: String
     public let revokedAudiences: [String]
+    public let isBootstrap: Bool
 
     public init(
         records: [NativeSyncRecord],
         tombstones: [NativeSyncTombstone] = [],
         cursor: String,
-        revokedAudiences: [String] = []
+        revokedAudiences: [String] = [],
+        isBootstrap: Bool = false
     ) {
         self.records = records
         self.tombstones = tombstones
         self.cursor = cursor
         self.revokedAudiences = revokedAudiences
+        self.isBootstrap = isBootstrap
     }
 }
 
@@ -109,12 +113,14 @@ public actor SyncEngine {
 
     public func bootstrap() async throws {
         do { try await store.apply(try await transport.bootstrap()) }
+        catch let error as AuthenticationError { throw error }
         catch let error as SyncEngineError { throw error }
         catch { throw SyncEngineError.transport }
     }
 
     public func pull() async throws {
         do { try await store.apply(try await transport.pull(cursor: await store.currentCursor())) }
+        catch let error as AuthenticationError { throw error }
         catch let error as SyncEngineError { throw error }
         catch { throw SyncEngineError.transport }
     }
@@ -125,6 +131,7 @@ public actor SyncEngine {
         guard !operations.isEmpty else { return }
         let results: [NativePushResult]
         do { results = try await transport.push(operations) }
+        catch let error as AuthenticationError { throw error }
         catch {
             retryAttempt += 1
             let delay = min(300, pow(2, Double(retryAttempt)))
@@ -141,8 +148,8 @@ public actor SyncEngine {
     }
 
     public func manualRefresh(now: Date = Date()) async throws {
-        try await push(now: now)
         try await pull()
+        try await push(now: now)
     }
 
     public func connectivityChanged(to state: NativeSyncConnectivity, now: Date = Date()) async {

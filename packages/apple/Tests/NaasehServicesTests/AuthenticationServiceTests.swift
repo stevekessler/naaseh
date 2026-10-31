@@ -48,6 +48,13 @@ struct AuthenticationServiceTests {
             AuthenticationHTTPResponse(statusCode: 500, headers: [:], body: Data("not-json".utf8)),
         ] {
             let service = AuthenticationService(transport: AuthenticationTransportStub(responses: [response]))
+            await service.restore(
+                NativeAuthenticatedSession(
+                    user: .init(id: "u1", username: "alex", displayName: "Alex", role: .user),
+                    csrfToken: "csrf",
+                    credential: .init(cookieValue: "session", csrfToken: "csrf")
+                )
+            )
             await #expect(throws: AuthenticationError.self) {
                 _ = try await service.validateSession()
             }

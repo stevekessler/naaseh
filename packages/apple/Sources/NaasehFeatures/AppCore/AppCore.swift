@@ -17,7 +17,7 @@ public enum ConnectivityState: String, Codable, Sendable {
 }
 
 public enum BlockedApplicationReason: String, Codable, Sendable {
-    case upgradeRequired, betaExpired, temporarilyUnavailable, storeUnavailable
+    case upgradeRequired, betaExpired, temporarilyUnavailable, storeUnavailable, sessionValidationRequired
 }
 
 public enum AppSection: String, CaseIterable, Codable, Identifiable, Sendable {
@@ -54,6 +54,15 @@ public protocol AppLifecycleService: Sendable {
     func refresh() async throws
     func lock() async
     func signOut() async throws
+    func offlineAccessDeadline() async -> Date?
+    func expireOfflineAccess() async -> Bool
+    func setSessionInvalidationHandler(_ handler: @escaping @Sendable () async -> Void) async
+}
+
+public extension AppLifecycleService {
+    func offlineAccessDeadline() async -> Date? { nil }
+    func expireOfflineAccess() async -> Bool { await lock(); return true }
+    func setSessionInvalidationHandler(_ handler: @escaping @Sendable () async -> Void) async {}
 }
 
 public struct AppDependencies: Sendable {
@@ -69,7 +78,11 @@ public struct AppDependencies: Sendable {
 public final class AppCore {
     public private(set) var state: ApplicationLifecycleState = .launching
     public let dependencies: AppDependencies
+    public var signOutError: String?
+    public var isSigningOut = false
     public var router: SceneRouter
+    private var isRefreshing = false
+    private var expirationTask: Task<Void, Never>?
 
     public init(
         dependencies: AppDependencies,
@@ -81,34 +94,70 @@ public final class AppCore {
 
     public func updateState(_ state: ApplicationLifecycleState) {
         self.state = state
-        if state == .locked || state == .signedOut { router.lock() }
+        if case .ready = state {} else { expirationTask?.cancel(); router.lock() }
     }
 
     public func start() async {
-        state = .openingStore
+        guard state != .openingStore else { return }
+        updateState(.openingStore)
+        await dependencies.lifecycle.setSessionInvalidationHandler { [weak self] in
+            await self?.updateState(.signedOut)
+        }
         do {
             try await dependencies.lifecycle.start()
-            state = .ready(connectivity: .online)
-        } catch AuthenticationError.noSession {
-            state = .signedOut
-        } catch AppLifecycleError.upgradeRequired {
-            state = .blocked(.upgradeRequired)
-        } catch AppLifecycleError.betaExpired {
-            state = .blocked(.betaExpired)
-        } catch AppLifecycleError.temporarilyUnavailable {
-            state = .blocked(.temporarilyUnavailable)
+            updateState(.ready(connectivity: .online))
         } catch {
-            state = .blocked(.storeUnavailable)
+            handleLifecycleFailure(error)
         }
+        await scheduleAccessExpiry()
     }
 
     public func refresh() async {
-        guard case .ready = state else { return }
+        guard case .ready = state, !isSigningOut, !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
         do {
             try await dependencies.lifecycle.refresh()
-            state = .ready(connectivity: .online)
+            updateState(.ready(connectivity: .online))
         } catch {
-            state = .ready(connectivity: .offline)
+            handleLifecycleFailure(error)
+        }
+        await scheduleAccessExpiry()
+    }
+
+    private func handleLifecycleFailure(_ error: Error) {
+        switch error {
+        case AuthenticationError.noSession, AuthenticationError.sessionExpired, AuthenticationError.accountDisabled:
+            updateState(.signedOut)
+        case AuthenticationError.offlineValidationRequired:
+            updateState(.blocked(.sessionValidationRequired))
+        case AppLifecycleError.offlineAccessAllowed:
+            updateState(.ready(connectivity: .offline))
+        case AppLifecycleError.upgradeRequired: updateState(.blocked(.upgradeRequired))
+        case AppLifecycleError.betaExpired: updateState(.blocked(.betaExpired))
+        case AppLifecycleError.temporarilyUnavailable: updateState(.blocked(.temporarilyUnavailable))
+        default:
+            // Unexpected failures cannot silently retain a previously open workspace.
+            updateState(.blocked(.storeUnavailable))
+        }
+    }
+
+    private func scheduleAccessExpiry() async {
+        expirationTask?.cancel()
+        guard case .ready = state,
+              let deadline = await dependencies.lifecycle.offlineAccessDeadline() else { return }
+        expirationTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(max(0, deadline.timeIntervalSinceNow))) }
+            catch { return }
+            guard !Task.isCancelled, let self else { return }
+            let previousState = self.state
+            self.updateState(.blocked(.sessionValidationRequired))
+            let expired = await self.dependencies.lifecycle.expireOfflineAccess()
+            // A validation already in flight may have renewed access while this timer waited.
+            if !expired, self.state == .blocked(.sessionValidationRequired) {
+                self.updateState(previousState)
+                await self.scheduleAccessExpiry()
+            }
         }
     }
 
@@ -118,7 +167,16 @@ public final class AppCore {
     }
 
     public func signOut() async throws {
-        try await dependencies.lifecycle.signOut()
-        updateState(.signedOut)
+        guard !isSigningOut else { return }
+        isSigningOut = true
+        signOutError = nil
+        defer { isSigningOut = false }
+        do {
+            try await dependencies.lifecycle.signOut()
+            updateState(.signedOut)
+        } catch {
+            signOutError = "Sign-out could not be completed. Your session and local data have been kept. Please try again."
+            throw error
+        }
     }
 }

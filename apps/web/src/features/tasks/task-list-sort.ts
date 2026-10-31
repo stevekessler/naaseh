@@ -68,6 +68,9 @@ export function sortTasksForTable(
     }
     return urgencyValues.indexOf(task.urgency);
   };
+  const tieBreak = (left: Task, right: Task) =>
+    urgencyValues.indexOf(right.urgency) - urgencyValues.indexOf(left.urgency) ||
+    textCollator.compare(left.label, right.label);
   return tasks
     .map((task, index) => ({ task, index }))
     .sort((left, right) => {
@@ -85,10 +88,11 @@ export function sortTasksForTable(
             if (timeOrder) return timeOrder;
           }
         }
-        return left.index - right.index;
+        return tieBreak(left.task, right.task) || left.index - right.index;
       }
       return (
         compareOptional(value(left.task), value(right.task), sort.direction) ||
+        tieBreak(left.task, right.task) ||
         left.index - right.index
       );
     })

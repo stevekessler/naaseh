@@ -59,6 +59,15 @@ public final class AuthenticationViewModel {
         }
     }
 
+    public func resetForSignIn() {
+        step = .signIn
+        password = ""
+        factorCode = ""
+        enrollment = nil
+        error = nil
+        correlationID = nil
+    }
+
     public func lock() async {
         await service.lockLocally()
         step = .locked
@@ -197,6 +206,7 @@ private extension AuthenticationError {
         case .redirectRejected: "The server returned an unsafe redirect."
         case .missingPreAuthentication: "The sign-in challenge expired. Start again."
         case .noSession: "Sign in again to continue."
+        case .offlineValidationRequired: "Connect to the internet to validate this device. Offline access lasts seven days."
         case .malformedResponse: "The server response could not be verified."
         case .server: "The request could not be completed."
         }

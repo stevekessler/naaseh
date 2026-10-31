@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { planEnhancedSchemaMigration } from '../../src/db/schema.js';
+import { currentSchemaVersion, planEnhancedSchemaMigration } from '../../src/db/schema.js';
 
 describe('Dexie archive/project migration through the current schema', () => {
   it('preserves the outbox while adding only encrypted feature stores to the plan', () => {
     const plan = planEnhancedSchemaMigration(7);
     expect(plan).toMatchObject({
       from: 7,
-      to: 15,
+      to: currentSchemaVersion,
       preserveOutbox: true,
       storesToDelete: ['secureGoogleSync'],
     });

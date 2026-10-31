@@ -9,7 +9,7 @@ struct MacProfileScene: View {
     @State private var replacement = ""
     @State private var confirmation = ""
     @State private var code = ""
-    @State private var sounds = true
+    @AppStorage("completion-sound") private var sounds = true
     @State private var showingPhotoImporter = false
 
     var body: some View {

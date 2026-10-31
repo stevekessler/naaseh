@@ -13,7 +13,7 @@ public struct NativeClientIdentity: Sendable {
     }
 }
 
-public struct NativeSessionCredential: Equatable, Sendable {
+public struct NativeSessionCredential: Codable, Equatable, Sendable {
     public let cookieName: String
     public let cookieValue: String
     public let csrfToken: String
@@ -47,6 +47,9 @@ public actor APIClient {
 
     private let baseURL: URL
     private let identity: NativeClientIdentity
+    private let clientID: String
+    private var clockAnchor: Date?
+    private var clockUptime: TimeInterval = 0
     private let session: URLSession
     private let cookieObserver: CookieObserver?
     private let maximumAttempts: Int
@@ -54,6 +57,7 @@ public actor APIClient {
     public init(
         baseURL: URL,
         identity: NativeClientIdentity,
+        clientID: String = UUID().uuidString,
         allowLocalDevelopment: Bool = false,
         maximumAttempts: Int = 3,
         cookieObserver: CookieObserver? = nil,
@@ -74,6 +78,7 @@ public actor APIClient {
 
         self.baseURL = baseURL
         self.identity = identity
+        self.clientID = clientID
         self.cookieObserver = cookieObserver
         self.maximumAttempts = max(1, maximumAttempts)
         let configuration = URLSessionConfiguration.ephemeral
@@ -88,6 +93,11 @@ public actor APIClient {
         session = URLSession(configuration: configuration, delegate: RedirectRejectingDelegate(), delegateQueue: nil)
     }
 
+    public func currentServerTime() -> Date {
+        guard let clockAnchor else { return Date() }
+        return clockAnchor.addingTimeInterval(max(0, ProcessInfo.processInfo.systemUptime - clockUptime))
+    }
+
     public func request(
         path: String,
         method: String = "GET",
@@ -95,12 +105,19 @@ public actor APIClient {
         contentType: String = "application/json",
         session credential: NativeSessionCredential? = nil,
         idempotencyKey: String? = nil,
-        maximumResponseBytes: Int = 2 * 1024 * 1024
+        maximumResponseBytes: Int = 2 * 1024 * 1024,
+        headers: [String: String] = [:]
     ) async throws -> APIResponse {
         let url = try allowedURL(path: path)
         var request = URLRequest(url: url)
         request.httpMethod = method.uppercased()
         request.httpBody = body
+        for (name, value) in headers {
+            guard ["x-upload-session-id", "x-client-mutation-id", "if-match"].contains(name.lowercased()) else {
+                throw APIClientError.disallowedURL
+            }
+            request.setValue(value, forHTTPHeaderField: name)
+        }
         if body != nil { request.setValue(contentType, forHTTPHeaderField: "Content-Type") }
         applyHeaders(to: &request, credential: credential, idempotencyKey: idempotencyKey)
         return try await execute(request, maximumResponseBytes: maximumResponseBytes)
@@ -194,6 +211,11 @@ public actor APIClient {
                 .filter { $0.isSecure && $0.path == "/" }
             if !cookies.isEmpty { await cookieObserver(cookies) }
         }
+        if (200..<300).contains(http.statusCode), let value = headerFields["date"] {
+            let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0); formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            if let date = formatter.date(from: value) { clockAnchor = date; clockUptime = ProcessInfo.processInfo.systemUptime }
+        }
         return APIResponse(statusCode: http.statusCode, headers: headerFields, body: data)
     }
 
@@ -202,6 +224,7 @@ public actor APIClient {
         credential: NativeSessionCredential?,
         idempotencyKey: String?
     ) {
+        request.setValue(clientID, forHTTPHeaderField: "X-Client-ID")
         request.setValue(identity.platform.rawValue, forHTTPHeaderField: "X-Naaseh-Client-Platform")
         request.setValue(String(identity.buildNumber), forHTTPHeaderField: "X-Naaseh-Client-Build")
         request.setValue(String(identity.contractVersion), forHTTPHeaderField: "X-Naaseh-Contract-Version")

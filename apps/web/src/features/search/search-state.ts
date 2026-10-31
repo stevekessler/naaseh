@@ -1,6 +1,91 @@
 import type { Filters } from '../../search/task-search.js';
 import { parseUrgencySet, serializeUrgencySet } from '@naaseh/domain';
 import type { DatePreset } from '../../search/task-filters.js';
+
+export interface FinanceSearchPreferences {
+  includeTasks: boolean;
+  includeLists: boolean;
+  includeTransactions: boolean;
+  includeMerchants: boolean;
+  accountId: 'all' | string;
+}
+
+export const defaultFinanceSearchPreferences: FinanceSearchPreferences = {
+  includeTasks: true,
+  includeLists: true,
+  includeTransactions: false,
+  includeMerchants: false,
+  accountId: 'all',
+};
+
+const financePreferenceStorageKey = 'naaseh.combined-search-finance.v1';
+
+const boundedAccountId = (value: string | null) =>
+  value && /^[A-Za-z0-9:_-]{1,128}$/u.test(value) ? value : 'all';
+
+/** Search text is deliberately excluded so protected queries never enter history or storage. */
+export function financeSearchPreferencesFromSearch(search: string): FinanceSearchPreferences {
+  const params = new URLSearchParams(search);
+  return {
+    includeTasks: params.get('tasks') !== '0',
+    includeLists: params.get('lists') !== '0',
+    includeTransactions: params.get('transactions') === '1',
+    includeMerchants: params.get('merchants') === '1',
+    accountId: boundedAccountId(params.get('financeAccount')),
+  };
+}
+
+export function safeFinanceSearchState(preferences: FinanceSearchPreferences) {
+  const params = new URLSearchParams();
+  if (!preferences.includeTasks) params.set('tasks', '0');
+  if (!preferences.includeLists) params.set('lists', '0');
+  if (preferences.includeTransactions) params.set('transactions', '1');
+  if (preferences.includeMerchants) params.set('merchants', '1');
+  if (preferences.includeTransactions && preferences.accountId !== 'all') {
+    const accountId = boundedAccountId(preferences.accountId);
+    if (accountId !== 'all') params.set('financeAccount', accountId);
+  }
+  return params;
+}
+
+export function readFinanceSearchPreferences(): FinanceSearchPreferences {
+  const fromUrl = financeSearchPreferencesFromSearch(globalThis.location?.search ?? '');
+  if (globalThis.location?.search) return fromUrl;
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(financePreferenceStorageKey) ?? 'null',
+    ) as unknown;
+    if (stored && typeof stored === 'object') {
+      const value = stored as Partial<FinanceSearchPreferences>;
+      return {
+        includeTasks: value.includeTasks !== false,
+        includeLists: value.includeLists !== false,
+        includeTransactions: value.includeTransactions === true,
+        includeMerchants: value.includeMerchants === true,
+        accountId: boundedAccountId(typeof value.accountId === 'string' ? value.accountId : null),
+      };
+    }
+  } catch {
+    // Defaults remain safe when device-local preferences are unavailable or malformed.
+  }
+  return fromUrl;
+}
+
+export function persistFinanceSearchPreferences(preferences: FinanceSearchPreferences) {
+  try {
+    localStorage.setItem(financePreferenceStorageKey, JSON.stringify(preferences));
+  } catch {
+    // The selection still applies for this visit.
+  }
+}
+
+export function clearFinanceSearchPreferences() {
+  try {
+    localStorage.removeItem(financePreferenceStorageKey);
+  } catch {
+    // Memory state is cleared independently.
+  }
+}
 const allowed = [
   'from',
   'to',
@@ -11,6 +96,7 @@ const allowed = [
   'scope',
   'categoryId',
   'projectId',
+  'parentId',
   'contentType',
   'lifecycle',
   'progress',
@@ -23,6 +109,7 @@ const datePresets: readonly DatePreset[] = [
   'nextWeek',
   'nextNextWeek',
   'month',
+  'quarter',
 ];
 export function safeSearchState(_query: string, filters: Filters) {
   const params = new URLSearchParams();
@@ -51,6 +138,7 @@ export function filtersFromSearch(search: string): Filters {
     scope: params.get('scope') === 'all' ? 'all' : 'default',
     categoryId: params.get('categoryId') ?? '',
     projectId: params.get('projectId') ?? '',
+    parentId: params.get('parentId') ?? '',
     progress:
       params.get('progress') === 'not-started' ||
       params.get('progress') === 'in-progress' ||

@@ -1,5 +1,6 @@
+import { useId, useState } from 'react';
 import type { MemoDocument } from '@naaseh/domain';
-import { plainMemoDocument } from '@naaseh/domain';
+import { memoDocumentText, plainMemoDocument } from '@naaseh/domain';
 import { LexicalComposer } from '@lexical/react/LexicalComposer';
 import { ContentEditable } from '@lexical/react/LexicalContentEditable';
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
@@ -11,6 +12,7 @@ import {
   $createTextNode,
   $getRoot,
   $isParagraphNode,
+  $isLineBreakNode,
   $isTextNode,
   FORMAT_TEXT_COMMAND,
   type TextFormatType,
@@ -66,8 +68,10 @@ const textRuns = (
     | ReturnType<typeof $createListItemNode>,
 ) =>
   node.getChildren().flatMap((child) => {
+    if ($isLineBreakNode(child)) return [{ text: '\n', marks: [] }];
     if (!$isTextNode(child)) return [];
-    const marks: Array<'bold' | 'italic' | 'strikethrough'> = [];
+    const marks: Array<'bold' | 'italic' | 'strikethrough' | 'code'> = [];
+    if (child.hasFormat('code')) marks.push('code');
     if (child.hasFormat('bold')) marks.push('bold');
     if (child.hasFormat('italic')) marks.push('italic');
     if (child.hasFormat('strikethrough')) marks.push('strikethrough');
@@ -104,6 +108,9 @@ function Toolbar() {
       <button type="button" aria-label="Strikethrough" onClick={() => format('strikethrough')}>
         <s>S</s>
       </button>
+      <button type="button" aria-label="Code" onClick={() => format('code')}>
+        &lt;/&gt; Code
+      </button>
       <button
         type="button"
         aria-label="Bulleted list"
@@ -129,6 +136,10 @@ export function MemoEditor({
   value?: MemoDocument;
   onChange: (value: MemoDocument) => void;
 }) {
+  const counterId = useId();
+  const [length, setLength] = useState(
+    () => memoDocumentText(value ?? plainMemoDocument('')).length,
+  );
   const initial = value ?? plainMemoDocument('');
   const config = {
     namespace: 'NaasehMemo',
@@ -136,6 +147,7 @@ export function MemoEditor({
     theme: {
       text: {
         strikethrough: 'memo-format-strikethrough',
+        code: 'memo-format-code',
       },
     },
     editorState: initialize(initial),
@@ -147,12 +159,30 @@ export function MemoEditor({
     <LexicalComposer initialConfig={config}>
       <Toolbar />
       <RichTextPlugin
-        contentEditable={<ContentEditable className="memo-editor" aria-label="Memo" />}
+        contentEditable={
+          <ContentEditable
+            className="memo-editor"
+            aria-label="Memo"
+            aria-describedby={counterId}
+            aria-invalid={length > 50_000}
+          />
+        }
         placeholder={<span className="memo-placeholder">Write a memo…</span>}
         ErrorBoundary={({ children }) => children}
       />
+      <p id={counterId} className="memo-character-count" role="status">
+        {length.toLocaleString()} / 50,000 characters{length > 50_000 ? ' — memo is too long' : ''}
+      </p>
       <ListPlugin />
-      <OnChangePlugin onChange={(state) => state.read(() => onChange(readDocument()))} />
+      <OnChangePlugin
+        onChange={(state) =>
+          state.read(() => {
+            const document = readDocument();
+            setLength(memoDocumentText(document).length);
+            onChange(document);
+          })
+        }
+      />
     </LexicalComposer>
   );
 }

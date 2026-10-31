@@ -27,13 +27,13 @@ public struct TaskSearchIndex: Sendable {
     public init(records: [TaskRecord], actorID: String, groupIDs: Set<String>) {
         authorized = records.filter { $0.canRead(actorID: actorID, groupIDs: groupIDs) }
         normalizedText = Dictionary(uniqueKeysWithValues: authorized.map {
-            ($0.id, "\($0.label) \($0.memo)".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current))
+            ($0.id, "\($0.label) \($0.memoHidden ? "" : $0.memo) \($0.link?.absoluteString ?? "")".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current))
         })
     }
 
     public func search(_ query: TaskSearchQuery) -> [TaskRecord] {
         guard !isLocked else { return [] }
-        let needle = query.text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        let needle = query.text.trimmingCharacters(in: .whitespacesAndNewlines).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         return authorized.filter { task in
             (needle.isEmpty || normalizedText[task.id]?.contains(needle) == true)
                 && (query.urgencies.isEmpty || query.urgencies.contains(task.urgency))

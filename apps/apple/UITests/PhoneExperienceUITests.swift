@@ -26,6 +26,27 @@ final class PhoneExperienceUITests: XCTestCase {
         attachScreenshot(named: "iPhone-Reduced-Motion", app: app)
     }
 
+    func testTaskCreateCompleteUndoJourney() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-ui-testing"]
+        app.launch()
+        if !app.buttons["New task"].firstMatch.exists { app.buttons["Tasks"].firstMatch.tap() }
+        let create = app.buttons["New task"].firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 10))
+        create.tap()
+        let title = app.textFields["task.label"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("Native task journey")
+        app.buttons["Save task"].tap()
+        let complete = app.buttons["Complete Native task journey"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        complete.tap()
+        XCTAssertTrue(app.buttons["Undo"].waitForExistence(timeout: 5))
+        app.buttons["Undo"].tap()
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        attachScreenshot(named: "Task-Create-Complete-Undo", app: app)
+    }
+
     private func attachScreenshot(named name: String, app: XCUIApplication) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name

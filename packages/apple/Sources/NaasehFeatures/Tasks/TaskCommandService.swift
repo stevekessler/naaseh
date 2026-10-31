@@ -1,6 +1,7 @@
 import Foundation
 
 public struct TaskCreateCommand: Sendable {
+    public let details: TaskDetails?
     public let mutationID: String
     public let label: String
     public let urgency: TaskUrgency
@@ -16,8 +17,10 @@ public struct TaskCreateCommand: Sendable {
         parentID: String? = nil,
         projectID: String? = nil,
         categoryID: String? = nil,
-        due: TaskDueValue? = nil
+        due: TaskDueValue? = nil,
+        details: TaskDetails? = nil
     ) {
+        self.details = details
         self.mutationID = mutationID
         self.label = label
         self.urgency = urgency
@@ -29,6 +32,8 @@ public struct TaskCreateCommand: Sendable {
 }
 
 public struct TaskEditCommand: Sendable {
+    public let protectedMemo: HiddenMemoPackage?
+    public let details: TaskDetails?
     public let mutationID: String
     public let taskID: String
     public let label: String?
@@ -40,8 +45,12 @@ public struct TaskEditCommand: Sendable {
         taskID: String,
         label: String? = nil,
         parentID: String? = nil,
-        baseVersion: Int? = nil
+        baseVersion: Int? = nil,
+        details: TaskDetails? = nil,
+        protectedMemo: HiddenMemoPackage? = nil
     ) {
+        self.protectedMemo = protectedMemo
+        self.details = details
         self.mutationID = mutationID
         self.taskID = taskID
         self.label = label
@@ -146,7 +155,7 @@ public actor TaskCommandService {
         if let duplicate = await store.duplicateTaskMutation(mutationID: command.mutationID) { return duplicate }
         let parents = await parentMap()
         try TaskHierarchy.validateParent(taskID: command.mutationID, proposedParentID: command.parentID, parentByTaskID: parents)
-        let task = try TaskRecord.create(
+        var task = try TaskRecord.create(
             label: command.label,
             ownerID: actorID,
             due: command.due,
@@ -156,6 +165,8 @@ public actor TaskCommandService {
             urgency: command.urgency,
             now: now()
         )
+        if let details = command.details { task = try details.applying(to: task) }
+        try TaskHierarchy.validateParent(taskID: task.id, proposedParentID: task.parentID, parentByTaskID: parents)
         await store.commitCreate(task, mutationID: command.mutationID)
         return task
     }
@@ -167,18 +178,21 @@ public actor TaskCommandService {
             throw TaskCommandError.conflict(currentVersion: task.version)
         }
         var parents = await parentMap()
-        parents[task.id] = command.parentID ?? task.parentID
+        let parentID = command.details != nil ? command.details!.parentID : (command.parentID ?? task.parentID)
+        parents[task.id] = parentID
         try TaskHierarchy.validateParent(
             taskID: task.id,
-            proposedParentID: command.parentID ?? task.parentID,
+            proposedParentID: parentID,
             parentByTaskID: parents
         )
-        let replacement = try task.edit(
+        var replacement = try task.edit(
             label: command.label,
             parentID: command.parentID,
             actorID: actorID,
             now: now()
         )
+        if let details = command.details { replacement = try details.applying(to: replacement) }
+        if let package = command.protectedMemo { replacement = try replacement.protectingMemo(package) }
         await store.commitEdit(previous: task, replacement: replacement, actorID: actorID, mutationID: command.mutationID)
         return replacement
     }
@@ -228,6 +242,7 @@ public actor TaskCommandService {
         if let duplicate = await store.duplicateTaskMutation(mutationID: mutationID) { return duplicate }
         let task = try await requireOwnedTask(taskID)
         guard task.lifecycle == .archived else { throw TaskCommandError.invalidLifecycle }
+        if task.completionState == .completed { return try await undoCompletion(taskID: taskID, mutationID: mutationID) }
         let replacement = restored(task, now: now())
         await store.commitLifecycle(previous: task, replacement: replacement, actorID: actorID, mutationID: mutationID, operation: "restore")
         return replacement

@@ -5,7 +5,13 @@ export interface Ciphertext {
   iv: string;
   ciphertext: string;
 }
-const encode = (value: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(value)));
+const encode = (value: ArrayBuffer) => {
+  const bytes = new Uint8Array(value);
+  const chunks: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += 32_768)
+    chunks.push(String.fromCharCode(...bytes.subarray(offset, offset + 32_768)));
+  return btoa(chunks.join(''));
+};
 const decode = (value: string) => Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 
 export async function createDeviceKey(): Promise<CryptoKey> {

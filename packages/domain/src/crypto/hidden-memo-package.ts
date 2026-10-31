@@ -58,7 +58,7 @@ export const hiddenMemoPackageSchema = z
 export type HiddenMemoPackage = z.infer<typeof hiddenMemoPackageSchema>;
 
 export const hiddenMemoPayloadV2Schema = z
-  .object({ version: z.literal(2), text: z.string().max(20_000), document: memoDocumentSchema })
+  .object({ version: z.literal(2), text: z.string().max(50_000), document: memoDocumentSchema })
   .strict();
 
 export const hiddenMemoAad = (taskId: string, memoId: string, version = 1) =>

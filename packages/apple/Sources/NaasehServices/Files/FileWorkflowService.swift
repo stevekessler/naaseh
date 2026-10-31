@@ -65,9 +65,45 @@ public actor FileWorkflowService {
         }
         throw lastError ?? FileWorkflowError.cancelled
     }
-    public func preview(encryptedBody: Data, attachment: NativeAttachment) throws -> URL { guard attachment.scanState == .clean else { throw attachment.scanState == .pending ? FileWorkflowError.scanPending : FileWorkflowError.scanRejected }; let chunks: [EncryptedChunk]; do { chunks = try JSONDecoder().decode([EncryptedChunk].self, from: encryptedBody) } catch { throw FileWorkflowError.corruptCiphertext }; var plaintext = Data(); for chunk in chunks.sorted(by: { $0.index < $1.index }) { let aad = Data("attachment|\(attachment.id)|\(attachment.contentType)|1|\(chunk.index)".utf8); plaintext.append(try NaasehCrypto.aesGCMOpen(.init(nonce: chunk.nonce, ciphertext: chunk.ciphertext, tag: chunk.tag), key: rootKey, authenticatedData: aad)) }; let url = stagingDirectory.appendingPathComponent("preview-\(attachment.id)-\(attachment.filename)"); try plaintext.write(to: url, options: protectedWriteOptions); return url }
+    public func preview(encryptedBody: Data, attachment: NativeAttachment) throws -> URL {
+        guard attachment.scanState == .clean else {
+            throw attachment.scanState == .pending ? FileWorkflowError.scanPending : FileWorkflowError.scanRejected
+        }
+        let chunks: [EncryptedChunk]
+        do { chunks = try JSONDecoder().decode([EncryptedChunk].self, from: encryptedBody) }
+        catch { throw FileWorkflowError.corruptCiphertext }
+        var plaintext = Data()
+        for chunk in chunks.sorted(by: { $0.index < $1.index }) {
+            let aad = Data("attachment|\(attachment.id)|\(attachment.contentType)|1|\(chunk.index)".utf8)
+            plaintext.append(
+                try NaasehCrypto.aesGCMOpen(
+                    .init(nonce: chunk.nonce, ciphertext: chunk.ciphertext, tag: chunk.tag),
+                    key: rootKey,
+                    authenticatedData: aad
+                )
+            )
+            guard plaintext.count <= Self.maximumBytes else { throw FileWorkflowError.tooLarge }
+        }
+        guard plaintext.count == attachment.byteSize else { throw FileWorkflowError.corruptCiphertext }
+        let safeID = safePathComponent(attachment.id, fallback: "attachment")
+        let safeFilename = safePathComponent(attachment.filename, fallback: "preview")
+        let url = stagingDirectory.appendingPathComponent("preview-\(safeID)-\(safeFilename)")
+        guard url.deletingLastPathComponent().standardizedFileURL == stagingDirectory.standardizedFileURL
+        else { throw FileWorkflowError.corruptCiphertext }
+        try plaintext.write(to: url, options: protectedWriteOptions)
+        return url
+    }
     public func cleanup() throws { for url in try FileManager.default.contentsOfDirectory(at: stagingDirectory, includingPropertiesForKeys: nil) { try FileManager.default.removeItem(at: url) } }
     private func randomData(_ count: Int) throws -> Data { var data = Data(repeating: 0, count: count); guard data.withUnsafeMutableBytes({ SecRandomCopyBytes(kSecRandomDefault, count, $0.baseAddress!) }) == errSecSuccess else { throw FileWorkflowError.corruptCiphertext }; return data }
+    private func safePathComponent(_ value: String, fallback: String) -> String {
+        let cleaned = value.unicodeScalars.map { scalar -> Character in
+            scalar == "/" || scalar == "\\" || scalar.value < 32 || scalar.value == 127
+                ? "_"
+                : Character(String(scalar))
+        }
+        let result = String(cleaned).trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty || result == "." || result == ".." ? fallback : String(result.prefix(180))
+    }
     private var protectedWriteOptions: Data.WritingOptions {
         #if os(iOS)
         [.atomic, .completeFileProtection]

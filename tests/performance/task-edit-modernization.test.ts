@@ -19,13 +19,13 @@ describe('reference combobox performance', () => {
       blocks: [
         {
           type: 'paragraph' as const,
-          runs: [{ text: 'x'.repeat(20_000), marks: ['bold' as const] }],
+          runs: [{ text: 'x'.repeat(50_000), marks: ['bold' as const] }],
         },
       ],
     };
     const started = performance.now();
     const document = normalizeMemoDocument(input);
-    expect(memoDocumentText(document)).toHaveLength(20_000);
+    expect(memoDocumentText(document)).toHaveLength(50_000);
     expect(performance.now() - started).toBeLessThan(100);
   });
 

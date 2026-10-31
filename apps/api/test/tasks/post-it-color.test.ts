@@ -10,6 +10,8 @@ describe('post-it color task mutation', () => {
     expect(taskPatchSchema.safeParse({ postItColor: null }).success).toBe(true);
     expect(taskPatchSchema.safeParse({ postItColor: '#123456' }).success).toBe(false);
     expect(sanitizeTaskPatch({ postItColor: null })).toEqual({ postItColor: undefined });
+    expect(taskPatchSchema.safeParse({ memoDocument: null }).success).toBe(true);
+    expect(sanitizeTaskPatch({ memoDocument: null })).toEqual({ memoDocument: undefined });
   });
 
   it('records the color in the same task revision transaction', async () => {

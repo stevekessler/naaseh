@@ -63,6 +63,7 @@ struct VoiceTaskServiceTests {
         #expect(first == duplicate)
         #expect(await store.operations.count == 1)
         #expect(await store.tasks[first.taskID]?.due?.kind == .timed)
+        #expect(await store.tasks[first.taskID]?.due?.instant == ISO8601DateFormatter().date(from: "2026-11-03T21:30:00Z"))
 
         let (locked, _) = service(unlocked: false)
         await #expect(throws: VoiceTaskError.locked) {

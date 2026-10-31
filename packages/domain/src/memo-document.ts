@@ -1,10 +1,10 @@
 import { z } from 'zod';
 
-export const memoMarkSchema = z.enum(['bold', 'italic', 'strikethrough']);
+export const memoMarkSchema = z.enum(['bold', 'italic', 'strikethrough', 'code']);
 const memoRunSchema = z
   .object({
-    text: z.string().max(20_000),
-    marks: z.array(memoMarkSchema).max(3).default([]),
+    text: z.string().max(50_000),
+    marks: z.array(memoMarkSchema).max(4).default([]),
   })
   .strict();
 const paragraphSchema = z
@@ -24,11 +24,11 @@ export const memoDocumentSchema = z
   })
   .strict()
   .superRefine((document, context) => {
-    if (memoDocumentText(document).length > 20_000)
+    if (memoDocumentText(document).length > 50_000)
       context.addIssue({
         code: 'custom',
         path: ['blocks'],
-        message: 'Memo text cannot exceed 20,000 characters.',
+        message: 'Memo text cannot exceed 50,000 characters.',
       });
   });
 export type MemoDocument = z.infer<typeof memoDocumentSchema>;
@@ -36,8 +36,8 @@ export type MemoDocument = z.infer<typeof memoDocumentSchema>;
 const canonicalMarks = (marks: readonly z.infer<typeof memoMarkSchema>[]) =>
   [...new Set(marks)].sort(
     (left, right) =>
-      ['bold', 'italic', 'strikethrough'].indexOf(left) -
-      ['bold', 'italic', 'strikethrough'].indexOf(right),
+      ['bold', 'italic', 'strikethrough', 'code'].indexOf(left) -
+      ['bold', 'italic', 'strikethrough', 'code'].indexOf(right),
   );
 
 const normalizeRuns = (

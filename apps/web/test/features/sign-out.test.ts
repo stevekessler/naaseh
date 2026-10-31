@@ -3,6 +3,7 @@ import {
   confirmSignOutWithUnsyncedData,
   signOutBrowser,
 } from '../../src/features/auth/sign-out.js';
+import { FinanceSearchIndex, registerFinanceSearchIndex } from '../../src/search/finance-index.js';
 
 describe('browser sign-out', () => {
   it('requires confirmation without blocking sign-out when local work is at risk', () => {
@@ -38,6 +39,16 @@ describe('browser sign-out', () => {
   });
 
   it('still clears local data when the server is unavailable', async () => {
+    const index = new FinanceSearchIndex();
+    const unregister = registerFinanceSearchIndex(index);
+    await index.replaceProgressively(
+      {
+        accounts: [{ id: 'account-a', friendlyName: 'Checking' }],
+        transactions: [{ id: 'transaction-a', accountId: 'account-a', description: 'Private' }],
+        merchants: [],
+      },
+      { yieldToMain: async () => undefined },
+    );
     const purge = vi.fn(async () => undefined);
     const clearSession = vi.fn();
     await signOutBrowser(undefined, {
@@ -49,5 +60,9 @@ describe('browser sign-out', () => {
     });
     expect(purge).toHaveBeenCalledOnce();
     expect(clearSession).toHaveBeenCalledOnce();
+    expect(index.search('private', { includeTransactions: true, includeMerchants: false })).toEqual(
+      [],
+    );
+    unregister();
   });
 });

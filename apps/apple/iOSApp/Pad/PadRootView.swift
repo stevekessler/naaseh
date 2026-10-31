@@ -63,6 +63,10 @@ public struct PadRootView: View {
                             }
                         }
                         .scrollContentBackground(.hidden)
+                        Button("Sign Out") { Task { try? await core.signOut() } }
+                            .disabled(core.isSigningOut)
+                            .accessibilityIdentifier("account.signOut")
+                            .padding()
                     }
                     .padding(.top, NaasehSpacing.standard)
                     .background(.background)
@@ -72,7 +76,9 @@ public struct PadRootView: View {
                             TaskBrowserView(model: tasks, showsDetailInline: true)
                         } else if core.router.selectedSection == .journal {
                             JournalScene()
-                        } else if [.lists, .directory, .reports].contains(core.router.selectedSection) {
+                        } else if core.router.selectedSection == .reports {
+                        NativeTaskReportsView(model: tasks)
+                    } else if [.lists, .directory, .reports].contains(core.router.selectedSection) {
                             PadProductParityScene(section: core.router.selectedSection)
                         } else if core.router.selectedSection == .settings {
                             ProfileScene()
@@ -108,7 +114,7 @@ public struct PadRootView: View {
             }
         }
         .task {
-            if core.state == .launching { await core.start() }
+            if core.state == .launching { await core.start(); await tasks.reload() }
         }
     }
 }

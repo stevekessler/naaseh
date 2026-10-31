@@ -10,6 +10,7 @@ export interface Filters {
   scope?: 'default' | 'all';
   categoryId: string;
   projectId?: string;
+  parentId?: string;
   from: string;
   to: string;
   contentType?: 'all' | 'lists' | 'todos';
@@ -97,6 +98,7 @@ export function taskMatchesExpression(task: Task, filters: Filters, ids?: Set<st
     conditions.push(
       filters.projectId === 'unassigned' ? !task.projectId : task.projectId === filters.projectId,
     );
+  if (filters.parentId) conditions.push(task.parentId === filters.parentId);
   if (filters.from) conditions.push(Boolean(dueDate && dueDate >= filters.from));
   if (filters.to) conditions.push(Boolean(dueDate && dueDate <= filters.to));
   if (filters.datePresets?.length)
