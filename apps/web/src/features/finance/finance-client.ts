@@ -1,3 +1,4 @@
+import { currentFinanceAccess } from './security/finance-access.js';
 export interface FinanceProblemView {
   status: number;
   code: string;
@@ -32,18 +33,33 @@ export async function financeRequest<T>(
   options: RequestInit & { csrfToken?: string; idempotencyKey?: string } = {},
   fetcher: typeof fetch = fetch,
 ): Promise<T> {
-  const headers = new Headers(options.headers);
-  headers.set('accept', 'application/json');
-  if (options.body !== undefined) headers.set('content-type', 'application/json');
-  if (options.csrfToken) headers.set('x-csrf-token', options.csrfToken);
-  if (options.idempotencyKey) headers.set('idempotency-key', options.idempotencyKey);
-  const response = await fetcher(`/api/v1${path}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-    cache: 'no-store',
-  });
-  const body = await response.json().catch(() => undefined);
-  if (!response.ok) throw new FinanceClientError(safeProblem(body, response.status));
-  return body as T;
+  const access = currentFinanceAccess();
+  return access.read(async (signal) => {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false)
+      throw new FinanceClientError({
+        status: 0,
+        code: 'FINANCE_OFFLINE',
+        message: 'Finance is offline. Saved encrypted changes remain on this device.',
+      });
+    const headers = new Headers(options.headers);
+    headers.set('accept', 'application/json');
+    if (options.body !== undefined) headers.set('content-type', 'application/json');
+    if (options.csrfToken) headers.set('x-csrf-token', options.csrfToken);
+    if (options.idempotencyKey) headers.set('idempotency-key', options.idempotencyKey);
+    for (const [name, value] of Object.entries(access.requestHeaders())) headers.set(name, value);
+    const response = await fetcher(`/api/v1${path}`, {
+      ...options,
+      headers,
+      signal,
+      credentials: 'include',
+      cache: 'no-store',
+    });
+    const body = await response.json().catch(() => undefined);
+    if (!response.ok) {
+      const problem = safeProblem(body, response.status);
+      if (problem.code === 'finance_locked' || response.status === 401) await access.markStale();
+      throw new FinanceClientError(problem);
+    }
+    return body as T;
+  }, options.signal ?? undefined);
 }

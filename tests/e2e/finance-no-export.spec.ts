@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 async function emptyFinanceRoutes(page: Page) {
   await page.route('**/api/v1/finance/**', (route) => {
@@ -31,6 +31,7 @@ test('Finance v1 exposes no export action, request, route, or download', async (
   });
   page.on('download', (download) => downloads.push(download.suggestedFilename()));
   await emptyFinanceRoutes(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Finance' }).click();
 

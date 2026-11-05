@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -98,6 +98,7 @@ test('creates a task from a budget item and navigates to the ordinary task', asy
       }),
     });
   });
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   const item = page.getByRole('article', { name: 'Utility bill budget item' });
@@ -143,6 +144,7 @@ test('keeps the form recoverable after an atomic creation failure', async ({ pag
           },
     );
   });
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   const item = page.getByRole('article', { name: 'Utility bill budget item' });
@@ -158,6 +160,7 @@ test('keeps the form recoverable after an atomic creation failure', async ({ pag
 test('shows no financial relationship hint when the Finance-only link is absent', async ({
   page,
 }) => {
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/tasks');
   await expect(page.getByRole('link', { name: /related financial item/i })).toHaveCount(0);

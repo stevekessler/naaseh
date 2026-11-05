@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-31",
+  "checkpoint": "4d67637",
+  "beforeEstimatedBytes": 1639393043,
+  "beforeReferenceRows": 4467900,
+  "dynamodbPriceOfferPublication": "2026-09-11T12:44:22Z",
+  "result": {
+    "evidence": "offline synthetic representation estimate; no AWS calls",
+    "accountCount": 50,
+    "transactionCount": 100000,
+    "calendarMonths": 1,
+    "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+    "excludes": [
+      "TTL receipts/query jobs",
+      "canonical Finance 015 rows",
+      "receipt/security/upcoming metadata",
+      "GSI overhead",
+      "multiple currencies/calendar bases",
+      "AWS consumed capacity and latency"
+    ],
+    "categories": {
+      "facts": {
+        "rows": 100000,
+        "estimatedBytes": 94088220
+      },
+      "ordinalCopies": {
+        "rows": 100000,
+        "estimatedBytes": 96988220
+      },
+      "correctedCheckpoints": {
+        "rows": 100000,
+        "estimatedBytes": 53800000
+      },
+      "references": {
+        "rows": 590000,
+        "estimatedBytes": 168928940
+      },
+      "shortPostings": {
+        "rows": 33740,
+        "estimatedBytes": 11881628
+      },
+      "cardinalities": {
+        "rows": 49175,
+        "estimatedBytes": 9908571
+      }
+    },
+    "writeAmplification": {
+      "sampleCount": 100,
+      "createEstimatedWriteUnits": 40344,
+      "correctionEstimatedWriteUnits": 11360,
+      "createEstimatedWriteUnitsPerSource": 403.44,
+      "correctionEstimatedWriteUnitsPerSource": 113.6,
+      "strongGetCalls": 25192,
+      "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+      "excludes": [
+        "canonical writes",
+        "conflict retries",
+        "read/condition-check capacity",
+        "GSI writes"
+      ]
+    },
+    "estimatedBytes": 435595579,
+    "estimatedDecimalGB": 0.435595579,
+    "referencesPerTransaction": 5.9,
+    "shortBitUpdatesPerTransaction": 89.489,
+    "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+  },
+  "note": "Completed checkpoints retain transition identity only; rebuilding checkpoints retain both facts until commit. Removing the duplicate next fact reduces the prior 513,383,799-byte estimate by 77,788,220 bytes. The write sample remains unchanged because pending-item write size still applies.",
+  "recheckedDate": "2026-11-01",
+  "coverageNote": "Bounded canonical/refund proof services and explicit migration drivers exist with local tests. Automatic incremental publication and live acceptance remain incomplete. Account/scope driver metadata is outside the retained-row estimate; the generated write sample includes current publication marker writes.",
+  "previousEstimatedBytes": 513383799
+}

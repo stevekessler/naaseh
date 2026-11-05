@@ -167,4 +167,26 @@ describe('confirmed original expense refund capacity', () => {
         createExpenseRefundRelationship({ ...input, refundedAllocations: allocations }),
       ).toThrow();
   });
+
+  it('requires review rather than freeing capacity when an accepted original allocation disappears', () => {
+    const { input } = setup();
+    const relationship = createExpenseRefundRelationship(input);
+    const corrected = {
+      ...input.original,
+      version: 2,
+      allocations: input.original.allocations.map((allocation) => ({
+        ...allocation,
+        id: experienceId(499),
+      })),
+    };
+    // Keep the original allocation graph valid while changing its identities.
+    corrected.allocations[1]!.id = experienceId(498);
+    expect(() => refundCapacity(corrected, [relationship])).toThrow(/review|allocation/i);
+  });
+
+  it('rejects inconsistent currency claims instead of combining their principal capacities', () => {
+    const { input } = setup();
+    const relationship = { ...createExpenseRefundRelationship(input), currency: 'EUR' };
+    expect(() => refundCapacity(input.original, [relationship])).toThrow(/currency|review/i);
+  });
 });

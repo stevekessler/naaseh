@@ -50,6 +50,27 @@ export const financeSyncEntityTypes = [
   'financeRefundRelationship',
 ] as const;
 
+/** Explicit allowlist: adding future Finance v2 entities must not expand legacy delivery. */
+const legacyFinanceSyncEntities = new Set<string>([
+  'financeAccount',
+  'financeBalanceSnapshot',
+  'financeTransaction',
+  'financeAllocation',
+  'financeTransfer',
+  'financeCategory',
+  'financeMerchant',
+  'financeBudget',
+  'financeBudgetAccountLink',
+  'financeBudgetItem',
+  'financeReusableItem',
+  'financeTransactionMatch',
+  'financeReconciliation',
+  'financeTaskLink',
+  'financeReviewIssue',
+]);
+export const isLegacyFinanceSyncEntityType = (value: string) =>
+  legacyFinanceSyncEntities.has(value);
+
 export type FinanceSyncEntityType = (typeof financeSyncEntityTypes)[number];
 export const isFinanceSyncEntityType = (value: string): value is FinanceSyncEntityType =>
   financeSyncEntityTypes.includes(value as FinanceSyncEntityType);

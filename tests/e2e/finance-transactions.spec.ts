@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -166,6 +166,7 @@ test('reviews, searches, splits, and confirms a transfer without losing the sour
     }),
   );
 
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Transactions' }).click();
@@ -215,6 +216,7 @@ test('shows a global merchant with only authorized activity and supports all-acc
     }),
   );
 
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Transactions' }).click();
@@ -277,6 +279,7 @@ test('compares ambiguous reconciliation candidates and handles a stale conflict 
     }),
   );
 
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Transactions' }).click();

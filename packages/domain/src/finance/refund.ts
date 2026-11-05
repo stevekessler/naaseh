@@ -85,6 +85,23 @@ export function refundCapacity(
   const active = relationships.filter(
     (r) => r.status === 'active' && r.originalExpenseTransactionId === original.id,
   );
+  const principalIds = new Set(principal.map((allocation) => allocation.id));
+  for (const relationship of active) {
+    expenseRefundRelationshipSchema.parse(relationship);
+    if (
+      relationship.currency !== original.currency ||
+      relationship.currencyExponent !== original.currencyExponent
+    )
+      throw new Error('Refund capacity currency requires review.');
+    // Provider corrections may replace allocation identities. Ignoring an old claim
+    // would make its reserved principal available again before explicit resolution.
+    if (
+      relationship.refundedAllocations.some(
+        (allocation) => !principalIds.has(allocation.originalAllocationId),
+      )
+    )
+      throw new Error('Refund allocation capacity requires review.');
+  }
   const allocations = principal.map((p) => {
     const claimedMinor = addMinorUnits(
       active.flatMap((r) =>

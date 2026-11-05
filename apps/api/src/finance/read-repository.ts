@@ -79,7 +79,7 @@ export class FinanceReadRepository {
     if (rows.length > 2) throw new Error('Finance compact read exceeds row budget.');
     for (const row of rows) {
       if (
-        row.codec !== 'short-text-v1' ||
+        (row.codec !== 'short-text-v1' && row.codec !== 'text-bitmap-v2') ||
         !row.bits ||
         typeof row.baseOrdinal !== 'number' ||
         !row.month ||
@@ -162,7 +162,7 @@ export class FinanceReadRepository {
       );
     else if (filters.text) {
       const characters = Array.from(normalizeFinanceText(filters.text));
-      compactText = characters.length < 3;
+      compactText = true;
       partition = financeReadKeys.probe(accountId, 'text', characters.slice(0, 3).join(''));
     } else {
       const dimension = [
@@ -191,8 +191,7 @@ export class FinanceReadRepository {
         characters.length < 3
           ? [characters.join('')]
           : financeTextGrams(filters.text, 3, 3).slice(0, 8);
-      for (const gram of grams)
-        probes.set(financeReadKeys.probe(accountId, 'text', gram), characters.length < 3);
+      for (const gram of grams) probes.set(financeReadKeys.probe(accountId, 'text', gram), true);
     }
     for (const [kind, ids] of [
       ['budget', filters.budgetIds],

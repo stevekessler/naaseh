@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -109,6 +109,7 @@ async function routes(page: Page, detail: Record<string, unknown>, reconcileStat
 
 test('confirms reconciliation and displays immutable actor/time history', async ({ page }) => {
   await routes(page, budget());
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByText('Not reconciled')).toBeVisible();
@@ -134,6 +135,7 @@ test('explains incomplete and offline prerequisites without allowing completion'
       },
     }),
   );
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByRole('button', { name: 'Reconcile budget' })).toBeDisabled();
@@ -156,6 +158,7 @@ test('retains prior history through later changes and failed retries', async ({ 
     }),
     409,
   );
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByText('Changed since reconciliation')).toBeVisible();

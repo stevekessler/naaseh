@@ -1,24 +1,14 @@
 import { createUlid, type EntityType, type Mutation, type MutationOperation } from '@naaseh/domain';
 import { decryptText, encryptText } from '../crypto/vault.js';
-import { createDeviceKey } from '../crypto/vault.js';
-import Dexie from 'dexie';
+import { financeBootstrapDeviceKey } from './finance-device-key.js';
+import { currentFinanceAccess } from '../features/finance/security/finance-access.js';
 import { db, type EncryptedFinanceRecord, type StoredMutation } from './database.js';
 
 const associatedData = (entityType: string, id: string, version: number) =>
   `finance:${entityType}:${id}:v${version}`;
 
 export async function financeDeviceKey(): Promise<CryptoKey> {
-  return Dexie.ignoreTransaction(async () => {
-    const stored = await db.cryptoKeys.get('device');
-    if (stored) return stored.key;
-    const candidate = await createDeviceKey();
-    return db.transaction('rw', db.cryptoKeys, async () => {
-      const winner = await db.cryptoKeys.get('device');
-      if (winner) return winner.key;
-      await db.cryptoKeys.add({ id: 'device', key: candidate });
-      return candidate;
-    });
-  });
+  return currentFinanceAccess().read(() => financeBootstrapDeviceKey());
 }
 
 export async function encryptFinanceRecord(input: {
@@ -53,16 +43,18 @@ export async function encryptFinanceRecord(input: {
 }
 
 export async function decryptFinanceRecord(record: EncryptedFinanceRecord, key: CryptoKey) {
-  const value = JSON.parse(
-    await decryptText(
-      record.value,
-      key,
-      associatedData(record.entityType, record.id, record.version),
-    ),
-  ) as unknown;
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? migrateLegacyFinanceValue(record.entityType, value as Record<string, unknown>)
-    : value;
+  return currentFinanceAccess().read(async () => {
+    const value = JSON.parse(
+      await decryptText(
+        record.value,
+        key,
+        associatedData(record.entityType, record.id, record.version),
+      ),
+    ) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? migrateLegacyFinanceValue(record.entityType, value as Record<string, unknown>)
+      : value;
+  });
 }
 
 /** Lazy, idempotent adaptation after decryption; encrypted pending mutations are never rewritten. */
@@ -148,6 +140,7 @@ export async function putFinanceRecordWithMutation(
   record: EncryptedFinanceRecord,
   mutation: StoredMutation,
 ) {
+  if (!currentFinanceAccess().canRead()) throw new Error('Unlock Finance to continue.');
   if (!mutation.entityType.startsWith('finance')) {
     throw new Error('Finance outbox mutation has an invalid entity type.');
   }
@@ -231,25 +224,28 @@ export async function queueEncryptedBudgetMutation(input: {
 }
 
 export async function readEncryptedBudgetProjection(budgetId: string, suppliedKey?: CryptoKey) {
-  const key = suppliedKey ?? (await financeDeviceKey());
-  const records = await db.secureFinanceRecords.where('budgetId').equals(budgetId).toArray();
-  const values = await Promise.all(
-    records.map(async (record) => ({
-      entityType: record.entityType,
-      id: record.id,
-      version: record.version,
-      value: await decryptFinanceRecord(record, key),
-    })),
-  );
-  return values.sort((left, right) => {
-    const order = { financeBudget: 0, financeBudgetAccountLink: 1, financeBudgetItem: 2 } as Record<
-      string,
-      number
-    >;
-    return (
-      (order[left.entityType] ?? 100) - (order[right.entityType] ?? 100) ||
-      left.id.localeCompare(right.id)
+  return currentFinanceAccess().read(async () => {
+    const key = suppliedKey ?? (await financeDeviceKey());
+    const records = await db.secureFinanceRecords.where('budgetId').equals(budgetId).toArray();
+    const values = await Promise.all(
+      records.map(async (record) => ({
+        entityType: record.entityType,
+        id: record.id,
+        version: record.version,
+        value: await decryptFinanceRecord(record, key),
+      })),
     );
+    return values.sort((left, right) => {
+      const order = {
+        financeBudget: 0,
+        financeBudgetAccountLink: 1,
+        financeBudgetItem: 2,
+      } as Record<string, number>;
+      return (
+        (order[left.entityType] ?? 100) - (order[right.entityType] ?? 100) ||
+        left.id.localeCompare(right.id)
+      );
+    });
   });
 }
 

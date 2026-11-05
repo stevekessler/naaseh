@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+vi.mock('../../apps/api/src/finance/finance-unlock-guard.js', () => ({
+  createFinanceUnlockGuard: () => async () => ({
+    requirePin: false,
+    securityRevision: 0,
+    sessionEpoch: 0,
+  }),
+}));
+import { describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { createBudget, createBudgetItem } from '@naaseh/domain';
 import {
@@ -230,15 +237,21 @@ describe('Finance task-link integration', () => {
     expect(repository.tasks.size).toBe(1);
 
     const linkRoute = '/api/v1/finance/tasks/{taskId}/link';
-    const linked = await handler(request('GET', linkRoute, {}, { taskId: String(response.taskId) }));
+    const linked = await handler(
+      request('GET', linkRoute, {}, { taskId: String(response.taskId) }),
+    );
     expect(JSON.parse(('body' in linked ? linked.body : '') ?? '{}')).toMatchObject({
       link: { budgetId: ids.budget, budgetItemId: ids.item, taskId: response.taskId },
     });
-    const noAccess = createFinanceHandler(registerUserStory1FinanceRoutes(new FinanceRouteRegistry(), {
-      repository,
-      actorFor: () => ({ ...actor, id: 'outsider', groupMemberships: [] }),
-    }));
-    const concealed = await noAccess(request('GET', linkRoute, {}, { taskId: String(response.taskId) }));
+    const noAccess = createFinanceHandler(
+      registerUserStory1FinanceRoutes(new FinanceRouteRegistry(), {
+        repository,
+        actorFor: () => ({ ...actor, id: 'outsider', groupMemberships: [] }),
+      }),
+    );
+    const concealed = await noAccess(
+      request('GET', linkRoute, {}, { taskId: String(response.taskId) }),
+    );
     expect(JSON.parse(('body' in concealed ? concealed.body : '') ?? '{}')).toEqual({});
 
     const linkId = String(response.financialTaskLinkId);

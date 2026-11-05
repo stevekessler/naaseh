@@ -1,4 +1,11 @@
-import { describe, expect, it } from 'vitest';
+vi.mock('../../apps/api/src/finance/finance-unlock-guard.js', () => ({
+  createFinanceUnlockGuard: () => async () => ({
+    requirePin: false,
+    securityRevision: 0,
+    sessionEpoch: 0,
+  }),
+}));
+import { describe, expect, it, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { createFinanceHandler } from '../../apps/api/src/finance/handler.js';
 import {

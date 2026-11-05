@@ -95,6 +95,10 @@ import {
 } from '../journal/journal-repository.js';
 import { JournalService } from '../journal/journal-service.js';
 import { recordSyncMutationAttempt, recordSyncMutationOutcome } from './sync-telemetry.js';
+import { createFinanceSyncHandler, pullFinanceDeliveryLanes } from './handlers.js';
+import { isFinanceSyncEntityType } from './types.js';
+import { createFinanceUnlockGuard } from '../finance/finance-unlock-guard.js';
+const financeUnlockGuard = createFinanceUnlockGuard();
 const MAX_BODY_BYTES = 1_000_000;
 const journalRepository = new DynamoJournalRepository();
 const journalService = new JournalService(journalRepository);
@@ -126,6 +130,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         csrfToken?: string;
         role?: 'admin' | 'user';
         groupIds?: string;
+        sessionHash?: string;
       };
     };
   };
@@ -225,6 +230,61 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         return { name, after, changes };
       }),
     );
+    const financeRequest = parsed as {
+      contractVersion?: number;
+      version?: number;
+      financeCursor?: Record<string, number>;
+    };
+    if (
+      financeRequest.financeCursor !== undefined ||
+      pulled.some((page) =>
+        page.changes.some((change) => isFinanceSyncEntityType(change.entityType ?? '')),
+      )
+    ) {
+      const gate = {
+        userId: actorId,
+        sessionHash: context.authorizer?.lambda?.sessionHash ?? '',
+        grant: event.headers['x-finance-unlock'],
+        tabNonce: event.headers['x-finance-tab'],
+      };
+      let requirePin = true;
+      let unlocked = false;
+      try {
+        const protection = await financeUnlockGuard(gate);
+        requirePin = protection.requirePin;
+        unlocked = true;
+      } catch (error) {
+        if (!(error instanceof SafeApiError) || error.code !== 'finance_locked') throw error;
+      }
+      const lanes = await pullFinanceDeliveryLanes({
+        feeds,
+        cursor,
+        ...(financeRequest.financeCursor ? { financeCursor: financeRequest.financeCursor } : {}),
+        contractVersion: financeRequest.contractVersion ?? financeRequest.version ?? 1,
+        requirePin,
+        unlocked,
+        read: async (audience, after, limit) => {
+          const cached = pulled.find(
+            (page) =>
+              feeds.find(([name]) => name === page.name)?.[1] === audience && page.after === after,
+          );
+          return cached?.changes ?? pullAudience(audience, after, limit);
+        },
+      });
+      // A late reset/revocation must not release data computed under an old grant.
+      if (
+        lanes.financeChanges.length ||
+        lanes.changes.some((change) => isFinanceSyncEntityType(change.entityType ?? ''))
+      )
+        await financeUnlockGuard(gate);
+      const serialize = (change: SyncFeedChange) =>
+        change.entityType === 'personalStackOperation' ? change : serializeSharedWorkChange(change);
+      return json(200, {
+        ...lanes,
+        changes: lanes.changes.map(serialize),
+        financeChanges: lanes.financeChanges.map(serialize),
+      });
+    }
     const deduped = new Map<string, SyncFeedChange>();
     for (const { changes } of pulled)
       for (const change of changes) {
@@ -315,6 +375,73 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       actorRole: actor.role,
       correlationId: event.requestContext.requestId,
     });
+    if (isFinanceSyncEntityType(mutation.entityType)) {
+      // This branch precedes all generic mutation-receipt lookups. Unsupported replay
+      // retains encrypted intent and cannot echo a prior protected entity.
+      try {
+        const replay = createFinanceSyncHandler(
+          async () => ({
+            mutationId: mutation.id,
+            status: 'retry' as const,
+          }),
+          async () => {
+            try {
+              const protection = await financeUnlockGuard({
+                userId: actorId,
+                sessionHash: context.authorizer?.lambda?.sessionHash ?? '',
+                grant: event.headers['x-finance-unlock'],
+                tabNonce: event.headers['x-finance-tab'],
+              });
+              if (protection.requirePin && (body.contractVersion ?? body.version ?? 1) < 8)
+                throw new SafeApiError(
+                  426,
+                  'finance_upgrade_required',
+                  'Refresh Naaseh before synchronizing protected Finance data.',
+                  'authorization',
+                );
+            } catch (error) {
+              if (
+                error instanceof SafeApiError &&
+                error.code === 'finance_locked' &&
+                (body.contractVersion ?? body.version ?? 1) < 8
+              )
+                throw new SafeApiError(
+                  426,
+                  'finance_upgrade_required',
+                  'Refresh Naaseh before synchronizing protected Finance data.',
+                  'authorization',
+                );
+              throw error;
+            }
+          },
+        );
+        results.push({
+          ...(await replay(actorId, mutation)),
+          problem: {
+            code: 'finance_replay_pending',
+            message: 'Finance replay is not available yet. Pending changes remain saved.',
+            correlationId: event.requestContext.requestId,
+            retryAfterSeconds: 30,
+          },
+        });
+      } catch (error) {
+        const safe = recordError(error, {
+          operation: 'sync.finance',
+          correlationId: event.requestContext.requestId,
+        });
+        results.push({
+          mutationId: mutation.id,
+          status: 'retry' as const,
+          problem: {
+            code: safe.code,
+            message: safe.safeMessage,
+            correlationId: event.requestContext.requestId,
+            retryAfterSeconds: safe.retryAfterSeconds ?? 30,
+          },
+        });
+      }
+      continue;
+    }
     if (
       (mutation as { entityType?: string }).entityType === 'journalEntry' ||
       (mutation as { entityType?: string }).entityType === 'journalProfile'

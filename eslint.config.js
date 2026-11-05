@@ -6,9 +6,13 @@ export default tseslint.config(
   {
     ignores: [
       '**/node_modules/**',
+      '**/.venv/**',
+      '**/venv/**',
       '**/dist/**',
       '**/build/**',
       '**/coverage/**',
+      '**/test-results/**',
+      '**/playwright-report/**',
       '**/cdk.out/**',
       '**/*.min.js',
     ],

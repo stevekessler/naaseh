@@ -47,6 +47,18 @@ describe('Finance experience serverless infrastructure and worker boundary', () 
     expect(JSON.stringify(template.findResources('AWS::ApiGatewayV2::Route'))).toContain(
       '/api/v1/finance/receipts/{receiptId}/content',
     );
+    const routes = Object.values(template.findResources('AWS::ApiGatewayV2::Route'));
+    for (const routeKey of [
+      'GET /api/v1/auth/finance-security',
+      'PUT /api/v1/auth/finance-security',
+      'PATCH /api/v1/auth/finance-security',
+      'POST /api/v1/auth/finance-unlocks',
+      'DELETE /api/v1/auth/finance-unlocks/current',
+    ]) {
+      const route = routes.find((resource) => resource.Properties.RouteKey === routeKey);
+      expect(route?.Properties).toMatchObject({ AuthorizationType: 'NONE' });
+      expect(JSON.stringify(route?.Properties.Target)).toContain('AuthFunction');
+    }
     expect(JSON.stringify(template.findResources('AWS::Backup::BackupPlan'))).toContain(
       'NaasehFinanceReceipts',
     );

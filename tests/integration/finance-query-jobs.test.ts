@@ -40,6 +40,8 @@ function setup(accounts: number, count: number) {
   let active = 0;
   let maxActive = 0;
   let allowed = true;
+  let expireOnScan = false;
+  let expireOnHydrate = false;
   let now = Date.UTC(2026, 9, 31);
   const jobs = new Map<string, FinanceQueryJob>();
   const queue: Array<{ userId: string; queryId: string }> = [];
@@ -65,6 +67,7 @@ function setup(accounts: number, count: number) {
     client: {
       send: async (command) => {
         if (!(command instanceof QueryCommand)) throw new Error('Unexpected non-index read.');
+        if (expireOnScan) now += 16 * 60_000;
         active++;
         maxActive = Math.max(maxActive, active);
         await Promise.resolve();
@@ -104,11 +107,14 @@ function setup(accounts: number, count: number) {
     now: () => now,
     validate: async () => allowed,
     authorizeDelivery: async () => allowed,
+    authorizeFacts: async () => allowed,
     dispatch: async (job) => {
       queue.push(job);
     },
-    hydrate: async (job) =>
-      job.firstIds.map((ref) => facts.get(ref.accountId)!.find((f) => f.id === ref.id)!),
+    hydrate: async (job) => {
+      if (expireOnHydrate) now += 16 * 60_000;
+      return job.firstIds.map((ref) => facts.get(ref.accountId)!.find((f) => f.id === ref.id)!);
+    },
   });
   return {
     service,
@@ -119,6 +125,12 @@ function setup(accounts: number, count: number) {
     },
     revoke() {
       allowed = false;
+    },
+    expireDuringHydration() {
+      expireOnHydrate = true;
+    },
+    expireDuringScan() {
+      expireOnScan = true;
     },
     advance() {
       now += 16 * 60_000;
@@ -187,5 +199,21 @@ describe('automatic bounded Finance query completion', () => {
       totalsByCurrency: [{ amountMinor: 250_000 }],
       aggregateState: 'exact',
     });
+  });
+
+  it('withholds exact rows and totals when the query expires during result hydration', async () => {
+    const f = setup(1, 10);
+    const id = await f.service.create(f.input);
+    await f.service.step('u1', id);
+    f.expireDuringHydration();
+    await expect(f.service.status('u1', id)).rejects.toThrow(/expired/i);
+  });
+
+  it('does not publish another checkpoint when a bounded worker scan crosses query expiry', async () => {
+    const f = setup(1, 10);
+    const id = await f.service.create(f.input);
+    f.expireDuringScan();
+    await expect(f.service.step('u1', id)).rejects.toThrow(/expired/i);
+    expect(f.jobs.get(id)).toMatchObject({ version: 1, state: 'pending', count: 0 });
   });
 });

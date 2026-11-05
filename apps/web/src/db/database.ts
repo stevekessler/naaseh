@@ -37,6 +37,8 @@ export interface StoredCryptoKey {
 }
 export interface EncryptedEntityRecord {
   id: string;
+  /** Additive non-indexed conflict classification; absent on legacy records. */
+  entityType?: string;
   taskId?: string;
   ownerId?: string;
   projectId?: string;

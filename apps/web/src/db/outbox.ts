@@ -211,6 +211,7 @@ export async function commitEnhancedPull(
           for (const mutation of pending) {
             await db.secureConflicts.put({
               id: mutation.id,
+              entityType: mutation.entityType,
               updatedAt: new Date().toISOString(),
               value: mutation.payload,
             });
@@ -244,6 +245,7 @@ export async function commitEnhancedPull(
               for (const mutation of dependent) {
                 await db.secureConflicts.put({
                   id: mutation.id,
+                  entityType: mutation.entityType,
                   updatedAt: new Date().toISOString(),
                   value: mutation.payload,
                 });

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test('completes the representative Finance account, CSV, split, budget, and offline journey', async ({
   context,
@@ -158,6 +158,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
     }),
   );
 
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Finance' }).click();
   await page.getByLabel('Organization name').fill('Fixture Bank');

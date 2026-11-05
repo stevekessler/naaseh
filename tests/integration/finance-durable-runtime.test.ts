@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import {
+  GetCommand,
+  QueryCommand,
+  TransactGetCommand,
+  TransactWriteCommand,
+} from '@aws-sdk/lib-dynamodb';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import { dynamodb } from '../../apps/api/src/shared/dynamodb.js';
 import { DynamoFinanceRepository } from '../../apps/api/src/finance/dynamo-repository.js';
@@ -56,7 +61,9 @@ const event = (method: string, path: string, body?: unknown, mutationId = 'mutat
     requestContext: {
       requestId: 'request-1',
       http: { method },
-      authorizer: { lambda: { userId: actor.id, role: 'user', csrfToken: 'csrf' } },
+      authorizer: {
+        lambda: { userId: actor.id, role: 'user', csrfToken: 'csrf', sessionHash: 'a'.repeat(64) },
+      },
     },
     pathParameters: { proxy: path.slice('/api/v1/finance/'.length) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -67,10 +74,35 @@ const bodyOf = (response: Awaited<ReturnType<ReturnType<typeof createFinanceHand
 beforeEach(() => {
   vi.restoreAllMocks();
   store.clear();
+  store.set(keyOf({ PK: `USER#${actor.id}`, SK: 'PROFILE' }), {
+    PK: `USER#${actor.id}`,
+    SK: 'PROFILE',
+    data: { id: actor.id, role: 'user', active: true, sessionEpoch: 0, tfaStatus: 'disabled' },
+  });
+  store.set(keyOf({ PK: `SESSION#${'a'.repeat(64)}`, SK: 'SESSION' }), {
+    PK: `SESSION#${'a'.repeat(64)}`,
+    SK: 'SESSION',
+    data: {
+      id: 'finance-runtime-session',
+      userId: actor.id,
+      csrfToken: 'c'.repeat(32),
+      sessionEpoch: 0,
+      createdAt: new Date().toISOString(),
+      idleExpiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+      absoluteExpiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+    },
+  });
+
   transactions = [];
   failCommit = false;
   pageSize = 200;
   vi.spyOn(dynamodb, 'send').mockImplementation((async (command: unknown) => {
+    if (command instanceof TransactGetCommand)
+      return {
+        Responses: command.input.TransactItems!.map(({ Get }) => ({
+          Item: structuredClone(store.get(keyOf(Get!.Key!))),
+        })),
+      };
     if (command instanceof GetCommand)
       return { Item: structuredClone(store.get(keyOf(command.input.Key!))) };
     if (command instanceof QueryCommand) {
@@ -147,12 +179,27 @@ async function createAccount() {
 describe('Finance deployed storage and routing', () => {
   it('preserves shared catalog references held only in another authorized scope', async () => {
     const categoryId = '01J00000000000000000000826';
+    const scopePK = `FINANCE#SCOPE#OWNER#${actor.id}`;
+    const metaKey = { PK: scopePK, SK: 'META' };
+    store.set(keyOf(metaKey), { ...metaKey, revision: 1, refundRelationshipIndexVersion: 1 });
+    const privateKey = { PK: scopePK, SK: 'ROW#refundRelationships#synthetic' };
+    const privateRow = {
+      ...privateKey,
+      collection: 'refundRelationships',
+      entryKey: 'synthetic-credit',
+      data: { privateReference: 'preserved-server-only' },
+    };
+    store.set(keyOf(privateKey), privateRow);
     const repository = await DynamoFinanceRepository.forActor(actor);
     repository.categories.set(
       categoryId,
       createUserFinanceCategory({ id: categoryId, name: 'Fixture category', creatorId: actor.id }),
     );
+    await createManualAccount(repository, actor, accountInput, 'protocol-preservation');
     await repository.commit();
+    expect(store.get(keyOf(metaKey))).toMatchObject({ refundRelationshipIndexVersion: 1 });
+    expect(store.get(keyOf(privateKey))).toEqual(privateRow);
+    expect(JSON.stringify(repository)).not.toContain('preserved-server-only');
     const groupId = '01J00000000000000000000821';
     const other = {
       ...actor,

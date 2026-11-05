@@ -57,6 +57,14 @@ describe('attachment parent-first authorization', () => {
         'read',
       ),
     ).toBe(true);
+    expect(
+      await authorizeAttachmentParent(
+        'financeTransaction' as never,
+        records.item.id,
+        { id: 'member', role: 'user', active: true, groupIds: ['family'] },
+        'read',
+      ),
+    ).toBe(false);
     records.item = undefined;
     expect(
       await authorizeAttachmentParent(

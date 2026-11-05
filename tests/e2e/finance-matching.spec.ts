@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -191,6 +191,7 @@ async function routes(page: Page) {
 
 test('creates reusable items and copies an applicable future offer', async ({ page }) => {
   await routes(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance/budgets');
   await page.getByRole('button', { name: 'Reusable items' }).click();
@@ -211,6 +212,7 @@ test('creates reusable items and copies an applicable future offer', async ({ pa
 
 test('shows near provenance and keeps match decisions undoable', async ({ page }) => {
   await routes(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance/budgets');
   await page.getByRole('button', { name: 'Reusable items' }).click();
@@ -227,6 +229,7 @@ test('distinguishes a unique automatic exact match from ambiguous exact suggesti
   page,
 }) => {
   await routes(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance/budgets');
   await page.getByRole('button', { name: 'Reusable items' }).click();

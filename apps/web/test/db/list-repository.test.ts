@@ -132,6 +132,7 @@ describe('encrypted local list repository', () => {
     });
     state.conflicts.set(completedMutation.id, {
       id: completedMutation.id,
+      entityType: completedMutation.entityType,
       updatedAt: new Date(0).toISOString(),
       value: { mutation: completedMutation, result: { reason: 'hard_deleted' } },
     });

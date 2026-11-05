@@ -1,3 +1,4 @@
+import { currentFinanceAccess } from '../features/finance/security/finance-access.js';
 import MiniSearch from 'minisearch';
 import type { FinanceMerchant, FinancialTransaction } from '@naaseh/domain';
 import { db } from '../db/database.js';
@@ -238,82 +239,84 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 /** Decrypts only authorized local projections, then returns short-lived indexing documents. */
 export async function loadAuthorizedFinanceSearchSource(): Promise<FinanceSearchSource> {
-  const records = await db.secureFinanceRecords
-    .filter(({ entityType }) =>
-      ['financeAccount', 'financeTransaction', 'financeMerchant'].includes(entityType),
-    )
-    .toArray();
-  if (!records.length) return { accounts: [], transactions: [], merchants: [] };
-  const key = await financeDeviceKey();
-  const decrypted = await Promise.all(
-    records.map(async (record) => ({ record, value: await decryptFinanceRecord(record, key) })),
-  );
-  const accounts = decrypted
-    .filter(({ record }) => record.entityType === 'financeAccount')
-    .flatMap(({ value }) => {
-      if (!isRecord(value) || typeof value.id !== 'string') return [];
-      const friendlyName =
-        typeof value.friendlyName === 'string'
-          ? value.friendlyName
-          : typeof value.accountName === 'string'
-            ? value.accountName
-            : undefined;
-      return friendlyName ? [{ id: value.id, friendlyName }] : [];
-    });
-  const accountIds = new Set(accounts.map(({ id }) => id));
-  const transactions = decrypted
-    .filter(({ record }) => record.entityType === 'financeTransaction')
-    .flatMap(({ value }) => {
-      const transaction = value as Partial<FinancialTransaction>;
-      if (
-        !isRecord(value) ||
-        typeof transaction.id !== 'string' ||
-        typeof transaction.accountId !== 'string' ||
-        typeof transaction.description !== 'string' ||
-        transaction.status !== 'active' ||
-        !accountIds.has(transaction.accountId)
+  return currentFinanceAccess().read(async () => {
+    const records = await db.secureFinanceRecords
+      .filter(({ entityType }) =>
+        ['financeAccount', 'financeTransaction', 'financeMerchant'].includes(entityType),
       )
-        return [];
-      return [
-        {
-          id: transaction.id,
-          accountId: transaction.accountId,
-          description: transaction.description,
-          ...(transaction.payee ? { payee: transaction.payee } : {}),
-          ...(transaction.memo ? { memo: transaction.memo } : {}),
-          ...(transaction.effectiveAt ? { effectiveAt: transaction.effectiveAt } : {}),
-          pending: transaction.pending === true,
-          ...(transaction.amountMinor === undefined
-            ? {}
-            : { amountMinor: transaction.amountMinor }),
-          ...(transaction.currency ? { currency: transaction.currency } : {}),
-          ...(transaction.currencyExponent === undefined
-            ? {}
-            : { currencyExponent: transaction.currencyExponent }),
-        },
-      ];
-    });
-  const merchants = decrypted
-    .filter(({ record }) => record.entityType === 'financeMerchant')
-    .flatMap(({ value }) => {
-      const merchant = value as Partial<FinanceMerchant>;
-      if (
-        !isRecord(value) ||
-        typeof merchant.id !== 'string' ||
-        typeof merchant.name !== 'string' ||
-        merchant.status !== 'active'
-      )
-        return [];
-      return [
-        {
-          id: merchant.id,
-          name: merchant.name,
-          ...(merchant.city ? { city: merchant.city } : {}),
-          ...(merchant.region ? { region: merchant.region } : {}),
-        },
-      ];
-    });
-  return { accounts, transactions, merchants };
+      .toArray();
+    if (!records.length) return { accounts: [], transactions: [], merchants: [] };
+    const key = await financeDeviceKey();
+    const decrypted = await Promise.all(
+      records.map(async (record) => ({ record, value: await decryptFinanceRecord(record, key) })),
+    );
+    const accounts = decrypted
+      .filter(({ record }) => record.entityType === 'financeAccount')
+      .flatMap(({ value }) => {
+        if (!isRecord(value) || typeof value.id !== 'string') return [];
+        const friendlyName =
+          typeof value.friendlyName === 'string'
+            ? value.friendlyName
+            : typeof value.accountName === 'string'
+              ? value.accountName
+              : undefined;
+        return friendlyName ? [{ id: value.id, friendlyName }] : [];
+      });
+    const accountIds = new Set(accounts.map(({ id }) => id));
+    const transactions = decrypted
+      .filter(({ record }) => record.entityType === 'financeTransaction')
+      .flatMap(({ value }) => {
+        const transaction = value as Partial<FinancialTransaction>;
+        if (
+          !isRecord(value) ||
+          typeof transaction.id !== 'string' ||
+          typeof transaction.accountId !== 'string' ||
+          typeof transaction.description !== 'string' ||
+          transaction.status !== 'active' ||
+          !accountIds.has(transaction.accountId)
+        )
+          return [];
+        return [
+          {
+            id: transaction.id,
+            accountId: transaction.accountId,
+            description: transaction.description,
+            ...(transaction.payee ? { payee: transaction.payee } : {}),
+            ...(transaction.memo ? { memo: transaction.memo } : {}),
+            ...(transaction.effectiveAt ? { effectiveAt: transaction.effectiveAt } : {}),
+            pending: transaction.pending === true,
+            ...(transaction.amountMinor === undefined
+              ? {}
+              : { amountMinor: transaction.amountMinor }),
+            ...(transaction.currency ? { currency: transaction.currency } : {}),
+            ...(transaction.currencyExponent === undefined
+              ? {}
+              : { currencyExponent: transaction.currencyExponent }),
+          },
+        ];
+      });
+    const merchants = decrypted
+      .filter(({ record }) => record.entityType === 'financeMerchant')
+      .flatMap(({ value }) => {
+        const merchant = value as Partial<FinanceMerchant>;
+        if (
+          !isRecord(value) ||
+          typeof merchant.id !== 'string' ||
+          typeof merchant.name !== 'string' ||
+          merchant.status !== 'active'
+        )
+          return [];
+        return [
+          {
+            id: merchant.id,
+            name: merchant.name,
+            ...(merchant.city ? { city: merchant.city } : {}),
+            ...(merchant.region ? { region: merchant.region } : {}),
+          },
+        ];
+      });
+    return { accounts, transactions, merchants };
+  });
 }
 
 export function clearFinanceSearchIndexes() {

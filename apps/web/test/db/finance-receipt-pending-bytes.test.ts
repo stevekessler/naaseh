@@ -3,6 +3,11 @@ import { createDeviceKey, decryptText, type Ciphertext } from '../../src/crypto/
 import { queueFinanceReceiptBytes } from '../../src/db/finance-repository.js';
 import type { EncryptedFinanceRecord, StoredMutation } from '../../src/db/database.js';
 
+// Queue persistence is isolated here; Finance access is exercised in finance-lock.test.tsx.
+vi.mock('../../src/features/finance/security/finance-access.js', () => ({
+  currentFinanceAccess: () => ({ read: async (work: () => Promise<unknown>) => work() }),
+}));
+
 const state = vi.hoisted(() => ({
   bytes: new Map<string, Record<string, unknown>>(),
   records: new Map<string, unknown>(),

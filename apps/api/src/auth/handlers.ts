@@ -12,3 +12,5 @@ export const logoutHandler: APIGatewayProxyHandlerV2 = async () => ({
     'cache-control': 'no-store',
   },
 });
+
+export { createFinanceSecurityHttpHandler } from './finance-security-handler.js';

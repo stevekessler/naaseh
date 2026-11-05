@@ -1,3 +1,4 @@
+import { peekFinanceAccess, subscribeFinanceAccess } from '../finance/security/finance-access.js';
 import {
   urgencyLabels,
   type CategoryRecord,
@@ -58,6 +59,11 @@ export function CombinedSearchPage({
   openList: (listId: string) => void;
   loadFinanceSource?: () => Promise<FinanceSearchSource>;
 }) {
+  const [financeAccessVersion, changeFinanceAccessVersion] = useState(0);
+  useEffect(
+    () => subscribeFinanceAccess(() => changeFinanceAccessVersion((value) => value + 1)),
+    [],
+  );
   const [query, setQuery] = useState('');
   const [allContent, setAllContent] = useState(
     () => new URLSearchParams(location.search).get('scope') === 'all',
@@ -76,6 +82,16 @@ export function CombinedSearchPage({
   useEffect(() => registerFinanceSearchIndex(financeIndex.current), []);
   useEffect(() => {
     let active = true;
+    financeIndex.current.clear();
+    setFinanceSource(emptyFinanceSource);
+    setFinanceProgress({ indexed: 0, total: 0, complete: false });
+    const removeLock = peekFinanceAccess()?.onLock(() => {
+      active = false;
+      financeIndex.current.clear();
+      setFinanceSource(emptyFinanceSource);
+      setFinanceProgress({ indexed: 0, total: 0, complete: true });
+      setFinanceError(true);
+    });
     void loadFinanceSource()
       .then((source) => {
         if (!active) return;
@@ -97,9 +113,10 @@ export function CombinedSearchPage({
       });
     return () => {
       active = false;
+      removeLock?.();
       financeIndex.current.clear();
     };
-  }, [loadFinanceSource]);
+  }, [loadFinanceSource, financeAccessVersion]);
 
   useEffect(() => {
     if (!financeProgress.complete) return;

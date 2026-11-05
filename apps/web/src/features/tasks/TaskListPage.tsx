@@ -103,7 +103,7 @@ export function TaskListPage({
                 aria-label="Task details"
                 data-task-id={selected.id}
               >
-                <FinancialTaskLink taskId={selected.id} />
+                <FinancialTaskLink key={selected.id} taskId={selected.id} />
                 <TaskActions
                   task={selected}
                   csrfToken={csrfToken}

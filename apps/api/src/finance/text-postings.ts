@@ -1,4 +1,4 @@
-/** Monthly 500-position bitmaps bound short substring postings and read amplification. */
+/** Monthly 500-position bitmaps bound substring postings and read amplification. */
 export const TEXT_POSTING_CHUNK_SIZE = 500;
 export const TEXT_POSTING_BYTES = 63;
 export const normalizeFinanceText = (text: string) =>
@@ -31,20 +31,15 @@ function validOrdinal(ordinal: number) {
   if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal > Number.MAX_SAFE_INTEGER - 500)
     throw new Error('Invalid text posting ordinal.');
 }
-export function shortTextPostingKey(
-  accountId: string,
-  gram: string,
-  month: string,
-  ordinal: number,
-) {
+export function textPostingKey(accountId: string, gram: string, month: string, ordinal: number) {
   validOrdinal(ordinal);
   if (
     !/^\d{4}-(?:0[1-9]|1[0-2])$/.test(month) ||
     !accountId ||
     !gram ||
-    Array.from(gram).length > 2
+    Array.from(gram).length > 3
   )
-    throw new Error('Invalid short-text posting context.');
+    throw new Error('Invalid text posting context.');
   return {
     PK: `FINANCE#FACT_SEARCH#${accountId}#text#${encodeURIComponent(gram)}`,
     SK: `DATE#${month}#${String(Math.floor(ordinal / 500)).padStart(12, '0')}`,
@@ -82,3 +77,6 @@ export function updateTextPostingBit(
   else bits[index] = bits[index]! & ~(1 << bit % 8);
   return bits;
 }
+
+// Preserve the existing short-gram key API for migration and older internal consumers.
+export const shortTextPostingKey = textPostingKey;

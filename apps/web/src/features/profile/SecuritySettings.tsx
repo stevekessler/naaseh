@@ -1,3 +1,4 @@
+import { FinanceSecuritySettings } from '../auth/FinanceSecuritySettings.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   changePassword,
@@ -12,10 +13,12 @@ export function SecuritySettings({
   csrfToken,
   role,
   showHeading = true,
+  userId,
 }: {
   csrfToken: string;
   role: 'admin' | 'user';
   showHeading?: boolean;
+  userId?: string;
 }) {
   const [status, setStatus] = useState('Loading account security…');
   const [tfaEnabled, setTfaEnabled] = useState<boolean>();
@@ -116,6 +119,7 @@ export function SecuritySettings({
       aria-label={showHeading ? undefined : 'Account security'}
     >
       {showHeading ? <h2 id="security-title">Account security</h2> : null}
+      {userId ? <FinanceSecuritySettings ownerId={userId} csrfToken={csrfToken} /> : null}
       <p role="status">{status}</p>
       <p>Password reset requires the account PIN and is available from the sign-in page.</p>
       {tfaEnabled === false && (

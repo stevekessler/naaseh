@@ -62,6 +62,7 @@ export async function purgeRevokedGroup(groupId: string, entityIds: string[]) {
       for (const mutation of pending) {
         await db.secureConflicts.put({
           id: mutation.id,
+          entityType: mutation.entityType,
           updatedAt: new Date().toISOString(),
           value: mutation.payload,
         });

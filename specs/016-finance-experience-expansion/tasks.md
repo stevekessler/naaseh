@@ -49,11 +49,29 @@ Automated tests are required by the constitution. Task checkboxes track complete
 - [ ] T013 Implement transaction/refund-revision contribution facts, reversible account/currency/calendar summaries, dimension references and restartable publication in `apps/api/src/finance/spend-projection-service.ts` and `apps/api/src/finance/read-repository.ts`, consuming Foundation spend predicates. Add owner-only expiring query jobs/automatic max-five-partition completion in `apps/api/src/finance/query-job-service.ts`; pin selected account/refund-source revision vectors, recheck authorization/grant at delivery and finish exact totals without user pagination.
 - [X] T014 Reserve the next available compatible capability (planned sync v8/Finance v2, recheck concurrent work) and additive entity/command envelopes including refund relations, budget activity and immutable entryContext in `packages/domain/src/sync.ts`, `packages/contracts/src/finance.ts` and `apps/api/src/sync/types.ts`; retain legacy adapters and gate old protected Finance hydration.
 - [X] T015 Add the next unused Dexie migration and encrypted metadata/pending-byte/offline-security stores in `apps/web/src/db/database.ts`, `apps/web/src/db/schema.ts` and `apps/web/src/db/finance-repository.ts`; preserve existing device keys/outbox, use empty legacy defaults and reject quota failures before claiming bytes were queued.
-- [ ] T016 Extend redacted structured Finance events, correlation/error categories and projection-lag/invariant metrics in `apps/api/src/finance/telemetry.ts` and `packages/observability/src/redaction.ts`; exclude credentials/grants/filenames/financial values and test exclusions in `tests/security/finance-experience-observability.security.test.ts`.
+- [X] T016 Extend redacted structured Finance events, correlation/error categories and projection-lag/invariant metrics in `apps/api/src/finance/telemetry.ts` and `packages/observability/src/redaction.ts`; exclude credentials/grants/filenames/financial values and test exclusions in `tests/security/finance-experience-observability.security.test.ts`.
 - [ ] T017 Wire existing-function routes, trusted asynchronous Finance query-worker dispatch, owner-only checkpoint access, least-privilege table/media prefixes, retention/alarms and backup coverage in `infra/lib/api-stack.ts`, `infra/lib/observability-stack.ts` and `infra/lib/backup-stack.ts`, with assertions in `infra/test/finance-experience-infrastructure.test.ts`; preserve import-only connection decryption/auth-only pepper access and never let user input select an internal bypass envelope.
 - [ ] T018 Run bounded indexed cold/warm/sparse/zero-match feasibility, Foundation parity/migration/infra tests and current cost forecast; record actual rows/verified-empty <=2s p95, exact connected counts/totals <=10s p95, separate <=1s progress, rows/calls and automatic query completion in `docs/testing/finance-experience-validation.md`; improve indexes/concurrency before stories if either deadline or the approved $6.50 gate fails.
 
 **Checkpoint**: Foundational Storage, Projection and Compatibility Primitives is complete only after its independent acceptance and relevant failure paths pass; preserve pending evidence as unresolved.
+
+**Continuation evidence (2026-10-31)**: T012/T013 gained compact three-character
+postings, interrupted-v1 conversion, calendar-basis reversal and completed-checkpoint
+retention corrections. Required validation passes 1,338 cases; T016 local observability requirements pass; the repeated cost
+scenario is $6.466201/month but real DynamoDB deadlines/capacity and current hosted
+duration are unmeasured. T012/T013/T017/T018 remain unchecked. Foundation external acceptance has not passed.
+On 2026-11-01 the user explicitly directed that DynamoDB/external gates remain
+deferred and that local development continue without DynamoDB; dependent local
+security work may proceed under that direction, without claiming external PASS. See
+`docs/testing/finance-experience-validation.md` and its runtime/cost links.
+
+Foundation coverage correction (2026-11-01): a single contribution now leaves
+account coverage unverified. Runtime rejects missing/partial coverage proofs.
+Bounded canonical/refund verifiers, canonical fact reconstruction and explicit
+restartable scope/account migration drivers now have local coverage. T013 still
+requires automatic incremental canonical-write publication and bounded query
+integration; these are internal implementation gaps, distinct
+from the user-deferred DynamoDB/hosted acceptance gates. No foundation PASS is claimed.
 
 ## Phase 3: User Story 2 — Protect Finance with My Own PIN (Priority: P1)
 
@@ -66,16 +84,22 @@ Automated tests are required by the constitution. Task checkboxes track complete
 
 ### Tests — write first
 
-- [ ] T019 [P] [US2] Add self-only password-verified enrollment/change/reset/requirement and opaque grant/epoch/revision contract tests in `tests/contract/finance-pin.contract.test.ts`; reject targetUserId, weak/mismatched PINs and responses containing verifiers.
+- [X] T019 [P] [US2] Add self-only password-verified enrollment/change/reset/requirement and opaque grant/epoch/revision contract tests in `tests/contract/finance-pin.contract.test.ts`; reject targetUserId, weak/mismatched PINs and responses containing verifiers.
 - [ ] T020 [P] [US2] Add admin denial, password reset preserving Finance PIN, stale authorizer/grant, generic Finance/sync/attachment bypass and >=30-second fifth-failure tests in `tests/security/finance-pin.security.test.ts`.
 - [ ] T021 [P] [US2] Add offline verifier/missing-material/throttle, forgotten-PIN pending-data survival, history restoration and cross-tab lock lifecycle tests in `apps/web/test/features/finance-lock.test.tsx`.
-- [ ] T022 [P] [US2] Add representative Chromium/WebKit password-enrollment/unlock/direct-link/cancel/relock/offline journeys in `tests/e2e/finance-pin.spec.ts`; retain these in full browser validation unless the measured quick budget explicitly permits selection.
+- [X] T022 [P] [US2] Add representative Chromium/WebKit password-enrollment/unlock/direct-link/cancel/relock/offline journeys in `tests/e2e/finance-pin.spec.ts`; retain these in full browser validation unless the measured quick budget explicitly permits selection.
+
+Local evidence (2026-11-01): T019/T023/T024/T025 pass contracts, conditional
+repository/service fixtures, canonical guard and HTTP boundary tests plus synthesized
+route/permission assertions. Required validate passed 428 files / 1,373 cases in
+67.83 s before the next browser integration batch. This is not DynamoDB/hosted
+acceptance. See validation and runtime reports; other US2 tasks remain open.
 
 ### Implementation and Verification
 
-- [ ] T023 [US2] Implement user-only separate security/verifier, random hashed grant and durable throttle records in `apps/api/src/auth/finance-security-repository.ts`; bind grant to user/session/epoch/revision/tab, enforce maximum 30-minute/session expiry and exponential 30-second-to-30-minute failure delays.
-- [ ] T024 [US2] Implement current-password verification using canonical pepperVersion and existing Argon2id for all PIN/requirement management in `apps/api/src/auth/finance-security-service.ts`; keep Journal/recovery PINs separate and expose no administrative target-user operation.
-- [ ] T025 [US2] Add the `/auth/finance-security` and `/auth/finance-unlocks` methods from the API contract in `apps/api/src/auth/handlers.ts` and `infra/lib/api-stack.ts`; enforce mutation security/no-store, grant revocation and safe audit outcomes without broadening Finance password-secret permissions.
+- [X] T023 [US2] Implement user-only separate security/verifier, random hashed grant and durable throttle records in `apps/api/src/auth/finance-security-repository.ts`; bind grant to user/session/epoch/revision/tab, enforce maximum 30-minute/session expiry and exponential 30-second-to-30-minute failure delays.
+- [X] T024 [US2] Implement current-password verification using canonical pepperVersion and existing Argon2id for all PIN/requirement management in `apps/api/src/auth/finance-security-service.ts`; keep Journal/recovery PINs separate and expose no administrative target-user operation.
+- [X] T025 [US2] Add the `/auth/finance-security` and `/auth/finance-unlocks` methods from the API contract in `apps/api/src/auth/handlers.ts` and `infra/lib/api-stack.ts`; enforce mutation security/no-store, grant revocation and safe audit outcomes without broadening Finance password-secret permissions.
 - [ ] T026 [US2] Implement current session/epoch/security-revision Finance gate validation in `apps/api/src/finance/finance-unlock-guard.ts` and `apps/api/src/shared/security.ts`; attach to Finance, query-job result/status, generic attachment/sync and task-derived reads with no stale cache/admin bypass, while trusted background computation cannot deliver data to a locked client.
 - [ ] T027 [US2] Implement independent Finance delivery checkpoints, protected pull/replay gating and legacy-client locked/upgrade behavior in `apps/api/src/sync/handlers.ts`, `apps/api/src/sync/sync-service.ts` and `apps/api/src/sync/change-feed-repository.ts`; keep general task sync progressing without acknowledging undisclosed Finance events.
 - [ ] T028 [US2] Implement the per-tab memory-only grant/access controller and worker-derived offline verifier in `apps/web/src/features/finance/security/finance-access-controller.ts` and `apps/web/src/crypto/finance-pin.worker.ts`; persist local throttling, fail closed on missing/known-stale state and preserve encrypted pending records during reset.
@@ -538,3 +562,58 @@ Next deliver US11 future obligations, then US6 receipts and US12 task/post-it co
 | **Total** | **159** |
 
 There are 41 explicitly parallelizable test-authoring tasks. Every story has a separate goal, prerequisites, independent acceptance, failure-focused tests, implementation and verification checkpoint. All task IDs/labels/paths and coverage mappings are validated at generation; Implementation evidence is recorded separately in docs/testing/finance-experience-validation.md; unchecked checkpoints remain unresolved.
+
+
+Continuation evidence (2026-11-01, local only): bounded canonical/refund/scope
+migration drivers, checkpoint payload pruning, atomic canonical security snapshots,
+in-place task unlock, pre-decryption Finance outbox gating and ordinary conflict-cache
+isolation were added. Required/quick/full results, including failures and repeat
+results, are recorded in `docs/testing/finance-experience-validation-runtime.md`.
+No additional task checkbox is completed by these partial changes. Foundation
+incremental publication/query integration, semantic replay/independent browser
+Finance cursors, final lifecycle/access audit, live DynamoDB, hosted runtime and
+migration budget acceptance remain open. The 100k initial-publication sample
+extrapolates above the approved $6.50 ceiling; the ongoing conditional forecast
+is not migration approval. Apple and lockfile remain unchanged. Browser-tooling
+upgrade direction is pending separately from deferred DynamoDB/hosted gates.
+
+
+Playwright experiment update (2026-11-01): the user approved exact 1.64.1 and
+matching browser binaries. Required validation passes 1,409 tests in 54.86 s;
+quick remains 31 passing cases in 27.76 s. WebKit now fails before reaching the
+PIN steps, including two existing authentication controls; this does not accept
+the prior offline gate. All temporary helper/config experiments were removed.
+Only the Playwright package/lock entries changed for this experiment; restoring
+1.61.1 versus retaining 1.64.1 is pending user direction. The earlier note that
+upgrade approval was pending is superseded. No additional checkbox is completed.
+
+
+WebKit diagnosis update (2026-11-01): user directed staying on 1.64.1 and fixing the
+gate before implementation continues. A plain non-extractable AES key IndexedDB
+probe reproduces the freeze without application code. Native browser-process
+samples locate the wait in macOS Keychain access for WebKit's WebCrypto master key.
+A visible synthetic probe is open for the user to check an OS permission prompt;
+local user consent/unlock is the current human-input boundary. The earlier rollback
+choice is superseded. No encryption or acceptance assertion was weakened and no
+additional task checkbox is complete. Once resolved, repeat the actual WebKit/PIN
+gates before continuing the dependency-ordered local work.
+
+
+Local OS prerequisite update (2026-11-02): no prompt was visible. Read-only metadata
+shows the Keychain is unlocked, but Playwright WebCrypto Master Key trusts only a
+removed webkit-2311 application path rather than the installed webkit-2370 app.
+The user is reviewing that specific item's Access Control entry. No credential
+value was read and no rule/key was modified by the agent. Keep 1.64.1; do not weaken
+key persistence or mark T022 complete. After the user approves the updated browser,
+rerun the minimal key probe and actual browser gate, then continue implementation.
+
+
+Continuation evidence (2026-11-03): the user updated local Keychain access;
+the minimal non-extractable CryptoKey probe and all 12 unchanged PIN cases pass
+on Playwright 1.64.1. T022 is checked for its representative test implementation.
+Two complete browser runs remain failing during documented macOS system sleep;
+this is not full acceptance or completion of US2. Six bounded query-status HTTP
+checks pass and the endpoint avoids legacy whole-scope hydration. Initial table
+query creation/paging, incremental publication and deferred external gates still
+leave T012/T013/T017/T018 open. See the validation/runtime evidence for failures,
+timings and the requested awake-machine prerequisite.

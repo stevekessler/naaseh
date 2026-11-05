@@ -1,4 +1,7 @@
+import { readOrdinaryConflict } from './finance-conflict-access.js';
 import type { EntityType, StackConflictReason, Task, VectorCursor } from '@naaseh/domain';
+import { readFinanceReplayIntent } from './finance-sync.js';
+import { financeRequest } from '../features/finance/finance-client.js';
 import {
   attachmentSchema,
   copyJobSchema,
@@ -382,6 +385,7 @@ async function pushMutation(
   const isTimerMutation = mutation.entityType === 'taskTimer';
   const isJournalMutation = ['journalEntry', 'journalProfile'].includes(mutation.entityType);
   const isCrisisPlanMutation = mutation.entityType === ('crisisPlan' as string);
+  const isFinanceMutation = mutation.entityType.startsWith('finance');
   const wireMutation = {
     id: mutation.id,
     entityId: mutation.entityId,
@@ -392,16 +396,10 @@ async function pushMutation(
     createdAt: mutation.createdAt,
     attempts: mutation.attempts,
   };
-  const response = await fetch('/api/v1/sync/push', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      'content-type': 'application/json',
-      'x-csrf-token': csrfToken,
-      'x-client-id': clientId,
-    },
-    body: JSON.stringify({
-      contractVersion: isCrisisPlanMutation
+  const requestBody = JSON.stringify({
+    contractVersion: isFinanceMutation
+      ? 8
+      : isCrisisPlanMutation
         ? 6
         : isTimerMutation || isJournalMutation
           ? 5
@@ -412,9 +410,27 @@ async function pushMutation(
               : ['task', 'category', 'group'].includes(mutation.entityType)
                 ? 1
                 : 2,
-      mutations: [wireMutation],
-      ...(isStackMutation ? {} : { backlog }),
-    }),
+    mutations: [wireMutation],
+    ...(isStackMutation ? {} : { backlog }),
+  });
+  if (isFinanceMutation) {
+    const response = await financeRequest<{ results: MutationResult[] }>('/sync/push', {
+      method: 'POST',
+      csrfToken,
+      headers: { 'x-client-id': clientId },
+      body: requestBody,
+    });
+    return response.results[0];
+  }
+  const response = await fetch('/api/v1/sync/push', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'content-type': 'application/json',
+      'x-csrf-token': csrfToken,
+      'x-client-id': clientId,
+    },
+    body: requestBody,
   });
   if (!response.ok) throw await syncHttpResponseError('Synchronization push', response);
   const body = (await response.json()) as { results: MutationResult[] };
@@ -432,7 +448,10 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
   for (const queue of groupSequentialMutations(stored)) {
     for (const item of queue) {
       try {
-        const mutation = await decryptMutation(item);
+        const mutation = await readFinanceReplayIntent(item.entityType, () =>
+          decryptMutation(item),
+        );
+        if (!mutation) break; // Keep this Finance queue encrypted; unrelated queues may progress.
         if (item.entityType === 'project') {
           const payload = mutation.payload as { categoryId?: string };
           const localProject = await db.secureProjects.get(item.entityId);
@@ -513,6 +532,7 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
             await db.transaction('rw', db.secureConflicts, db.outbox, async () => {
               await db.secureConflicts.put({
                 id: item.id,
+                entityType: item.entityType,
                 updatedAt: new Date().toISOString(),
                 value,
               });
@@ -885,5 +905,12 @@ export async function drainSequentially(
 }
 export async function listConflicts() {
   const records = await db.secureConflicts.toArray();
-  return Promise.all(records.map((item) => decryptLocalValue('conflict', item.id, item.value)));
+  const values = await Promise.all(
+    records.map((item) =>
+      readOrdinaryConflict(item, () =>
+        decryptLocalValue<{ mutation?: { entityType?: string } }>('conflict', item.id, item.value),
+      ),
+    ),
+  );
+  return values.filter((value) => value !== undefined);
 }

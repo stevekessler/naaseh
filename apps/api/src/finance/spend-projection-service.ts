@@ -13,7 +13,7 @@ import type { FinanceFact } from './query-contract.js';
 import {
   financeTextGrams,
   financeFactSearchText,
-  shortTextPostingKey,
+  textPostingKey,
   textOrdinalKey,
   updateTextPostingBit,
   textPostingOrdinals,
@@ -23,7 +23,12 @@ import {
   loadTargetedFinanceEntity,
   type FinanceRecordKey,
 } from './unit-of-work.js';
-import { emitFinanceExperienceEvent } from './telemetry.js';
+import {
+  emitFinanceExperienceEvent,
+  FinanceExperienceFailure,
+  financeExperienceFailureDetails,
+  financeExperienceFailureOutcome,
+} from './telemetry.js';
 
 export interface SpendPublication {
   transactionId: string;
@@ -84,6 +89,7 @@ export function createFinanceFact(
 /** References only; full text is kept in the canonical fact rather than repeated per posting. */
 export function financeFactReferences(
   fact: FinanceFact,
+  legacyTextReferences = false,
 ): Array<FinanceRecordKey & { transactionId: string }> {
   const partitions = new Set([financeReadKeys.account(fact.accountId)]);
   const add = (kind: string, id: string | undefined) => {
@@ -101,8 +107,9 @@ export function financeFactReferences(
     financeReadKeys.probe(fact.accountId, 'amount', `${fact.currency}:${fact.amountMinor}`),
   );
   partitions.add(financeReadKeys.probe(fact.accountId, 'amount', `*:${fact.amountMinor}`));
-  for (const gram of financeTextGrams(financeFactSearchText(fact), 3, 3))
-    partitions.add(financeReadKeys.probe(fact.accountId, 'text', gram));
+  if (legacyTextReferences)
+    for (const gram of financeTextGrams(financeFactSearchText(fact), 3, 3))
+      partitions.add(financeReadKeys.probe(fact.accountId, 'text', gram));
   return [...partitions]
     .sort()
     .map((PK) => ({ PK, SK: financeReadKeys.date(fact), transactionId: fact.id }));
@@ -112,15 +119,28 @@ type ProjectionCheckpoint = {
   operation: string;
   offset: number;
   previous?: FinanceFact;
-  next: FinanceFact;
+  next?: FinanceFact;
   state: 'rebuilding' | 'complete';
   sourceScopeRevision?: number;
+  startedAt?: number;
+  calendarBasis?: string;
+  previousCalendarBasis?: string;
+  fingerprint?: string;
+  textPostingVersion?: number;
+  previousTextPostingVersion?: number;
 };
 const keyId = (key: FinanceRecordKey) => JSON.stringify([key.PK, key.SK]);
-function shortPostings(fact: FinanceFact | undefined) {
+function projectionSum(values: readonly number[]) {
+  try {
+    return addMinorUnits(values);
+  } catch {
+    throw new FinanceExperienceFailure('invariant', 'Finance projection amount invariant failed.');
+  }
+}
+function textPostings(fact: FinanceFact | undefined, maxGram = 3) {
   if (!fact || fact.textOrdinal === undefined || !fact.textMonth) return [];
-  return financeTextGrams(financeFactSearchText(fact), 1, 2).map((gram) => ({
-    key: shortTextPostingKey(fact.accountId, gram, fact.textMonth!, fact.textOrdinal!),
+  return financeTextGrams(financeFactSearchText(fact), 1, maxGram).map((gram) => ({
+    key: textPostingKey(fact.accountId, gram, fact.textMonth!, fact.textOrdinal!),
     ordinal: fact.textOrdinal!,
     month: fact.textMonth!,
   }));
@@ -129,34 +149,74 @@ function shortPostings(fact: FinanceFact | undefined) {
 /** Restartable index publication; account coverage stays rebuilding until every reference/summary commits. */
 export class SpendProjectionService {
   constructor(private readonly work: () => FinanceUnitOfWork = () => new FinanceUnitOfWork()) {}
+  /** Finish the exact durable input before processing a later canonical source version. */
+  async resumePending(transactionId: string): Promise<boolean> {
+    const row = await this.work().get({
+      PK: `FINANCE#TRANSACTION#${transactionId}`,
+      SK: 'SPEND_CONTRIBUTION',
+    });
+    const checkpoint = row?.data as ProjectionCheckpoint | undefined;
+    if (!checkpoint || checkpoint.state !== 'rebuilding') return false;
+    if (!checkpoint.next)
+      throw new FinanceExperienceFailure('invariant', 'Finance publication checkpoint is incomplete.');
+    const input = { ...checkpoint.next };
+    delete input.textOrdinal;
+    delete input.textMonth;
+    await this.publish(input, checkpoint.calendarBasis ?? 'UTC');
+    return true;
+  }
   async publish(next: FinanceFact, calendarBasis = 'UTC'): Promise<void> {
     const started = performance.now();
     const correlationId = createUlid();
     try {
-      await this.publishBounded(next, calendarBasis);
+      const publicationStartedAt = await this.publishBounded(next, calendarBasis);
       emitFinanceExperienceEvent({
         operation: 'projection',
         outcome: 'success',
+        ...(publicationStartedAt !== undefined
+          ? { projectionLagMs: Math.max(0, Date.now() - publicationStartedAt) }
+          : {}),
         correlationId,
         durationMs: performance.now() - started,
       });
     } catch (error) {
       emitFinanceExperienceEvent({
         operation: 'projection',
-        outcome: 'failed',
+        outcome: financeExperienceFailureOutcome(error),
         correlationId,
         durationMs: performance.now() - started,
-        errorCategory: 'storage',
-        retryKind: 'automatic',
+        ...financeExperienceFailureDetails(error),
       });
       throw error;
     }
   }
 
-  private async publishBounded(next: FinanceFact, calendarBasis: string): Promise<void> {
-    const operation = createHash('sha256')
+  private blockedPublication(message: string, startedAt?: number): never {
+    const age =
+      startedAt !== undefined && Number.isFinite(startedAt)
+        ? Math.max(0, Date.now() - startedAt)
+        : undefined;
+    const stalled = age !== undefined && age >= 15 * 60_000;
+    throw new FinanceExperienceFailure(
+      stalled ? 'stalled' : 'capacity',
+      stalled ? 'Finance projection is stalled; resume or repair its checkpoint.' : message,
+      'automatic',
+      age,
+    );
+  }
+
+  private async publishBounded(
+    next: FinanceFact,
+    calendarBasis: string,
+  ): Promise<number | undefined> {
+    const input = next;
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify({ next, calendarBasis, textPostingVersion: 2 }))
+      .digest('hex');
+    const legacyFingerprint = createHash('sha256')
       .update(JSON.stringify({ next, calendarBasis }))
       .digest('hex');
+    let operation = fingerprint;
     const checkpointKey = { PK: `FINANCE#TRANSACTION#${next.id}`, SK: 'SPEND_CONTRIBUTION' };
     const accountKey = { PK: `FINANCE#PROJECTION_ACCOUNT#${next.accountId}`, SK: 'CURRENT' };
     let checkpoint: ProjectionCheckpoint;
@@ -164,19 +224,43 @@ export class SpendProjectionService {
       const work = this.work();
       const stored = await work.get(checkpointKey);
       const current = stored?.data as ProjectionCheckpoint | undefined;
-      if (current?.operation === operation && current.state === 'complete') return;
-      if (current?.state === 'rebuilding' && current.operation !== operation)
-        throw new Error('Finance projection publication already in progress.');
+      const currentFingerprint = current?.fingerprint ?? current?.operation;
+      const sameInput =
+        currentFingerprint === fingerprint ||
+        (current?.state === 'rebuilding' &&
+          current.textPostingVersion === undefined &&
+          currentFingerprint === legacyFingerprint);
+      if (sameInput && current?.state === 'complete') return Date.now();
+      if (current?.state === 'rebuilding' && !sameInput)
+        this.blockedPublication(
+          'Finance projection publication already in progress.',
+          current.startedAt,
+        );
+      // A later transition may return to earlier input. Its receipts must be fresh,
+      // while an interrupted transition must retain its original receipt identities.
+      operation =
+        current?.state === 'rebuilding'
+          ? current.operation
+          : createHash('sha256')
+              .update(JSON.stringify([fingerprint, current?.operation ?? null]))
+              .digest('hex');
       const marker = await work.get(accountKey);
       if (marker?.state === 'rebuilding' && marker.operation !== operation)
-        throw new Error('Finance account projection is rebuilding.');
+        this.blockedPublication(
+          'Finance account projection is rebuilding.',
+          typeof marker.startedAt === 'number' ? marker.startedAt : undefined,
+        );
       if (current?.operation === operation) checkpoint = current;
       else {
         const fact = (await work.get(financeReadKeys.fact(next.id)))?.fact as
           | FinanceFact
           | undefined;
         if (fact && (fact.accountId !== next.accountId || fact.sourceVersion > next.sourceVersion))
-          throw new Error('Finance projection source conflict.');
+          throw new FinanceExperienceFailure(
+            'capacity',
+            'Finance projection source conflict.',
+            'user',
+          );
         const month = next.effectiveAt.slice(0, 7);
         let ordinal = fact?.textMonth === month ? fact.textOrdinal : undefined;
         if (ordinal === undefined) {
@@ -187,12 +271,23 @@ export class SpendProjectionService {
           const counter = await work.get(counterKey);
           ordinal = Number(counter?.nextOrdinal ?? 0);
           if (!Number.isSafeInteger(ordinal) || ordinal < 0 || ordinal >= 1_000_000)
-            throw new Error('Finance text ordinal capacity exceeded.');
+            throw new FinanceExperienceFailure(
+              'capacity',
+              'Finance text ordinal capacity exceeded.',
+              'user',
+            );
           await work.put({ ...counterKey, nextOrdinal: ordinal + 1 });
         }
         checkpoint = {
           operation,
+          fingerprint,
+          startedAt: Date.now(),
           offset: 0,
+          calendarBasis,
+          textPostingVersion: 2,
+          previousTextPostingVersion: current?.textPostingVersion ?? 1,
+          // Checkpoints written before calendar metadata used the default UTC basis.
+          previousCalendarBasis: current?.calendarBasis ?? 'UTC',
           ...(fact ? { previous: fact } : {}),
           next: { ...next, textOrdinal: ordinal, textMonth: month },
           state: 'rebuilding',
@@ -200,11 +295,18 @@ export class SpendProjectionService {
         const account = await loadTargetedFinanceEntity(work, 'accounts', next.accountId);
         if (account) checkpoint.sourceScopeRevision = account.scopeRevision;
         if (Buffer.byteLength(JSON.stringify(checkpoint), 'utf8') > 300_000)
-          throw new Error('Finance projection checkpoint exceeds safe item budget.');
+          throw new FinanceExperienceFailure(
+            'capacity',
+            'Finance projection checkpoint exceeds safe item budget.',
+            'user',
+          );
         await work.put({ ...checkpointKey, data: checkpoint });
         await work.put({
           ...accountKey,
           state: 'rebuilding',
+          transactionId: next.id,
+          coverageVerified: false,
+          startedAt: checkpoint.startedAt,
           operation,
           revision: Number(marker?.revision ?? 0) + 1,
         });
@@ -216,18 +318,29 @@ export class SpendProjectionService {
         });
       }
     }
+    if (!checkpoint.next)
+      throw new FinanceExperienceFailure('invariant', 'Finance publication checkpoint is incomplete.');
     next = checkpoint.next;
     const previousRefs = new Map(
-      (checkpoint.previous ? financeFactReferences(checkpoint.previous) : []).map((row) => [
-        keyId(row),
-        row,
-      ]),
+      (checkpoint.previous
+        ? financeFactReferences(checkpoint.previous, checkpoint.previousTextPostingVersion !== 2)
+        : []
+      ).map((row) => [keyId(row), row]),
     );
-    const nextRefs = new Map(financeFactReferences(next).map((row) => [keyId(row), row]));
+    // Finish an interrupted v1 publication with its original operation ordering first.
+    // Changing the batch contents underneath a durable offset would skip index writes.
+    const legacyPublication = checkpoint.textPostingVersion !== 2;
+    const nextRefs = new Map(
+      financeFactReferences(next, legacyPublication).map((row) => [keyId(row), row]),
+    );
     const oldShort = new Map(
-      shortPostings(checkpoint.previous).map((value) => [keyId(value.key), value]),
+      textPostings(checkpoint.previous, checkpoint.previousTextPostingVersion === 2 ? 3 : 2).map(
+        (value) => [keyId(value.key), value],
+      ),
     );
-    const newShort = new Map(shortPostings(next).map((value) => [keyId(value.key), value]));
+    const newShort = new Map(
+      textPostings(next, legacyPublication ? 2 : 3).map((value) => [keyId(value.key), value]),
+    );
     const operations: Array<{
       key: FinanceRecordKey;
       remove: boolean;
@@ -251,7 +364,11 @@ export class SpendProjectionService {
       const stored = await work.get(checkpointKey);
       const current = stored?.data as ProjectionCheckpoint | undefined;
       if (!current || current.operation !== operation || current.state !== 'rebuilding')
-        throw new Error('Finance projection checkpoint changed.');
+        throw new FinanceExperienceFailure(
+          'capacity',
+          'Finance projection checkpoint changed.',
+          'automatic',
+        );
       checkpoint = current;
       const batch = operations.slice(checkpoint.offset, checkpoint.offset + 40);
       for (const entry of batch) {
@@ -272,7 +389,7 @@ export class SpendProjectionService {
           if (textPostingOrdinals(bits, baseOrdinal).length)
             await work.put({
               ...entry.key,
-              codec: 'short-text-v1',
+              codec: legacyPublication ? 'short-text-v1' : 'text-bitmap-v2',
               month: entry.posting.month,
               baseOrdinal,
               bits,
@@ -288,8 +405,12 @@ export class SpendProjectionService {
         if (cardinalityDelta) {
           const countKey = { PK: entry.key.PK, SK: 'CARDINALITY' };
           const counter = await work.get(countKey);
-          const facts = addMinorUnits([Number(counter?.facts ?? 0), cardinalityDelta]);
-          if (facts < 0) throw new Error('Finance index cardinality invariant failed.');
+          const facts = projectionSum([Number(counter?.facts ?? 0), cardinalityDelta]);
+          if (facts < 0)
+            throw new FinanceExperienceFailure(
+              'invariant',
+              'Finance index cardinality invariant failed.',
+            );
           await work.put({ ...countKey, facts });
         }
       }
@@ -309,30 +430,36 @@ export class SpendProjectionService {
     const current = stored?.data as ProjectionCheckpoint | undefined;
     const marker = await work.get(accountKey);
     if (!current || current.operation !== operation || marker?.operation !== operation)
-      throw new Error('Finance projection publication conflict.');
-    if (current.state === 'complete') return;
+      throw new FinanceExperienceFailure(
+        'capacity',
+        'Finance projection publication conflict.',
+        'automatic',
+      );
+    if (current.state === 'complete') return Date.now();
+    // Reverse each publication in the calendar where it was originally counted.
+    // Reusing the requested basis for both sides leaves the old summary overstated.
     const deltas = [
       ...(checkpoint.previous?.slices ?? []).map((slice) => ({
-        ...slice,
-        amountMinor: -slice.amountMinor,
+        slice: { ...slice, amountMinor: -slice.amountMinor },
+        basis: checkpoint.previousCalendarBasis ?? 'UTC',
       })),
-      ...next.slices,
+      ...next.slices.map((slice) => ({ slice, basis: checkpoint.calendarBasis ?? calendarBasis })),
     ];
     const monthly = new Map<
       string,
       { key: FinanceRecordKey; amount: number; currency: string; currencyExponent: number }
     >();
-    for (const slice of deltas) {
-      const month = localFinanceDate(slice.effectiveAt, calendarBasis).slice(0, 7);
+    for (const { slice, basis } of deltas) {
+      const month = localFinanceDate(slice.effectiveAt, basis).slice(0, 7);
       const key = {
         PK: `FINANCE#SUMMARY#${slice.accountId}#${slice.currency}`,
-        SK: `MONTH#${calendarBasis}#${month}`,
+        SK: `MONTH#${basis}#${month}`,
       };
       const id = keyId(key);
       const previous = monthly.get(id);
       monthly.set(id, {
         key,
-        amount: addMinorUnits([previous?.amount ?? 0, slice.amountMinor]),
+        amount: projectionSum([previous?.amount ?? 0, slice.amountMinor]),
         currency: slice.currency,
         currencyExponent: slice.currencyExponent,
       });
@@ -340,12 +467,15 @@ export class SpendProjectionService {
     for (const { key, amount, currency, currencyExponent } of monthly.values()) {
       const row = await work.get(key);
       if (row && row.currencyExponent !== currencyExponent)
-        throw new Error('Finance summary currency invariant failed.');
+        throw new FinanceExperienceFailure(
+          'invariant',
+          'Finance summary currency invariant failed.',
+        );
       await work.put({
         ...key,
         currency,
         currencyExponent,
-        amountMinor: addMinorUnits([Number(row?.amountMinor ?? 0), amount]),
+        amountMinor: projectionSum([Number(row?.amountMinor ?? 0), amount]),
         version: Number(row?.version ?? 0) + 1,
       });
     }
@@ -361,10 +491,18 @@ export class SpendProjectionService {
       (old.textMonth !== next.textMonth || old.textOrdinal !== next.textOrdinal)
     )
       await work.delete(textOrdinalKey(old.accountId, old.textMonth, old.textOrdinal));
-    await work.put({ ...checkpointKey, data: { ...checkpoint, state: 'complete' } });
+    // The canonical fact is the next publication's reversal source. Once committed,
+    // the old copy is only needed by an unfinished batch, not by retained checkpoints.
+    const completed = { ...checkpoint };
+    delete completed.previous;
+    delete completed.next;
+    await work.put({ ...checkpointKey, data: { ...completed, state: 'complete' } });
     await work.put({
       ...accountKey,
-      state: 'ready',
+      // Completing one source cannot establish coverage of every canonical transaction/refund.
+      state: 'awaiting-coverage',
+      transactionId: next.id,
+      coverageVerified: false,
       operation,
       revision: Number(marker.revision) + 1,
       ...(checkpoint.sourceScopeRevision !== undefined
@@ -377,5 +515,7 @@ export class SpendProjectionService {
       result: true,
       expiresAt: Math.floor(Date.now() / 1000) + 86_400,
     });
+    if (legacyPublication) return this.publishBounded(input, calendarBasis);
+    return checkpoint.startedAt;
   }
 }

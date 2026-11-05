@@ -14,7 +14,7 @@ export interface StoredUser extends UserRecord {
   pinHash?: string;
   pepperVersion?: string;
 }
-const storedUserSchema = userSchema
+export const storedUserSchema = userSchema
   .extend({
     // Accounts imported before browser authentication was introduced may not
     // have credentials yet. They still need to be readable so an administrator

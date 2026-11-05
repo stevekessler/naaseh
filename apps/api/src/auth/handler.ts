@@ -15,6 +15,7 @@ import {
   tfaChallengeRequestSchema,
   tfaEnrollmentConfirmRequestSchema,
 } from '@naaseh/contracts';
+import { createFinanceSecurityHttpHandler } from './finance-security-handler.js';
 import { hashPassword, loadPepper, verifyOrDummy } from './password.js';
 import {
   authenticateSession,
@@ -79,6 +80,19 @@ const authenticatedRequest = async (event: APIGatewayProxyEventV2) => {
   if (!record || !user) return undefined;
   return { token, record, user };
 };
+
+const financeSecurityHttp = createFinanceSecurityHttpHandler({
+  authenticate: async (event) => {
+    const authenticated = await authenticatedRequest(event);
+    return authenticated
+      ? {
+          userId: authenticated.user.id,
+          sessionHash: sessionTokenHash(authenticated.token),
+          csrfToken: authenticated.record.csrfToken,
+        }
+      : undefined;
+  },
+});
 
 const mutationAuthorized = (event: APIGatewayProxyEventV2, csrfToken: string) => {
   try {
@@ -320,6 +334,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         username: user.username,
         displayName: user.displayName,
         role: user.role,
+        sessionEpoch: user.sessionEpoch,
       },
       csrfToken: record.csrfToken,
     });
@@ -650,7 +665,8 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
 
 export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   try {
-    return await handle(event);
+    const financeSecurity = await financeSecurityHttp(event);
+    return financeSecurity ?? (await handle(event));
   } catch (error) {
     return errorResponse(error, {
       correlationId: event.requestContext.requestId || randomUUID(),

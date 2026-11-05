@@ -9,8 +9,11 @@ import {
   dispatchFinanceInvocation,
   type financeQueryWorkerEnvelopeSchema,
 } from './query-worker.js';
-import { executeFinanceQueryWorker } from './query-runtime.js';
+import { createFinanceQueryRuntime, executeFinanceQueryWorker } from './query-runtime.js';
+import { ulidSchema } from '@naaseh/domain';
+import { FinanceExperienceFailure } from './telemetry.js';
 import type { z } from 'zod';
+import { createFinanceUnlockGuard } from './finance-unlock-guard.js';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -48,11 +51,17 @@ export async function createDefaultFinanceRegistry(event: APIGatewayProxyEventV2
   return { registry, repository };
 }
 
-export function createFinanceHandler(registry?: FinanceRouteRegistry) {
+export function createFinanceHandler(
+  registry?: FinanceRouteRegistry,
+  authorize = createFinanceUnlockGuard(),
+  queryRuntime: (
+    options: Parameters<typeof createFinanceQueryRuntime>[0],
+  ) => Pick<ReturnType<typeof createFinanceQueryRuntime>, 'status'> = createFinanceQueryRuntime,
+) {
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
     const correlationId = event.requestContext.requestId;
     const auth = (event.requestContext as { authorizer?: { lambda?: unknown } }).authorizer
-      ?.lambda as { userId?: string; csrfToken?: string } | undefined;
+      ?.lambda as { userId?: string; csrfToken?: string; sessionHash?: string } | undefined;
     if (!auth?.userId)
       return problem(401, 'unauthorized', 'Authentication required.', correlationId);
     try {
@@ -71,6 +80,27 @@ export function createFinanceHandler(registry?: FinanceRouteRegistry) {
           );
         }
       }
+      const gate = {
+        userId: auth.userId,
+        sessionHash: auth.sessionHash ?? '',
+        grant: event.headers['x-finance-unlock'],
+        tabNonce: event.headers['x-finance-tab'],
+      };
+      await authorize(gate);
+      // Resolve owner-only bounded jobs before the legacy registry hydrates scope data.
+      const queryPath = /^\/api\/v1\/finance\/queries\/([^/]+)$/.exec(event.rawPath);
+      if (event.requestContext.http.method === 'GET' && queryPath) {
+        const queryId = ulidSchema.parse(queryPath[1]);
+        const jobs = queryRuntime({
+          authorizeDelivery: async (job) => {
+            const current = await authorize(gate);
+            return job.userId === gate.userId && job.securityRevision === current.securityRevision;
+          },
+        });
+        const result = await jobs.status(auth.userId, queryId);
+        await authorize(gate);
+        return json(200, result);
+      }
       const runtime = registry ? undefined : await createDefaultFinanceRegistry(event);
       const route = (registry ?? runtime!.registry).resolve(
         event.requestContext.http.method,
@@ -79,9 +109,29 @@ export function createFinanceHandler(registry?: FinanceRouteRegistry) {
       if (!route)
         return problem(404, 'finance_not_found', 'Finance record not found.', correlationId);
       const response = await route(event);
+      if (mutationMethods.has(event.requestContext.http.method)) await authorize(gate);
       await runtime?.repository.commit();
+      await authorize(gate);
       return response;
     } catch (error) {
+      if (error instanceof FinanceExperienceFailure) {
+        const missing = error.errorCategory === 'validation';
+        const changed = error.errorCategory === 'authorization';
+        return problem(
+          missing ? 404 : changed ? 409 : 503,
+          missing
+            ? 'finance_query_expired'
+            : changed
+              ? 'finance_query_restart_required'
+              : 'finance_query_unavailable',
+          missing
+            ? 'Finance query missing or expired.'
+            : changed
+              ? 'Finance query changed. Restart the query.'
+              : 'Finance query is temporarily unavailable.',
+          correlationId,
+        );
+      }
       const message = error instanceof Error ? error.message : '';
       const mapped =
         message === 'Finance record not found.' || message === 'Finance connection not found.'

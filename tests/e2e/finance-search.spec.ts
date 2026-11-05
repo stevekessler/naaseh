@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -150,6 +150,7 @@ const records: SeedValue[] = [
 ];
 
 test('Finance types are opt-in and mixed results respect account scope', async ({ page }) => {
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await seedFinanceSearch(page, records);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -174,6 +175,7 @@ test('Finance types are opt-in and mixed results respect account scope', async (
 });
 
 test('Finance search remains complete for synchronized data offline', async ({ page, context }) => {
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await seedFinanceSearch(page, records);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -192,6 +194,7 @@ test('Finance search remains complete for synchronized data offline', async ({ p
 
 test('Finance empty state and controls remain accessible on a phone layout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Transactions' }).check();
@@ -202,6 +205,7 @@ test('Finance empty state and controls remain accessible on a phone layout', asy
 });
 
 test('Finance indexing failures keep ordinary search available', async ({ page }) => {
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await seedFinanceSearch(page, [records[0]!]);
   await page.evaluate(async () => {

@@ -1,3 +1,6 @@
+import { useFinanceSession } from '../features/finance/security/use-finance-session.js';
+import { peekFinanceAccess } from '../features/finance/security/finance-access.js';
+import { FinanceAccessBoundary } from '../features/finance/security/FinanceUnlock.js';
 import { useTaskCompletionUndo } from '../features/tasks/useTaskCompletionUndo.js';
 import { AdminNavigation } from '../components/AdminNavigation.js';
 import { TasksNavigation } from '../components/TasksNavigation.js';
@@ -44,7 +47,7 @@ import {
 } from '../features/sync/sync-activity.js';
 import { drainSequentially, resyncFromServer } from '../sync/sync-engine.js';
 import { installForegroundSync } from '../sync/foreground-sync.js';
-import { dismissObsoleteConflicts } from '../sync/conflict-review.js';
+import { countOrdinaryConflicts, dismissObsoleteConflicts } from '../sync/conflict-review.js';
 import { drainJournalOutbox, synchronizeJournalCiphertext } from '../sync/journal-sync.js';
 import { drainJournalDataInDependencyOrder } from '../sync/crisis-plan-sync.js';
 import { zeroizeJournalKey } from '../crypto/journal-crypto.js';
@@ -286,6 +289,7 @@ export function App() {
   const [sessionValidation, setSessionValidation] = useState<
     'valid' | 'locked' | 'retry' | 'wrong_account'
   >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
+  useFinanceSession(session?.userId, session?.csrfToken, sessionValidation === 'valid');
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
@@ -304,6 +308,9 @@ export function App() {
     | 'admin-categories'
     | 'journal'
   >(initialRoute.section);
+  useEffect(() => {
+    peekFinanceAccess()?.visitFinance(section === 'finance' || section === 'search');
+  }, [section]);
   const [journalKey, setJournalKey] = useState<Uint8Array>();
   const lockJournal = useCallback(() => {
     setJournalKey((current) => {
@@ -485,7 +492,7 @@ export function App() {
       .catch(() => undefined);
   }, [pendingSyncIdentity]);
   const [reviewConflicts, setReviewConflicts] = useState(false);
-  const conflicts = useLiveQuery(() => db.secureConflicts.count(), []) ?? 0;
+  const conflicts = useLiveQuery(() => countOrdinaryConflicts(), []) ?? 0;
   const savedConflictCount =
     useLiveQuery(
       async () =>
@@ -1316,11 +1323,20 @@ export function App() {
         </header>
         <main>
           {section === 'finance' ? (
-            <FinanceLandingPage
+            <FinanceAccessBoundary
               ownerId={session.userId}
-              role={session.role}
               csrfToken={session.csrfToken}
-            />
+              onCancel={() => {
+                history.pushState({}, '', '/');
+                setSection('tasks');
+              }}
+            >
+              <FinanceLandingPage
+                ownerId={session.userId}
+                role={session.role}
+                csrfToken={session.csrfToken}
+              />
+            </FinanceAccessBoundary>
           ) : section === 'journal' ? (
             <JournalPage
               ownerId={session.userId}

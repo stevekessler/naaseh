@@ -1,4 +1,11 @@
-import { emitFinanceExperienceEvent } from './telemetry.js';
+import { matchesFinanceFact, type FinanceFact, type FinanceReadContext } from './query-contract.js';
+import { financeQueryFiltersSchema } from '@naaseh/contracts';
+import {
+  emitFinanceExperienceEvent,
+  financeExperienceFailureDetails,
+  financeExperienceFailureOutcome,
+  FinanceExperienceFailure,
+} from './telemetry.js';
 import { createHash } from 'node:crypto';
 import { BatchGetCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { createUlid, membershipSchema, financeScopeSchema, financeAudience } from '@naaseh/domain';
@@ -129,6 +136,32 @@ async function sourceSnapshot(actor: FinanceActor, ids: string[]) {
     ...[...accounts.values()].map((account) => ({ PK: account.partition, SK: 'META' })),
     ...ids.map((id) => ({ PK: `FINANCE#PROJECTION_ACCOUNT#${id}`, SK: 'CURRENT' })),
   ]);
+  const coverageDependencies = new Map<string, Record<string, number>>();
+  const dependencyKeys = new Map<string, RecordKey>();
+  for (const id of ids) {
+    const marker = records.get(recordId({ PK: `FINANCE#PROJECTION_ACCOUNT#${id}`, SK: 'CURRENT' }));
+    const raw = marker?.coverageDependencies;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const entries = Object.entries(raw);
+    if (
+      entries.length > 80 ||
+      entries.some(
+        ([PK, revision]) =>
+          (!PK.startsWith('FINANCE#SCOPE#') && PK !== 'FINANCE#CATALOG') ||
+          !Number.isSafeInteger(revision) ||
+          (revision as number) < 0,
+      )
+    )
+      continue;
+    const dependencies = Object.fromEntries(entries) as Record<string, number>;
+    coverageDependencies.set(id, dependencies);
+    for (const PK of Object.keys(dependencies)) dependencyKeys.set(PK, { PK, SK: 'META' });
+  }
+  const dependencyRows = new Map(records);
+  const additional = await batchRows(
+    [...dependencyKeys.values()].filter((key) => !dependencyRows.has(recordId(key))),
+  );
+  for (const [key, value] of additional) dependencyRows.set(key, value);
   const revisions = new Map<string, string>();
   for (const id of ids) {
     const account = accounts.get(id);
@@ -147,6 +180,11 @@ async function sourceSnapshot(actor: FinanceActor, ids: string[]) {
       !Number.isSafeInteger(meta.revision) ||
       !marker ||
       marker.state !== 'ready' ||
+      marker.coverageVerified !== true ||
+      coverageDependencies.get(id)?.[account.partition] !== meta.revision ||
+      Object.entries(coverageDependencies.get(id) ?? {}).some(
+        ([PK, revision]) => dependencyRows.get(recordId({ PK, SK: 'META' }))?.revision !== revision,
+      ) ||
       marker.sourceScopeRevision !== meta.revision ||
       !Number.isSafeInteger(marker.revision)
     )
@@ -181,6 +219,45 @@ export function createFinanceQueryRuntime(
     currentJob = job;
     return true;
   };
+  const authorizeSources = async (
+    context: FinanceReadContext,
+    originals?: readonly string[],
+    budgetIds?: readonly string[],
+  ) => {
+    const job = currentJob;
+    if (
+      !job ||
+      job.userId !== context.userId ||
+      job.sourceRevisions[context.accountId] !== context.sourceRevision ||
+      job.securityRevision !== context.securityRevision ||
+      !currentPolicy ||
+      currentSources.get(context.accountId) !== context.sourceRevision
+    )
+      return false;
+    // These reads compute privately. step()/status() refresh the full canonical snapshot
+    // before publication/delivery, so we can reuse it across the five bounded source scans.
+    const current = currentPolicy;
+    if (!current) return false;
+    for (const id of originals ?? [])
+      if (currentSources.get(id) !== job.sourceRevisions[id] || !currentSources.has(id))
+        return false;
+    const budgets = await scopedRows('budgets', [...new Set(budgetIds ?? [])]);
+    for (const id of budgetIds ?? []) {
+      const budget = budgets.get(id);
+      if (
+        !budget ||
+        typeof budget.data.groupId !== 'string' ||
+        budget.partition !== `FINANCE#SCOPE#GROUP#${budget.data.groupId}` ||
+        !authorizeFinanceScope(
+          current.actor,
+          { type: 'group', groupId: budget.data.groupId },
+          'read',
+        ).allowed
+      )
+        return false;
+    }
+    return true;
+  };
   const repository = new FinanceReadRepository({
     tableName,
     cursorSecret: process.env.CURSOR_SIGNING_SECRET ?? '',
@@ -197,50 +274,47 @@ export function createFinanceQueryRuntime(
         ]),
       );
     },
-    authorize: async (context, originals, budgetIds) => {
-      const job = currentJob;
-      if (
-        !job ||
-        job.userId !== context.userId ||
-        job.sourceRevisions[context.accountId] !== context.sourceRevision ||
-        job.securityRevision !== context.securityRevision ||
-        !currentPolicy ||
-        currentSources.get(context.accountId) !== context.sourceRevision
-      )
-        return false;
-      // These reads compute privately. step()/status() refresh the full canonical snapshot
-      // before publication/delivery, so we can reuse it across the five bounded source scans.
-      const current = currentPolicy;
-      if (!current) return false;
-      for (const id of originals ?? [])
-        if (currentSources.get(id) !== job.sourceRevisions[id] || !currentSources.has(id))
-          return false;
-      const budgets = await scopedRows('budgets', [...new Set(budgetIds ?? [])]);
-      for (const id of budgetIds ?? []) {
-        const budget = budgets.get(id);
-        if (
-          !budget ||
-          typeof budget.data.groupId !== 'string' ||
-          budget.partition !== `FINANCE#SCOPE#GROUP#${budget.data.groupId}` ||
-          !authorizeFinanceScope(
-            current.actor,
-            { type: 'group', groupId: budget.data.groupId },
-            'read',
-          ).allowed
-        )
-          return false;
-      }
-      return true;
-    },
+    authorize: authorizeSources,
   });
   return new FinanceQueryJobService({
     repository,
     store: new DynamoFinanceQueryJobStore(),
     validate,
     authorizeDelivery: options.authorizeDelivery ?? (async () => false),
+    authorizeFacts: async (job, facts) => {
+      const byAccount = new Map<string, FinanceFact[]>();
+      for (const fact of facts)
+        byAccount.set(fact.accountId, [...(byAccount.get(fact.accountId) ?? []), fact]);
+      for (const [accountId, rows] of byAccount) {
+        if (
+          !(await authorizeSources(
+            {
+              userId: job.userId,
+              accountId,
+              sourceRevision: job.sourceRevisions[accountId] ?? '',
+              securityRevision: job.securityRevision,
+              filters: job.filters,
+            },
+            [...new Set(rows.flatMap((fact) => fact.originalSourceAccountIds ?? []))],
+            [
+              ...new Set(
+                rows.flatMap((fact) =>
+                  fact.slices.flatMap((slice) => (slice.budgetId ? [slice.budgetId] : [])),
+                ),
+              ),
+            ],
+          ))
+        )
+          return false;
+      }
+      return true;
+    },
     dispatch: dispatchFinanceQueryWorker,
     hydrate: async (job) => {
-      const facts = [];
+      const facts: FinanceFact[] = [];
+      const expected = new Map(job.firstIds.map((ref) => [ref.id, ref]));
+      const seen = new Set<string>();
+      const filters = financeQueryFiltersSchema.parse(job.filters);
       for (let offset = 0; offset < job.firstIds.length; offset += 100) {
         const result = await dynamodb.send(
           new BatchGetCommand({
@@ -256,7 +330,27 @@ export function createFinanceQueryRuntime(
         );
         if (result.UnprocessedKeys && Object.keys(result.UnprocessedKeys).length)
           throw new Error('Finance query hydration requires retry.');
-        for (const row of result.Responses?.[tableName] ?? []) facts.push(row.fact);
+        for (const row of result.Responses?.[tableName] ?? []) {
+          const fact = row.fact as FinanceFact | undefined;
+          const ref = fact && expected.get(fact.id);
+          if (
+            !fact ||
+            !ref ||
+            seen.has(fact.id) ||
+            row.PK !== `FINANCE#FACT#${ref.id}` ||
+            row.SK !== 'CURRENT' ||
+            fact.accountId !== ref.accountId ||
+            fact.effectiveAt !== ref.effectiveAt ||
+            !Array.isArray(fact.slices) ||
+            !matchesFinanceFact(fact, filters)
+          )
+            throw new FinanceExperienceFailure(
+              'invariant',
+              'Finance query source identity invariant failed.',
+            );
+          seen.add(fact.id);
+          facts.push(fact);
+        }
       }
       if (facts.length !== job.firstIds.length)
         throw new Error('Finance query source changed; restart required.');
@@ -281,11 +375,10 @@ export async function executeFinanceQueryWorker(input: { userId: string; queryId
   } catch (error) {
     emitFinanceExperienceEvent({
       operation: 'query',
-      outcome: 'failed',
+      outcome: financeExperienceFailureOutcome(error),
       correlationId,
       durationMs: performance.now() - started,
-      errorCategory: 'storage',
-      retryKind: 'automatic',
+      ...financeExperienceFailureDetails(error),
     });
     throw error;
   }

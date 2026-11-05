@@ -149,3 +149,36 @@ export async function resizePreservingValue(
   await page.setViewportSize({ width, height });
   await expect(field).toHaveValue(value);
 }
+
+/** Explicit legacy-unprotected fixture; authentication security journeys use their own routes. */
+export async function mockUnprotectedFinanceSecurity(page: Page) {
+  let signedIn = false;
+  await page.route('**/api/v1/auth/login', (route) => {
+    signedIn = true;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: { id: 'local-steve', displayName: 'Steve', role: 'admin' },
+        csrfToken: 'local-development',
+      }),
+    });
+  });
+  await page.route('**/api/v1/auth/finance-security', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ requirePin: false, enrolled: false, revision: 0 }),
+    }),
+  );
+  await page.route('**/api/v1/auth/session', (route) =>
+    route.fulfill({
+      status: signedIn ? 200 : 401,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: { id: 'local-steve', displayName: 'Steve', role: 'admin', sessionEpoch: 0 },
+        csrfToken: 'local-development',
+      }),
+    }),
+  );
+}

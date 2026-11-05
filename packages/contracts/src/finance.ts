@@ -9,6 +9,49 @@ import {
 
 export const financeContractVersion = 2 as const;
 
+const financePinSchema = z.string().regex(/^\d{6,32}$/);
+export const financePinUpdateSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(1024),
+    newPin: financePinSchema,
+    confirmPin: financePinSchema,
+    requirePin: z.boolean(),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict()
+  .refine((value) => value.newPin === value.confirmPin, {
+    message: 'Finance PIN confirmation must match.',
+    path: ['confirmPin'],
+  });
+export const financePinRequirementSchema = z
+  .object({
+    currentPassword: z.string().min(1).max(1024),
+    requirePin: z.boolean(),
+    expectedRevision: z.number().int().nonnegative(),
+  })
+  .strict();
+export const financeUnlockRequestSchema = z
+  .object({
+    pin: financePinSchema,
+    tabNonce: z.string().regex(/^[A-Za-z0-9_-]{32,128}$/),
+  })
+  .strict();
+export const financeSecurityResponseSchema = z
+  .object({
+    requirePin: z.boolean(),
+    enrolled: z.boolean(),
+    revision: z.number().int().nonnegative(),
+  })
+  .strict();
+export const financeUnlockResponseSchema = z
+  .object({
+    grant: z.string().regex(/^[A-Za-z0-9_-]{43}$/),
+    expiresAt: z.string().datetime(),
+    securityRevision: z.number().int().positive(),
+    sessionEpoch: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export { expenseRefundRelationshipSchema, refundedAllocationSchema } from '@naaseh/domain';
 
 export const financeEntryContextSchema = z

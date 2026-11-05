@@ -19,6 +19,8 @@ export async function authorizeAttachmentParent(
     if (!task) return false;
     return action === 'read' ? canReadTaskAs(task, actor).allowed : task.ownerId === actor.id;
   }
+  // Unknown/future parent types must not inherit list-item authorization.
+  if (parentType !== 'listItem') return false;
   const item = await findListItem(parentId);
   if (!item) return false;
   const list = await findList(item.listId);

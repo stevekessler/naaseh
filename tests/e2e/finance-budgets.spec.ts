@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -119,6 +119,7 @@ test('creates a bounded budget and manages group/private accounts and signed ite
   page,
 }) => {
   await routeBudgetData(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Budgets' }).click();
@@ -149,6 +150,7 @@ test('shows exact item/category variance and separate currency totals without a 
   page,
 }) => {
   await routeBudgetData(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByRole('region', { name: 'USD budget totals' })).toContainText(
@@ -184,6 +186,7 @@ test('warns about incomplete totals without identifying a hidden account or amou
       }),
     }),
   );
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByRole('alert').filter({ hasText: /totals are incomplete/i })).toContainText(
@@ -195,6 +198,7 @@ test('warns about incomplete totals without identifying a hidden account or amou
 test('keeps budget creation usable on a narrow touch layout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await routeBudgetData(page);
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Budgets' }).click();

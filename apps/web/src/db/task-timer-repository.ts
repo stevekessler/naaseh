@@ -114,6 +114,7 @@ export async function claimTimerFeedback(
 export async function storeTaskTimerConflict(conflict: LocalTaskTimerConflict) {
   await db.secureConflicts.put({
     id: conflict.id,
+    entityType: 'taskTimer',
     ownerId: conflict.ownerId,
     taskId: conflict.local.taskId,
     updatedAt: conflict.createdAt,
@@ -141,6 +142,7 @@ export async function conflictLocalTaskTimer(input: {
   };
   const record = {
     id: conflict.id,
+    entityType: 'taskTimer',
     ownerId: conflict.ownerId,
     taskId: conflict.local.taskId,
     updatedAt: conflict.createdAt,

@@ -105,6 +105,7 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
       'budgetItems',
       'categories',
       'merchants',
+      'refundRelationships',
     ]);
     for (const candidate of page.Items ?? []) {
       if (!collections.has(candidate.collection as string)) continue;
@@ -130,6 +131,7 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     });
   }
   private readonly versions = new Map<string, number>();
+  private readonly scopeMetadata = new Map<string, Record<string, unknown>>();
   private baseline = new Map<string, StateRow>();
   private readonly loadedTaskIds = new Set<string>();
   private readonly loadedReceipts = new Set<string>();
@@ -193,6 +195,7 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
         ConsistentRead: true,
       }),
     );
+    this.scopeMetadata.set(PK, { ...(result.Item ?? {}) });
     return Number(result.Item?.revision ?? 0);
   }
 
@@ -213,6 +216,8 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
         );
         for (const item of page.Items ?? []) {
           const row = item as StateRow;
+          // New server-only relationships are retained, but never hydrated into legacy DTOs.
+          if ((row.collection as string) === 'refundRelationships') continue;
           if (!collections.includes(row.collection))
             throw new Error('Invalid Finance storage row.');
           this.baseline.set(rowId(row), row);
@@ -411,7 +416,7 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
           ? {
               Put: {
                 TableName: tableName,
-                Item: { PK, SK: 'META', revision: revision + 1 },
+                Item: { ...this.scopeMetadata.get(PK), PK, SK: 'META', revision: revision + 1 },
                 ConditionExpression: condition,
                 ...attributes,
               },

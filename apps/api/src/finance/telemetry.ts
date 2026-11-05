@@ -37,6 +37,7 @@ const experienceEventSchema = z
     outcome: z.enum(['success', 'failed', 'denied', 'throttled', 'conflict', 'pending']),
     correlationId: z.string().regex(/^[A-Za-z0-9._:-]{1,128}$/),
     durationMs: z.number().finite().nonnegative(),
+    projectionLagMs: z.number().finite().nonnegative().optional(),
     examined: z.number().int().min(0).max(1_000).optional(),
     errorCategory: z
       .enum([
@@ -58,7 +59,7 @@ const experienceEventSchema = z
 export type FinanceExperienceEventInput = z.infer<typeof experienceEventSchema>;
 
 export function financeExperienceEvent(input: FinanceExperienceEventInput) {
-  const { durationMs, ...event } = experienceEventSchema.parse(input);
+  const { durationMs, projectionLagMs, ...event } = experienceEventSchema.parse(input);
   const latencyBucket =
     durationMs < 100
       ? '<100ms'
@@ -67,7 +68,23 @@ export function financeExperienceEvent(input: FinanceExperienceEventInput) {
         : durationMs < 10_000
           ? '1-9s'
           : '>=10s';
-  return { ...event, operation: `finance.${event.operation}`, schemaVersion: 2, latencyBucket };
+  const projectionLagBucket =
+    projectionLagMs === undefined
+      ? undefined
+      : projectionLagMs < 2_000
+        ? '<2s'
+        : projectionLagMs < 10_000
+          ? '2-9s'
+          : projectionLagMs < 15 * 60_000
+            ? '10s-14m'
+            : '>=15m';
+  return {
+    ...event,
+    ...(projectionLagBucket ? { projectionLagBucket } : {}),
+    operation: `finance.${event.operation}`,
+    schemaVersion: 2,
+    latencyBucket,
+  };
 }
 
 /** Reuse existing paid global series; detailed breakdowns remain bounded structured log fields. */
@@ -85,4 +102,38 @@ export function emitFinanceExperienceEvent(input: FinanceExperienceEventInput) {
     });
   else if (event.outcome === 'failed')
     logger.metric('FinanceImportFailures', 1, 'Count', { correlationId: event.correlationId });
+}
+
+/** Safe classifications are set by trusted service code, never derived from error messages. */
+export class FinanceExperienceFailure extends Error {
+  constructor(
+    readonly errorCategory: NonNullable<FinanceExperienceEventInput['errorCategory']>,
+    message: string,
+    readonly retryKind: NonNullable<FinanceExperienceEventInput['retryKind']> = 'none',
+    readonly projectionLagMs?: number,
+  ) {
+    super(message);
+    this.name = 'FinanceExperienceFailure';
+  }
+}
+export function financeExperienceFailureDetails(error: unknown) {
+  if (error instanceof FinanceExperienceFailure)
+    return {
+      errorCategory: error.errorCategory,
+      retryKind: error.retryKind,
+      ...(error.projectionLagMs !== undefined ? { projectionLagMs: error.projectionLagMs } : {}),
+    };
+  return { errorCategory: 'storage' as const, retryKind: 'automatic' as const };
+}
+export function financeExperienceFailureOutcome(
+  error: unknown,
+): FinanceExperienceEventInput['outcome'] {
+  const { errorCategory } = financeExperienceFailureDetails(error);
+  return errorCategory === 'authorization'
+    ? 'denied'
+    : errorCategory === 'throttled'
+      ? 'throttled'
+      : errorCategory === 'capacity'
+        ? 'conflict'
+        : 'failed';
 }

@@ -1,3 +1,4 @@
+import { readOrdinaryConflict, ordinaryConflictVisible } from './finance-conflict-access.js';
 import {
   categorySchema,
   createUlid,
@@ -107,20 +108,34 @@ export async function readConflictDisplayContext(
   return undefined;
 }
 
-export async function listReviewConflicts(): Promise<ReviewConflict[]> {
+export async function countOrdinaryConflicts() {
+  return (await db.secureConflicts.toArray()).filter(ordinaryConflictVisible).length;
+}
+
+export async function listReviewConflicts(
+  options: { classifyLegacy?: boolean } = {},
+): Promise<ReviewConflict[]> {
   const standard = await Promise.all(
     (await db.secureConflicts.toArray()).map(async (record) => {
       try {
-        const saved = await decryptLocalValue<{
-          mutation?: Mutation;
-          result?: {
-            reason?: string;
-            entityVersion?: number;
-            currentVersion?: number;
-            problem?: { reason?: string; message?: string; code?: string };
-          };
-          display?: ConflictDisplayContext;
-        }>('conflict', record.id, record.value);
+        const saved = await readOrdinaryConflict(
+          record,
+          () =>
+            decryptLocalValue<{
+              mutation?: Mutation;
+              result?: {
+                reason?: string;
+                entityVersion?: number;
+                currentVersion?: number;
+                problem?: { reason?: string; message?: string; code?: string };
+              };
+              display?: ConflictDisplayContext;
+            }>('conflict', record.id, record.value),
+          options.classifyLegacy
+            ? (entityType) => db.secureConflicts.update(record.id, { entityType })
+            : undefined,
+        );
+        if (!saved) return undefined;
         const currentVersion = saved.result?.entityVersion ?? saved.result?.currentVersion;
         const display = saved.display ?? (await readConflictDisplayContext(saved.mutation));
         return {
@@ -135,6 +150,7 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
           source: 'standard' as const,
         };
       } catch {
+        if (!record.entityType) return undefined;
         // Timer and legacy access-revocation records use other encryption namespaces.
         // Never expose the contents of a revoked resource by trying its mutation key.
         return {
@@ -157,7 +173,7 @@ export async function listReviewConflicts(): Promise<ReviewConflict[]> {
       'This encrypted Journal entry changed elsewhere. Choose which encrypted version to keep.',
     source: 'journal' as const,
   }));
-  return [...standard, ...journal];
+  return [...standard.filter((value) => value !== undefined), ...journal];
 }
 
 async function resolveJournalConflict(conflict: ReviewConflict, choice: 'local' | 'remote') {

@@ -492,6 +492,28 @@ export function createApplicationApi(
   route('LoginIntegration', '/api/v1/auth/login', [apigwv2.HttpMethod.POST], auth, false);
   route('SessionIntegration', '/api/v1/auth/session', [apigwv2.HttpMethod.GET], auth, false);
   route('LogoutIntegration', '/api/v1/auth/logout', [apigwv2.HttpMethod.POST], auth, false);
+  // These routes authenticate the canonical cookie/session inside the auth function.
+  route(
+    'FinanceSecurityIntegration',
+    '/api/v1/auth/finance-security',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT, apigwv2.HttpMethod.PATCH],
+    auth,
+    false,
+  );
+  route(
+    'FinanceUnlockIntegration',
+    '/api/v1/auth/finance-unlocks',
+    [apigwv2.HttpMethod.POST],
+    auth,
+    false,
+  );
+  route(
+    'FinanceUnlockRevokeIntegration',
+    '/api/v1/auth/finance-unlocks/current',
+    [apigwv2.HttpMethod.DELETE],
+    auth,
+    false,
+  );
   route(
     'PasswordResetIntegration',
     '/api/v1/auth/password-reset',

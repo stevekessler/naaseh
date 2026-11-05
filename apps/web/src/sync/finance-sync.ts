@@ -1,4 +1,23 @@
 import type { SyncChange } from '@naaseh/domain';
+import { peekFinanceAccess } from '../features/finance/security/finance-access.js';
+
+/** Hold encrypted Finance intent before generic decryption, without stalling task queues. */
+export async function readFinanceReplayIntent<T>(
+  entityType: string,
+  decrypt: () => Promise<T>,
+): Promise<T | undefined> {
+  if (!entityType.startsWith('finance')) return decrypt();
+  const access = peekFinanceAccess();
+  if (!access?.canRead()) return undefined;
+  try {
+    // An offline-only visit never provides authority to replay connected mutations.
+    if (access.requiresPin && !access.requestHeaders()['x-finance-unlock']) return undefined;
+    return await access.read(decrypt);
+  } catch (error) {
+    if (!access.canRead()) return undefined;
+    throw error;
+  }
+}
 
 export interface FinanceSyncState {
   status: 'idle' | 'syncing' | 'offline' | 'conflict' | 'failed';

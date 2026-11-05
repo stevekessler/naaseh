@@ -186,6 +186,7 @@ describe('organization sync recovery', () => {
     };
     state.conflicts.set(conflictId, {
       id: conflictId,
+      entityType: 'listItem',
       updatedAt: '2026-10-01T22:34:00.000Z',
       value: {
         iv: 'test-iv',

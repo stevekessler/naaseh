@@ -7,6 +7,7 @@ import {
 } from './query-contract.js';
 import type { FinanceReadRepository } from './read-repository.js';
 import { FinanceUnitOfWork } from './unit-of-work.js';
+import { FinanceExperienceFailure } from './telemetry.js';
 
 type CurrencyTotal = { currency: string; currencyExponent: number; amountMinor: number };
 export interface FinanceQueryJob {
@@ -70,7 +71,7 @@ function mergeTotals(previous: CurrencyTotal[], incoming: CurrencyTotal[]): Curr
   for (const value of incoming) {
     const current = totals.get(value.currency);
     if (current && current.currencyExponent !== value.currencyExponent)
-      throw new Error('Finance currency invariant failed.');
+      throw new FinanceExperienceFailure('invariant', 'Finance currency invariant failed.');
     totals.set(value.currency, {
       ...value,
       amountMinor: addMinorUnits([current?.amountMinor ?? 0, value.amountMinor]),
@@ -89,18 +90,29 @@ export class FinanceQueryJobService {
       dispatch: (job: { userId: string; queryId: string }) => Promise<void>;
       hydrate: (job: FinanceQueryJob) => Promise<FinanceReadResult['items']>;
       authorizeDelivery: (job: FinanceQueryJob) => Promise<boolean>;
+      authorizeFacts: (job: FinanceQueryJob, facts: FinanceReadResult['items']) => Promise<boolean>;
       now?: () => number;
     },
   ) {}
   private now() {
     return this.options.now?.() ?? Date.now();
   }
+  private requireLive(job: FinanceQueryJob) {
+    if (job.expiresAt <= this.now())
+      throw new FinanceExperienceFailure('validation', 'Finance query missing or expired.', 'user');
+  }
   private async checked(userId: string, id: string) {
     const job = await this.options.store.get(userId, id);
-    if (!job || job.userId !== userId || job.expiresAt <= this.now())
-      throw new Error('Finance query missing or expired.');
+    if (!job || job.id !== id || job.userId !== userId)
+      throw new FinanceExperienceFailure('validation', 'Finance query missing or expired.', 'user');
+    this.requireLive(job);
     if (!(await this.options.validate(job)))
-      throw new Error('Finance query source or authorization changed; restart required.');
+      throw new FinanceExperienceFailure(
+        'authorization',
+        'Finance query source or authorization changed; restart required.',
+        'user',
+      );
+    this.requireLive(job);
     return job;
   }
   async create(input: {
@@ -144,9 +156,11 @@ export class FinanceQueryJobService {
       expiresAt: now + FINANCE_QUERY_LIFETIME_MS,
       version: 1,
     };
-    if (!(await this.options.validate(job))) throw new Error('Finance query access denied.');
+    if (!(await this.options.validate(job)))
+      throw new FinanceExperienceFailure('authorization', 'Finance query access denied.', 'user');
     if (!(await this.options.authorizeDelivery(job)))
-      throw new Error('Finance query unlock required.');
+      throw new FinanceExperienceFailure('authorization', 'Finance query unlock required.', 'user');
+    this.requireLive(job);
     await this.options.store.save(job, 0);
     await this.options.dispatch({ userId: job.userId, queryId: job.id });
     return id;
@@ -193,9 +207,18 @@ export class FinanceQueryJobService {
     next.state = next.partitions.every((p) => p.complete) ? 'exact' : 'pending';
     next.version++;
     if (next.examined > 1_000_000 || next.version > 2_000)
-      throw new Error('Finance query bounded-work budget exceeded.');
+      throw new FinanceExperienceFailure(
+        'capacity',
+        'Finance query bounded-work budget exceeded.',
+        'user',
+      );
     if (!(await this.options.validate(next)))
-      throw new Error('Finance query revision changed before publication.');
+      throw new FinanceExperienceFailure(
+        'authorization',
+        'Finance query revision changed before publication.',
+        'user',
+      );
+    this.requireLive(next);
     const saved = await this.options.store.save(next, job.version);
     if (saved.state !== 'exact' && saved.workerNonce === next.workerNonce)
       await this.options.dispatch({ userId, queryId: id });
@@ -203,10 +226,23 @@ export class FinanceQueryJobService {
   async status(userId: string, id: string): Promise<FinanceReadResult> {
     const job = await this.checked(userId, id);
     if (!(await this.options.authorizeDelivery(job)))
-      throw new Error('Finance query unlock required.');
+      throw new FinanceExperienceFailure('authorization', 'Finance query unlock required.', 'user');
     const items = await this.options.hydrate(job);
-    if (!(await this.options.validate(job)) || !(await this.options.authorizeDelivery(job)))
-      throw new Error('Finance query authorization changed during delivery.');
+    // Fact dependencies can require asynchronous reads. Refresh the canonical snapshot
+    // and visit grant after those reads, immediately before delivering the payload.
+    if (
+      !(await this.options.authorizeFacts(job, items)) ||
+      !(await this.options.validate(job)) ||
+      !(await this.options.authorizeDelivery(job))
+    )
+      throw new FinanceExperienceFailure(
+        'authorization',
+        'Finance query source access or authorization changed during delivery.',
+        'user',
+      );
+    // Hydration and current-access checks may cross the expiry boundary. TTL cleanup
+    // is asynchronous; expiry must still be enforced immediately before delivery.
+    this.requireLive(job);
     const complete = job.state === 'exact';
     return {
       items,

@@ -1,3 +1,4 @@
+import { clearFinanceAccess } from '../finance/security/finance-access.js';
 import { purgeAllAuthorizedData, purgeFinanceSearchState } from '../../sync/privacy-purge.js';
 import { clearSessionView } from './session.js';
 
@@ -33,6 +34,7 @@ export async function signOutBrowser(
     clearSession: clearSessionView,
   },
 ) {
+  clearFinanceAccess();
   let currentCsrfToken = csrfToken;
   try {
     const session = await dependencies.request('/api/v1/auth/session', {

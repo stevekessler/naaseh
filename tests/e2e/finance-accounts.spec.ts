@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
 
 const accountId = '01J00000000000000000000001';
 
@@ -43,6 +43,7 @@ test('creates a named manual account and records a later balance', async ({ page
       body: JSON.stringify({ account: accounts[0], snapshot: {} }),
     });
   });
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Finance' }).click();
   await page.getByLabel('Organization name').fill('Fixture Bank');
@@ -86,6 +87,7 @@ test('walks each CSV duplicate and queues encrypted rows while offline', async (
       body: JSON.stringify({ items: [account], cursor: null }),
     }),
   );
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.getByRole('button', { name: 'Finance' }).click();
   await page.getByRole('button', { name: 'Open account' }).click();
@@ -128,6 +130,7 @@ test('shows protected SimpleFIN status and remains touch-friendly on a narrow sc
       }),
     }),
   );
+  await mockUnprotectedFinanceSecurity(page);
   await signIn(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Finance' }).click();

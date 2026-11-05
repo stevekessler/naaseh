@@ -381,7 +381,14 @@ export const crisisPlanObservabilityControls = Object.freeze({
 export const financeExperienceObservabilityControls = Object.freeze({
   logRetentionDays: 30,
   schemaVersion: 2,
-  dimensions: ['operation', 'outcome', 'latencyBucket', 'errorCategory', 'retryKind'],
+  dimensions: [
+    'operation',
+    'outcome',
+    'latencyBucket',
+    'projectionLagBucket',
+    'errorCategory',
+    'retryKind',
+  ],
   reusedFailureMetrics: [
     'FinanceDataIntegrityFailures',
     'FinanceAuthorizationDenials',
@@ -392,6 +399,7 @@ export const financeExperienceObservabilityControls = Object.freeze({
     deniedReads: 10,
     exactQueryDeadlineMs: 10_000,
     stalledReceiptMinutes: 15,
+    stalledProjectionMinutes: 15,
   },
   protectedFields: [
     'financeGrant',

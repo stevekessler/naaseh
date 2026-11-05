@@ -11,7 +11,7 @@ import {
 } from '../../apps/api/src/finance/text-postings.js';
 import type { FinanceFact } from '../../apps/api/src/finance/query-contract.js';
 
-function setup(count: number) {
+function setup(count: number, gram = 'ap', codec = 'short-text-v1') {
   const rows = new Map<string, Record<string, unknown>>();
   const identity = (key: { PK: unknown; SK: unknown }) => JSON.stringify([key.PK, key.SK]);
   for (let ordinal = 0; ordinal < count; ordinal++) {
@@ -38,11 +38,17 @@ function setup(count: number) {
         },
       ],
     };
-    const key = shortTextPostingKey('a1', 'ap', '2026-10', ordinal);
+    const key =
+      gram.length <= 2
+        ? shortTextPostingKey('a1', gram, '2026-10', ordinal)
+        : {
+            PK: `FINANCE#FACT_SEARCH#a1#text#${gram}`,
+            SK: `DATE#2026-10#${String(Math.floor(ordinal / 500)).padStart(12, '0')}`,
+          };
     const previous = rows.get(identity(key));
     rows.set(identity(key), {
       ...key,
-      codec: 'short-text-v1',
+      codec,
       month: '2026-10',
       baseOrdinal: Math.floor(ordinal / 500) * 500,
       bits: updateTextPostingBit(
@@ -151,5 +157,37 @@ describe('bounded compact short-text reads', () => {
     const bad = setup(10);
     bad.rows.delete(bad.identity(textOrdinalKey('a1', '2026-10', 0)));
     await expect(bad.repository.read(input)).rejects.toThrow(/incomplete|rebuild/i);
+  });
+
+  it('reads three-character bitmaps for long normalized text without hydrating the account', async () => {
+    const f = setup(600, 'app', 'text-bitmap-v2');
+    const result = await f.repository.scan({ ...input, filters: { text: 'ＡＰＰＬＥ' } });
+    expect(result.page.rowsState).toBe('ready');
+    expect(result.step.matchedCount).toBe(600);
+    expect(result.step.totalsByCurrency[0]?.amountMinor).toBe(60_000);
+    expect((f.commands[0] as QueryCommand).input.Limit).toBe(2);
+    expect(result.step.examined).toBe(600);
+  });
+
+  it('applies the full substring predicate after a compact three-character candidate probe', async () => {
+    const f = setup(10, 'app', 'text-bitmap-v2');
+    const result = await f.repository.read({ ...input, filters: { text: 'apple pie' } });
+    expect(result).toMatchObject({
+      rowsState: 'confirmed-empty',
+      totalCount: 0,
+      aggregateState: 'exact',
+    });
+  });
+
+  it('rejects an unmigrated long-text reference instead of falsely confirming an empty bitmap', async () => {
+    const f = setup(0);
+    f.rows.set('legacy', {
+      PK: 'FINANCE#FACT_SEARCH#a1#text#app',
+      SK: 'DATE#2026-10-01T00:00:00.000Z#t0',
+      transactionId: 't0',
+    });
+    await expect(f.repository.read({ ...input, filters: { text: 'apple' } })).rejects.toThrow(
+      /rebuild|posting/i,
+    );
   });
 });

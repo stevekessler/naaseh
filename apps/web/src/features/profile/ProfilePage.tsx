@@ -39,7 +39,12 @@ export function ProfilePage({
         <details className="profile-section">
           <summary>Account security</summary>
           <div className="profile-section-content">
-            <SecuritySettings csrfToken={csrfToken} role={role} showHeading={false} />
+            <SecuritySettings
+              csrfToken={csrfToken}
+              role={role}
+              userId={userId}
+              showHeading={false}
+            />
           </div>
         </details>
       </div>

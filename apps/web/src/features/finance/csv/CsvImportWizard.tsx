@@ -1,4 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { parseProtectedFinanceCsv } from './csv-worker-client.js';
+import { currentFinanceAccess } from '../security/finance-access.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { mapFinanceCsvRows } from '@naaseh/domain';
 import { DuplicateReview, type CsvMappingState, type DuplicateCandidate } from './csv-import.js';
 
@@ -22,7 +24,19 @@ export function CsvImportWizard({
   });
   const [review] = useState(() => new DuplicateReview(duplicates));
   const [, render] = useState(0);
-  const worker = useRef<Worker | undefined>(undefined);
+  const parseRequest = useRef<AbortController | undefined>(undefined);
+  useEffect(() => {
+    const cancel = () => {
+      parseRequest.current?.abort();
+      setRawRows([]);
+      setProgress('');
+    };
+    const unsubscribe = currentFinanceAccess().onLock(cancel);
+    return () => {
+      parseRequest.current?.abort();
+      unsubscribe();
+    };
+  }, []);
   const headers = rawRows[0] ?? [];
   const mappingResult = useMemo(() => {
     if (
@@ -57,35 +71,28 @@ export function CsvImportWizard({
     </label>
   );
   const parseFile = async (file: File | undefined) => {
-    worker.current?.terminate();
+    parseRequest.current?.abort();
+    const request = new AbortController();
+    parseRequest.current = request;
     setRawRows([]);
     setError('');
+    setProgress('');
     if (!file) return;
-    const text = await file.text();
-    const csvWorker = new Worker(new URL('./csv.worker.ts', import.meta.url), { type: 'module' });
-    worker.current = csvWorker;
-    setProgress('Reading CSV…');
-    csvWorker.onmessage = (
-      event: MessageEvent<{
-        type: string;
-        rows?: string[][];
-        rowsParsed?: number;
-        message?: string;
-      }>,
-    ) => {
-      if (event.data.type === 'progress') setProgress(`Read ${event.data.rowsParsed ?? 0} rows…`);
-      if (event.data.type === 'complete' && event.data.rows) {
-        setRawRows(event.data.rows);
-        setProgress(`Ready to review ${Math.max(0, event.data.rows.length - 1)} rows.`);
-        csvWorker.terminate();
-      }
-      if (event.data.type === 'error') {
-        setError(event.data.message ?? 'CSV parsing failed.');
+    try {
+      setProgress('Reading CSV…');
+      const rows = await parseProtectedFinanceCsv(file, {
+        signal: request.signal,
+        onProgress: (count) => setProgress(`Read ${count} rows…`),
+      });
+      if (request.signal.aborted) return;
+      setRawRows(rows);
+      setProgress(`Ready to review ${Math.max(0, rows.length - 1)} rows.`);
+    } catch {
+      if (!request.signal.aborted) {
+        setError('CSV parsing failed.');
         setProgress('');
-        csvWorker.terminate();
       }
-    };
-    csvWorker.postMessage({ text });
+    }
   };
   const candidate = review.current;
   return (
