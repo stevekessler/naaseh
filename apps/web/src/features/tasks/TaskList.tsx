@@ -1,12 +1,7 @@
 import type { CategoryRecord, Project, Task } from '@naaseh/domain';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { TaskRow } from './TaskRow.js';
-import {
-  TaskColumnSettings,
-  TaskTableSettings,
-  type TaskColumnId,
-  type useTaskColumns,
-} from './TaskColumnSettings.js';
+import { TaskTableSettings, type TaskColumnId } from './TaskColumnSettings.js';
 import {
   loadTaskListSort,
   resetTaskListSort,
@@ -84,7 +79,8 @@ export function TaskList({
   projects = [],
   groups = [],
   relationshipTasks = tasks,
-  columns,
+  visibleColumns,
+  columnSettings,
   collapseFutureTasks = false,
 }: {
   tasks: Task[];
@@ -97,7 +93,8 @@ export function TaskList({
   projects?: readonly Project[];
   groups?: readonly { id: string; name: string }[];
   relationshipTasks?: readonly Task[];
-  columns: ReturnType<typeof useTaskColumns>;
+  visibleColumns: ReadonlySet<TaskColumnId>;
+  columnSettings?: ReactNode;
   collapseFutureTasks?: boolean;
 }) {
   const sortGroupName = useId();
@@ -149,7 +146,7 @@ export function TaskList({
     collapseFutureTasks && !showAllFutureTasks
       ? sortedTasks.filter((task) => !hiddenFutureTaskIds.has(task.id))
       : sortedTasks;
-  const toolbar = (
+  const toolbar = columnSettings ? (
     <div className="task-list-toolbar">
       <p>
         {tasks.length} task{tasks.length === 1 ? '' : 's'}
@@ -188,10 +185,10 @@ export function TaskList({
             </div>
           </TaskTableSettings>
         )}
-        <TaskColumnSettings {...columns} />
+        {columnSettings}
       </div>
     </div>
-  );
+  ) : null;
   if (!tasks.length)
     return (
       <>
@@ -216,7 +213,7 @@ export function TaskList({
       ) : null}
       <table
         className={`task-list ${configurableColumns
-          .filter((column) => !columns.visible.has(column))
+          .filter((column) => !visibleColumns.has(column))
           .map((column) => `hide-${column}`)
           .join(' ')}`}
         aria-label="Tasks"

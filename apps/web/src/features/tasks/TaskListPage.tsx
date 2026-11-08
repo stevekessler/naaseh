@@ -5,7 +5,7 @@ import { SubtaskTree } from './SubtaskTree.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from './TaskEditDialog.js';
-import { useTaskColumns } from './TaskColumnSettings.js';
+import { TaskColumnSettings, useTaskColumns } from './TaskColumnSettings.js';
 import { FinancialTaskLink } from './FinancialTaskLink.js';
 export function TaskListPage({
   tasks,
@@ -66,7 +66,8 @@ export function TaskListPage({
         projects={projects}
         groups={groups}
         relationshipTasks={parentTasks}
-        columns={columns}
+        visibleColumns={columns.visible}
+        columnSettings={<TaskColumnSettings {...columns} />}
         collapseFutureTasks={collapseFutureTasks}
         {...(currentUserId ? { currentUserId } : {})}
       />
