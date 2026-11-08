@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { createList, createListItem, createTask } from '@naaseh/domain';
+import { createList, createListItem, createTask, journalSyncContractVersion } from '@naaseh/domain';
 import { openTaskSection } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
@@ -73,13 +73,20 @@ for (const brokenCache of [false, true]) {
         },
       }),
     );
-    await page.route('**/api/v1/sync/pull', (route) =>
-      route.fulfill({
+    await page.route('**/api/v1/sync/pull', (route) => {
+      const request = route.request().postDataJSON();
+      if (request.version === journalSyncContractVersion)
+        return route.fulfill({
+          json: {
+            version: journalSyncContractVersion,
+            changes: [],
+            journalCursor: request.journalCursor,
+            hasMore: false,
+          },
+        });
+      return route.fulfill({
         json: {
-          changes: (Number(route.request().postDataJSON().cursor?.owner ?? 0) < 10
-            ? serverTasks
-            : []
-          ).map((task) => ({
+          changes: (Number(request.cursor?.owner ?? 0) < 10 ? serverTasks : []).map((task) => ({
             entityType: 'task',
             entityId: task.id,
             operation: 'upsert',
@@ -87,8 +94,8 @@ for (const brokenCache of [false, true]) {
           })),
           cursor: { owner: serverTasks.length ? 10 : 0 },
         },
-      }),
-    );
+      });
+    });
     await page.route('**/api/v1/sync/push', (route) => {
       const { mutations } = route.request().postDataJSON();
       return route.fulfill({

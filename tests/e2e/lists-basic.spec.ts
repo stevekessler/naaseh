@@ -83,6 +83,16 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await page.getByRole('button', { name: 'Close column settings' }).click();
   const item = page.locator('.list-item').filter({ hasText: 'Milk' });
   const eggs = page.locator('.list-item').filter({ hasText: 'Eggs' });
+  if (phoneLayout) {
+    await expect(item).toHaveCSS('display', 'grid');
+    const milkName = await item.locator('.list-item-name-cell').boundingBox();
+    const milkMemo = await item.locator('.list-item-memo-cell').boundingBox();
+    const milkLink = await item.locator('.list-item-file-links-cell').boundingBox();
+    const eggsRow = await eggs.boundingBox();
+    expect(milkMemo!.y).toBeGreaterThanOrEqual(milkName!.y + milkName!.height - 1);
+    expect(milkLink!.y).toBeGreaterThanOrEqual(milkMemo!.y + milkMemo!.height - 1);
+    expect(eggsRow!.y).toBeGreaterThanOrEqual(milkLink!.y + milkLink!.height - 1);
+  }
   await page.getByLabel('Search list items').fill('cold');
   await expect(item).toBeVisible();
   await expect(eggs).toHaveCount(0);

@@ -56,12 +56,6 @@ export function TaskListPage({
     );
   return (
     <>
-      <div className="task-list-toolbar">
-        <p>
-          {tasks.length} task{tasks.length === 1 ? '' : 's'}
-        </p>
-        <TaskColumnSettings {...columns} />
-      </div>
       <TaskList
         tasks={tasks}
         onToggle={onToggle}
@@ -73,6 +67,7 @@ export function TaskListPage({
         groups={groups}
         relationshipTasks={parentTasks}
         visibleColumns={columns.visible}
+        columnSettings={<TaskColumnSettings {...columns} />}
         collapseFutureTasks={collapseFutureTasks}
         {...(currentUserId ? { currentUserId } : {})}
       />

@@ -1,7 +1,7 @@
 import type { CategoryRecord, Project, Task } from '@naaseh/domain';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { TaskRow } from './TaskRow.js';
-import type { TaskColumnId } from './TaskColumnSettings.js';
+import { TaskTableSettings, type TaskColumnId } from './TaskColumnSettings.js';
 import {
   loadTaskListSort,
   resetTaskListSort,
@@ -29,6 +29,15 @@ const sortLabels: Record<TaskListSortKey, string> = {
   project: 'Project',
   priority: 'Priority',
 };
+
+const mobileSortOptions = [
+  { key: 'name', direction: 'ascending', label: 'Task name (A to Z)' },
+  { key: 'name', direction: 'descending', label: 'Task name (Z to A)' },
+  { key: 'due', direction: 'ascending', label: 'Due date (earliest first)' },
+  { key: 'due', direction: 'descending', label: 'Due date (latest first)' },
+  { key: 'priority', direction: 'descending', label: 'Priority (highest first)' },
+  { key: 'priority', direction: 'ascending', label: 'Priority (lowest first)' },
+] as const;
 
 function SortableHeading({
   sortKey,
@@ -71,6 +80,7 @@ export function TaskList({
   groups = [],
   relationshipTasks = tasks,
   visibleColumns,
+  columnSettings,
   collapseFutureTasks = false,
 }: {
   tasks: Task[];
@@ -84,8 +94,10 @@ export function TaskList({
   groups?: readonly { id: string; name: string }[];
   relationshipTasks?: readonly Task[];
   visibleColumns: ReadonlySet<TaskColumnId>;
+  columnSettings?: ReactNode;
   collapseFutureTasks?: boolean;
 }) {
+  const sortGroupName = useId();
   const [sort, setSort] = useState<TaskListSort>();
   const [showAllFutureTasks, setShowAllFutureTasks] = useState(false);
   useEffect(() => {
@@ -134,46 +146,61 @@ export function TaskList({
     collapseFutureTasks && !showAllFutureTasks
       ? sortedTasks.filter((task) => !hiddenFutureTaskIds.has(task.id))
       : sortedTasks;
+  const toolbar = columnSettings ? (
+    <div className="task-list-toolbar">
+      <p>
+        {tasks.length} task{tasks.length === 1 ? '' : 's'}
+      </p>
+      <div className="task-list-toolbar-controls">
+        {tasks.length > 0 && (
+          <TaskTableSettings
+            className="task-mobile-sort"
+            label="Sort"
+            title="Sort tasks"
+            closeLabel="Close sort settings"
+          >
+            <p>Choose the order of the task list.</p>
+            <div className="task-column-options">
+              <label>
+                <input type="radio" name={sortGroupName} checked={!sort} onChange={resetSort} />
+                Automatic
+              </label>
+              {mobileSortOptions.map(({ key, direction, label }) => (
+                <label key={label}>
+                  <input
+                    type="radio"
+                    name={sortGroupName}
+                    checked={sort?.key === key && sort.direction === direction}
+                    onChange={() => applySort({ key, direction })}
+                  />
+                  {label}
+                </label>
+              ))}
+              {sort?.key === 'category' || sort?.key === 'project' ? (
+                <label>
+                  <input type="radio" name={sortGroupName} checked readOnly />
+                  {sortLabels[sort.key]} ({sort.direction})
+                </label>
+              ) : null}
+            </div>
+          </TaskTableSettings>
+        )}
+        {columnSettings}
+      </div>
+    </div>
+  ) : null;
   if (!tasks.length)
     return (
-      <div className="empty">
-        <h2>Your list is clear.</h2>
-        <p>Add a task above, or adjust your filters.</p>
-      </div>
+      <>
+        {toolbar}
+        <div className="empty">
+          <h2>Your list is clear.</h2>
+          <p>Add a task above, or adjust your filters.</p>
+        </div>
+      </>
     );
-  return (
+  const table = (
     <div className="task-table-wrap">
-      <details className="task-mobile-sort">
-        <summary>Sort</summary>
-        <label>
-          Sort tasks
-          <select
-            value={sort ? `${sort.key}-${sort.direction}` : ''}
-            onChange={(event) => {
-              const value = event.currentTarget.value;
-              if (!value) return resetSort();
-              const [key, direction] = value.split('-') as [
-                TaskListSortKey,
-                TaskListSort['direction'],
-              ];
-              applySort({ key, direction });
-            }}
-          >
-            <option value="">Automatic</option>
-            <option value="name-ascending">Task name (A to Z)</option>
-            <option value="name-descending">Task name (Z to A)</option>
-            <option value="due-ascending">Due date (earliest first)</option>
-            <option value="due-descending">Due date (latest first)</option>
-            <option value="priority-descending">Priority (highest first)</option>
-            <option value="priority-ascending">Priority (lowest first)</option>
-            {sort?.key === 'category' || sort?.key === 'project' ? (
-              <option value={`${sort.key}-${sort.direction}`}>
-                {sortLabels[sort.key]} ({sort.direction})
-              </option>
-            ) : null}
-          </select>
-        </label>
-      </details>
       {sort ? (
         <div className="task-sort-toolbar" role="status">
           <span>
@@ -292,5 +319,11 @@ export function TaskList({
         </div>
       ) : null}
     </div>
+  );
+  return (
+    <>
+      {toolbar}
+      {table}
+    </>
   );
 }
