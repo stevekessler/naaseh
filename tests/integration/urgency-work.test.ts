@@ -41,20 +41,12 @@ describe('urgency work integration', () => {
       new Date('2026-08-05T12:01:00.000Z'),
     );
     const commit = vi.fn().mockResolvedValue(undefined);
-    const saved = await saveTaskMutation(
-      prepared.task,
-      'owner',
-      'mutation-1',
-      'update',
-      prepared.changedFields,
-      current,
-      {
-        prepareChange: vi.fn(async (change) => ({ expectedSequence: 0, change })),
-        commit,
-        findResult: vi.fn().mockResolvedValue(undefined),
-        administratorFeed: false,
-      },
-    );
+    const saved = await saveTaskMutation(prepared.task, 'owner', 'mutation-1', 'update', current, {
+      prepareChange: vi.fn(async (change) => ({ expectedSequence: 0, change })),
+      commit,
+      findResult: vi.fn().mockResolvedValue(undefined),
+      administratorFeed: false,
+    });
 
     expect(prepared.task.urgency).toBe('high');
     expect(prepared.changedFields).toContain('urgency');

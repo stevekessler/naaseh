@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { UserAvatar } from '../profile/user-directory.js';
-import { instantToLocalDue, localDueToInstant, type Task } from '@naaseh/domain';
+import { instantToLocalDue, localDueToInstant, urgencyLabels, type Task } from '@naaseh/domain';
 import { ReminderStatus } from '../reminders/ReminderStatus.js';
 import { useCompletionFeedback } from './useCompletionFeedback.js';
 import { UrgencyBadge } from '../../components/UrgencyBadge.js';
@@ -10,6 +10,7 @@ import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { categoryForeground } from '../../styles/category-color.js';
+import { TaskPriorityDialog } from './TaskPriorityDialog.js';
 import { DueDateDialog, type DueDateValue } from './DueDateField.js';
 
 export function taskDueDatePatch(task: Task, value: DueDateValue): Partial<Task> {
@@ -42,7 +43,7 @@ export function TaskRow({
   task,
   onToggle,
   onSelect,
-  onDueDateChange,
+  onUpdate,
   onProgressChange,
   currentUserId,
   categoryName,
@@ -54,7 +55,7 @@ export function TaskRow({
   task: Task;
   onToggle: (task: Task) => void;
   onSelect: (task: Task) => void;
-  onDueDateChange?: (task: Task, patch: Partial<Task>) => void | Promise<void>;
+  onUpdate?: (task: Task, patch: Partial<Task>) => void | Promise<void>;
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
   categoryName?: string | undefined;
@@ -73,6 +74,7 @@ export function TaskRow({
     dueTime: timedDue?.localTime ?? '10:00',
   };
   const [editingDueDate, setEditingDueDate] = useState(false);
+  const [editingPriority, setEditingPriority] = useState(false);
   const actions = useRef<HTMLDetailsElement>(null);
   const categoryPalette = categoryForeground(categoryColor ?? '#fff2a8');
   useEffect(() => {
@@ -169,7 +171,7 @@ export function TaskRow({
         {task.link ? <CompactLink href={task.link} /> : <span aria-hidden="true">—</span>}
       </td>
       <td className="task-due-cell">
-        {onDueDateChange ? (
+        {onUpdate ? (
           <button
             type="button"
             className="quiet task-due-trigger"
@@ -183,10 +185,10 @@ export function TaskRow({
         ) : (
           <span aria-hidden="true">—</span>
         )}
-        {editingDueDate && onDueDateChange ? (
+        {editingDueDate && onUpdate ? (
           <DueDateDialog
             value={dueValue}
-            onChange={(value) => onDueDateChange(task, taskDueDatePatch(task, value))}
+            onChange={(value) => onUpdate(task, taskDueDatePatch(task, value))}
             onClose={() => setEditingDueDate(false)}
           />
         ) : null}
@@ -199,7 +201,27 @@ export function TaskRow({
         <ReminderStatus task={task} />
       </td>
       <td className="task-priority-cell">
-        <UrgencyBadge urgency={task.urgency} mode="responsive" />
+        {onUpdate && (!currentUserId || currentUserId === task.ownerId) ? (
+          <>
+            <button
+              type="button"
+              className="quiet task-due-trigger"
+              aria-label={`Edit priority for ${task.label}, currently ${urgencyLabels[task.urgency]}`}
+              onClick={() => setEditingPriority(true)}
+            >
+              <UrgencyBadge urgency={task.urgency} mode="responsive" />
+            </button>
+            {editingPriority && (
+              <TaskPriorityDialog
+                urgency={task.urgency}
+                save={(urgency) => onUpdate(task, { urgency })}
+                close={() => setEditingPriority(false)}
+              />
+            )}
+          </>
+        ) : (
+          <UrgencyBadge urgency={task.urgency} mode="responsive" />
+        )}
       </td>
       <td className="task-assignee-cell">
         <UserAvatar userId={task.assigneeId ?? task.ownerId} showName nameFormat="first" />

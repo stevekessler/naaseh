@@ -35,9 +35,9 @@ describe('task HTTP contract', () => {
       }).success,
     ).toBe(true);
   });
-  it('defines safe revision provenance without memo or label snapshots', () => {
+  it('defines revision provenance and protects hidden memo content', () => {
     for (const value of ['sourceClientId:', 'syncOutcome:', 'local-pending', 'before:', 'after:'])
       expect(contract).toContain(value);
-    expect(contract).toContain('memo and label content are excluded');
+    expect(contract).toContain('Hidden memo content and ciphertext are excluded');
   });
 });

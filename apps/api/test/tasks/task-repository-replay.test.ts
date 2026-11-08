@@ -31,7 +31,6 @@ describe('task mutation contention recovery', () => {
       'steve',
       'mutation-1',
       'create',
-      ['label'],
       undefined,
       deps,
       'client-1',
@@ -44,9 +43,8 @@ describe('task mutation contention recovery', () => {
     expect(commit.mock.calls[0]?.[1]).toMatchObject({
       sourceClientId: 'client-1',
       syncOutcome: 'applied',
-      after: {},
+      after: { label: task.label },
     });
-    expect(JSON.stringify(commit.mock.calls[0]?.[1])).not.toContain('Contended');
   });
 
   it('returns the durable original result when an identical request wins the race', async () => {
@@ -64,15 +62,7 @@ describe('task mutation contention recovery', () => {
       })),
     });
 
-    const result = await saveTaskMutation(
-      attempted,
-      'steve',
-      'same',
-      'create',
-      ['label'],
-      undefined,
-      deps,
-    );
+    const result = await saveTaskMutation(attempted, 'steve', 'same', 'create', undefined, deps);
 
     expect(result).toMatchObject({ task: original, replayed: true });
     expect(deps.commit).toHaveBeenCalledTimes(1);

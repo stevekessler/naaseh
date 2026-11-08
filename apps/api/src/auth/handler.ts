@@ -5,6 +5,9 @@ import type {
 } from 'aws-lambda';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { log } from '@naaseh/observability';
+import { taskDueDefaultsRequestSchema, type TaskDueDefaults } from '@naaseh/domain';
+import { keys } from '../shared/keys.js';
+import { getRecord, putRecord } from '../shared/store.js';
 import {
   loginRequestSchema,
   factorChangeProofSchema,
@@ -323,6 +326,24 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       },
       csrfToken: record.csrfToken,
     });
+  }
+  if (path.endsWith('/profile/task-due-defaults')) {
+    const authenticated = await authenticatedRequest(event);
+    if (!authenticated)
+      return problem(401, 'unauthorized', 'Authentication required.', correlationId);
+    const userId = authenticated.user.id;
+    const key = keys.taskDueDefaults(userId);
+    if (event.requestContext.http.method === 'GET') {
+      const saved = await getRecord<{ defaults: TaskDueDefaults | null }>(key.PK, key.SK);
+      return json(200, { userId, defaults: saved?.defaults ?? null });
+    }
+    if (event.requestContext.http.method === 'PUT') {
+      if (!mutationAuthorized(event, authenticated.record.csrfToken))
+        return problem(403, 'forbidden', 'Request rejected.', correlationId);
+      const { defaults } = taskDueDefaultsRequestSchema.parse(JSON.parse(event.body ?? '{}'));
+      await putRecord({ ...key, defaults });
+      return json(200, { userId, defaults });
+    }
   }
   if (path.endsWith('/profile/security') && event.requestContext.http.method === 'GET') {
     const authenticated = await authenticatedRequest(event);

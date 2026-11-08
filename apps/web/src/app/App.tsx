@@ -22,7 +22,7 @@ import {
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database.js';
 import { readLocalTaskSnapshot, saveNewTask } from '../db/task-repository.js';
-import { listCategories, listRevisions } from '../db/reminder-repository.js';
+import { listCategories } from '../db/reminder-repository.js';
 import {
   filterTasksForViewer,
   filtersExpandToAllReadable,
@@ -59,7 +59,7 @@ import {
   type ApplyUpdate,
 } from './service-worker-update.js';
 import { ViewSwitcher } from '../features/tasks/ViewSwitcher.js';
-import { loadView, saveView } from '../db/preferences-repository.js';
+import { loadView, refreshTaskDueDefaults, saveView } from '../db/preferences-repository.js';
 import { listLocalGroups } from '../db/group-repository.js';
 import {
   addRemoteGroupMember,
@@ -283,6 +283,14 @@ export function App() {
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const headerExpandTimer = useRef<number | undefined>(undefined);
   const [online, setOnline] = useState(() => navigator.onLine);
+  const signedInUserId = session?.userId;
+  useEffect(() => {
+    if (!signedInUserId || !online) return;
+    const controller = new AbortController();
+    void refreshTaskDueDefaults(signedInUserId, controller.signal).catch(() => undefined);
+    return () => controller.abort();
+  }, [signedInUserId, online]);
+
   const [sessionValidation, setSessionValidation] = useState<
     'valid' | 'locked' | 'retry' | 'wrong_account'
   >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
@@ -412,11 +420,6 @@ export function App() {
         ),
       [lists.map((list) => list.id).join(',')],
     ) ?? new Map<string, ListItem[]>();
-  const revisions =
-    useLiveQuery(
-      () => (selectedId ? listRevisions(selectedId) : Promise.resolve([])),
-      [selectedId],
-    ) ?? [];
   const [adminLoadError, setAdminLoadError] = useState('');
   const [adminLoadAttempt, setAdminLoadAttempt] = useState(0);
   const [directoryUsers, setDirectoryUsers] = useState<DirectoryUser[]>([]);
@@ -1850,7 +1853,6 @@ export function App() {
                     ? { error: 'Saved tasks need recovery.' }
                     : {})}
                   selected={tasks.find((item) => item.id === selectedId)}
-                  revisions={revisions}
                   onToggle={toggle}
                   onSelect={(task) => {
                     history.pushState(

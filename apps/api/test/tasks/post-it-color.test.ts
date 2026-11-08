@@ -51,7 +51,6 @@ describe('post-it color task mutation', () => {
       'owner',
       '01J00000000000000000000009',
       'update',
-      prepared.changedFields,
       before,
       {
         prepareChange: vi.fn(async (value) => value as never),

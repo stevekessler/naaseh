@@ -8,6 +8,7 @@ import {
   transitionTask,
   matchesUrgencySet,
   taskSchema,
+  taskRevisionChanges,
   type Task,
   type TaskInput,
   type TaskRevision,
@@ -73,53 +74,6 @@ export async function taskToEncryptedRecord(task: Task) {
 }
 async function encryptMutationPayload(mutationId: string, payload: unknown) {
   return encryptText(JSON.stringify(payload), await deviceKey(), `mutation:${mutationId}`);
-}
-const safeRevisionFields = new Set<keyof Task>([
-  'memo',
-  'memoDocument',
-  'urgency',
-  'postItColor',
-  'link',
-  'dueAt',
-  'dueKind',
-  'dueDate',
-  'dueTimeZone',
-  'repeatInterval',
-  'repeatUnit',
-  'assigneeId',
-  'categoryId',
-  'projectId',
-  'groupId',
-  'parentId',
-  'visibility',
-  'status',
-  'completedAt',
-  'completedBy',
-  'lifecycle',
-  'completionState',
-  'archiveReason',
-  'archivedAt',
-  'archivedBy',
-  'currentCompletionEventId',
-  'version',
-]);
-function localRevisionValues(task: Task, fields: string[]) {
-  return Object.fromEntries(
-    fields
-      .filter((field) => safeRevisionFields.has(field as keyof Task))
-      .map((field) => {
-        const value = task[field as keyof Task];
-        const revisionValue: string | number | boolean | null =
-          field === 'memoDocument'
-            ? value
-              ? JSON.stringify(value)
-              : null
-            : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-              ? value
-              : null;
-        return [field, revisionValue];
-      }),
-  );
 }
 async function encryptRevision(revision: TaskRevision) {
   return {
@@ -192,8 +146,6 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
   const task = createTask(input, actorId);
   const id = createUlid();
   const sourceClientId = await getClientId();
-  const changedFields = [...new Set([...Object.keys(input), 'urgency'])];
-  const revisionChangedFields = changedFields.filter((field) => field !== 'percentComplete');
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -203,8 +155,7 @@ export async function saveNewTask(input: TaskInput, actorId: string): Promise<Ta
     version: 1,
     changedAt: task.createdAt,
     operation: 'create',
-    changedFields: revisionChangedFields,
-    after: localRevisionValues(task, revisionChangedFields),
+    ...taskRevisionChanges(task),
     syncOutcome: 'local-pending',
   };
   const [storedTask, payload, storedRevision] = await Promise.all([
@@ -306,23 +257,7 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
       ? Object.fromEntries(Object.entries(patch).filter(([key]) => key !== 'status'))
       : patch;
   const next = taskSchema.parse({ ...transitioned, ...lifecyclePatch });
-  const changedFields = [
-    ...new Set([
-      ...Object.keys(patch),
-      ...(operation === 'update'
-        ? []
-        : [
-            'lifecycle',
-            'completionState',
-            'archiveReason',
-            'archivedAt',
-            'archivedBy',
-            'currentCompletionEventId',
-          ]),
-    ]),
-  ];
   const sourceClientId = await getClientId();
-  const revisionChangedFields = changedFields.filter((field) => field !== 'percentComplete');
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -332,9 +267,7 @@ export async function updateTask(task: Task, patch: Partial<Task>, actorId: stri
     version: next.version,
     changedAt: next.updatedAt,
     operation,
-    changedFields: revisionChangedFields,
-    before: localRevisionValues(task, revisionChangedFields),
-    after: localRevisionValues(next, revisionChangedFields),
+    ...taskRevisionChanges(next, task),
     syncOutcome: 'local-pending',
   };
   const [storedTask, payload, storedRevision, storedEvent] = await Promise.all([

@@ -98,6 +98,11 @@ test('@enhanced-lists creates, completes, and retains a lightweight list item of
   await expect(item.getByRole('button', { name: 'Drag Milk' })).toBeVisible();
   await expect(item.getByRole('button', { name: /Move Milk (?:up|down)/ })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Attachments' })).toBeHidden();
+  await item.getByText('Files', { exact: true }).click();
+  await expect(item.getByText('No files attached.')).toBeVisible();
+  await expect(item.locator('input[type="file"]')).toHaveCount(0);
+  await item.getByText('Files', { exact: true }).click();
+
   await expectMinimumTarget(complete);
   await expect
     .poll(() => complete.evaluate((element) => getComputedStyle(element, '::before').width))

@@ -65,9 +65,31 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     event.requestContext.http.method === 'GET'
   ) {
     const task = await findTask(taskId);
-    return task && canRead(task)
-      ? json(200, { items: await listRevisions(taskId) })
-      : problem(404, 'not_found', 'Task not found.', correlationId);
+    if (!task || !canRead(task)) return problem(404, 'not_found', 'Task not found.', correlationId);
+    // History can contain values from before the task was shared.
+    if (task.ownerId !== actorId && context.authorizer?.lambda?.role !== 'admin')
+      return json(200, { items: [] });
+    auditRead(task);
+    const cursor = event.queryStringParameters?.cursor;
+    const limit = Number(event.queryStringParameters?.limit ?? 50);
+    if (
+      (cursor && !/^REV#\d{12,}#[0-9A-HJKMNP-TV-Z]{26}$/u.test(cursor)) ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    )
+      return problem(400, 'invalid_request', 'Invalid revision page.', correlationId);
+    const page = await listRevisions(taskId, limit, cursor);
+    if (task.memoHidden) {
+      for (const item of page.items) {
+        for (const values of [item.before, item.after]) {
+          if (!values) continue;
+          delete values.memo;
+          delete values.memoDocument;
+        }
+      }
+    }
+    return json(200, page);
   }
   if (taskId && event.requestContext.http.method === 'GET') {
     const task = await findTask(taskId);
@@ -107,7 +129,6 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       actorId,
       mutationId,
       'create',
-      [...new Set([...Object.keys(input as object), 'urgency'])],
       undefined,
       undefined,
       event.headers['x-client-id'],
@@ -221,7 +242,6 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           : normalized.visibility !== undefined && normalized.visibility !== current.visibility
             ? 'privacy'
             : 'update',
-      Object.keys(normalized),
       current,
       undefined,
       event.headers['x-client-id'],

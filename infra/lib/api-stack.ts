@@ -493,6 +493,12 @@ export function createApplicationApi(
     auth,
     false,
   );
+  route(
+    'ProfileTaskDueDefaultsIntegration',
+    '/api/v1/profile/task-due-defaults',
+    [apigwv2.HttpMethod.GET, apigwv2.HttpMethod.PUT],
+    auth,
+  );
   route('ProfileSecurityIntegration', '/api/v1/profile/security', [apigwv2.HttpMethod.GET], auth);
   route(
     'ProfileTrustedDevicesIntegration',

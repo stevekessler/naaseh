@@ -9,6 +9,8 @@ import { Fragment } from 'react';
 import { useCompletionFeedback } from '../tasks/useCompletionFeedback.js';
 import type { NewListItem } from './ListItems.js';
 import { formatCalendarDate } from '../tasks/due-value.js';
+import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
+import { parseFileLinks } from './file-links.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { MemoEditor } from '../memos/MemoEditor.js';
 import { LinkifiedText, MemoDocumentView } from '../memos/MemoDocumentView.js';
@@ -22,7 +24,7 @@ export function ListItemRow({
   onEdit,
   onReset,
   onPromote,
-  attachments,
+  csrfToken,
   rowRef,
   handleRef,
   dragging = false,
@@ -40,7 +42,7 @@ export function ListItemRow({
   onEdit: (input: NewListItem) => void;
   onReset?: () => void;
   onPromote: () => void;
-  attachments?: import('react').ReactNode;
+  csrfToken?: string;
   rowRef?: (element: Element | null) => void;
   handleRef?: (element: Element | null) => void;
   dragging?: boolean;
@@ -78,6 +80,18 @@ export function ListItemRow({
     }
     setEditing((open) => !open);
   };
+  const files = csrfToken && !editing && (
+    <details>
+      <summary>Files</summary>
+      <AttachmentPanelForParent
+        parentType="listItem"
+        parentId={item.id}
+        csrfToken={csrfToken}
+        readOnly
+      />
+    </details>
+  );
+  const savedLinks = item.fileLinks ?? [];
   return (
     <Fragment>
       <tr
@@ -134,27 +148,21 @@ export function ListItemRow({
         )}
         {visibleColumns.has('fileLinks') && (
           <td className="list-item-file-links-cell" data-label="Link">
-            {item.fileLinks?.[0] ? (
-              <CompactLink href={item.fileLinks[0]} />
-            ) : (
-              <span aria-hidden="true">—</span>
-            )}
-            {!editing && attachments && (
-              <details>
-                <summary>Files</summary>
-                {attachments}
-              </details>
-            )}
+            {savedLinks.length ? (
+              <ul className="list-item-links">
+                {savedLinks.map((link) => (
+                  <li key={link}>
+                    <CompactLink href={link} />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {files}
           </td>
         )}
         {editable && visibleColumns.has('actions') && (
           <td className="list-item-actions" aria-label={`Actions for ${name}`}>
-            {!editing && !visibleColumns.has('fileLinks') && attachments && (
-              <details>
-                <summary>Files</summary>
-                {attachments}
-              </details>
-            )}
+            {!visibleColumns.has('fileLinks') && files}
             <div className="list-item-action-buttons">
               {handleRef && reorderable ? (
                 <button
@@ -217,6 +225,15 @@ export function ListItemRow({
                   onChange={(event) => setDraftLink(event.target.value)}
                 />
               </label>
+              {savedLinks.length ? (
+                <ul className="list-item-links">
+                  {savedLinks.map((link) => (
+                    <li key={link}>
+                      <CompactLink href={link} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {destinationLists.length > 0 && (
                 <div className="list-item-move-control">
                   <label>
@@ -246,7 +263,13 @@ export function ListItemRow({
                   </button>
                 </div>
               )}
-              {attachments}
+              {csrfToken && (
+                <AttachmentPanelForParent
+                  parentType="listItem"
+                  parentId={item.id}
+                  csrfToken={csrfToken}
+                />
+              )}
               <div className="list-item-save-actions">
                 <button
                   className="list-item-save"
@@ -258,12 +281,21 @@ export function ListItemRow({
                       setEditorError('List item memos cannot exceed 2,000 characters.');
                       return;
                     }
+                    let fileLinks: string[];
+                    try {
+                      fileLinks = parseFileLinks([draftLink, ...savedLinks.slice(1)].join('\n'));
+                    } catch (error) {
+                      setEditorError(
+                        error instanceof Error ? error.message : 'Enter a valid link.',
+                      );
+                      return;
+                    }
                     setEditorError('');
                     onEdit({
                       name: draftName.trim(),
                       ...(draftDueDate ? { dueDate: draftDueDate } : {}),
                       ...(memo ? { memo, memoDocument: draftMemoDocument } : {}),
-                      ...(draftLink ? { fileLinks: [draftLink] } : {}),
+                      ...(fileLinks.length ? { fileLinks } : {}),
                     });
                     setEditing(false);
                   }}

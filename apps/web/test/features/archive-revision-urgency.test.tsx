@@ -7,7 +7,7 @@ vi.mock('../../src/features/archive/PermanentDeleteDialog.js', () => ({
 }));
 
 import { ArchivePage, matchesArchiveFilters } from '../../src/features/archive/ArchivePage.js';
-import { RevisionLog } from '../../src/features/tasks/RevisionLog.js';
+import { RevisionTable } from '../../src/features/tasks/RevisionLog.js';
 
 const now = new Date('2026-08-05T12:00:00.000Z');
 
@@ -156,11 +156,11 @@ describe('archived and revised urgency display', () => {
       after: { urgency: 'critical' },
       syncOutcome: 'applied',
     };
-    const html = renderToStaticMarkup(<RevisionLog revisions={[revision]} />);
+    const html = renderToStaticMarkup(<RevisionTable revisions={[revision]} />);
 
-    expect(html).toContain('Priority changed from');
-    expect(html).toContain('<strong>Low</strong>');
-    expect(html).toContain('<strong>Critical</strong>');
+    expect(html).toContain('<th scope="row">Priority</th>');
+    expect(html).toContain('<td>Low</td>');
+    expect(html).toContain('<td>Critical</td>');
     expect(html).not.toContain('low');
   });
 });

@@ -1,6 +1,7 @@
 import { ProfilePictureSettings } from './ProfilePictureSettings.js';
 import { SecuritySettings } from './SecuritySettings.js';
 import { ReminderSettings } from '../reminders/ReminderSettings.js';
+import { TaskDueDefaultsSettings } from '../tasks/TaskDueDefaultsSettings.js';
 import { CompletionSoundSetting } from '../tasks/CompletionSoundSetting.js';
 
 export function ProfilePage({
@@ -34,6 +35,12 @@ export function ProfilePage({
           <div className="profile-section-content profile-preferences">
             <ReminderSettings csrfToken={csrfToken} />
             <CompletionSoundSetting />
+          </div>
+        </details>
+        <details className="profile-section">
+          <summary>Task defaults</summary>
+          <div className="profile-section-content">
+            <TaskDueDefaultsSettings userId={userId} csrfToken={csrfToken} />
           </div>
         </details>
         <details className="profile-section">

@@ -2076,6 +2076,9 @@ main {
   color: var(--muted);
   text-align: center;
 }
+.task-mobile-sort {
+  display: none;
+}
 .task-sort-toolbar {
   display: flex;
   align-items: center;
@@ -2095,7 +2098,7 @@ main {
 .task-column-settings {
   position: relative;
 }
-.task-column-settings > summary {
+:is(.task-column-settings, .task-mobile-sort) > summary {
   min-height: 2.5rem;
   padding: 0.55rem 0.8rem;
   border: 1px solid #afbeb5;
@@ -2109,7 +2112,7 @@ main {
 .task-column-settings > summary::before {
   content: '☷ ';
 }
-.task-column-settings > summary::-webkit-details-marker {
+:is(.task-column-settings, .task-mobile-sort) > summary::-webkit-details-marker {
   display: none;
 }
 .task-column-settings-panel {
@@ -3085,6 +3088,16 @@ dialog input {
   }
   .task-list colgroup {
     display: none;
+  }
+  .task-mobile-sort {
+    display: block;
+    margin: 0.65rem 0.8rem;
+  }
+  .task-mobile-sort > summary::before {
+    content: '↕ ';
+  }
+  .task-mobile-sort label {
+    margin-top: 0.5rem;
   }
   .task-list thead,
   .stack-list thead {
@@ -4898,4 +4911,55 @@ html:has(.task-undo-notices) {
 .task-row-memo .memo-fenced-code {
   margin: 0;
   padding: 0 !important;
+}
+
+.list-item-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.attachment-download-link {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
+.task-due-defaults,
+.task-due-defaults fieldset:not([hidden]) {
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.task-revision-history {
+  margin-top: 1rem;
+}
+
+.task-revision-history .table-scroll {
+  overflow-x: auto;
+}
+
+.task-revision-history table {
+  width: 100%;
+  min-width: 34rem;
+  border-collapse: collapse;
+}
+
+.task-revision-history th,
+.task-revision-history td {
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-align: start;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.task-revision-history thead {
+  background: #eef2ef;
+}
+
+.task-revision-history small {
+  display: block;
+  color: var(--muted);
 }

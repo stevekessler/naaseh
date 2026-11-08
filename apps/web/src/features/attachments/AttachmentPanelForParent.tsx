@@ -7,10 +7,12 @@ export function AttachmentPanelForParent({
   parentType,
   parentId,
   csrfToken,
+  readOnly = false,
 }: {
   parentType: 'task' | 'listItem';
   parentId: string;
   csrfToken: string;
+  readOnly?: boolean;
 }) {
   const [revision, setRevision] = useState(0);
   const items = useLiveQuery(() => listAttachmentMetadata(parentId), [parentId, revision]) ?? [];
@@ -28,6 +30,7 @@ export function AttachmentPanelForParent({
       parentType={parentType}
       parentId={parentId}
       items={items}
+      readOnly={readOnly}
       csrfToken={csrfToken}
       awaitingParentSync={awaitingParentSync}
       changed={() => setRevision((value) => value + 1)}

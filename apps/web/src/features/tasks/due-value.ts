@@ -1,5 +1,7 @@
 import { instantToLocalDue, localDueToInstant } from '@naaseh/domain';
 import { useEffect, useState } from 'react';
+import type { TaskDueDefaults } from '@naaseh/domain';
+import type { DueDateValue } from './DueDateField.js';
 
 export const fiveMinuteTimeOptions = () =>
   Array.from({ length: 24 * 12 }, (_, index) => {
@@ -66,4 +68,24 @@ export function useBrowserTimeZone() {
     };
   }, []);
   return zone;
+}
+
+export function relativeDueValue(
+  defaults?: TaskDueDefaults,
+  now = new Date(),
+): DueDateValue & { dueAt?: string } {
+  if (!defaults) return { dueKind: 'none', dueDate: '', dueTime: '10:00' };
+  const due = new Date(now);
+  if (defaults.days) due.setDate(due.getDate() + defaults.days);
+  const relative = defaults.timeMode === 'relative';
+  if (relative) due.setTime(due.getTime() + defaults.hours * 60 * 60 * 1000);
+  // Keep the precise instant when the same local time occurs twice at a clock change.
+  const dueAt = new Date(Math.floor(due.getTime() / 60_000) * 60_000).toISOString();
+  const { localDate, localTime } = instantToLocalDue(dueAt);
+  return {
+    dueKind: defaults.timeMode === 'none' ? 'date' : 'timed',
+    dueDate: localDate,
+    dueTime: relative ? localTime : defaults.time,
+    ...(relative ? { dueAt } : {}),
+  };
 }

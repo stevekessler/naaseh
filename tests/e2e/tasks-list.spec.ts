@@ -76,6 +76,22 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await saveDueDate.press('Enter');
   await expect(dueDateDialog).toBeHidden();
   await expect(dueDateTrigger).toContainText('1/2/2020');
+  const priority = taskTable.getByRole('button', { name: /Edit priority for Call the contractor/ });
+  await priority.click();
+  const priorityDialog = page.getByRole('dialog', { name: 'Change priority' });
+  await priorityDialog.getByLabel('Priority').selectOption('high');
+  await priorityDialog.getByRole('button', { name: 'Save priority' }).click();
+  await expect(priority).toHaveAccessibleName(/currently High/);
+  if ((page.viewportSize()?.width ?? 1280) <= 640) {
+    await page.locator('.task-mobile-sort > summary').click();
+    await page
+      .getByRole('combobox', { name: 'Sort tasks', exact: true })
+      .selectOption('name-ascending');
+    await expect(page.getByText('Sorted by Task name ascending')).toBeVisible();
+    await page.getByRole('button', { name: 'Reset sort' }).click();
+    await page.locator('.task-mobile-sort > summary').click();
+  }
+
   await page.locator('.task-column-settings > summary').click();
   const columnSettings = page.getByRole('group', { name: 'Choose visible columns' });
   await expect(columnSettings).toBeVisible();
@@ -105,18 +121,49 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
       .locator('xpath=parent::details'),
   ).not.toHaveAttribute('open', '');
   await expect(page.getByText('Overdue', { exact: true })).toBeVisible();
+  await page.route('**/api/v1/tasks/*/revisions*', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: '01J00000000000000000000001',
+            taskId: new URL(route.request().url()).pathname.split('/')[4],
+            actorId: 'local-steve',
+            version: 2,
+            changedAt: '2020-01-01T00:00:00.000Z',
+            operation: 'update',
+            changedFields: ['memo'],
+            before: { memo: 'Previous estimate' },
+            after: { memo: 'Updated estimate' },
+            syncOutcome: 'applied',
+          },
+        ],
+        cursor: null,
+      },
+    }),
+  );
   await page.getByRole('button', { name: 'Call the contractor', exact: true }).click();
   await expect(page).toHaveURL(/\/tasks\//);
-  const detail = page.getByLabel('Task details');
   const dialog = page.getByRole('dialog', { name: 'Edit task' });
   await expect(dialog.getByLabel('Link', { exact: true })).toHaveValue(
     'http://example.com/project',
   );
-  await expect(detail.getByRole('heading', { name: 'Revision history' })).toBeVisible();
-  await expect(detail.getByText(/create by local-steve/)).toBeVisible();
+  const revisions = dialog.getByRole('table', { name: 'Task revisions' });
+  await expect(
+    revisions.getByRole('row', { name: /Memo Previous estimate Updated estimate/ }),
+  ).toBeVisible();
+  await expect(
+    revisions.getByRole('row', { name: /Task name.*Call the contractor.*Steve Kessler/ }),
+  ).toBeVisible();
   await dialog.getByLabel('Task label').fill('Call the contractor today');
   await dialog.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeVisible();
+  await page.getByRole('button', { name: 'Call the contractor today', exact: true }).click();
+  await expect(
+    revisions.getByRole('row', { name: /Task name Call the contractor Call the contractor today/ }),
+  ).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+
   await page.getByRole('button', { name: 'Complete Call the contractor today' }).click();
   await expect(page.getByRole('heading', { name: 'Call the contractor today' })).toBeHidden();
   await expect(

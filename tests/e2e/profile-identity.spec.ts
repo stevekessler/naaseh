@@ -10,6 +10,14 @@ test('ordinary users see identity, all assignees, readable priorities, and consi
       json: { user: { id: 'alex', displayName: 'Alex', role: 'user' }, csrfToken: 'csrf' },
     }),
   );
+  let defaults: unknown = null;
+  await page.route('**/api/v1/profile/task-due-defaults', (route) => {
+    if (route.request().method() === 'PUT') {
+      expect(route.request().headers()['x-csrf-token']).toBe('csrf');
+      defaults = route.request().postDataJSON().defaults;
+    }
+    return route.fulfill({ json: { userId: 'alex', defaults } });
+  });
   await page.route('**/api/v1/users/directory', (route) =>
     route.fulfill({
       json: {
@@ -23,6 +31,19 @@ test('ordinary users see identity, all assignees, readable priorities, and consi
   await signIn(page);
   await expect(page.getByRole('button', { name: 'Signed in as Alex. Open profile' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Users', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Signed in as Alex. Open profile' }).click();
+  await page.getByText('Task defaults', { exact: true }).click();
+  await page.getByLabel('Set a default due date').check();
+  await page.getByLabel('Days after today (0 is today)').fill('1');
+  await page.getByRole('combobox', { name: 'Default time', exact: true }).selectOption('clock');
+  await page.getByLabel('Time of day').fill('15:00');
+  await page.getByRole('button', { name: 'Save task defaults' }).click();
+  await expect(page.getByText('Task defaults saved.')).toBeVisible();
+  await page.getByRole('button', { name: 'Tasks', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: /Change due date, currently .*3:00 PM/ }),
+  ).toBeVisible();
+
   const form = page.locator('.task-form').first();
   await expandTaskDetails(form);
   await expect(form.getByRole('option', { name: 'Steve (@steve)', exact: true })).toHaveCount(1);

@@ -23,6 +23,7 @@ const configurableColumns: TaskColumnId[] = [
   'actions',
 ];
 const sortLabels: Record<TaskListSortKey, string> = {
+  name: 'Task name',
   due: 'Due date',
   category: 'Category',
   project: 'Project',
@@ -62,7 +63,7 @@ export function TaskList({
   tasks,
   onToggle,
   onSelect = () => {},
-  onDueDateChange,
+  onUpdate,
   onProgressChange,
   currentUserId,
   categories = [],
@@ -75,7 +76,7 @@ export function TaskList({
   tasks: Task[];
   onToggle: (task: Task) => void;
   onSelect?: (task: Task) => void;
-  onDueDateChange?: (task: Task, patch: Partial<Task>) => void | Promise<void>;
+  onUpdate?: (task: Task, patch: Partial<Task>) => void | Promise<void>;
   onProgressChange: (task: Task, percent: number) => void | Promise<void>;
   currentUserId?: string;
   categories?: readonly CategoryRecord[];
@@ -98,13 +99,19 @@ export function TaskList({
       active = false;
     };
   }, []);
-  const changeSort = (key: TaskListSortKey) => {
-    const next: TaskListSort = {
-      key,
-      direction: sort?.key === key && sort.direction === 'ascending' ? 'descending' : 'ascending',
-    };
+  const applySort = (next: TaskListSort) => {
     setSort(next);
     void saveTaskListSort(next).catch(() => undefined);
+  };
+  const resetSort = () => {
+    setSort(undefined);
+    void resetTaskListSort().catch(() => undefined);
+  };
+  const changeSort = (key: TaskListSortKey) => {
+    applySort({
+      key,
+      direction: sort?.key === key && sort.direction === 'ascending' ? 'descending' : 'ascending',
+    });
   };
   const sortedTasks = sortTasksForTable(tasks, sort, categories, projects);
   const cutoff = new Date();
@@ -136,19 +143,43 @@ export function TaskList({
     );
   return (
     <div className="task-table-wrap">
+      <details className="task-mobile-sort">
+        <summary>Sort</summary>
+        <label>
+          Sort tasks
+          <select
+            value={sort ? `${sort.key}-${sort.direction}` : ''}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              if (!value) return resetSort();
+              const [key, direction] = value.split('-') as [
+                TaskListSortKey,
+                TaskListSort['direction'],
+              ];
+              applySort({ key, direction });
+            }}
+          >
+            <option value="">Automatic</option>
+            <option value="name-ascending">Task name (A to Z)</option>
+            <option value="name-descending">Task name (Z to A)</option>
+            <option value="due-ascending">Due date (earliest first)</option>
+            <option value="due-descending">Due date (latest first)</option>
+            <option value="priority-descending">Priority (highest first)</option>
+            <option value="priority-ascending">Priority (lowest first)</option>
+            {sort?.key === 'category' || sort?.key === 'project' ? (
+              <option value={`${sort.key}-${sort.direction}`}>
+                {sortLabels[sort.key]} ({sort.direction})
+              </option>
+            ) : null}
+          </select>
+        </label>
+      </details>
       {sort ? (
         <div className="task-sort-toolbar" role="status">
           <span>
             Sorted by {sortLabels[sort.key]} {sort.direction}
           </span>
-          <button
-            type="button"
-            className="quiet"
-            onClick={() => {
-              setSort(undefined);
-              void resetTaskListSort().catch(() => undefined);
-            }}
-          >
+          <button type="button" className="quiet" onClick={resetSort}>
             Reset sort
           </button>
         </div>
@@ -230,7 +261,7 @@ export function TaskList({
                 task={task}
                 onToggle={onToggle}
                 onSelect={onSelect}
-                {...(onDueDateChange ? { onDueDateChange } : {})}
+                {...(onUpdate ? { onUpdate } : {})}
                 onProgressChange={onProgressChange}
                 categoryName={categories.find((category) => category.id === categoryId)?.name}
                 categoryColor={categories.find((category) => category.id === categoryId)?.color}
