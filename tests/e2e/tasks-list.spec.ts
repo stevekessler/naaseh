@@ -84,12 +84,11 @@ test('creates, edits, completes, and inspects a responsive task with revisions a
   await expect(priority).toHaveAccessibleName(/currently High/);
   if ((page.viewportSize()?.width ?? 1280) <= 640) {
     await page.locator('.task-mobile-sort > summary').click();
-    await page
-      .getByRole('combobox', { name: 'Sort tasks', exact: true })
-      .selectOption('name-ascending');
+    const sortSettings = page.getByRole('group', { name: 'Sort tasks', exact: true });
+    await sortSettings.getByRole('radio', { name: 'Task name (A to Z)' }).check();
+    await sortSettings.getByRole('button', { name: 'Close sort settings' }).click();
     await expect(page.getByText('Sorted by Task name ascending')).toBeVisible();
     await page.getByRole('button', { name: 'Reset sort' }).click();
-    await page.locator('.task-mobile-sort > summary').click();
   }
 
   await page.locator('.task-column-settings > summary').click();

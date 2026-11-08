@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 export const taskColumns = [
   { id: 'category', label: 'Category' },
@@ -82,18 +82,23 @@ export function useTaskColumns() {
   };
 }
 
-export function TaskColumnSettings({
-  breakpoint,
-  visible,
-  toggle,
-  reset,
+export function TaskTableSettings({
+  className,
+  label,
+  title,
+  subtitle,
+  closeLabel,
+  children,
 }: {
-  breakpoint: Breakpoint;
-  visible: ReadonlySet<TaskColumnId>;
-  toggle: (column: TaskColumnId) => void;
-  reset: () => void;
+  className: string;
+  label: string;
+  title: string;
+  subtitle?: string;
+  closeLabel: string;
+  children: ReactNode;
 }) {
   const details = useRef<HTMLDetailsElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
     const closeWhenOutside = (event: PointerEvent) => {
@@ -105,49 +110,67 @@ export function TaskColumnSettings({
   }, []);
 
   return (
-    <details ref={details} className="task-column-settings">
-      <summary>Columns</summary>
-      <div
-        className="task-column-settings-panel"
-        role="group"
-        aria-labelledby="task-column-settings-title"
-      >
+    <details ref={details} className={className}>
+      <summary>{label}</summary>
+      <div className="task-column-settings-panel" role="group" aria-labelledby={titleId}>
         <header>
           <div>
-            <strong id="task-column-settings-title">Choose visible columns</strong>
-            <small>For this {breakpoint} layout</small>
+            <strong id={titleId}>{title}</strong>
+            {subtitle && <small>{subtitle}</small>}
           </div>
           <button
             type="button"
             className="quiet task-column-settings-close"
-            aria-label="Close column settings"
+            aria-label={closeLabel}
             onClick={() => {
-              if (details.current) details.current.open = false;
+              if (details.current) {
+                details.current.open = false;
+                details.current.querySelector('summary')?.focus();
+              }
             }}
           >
             ×
           </button>
         </header>
-        <p>Task and completion stay visible.</p>
-        <div className="task-column-options">
-          {taskColumns.map((column) => (
-            <label key={column.id}>
-              <input
-                type="checkbox"
-                aria-label={`Show ${column.label} column`}
-                checked={visible.has(column.id)}
-                onChange={() => toggle(column.id)}
-              />
-              {column.label}
-            </label>
-          ))}
-        </div>
-        <footer>
-          <button type="button" className="quiet" onClick={reset}>
-            Restore defaults
-          </button>
-        </footer>
+        {children}
       </div>
     </details>
+  );
+}
+
+export function TaskColumnSettings({
+  breakpoint,
+  visible,
+  toggle,
+  reset,
+}: ReturnType<typeof useTaskColumns>) {
+  return (
+    <TaskTableSettings
+      className="task-column-settings"
+      label="Columns"
+      title="Choose visible columns"
+      subtitle={`For this ${breakpoint} layout`}
+      closeLabel="Close column settings"
+    >
+      <p>Task and completion stay visible.</p>
+      <div className="task-column-options">
+        {taskColumns.map((column) => (
+          <label key={column.id}>
+            <input
+              type="checkbox"
+              aria-label={`Show ${column.label} column`}
+              checked={visible.has(column.id)}
+              onChange={() => toggle(column.id)}
+            />
+            {column.label}
+          </label>
+        ))}
+      </div>
+      <footer>
+        <button type="button" className="quiet" onClick={reset}>
+          Restore defaults
+        </button>
+      </footer>
+    </TaskTableSettings>
   );
 }

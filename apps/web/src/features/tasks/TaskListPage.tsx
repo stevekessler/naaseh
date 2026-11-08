@@ -5,7 +5,7 @@ import { SubtaskTree } from './SubtaskTree.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from './TaskEditDialog.js';
-import { TaskColumnSettings, useTaskColumns } from './TaskColumnSettings.js';
+import { useTaskColumns } from './TaskColumnSettings.js';
 import { FinancialTaskLink } from './FinancialTaskLink.js';
 export function TaskListPage({
   tasks,
@@ -56,12 +56,6 @@ export function TaskListPage({
     );
   return (
     <>
-      <div className="task-list-toolbar">
-        <p>
-          {tasks.length} task{tasks.length === 1 ? '' : 's'}
-        </p>
-        <TaskColumnSettings {...columns} />
-      </div>
       <TaskList
         tasks={tasks}
         onToggle={onToggle}
@@ -72,7 +66,7 @@ export function TaskListPage({
         projects={projects}
         groups={groups}
         relationshipTasks={parentTasks}
-        visibleColumns={columns.visible}
+        columns={columns}
         collapseFutureTasks={collapseFutureTasks}
         {...(currentUserId ? { currentUserId } : {})}
       />
