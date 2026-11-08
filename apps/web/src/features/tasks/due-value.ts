@@ -70,16 +70,22 @@ export function useBrowserTimeZone() {
   return zone;
 }
 
-export function relativeDueValue(defaults?: TaskDueDefaults, now = new Date()): DueDateValue {
+export function relativeDueValue(
+  defaults?: TaskDueDefaults,
+  now = new Date(),
+): DueDateValue & { dueAt?: string } {
   if (!defaults) return { dueKind: 'none', dueDate: '', dueTime: '10:00' };
   const due = new Date(now);
-  due.setDate(due.getDate() + defaults.days);
-  if (defaults.timeMode === 'relative')
-    due.setTime(due.getTime() + defaults.hours * 60 * 60 * 1000);
-  const { localDate, localTime } = instantToLocalDue(due.toISOString());
+  if (defaults.days) due.setDate(due.getDate() + defaults.days);
+  const relative = defaults.timeMode === 'relative';
+  if (relative) due.setTime(due.getTime() + defaults.hours * 60 * 60 * 1000);
+  // Keep the precise instant when the same local time occurs twice at a clock change.
+  const dueAt = new Date(Math.floor(due.getTime() / 60_000) * 60_000).toISOString();
+  const { localDate, localTime } = instantToLocalDue(dueAt);
   return {
     dueKind: defaults.timeMode === 'none' ? 'date' : 'timed',
     dueDate: localDate,
-    dueTime: defaults.timeMode === 'relative' ? localTime : defaults.time,
+    dueTime: relative ? localTime : defaults.time,
+    ...(relative ? { dueAt } : {}),
   };
 }

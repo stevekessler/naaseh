@@ -139,15 +139,18 @@ export function TaskForm({
         : Promise.resolve(undefined),
     [task?.id, defaultAssigneeId],
   );
-  const [editedDue, setEditedDue] = useState<DueDateValue | undefined>(() => {
-    if (!task) return undefined;
-    const timed = task.dueAt ? instantToLocalDue(task.dueAt) : undefined;
-    return {
-      dueKind: task.dueKind ?? (task.dueDate ? 'date' : task.dueAt ? 'timed' : 'none'),
-      dueDate: task.dueDate ?? timed?.localDate ?? '',
-      dueTime: timed?.localTime ?? '10:00',
-    };
-  });
+  const [editedDue, setEditedDue] = useState<(DueDateValue & { dueAt?: string }) | undefined>(
+    () => {
+      if (!task) return undefined;
+      const timed = task.dueAt ? instantToLocalDue(task.dueAt) : undefined;
+      return {
+        dueKind: task.dueKind ?? (task.dueDate ? 'date' : task.dueAt ? 'timed' : 'none'),
+        dueDate: task.dueDate ?? timed?.localDate ?? '',
+        dueTime: timed?.localTime ?? '10:00',
+        ...(task.dueAt ? { dueAt: task.dueAt } : {}),
+      };
+    },
+  );
   const due = editedDue ?? relativeDueValue(dueDefaults);
   const [repeatInterval, setRepeatInterval] = useState(task?.repeatInterval ?? 1);
   const [repeatUnit, setRepeatUnit] = useState<TaskRepeatUnit | ''>(task?.repeatUnit ?? '');
@@ -164,7 +167,7 @@ export function TaskForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
-    const { dueKind, dueDate, dueTime } = editedDue ?? relativeDueValue(dueDefaults);
+    const { dueKind, dueDate, dueTime, dueAt } = editedDue ?? relativeDueValue(dueDefaults);
     const form = event.currentTarget;
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
@@ -189,7 +192,7 @@ export function TaskForm({
           link: value('link'),
           ...(dueKind === 'date' && dueDate ? { dueKind, dueDate } : {}),
           ...(dueKind === 'timed' && dueDate && dueTime
-            ? { dueKind, dueAt: localDueToInstant(dueDate, dueTime).dueAt }
+            ? { dueKind, dueAt: dueAt ?? localDueToInstant(dueDate, dueTime).dueAt }
             : {}),
           ...(dueKind !== 'none' && repeatUnit ? { repeatInterval, repeatUnit } : {}),
           assigneeId: submittedAssigneeId,
