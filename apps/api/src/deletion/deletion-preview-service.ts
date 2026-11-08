@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { deletionPreviewSchema, type DeletionPreview } from '@naaseh/domain';
 import { listParentAttachments } from '../attachments/attachment-repository.js';
 import { findList, listItemsForList } from '../lists/list-repository.js';
-import { findTask, listRevisions } from '../tasks/task-repository.js';
+import { countTaskRevisions, findTask } from '../tasks/task-repository.js';
 import { issueConfirmationToken } from './confirmation-token.js';
 import { scanReferences } from './deletion-repository.js';
 import { inspectOrganizationDeletion } from '../projects/organization-deletion-service.js';
@@ -56,7 +56,7 @@ export async function createDeletionPreview(input: {
   const resource = task ?? list;
   if (!resource || resource.ownerId !== input.actorId) throw new Error('Resource not found.');
   const [revisions, children, taskAttachments, reporting] = await Promise.all([
-    input.resourceType === 'task' ? listRevisions(input.resourceId) : Promise.resolve([]),
+    input.resourceType === 'task' ? countTaskRevisions(input.resourceId) : Promise.resolve(0),
     input.resourceType === 'list' ? listItemsForList(input.resourceId) : Promise.resolve([]),
     input.resourceType === 'task'
       ? listParentAttachments('task', input.resourceId)
@@ -72,7 +72,7 @@ export async function createDeletionPreview(input: {
   );
   const attachments = [...taskAttachments, ...childAttachmentGroups.flat()];
   const dependentCounts = {
-    revisions: revisions.length,
+    revisions,
     listItems: children.length,
     attachments: attachments.length,
     reportingRecords: reporting.length,

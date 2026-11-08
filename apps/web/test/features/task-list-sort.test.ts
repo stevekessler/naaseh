@@ -89,11 +89,12 @@ describe('task list sorting', () => {
       }),
     ];
 
-    expect(
-      sortTasksForTable(sameDay, { key: 'due', direction: 'ascending' }, categories, projects).map(
-        ({ label }) => label,
-      ),
-    ).toEqual(['At 1 PM', 'At 5 PM', 'Date only']);
+    for (const key of ['due', 'priority'] as const)
+      expect(
+        sortTasksForTable(sameDay, { key, direction: 'ascending' }, categories, projects).map(
+          ({ label }) => label,
+        ),
+      ).toEqual(['At 1 PM', 'At 5 PM', 'Date only']);
   });
 
   it.each([

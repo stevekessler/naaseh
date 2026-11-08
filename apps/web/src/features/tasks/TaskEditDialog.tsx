@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CategoryRecord, Project, Task, TaskInput } from '@naaseh/domain';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskForm } from './TaskForm.js';
+import { RevisionLog } from './RevisionLog.js';
 
 export function taskEditPatch(input: TaskInput, task: Task): Partial<Task> {
   const patch: Record<string, unknown> = { ...input };
@@ -131,6 +132,7 @@ export function TaskEditDialog({
           />
         </fieldset>
         {secondaryContent}
+        <RevisionLog key={task.id} task={task} />
       </div>
     </dialog>
   );

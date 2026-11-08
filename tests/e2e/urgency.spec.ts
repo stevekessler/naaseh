@@ -42,7 +42,7 @@ async function createTask(page: Page, label: string, urgency: Urgency, parentLab
   }
   await form.getByRole('button', { name: 'Add task' }).click();
   const row = taskRow(page, label);
-  await expect(row.getByLabel(urgencyLabels[urgency])).toBeVisible();
+  await expect(row.getByLabel(urgencyLabels[urgency], { exact: true })).toBeVisible();
   return row;
 }
 
@@ -61,7 +61,7 @@ async function createList(page: Page, name: string, urgency: Urgency) {
   await chooseUrgency(form, urgency);
   await form.getByRole('button', { name: 'Create list' }).click();
   const list = page.locator('.named-list').filter({ hasText: name });
-  await expect(list.getByLabel(urgencyLabels[urgency])).toBeVisible();
+  await expect(list.getByLabel(urgencyLabels[urgency], { exact: true })).toBeVisible();
   return list;
 }
 
@@ -80,11 +80,9 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
   await page.getByRole('button', { name: 'Urgent parent', exact: true }).click();
   const updatedDetail = page.getByRole('dialog', { name: 'Edit task' });
   await expect(updatedDetail.getByRole('heading', { name: 'Revision history' })).toBeVisible();
-  const urgencyRevision = updatedDetail.locator('li').filter({ hasText: 'urgency' }).last();
-  await expect(urgencyRevision).toBeVisible();
-  await urgencyRevision.getByText('Safe changes').click();
-  await expect(urgencyRevision.getByText(/"before"[\s\S]*critical/i)).toBeVisible();
-  await expect(urgencyRevision.getByText(/"after"[\s\S]*Low/i)).toBeVisible();
+  const urgencyRevision = updatedDetail.getByRole('row', { name: /Priority Critical Low/ });
+  await expect(urgencyRevision.getByRole('cell', { name: 'Critical', exact: true })).toBeVisible();
+  await expect(urgencyRevision.getByRole('cell', { name: 'Low', exact: true })).toBeVisible();
   await updatedDetail.getByRole('button', { name: 'Cancel' }).click();
 
   await createTask(page, 'Urgent child', 'high', 'Urgent parent');
@@ -96,7 +94,7 @@ test('creates and edits Task, Subtask, and List urgency and retains it in histor
 
   const list = await createList(page, 'Urgent checklist', 'low');
   await chooseUrgency(list, 'critical');
-  await expect(list.getByLabel('Critical')).toBeVisible();
+  await expect(list.getByLabel('Critical', { exact: true })).toBeVisible();
   await list.getByRole('button', { name: 'Finish and archive list' }).click();
 
   await openTaskSection(page, 'Archive');
@@ -132,8 +130,12 @@ test('preserves offline urgency creation and edits through reconnect synchroniza
   await expect(page.getByText('Synced').first()).toBeAttached({ timeout: 15_000 });
 
   await openTaskSection(page, 'My Tasks');
-  await expect(taskRow(page, 'Online urgency seed').getByLabel('Critical')).toBeVisible();
-  await expect(taskRow(page, 'Offline urgent child').getByLabel('Low')).toBeVisible();
+  await expect(
+    taskRow(page, 'Online urgency seed').getByLabel('Critical', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    taskRow(page, 'Offline urgent child').getByLabel('Low', { exact: true }),
+  ).toBeVisible();
 });
 
 test('keeps urgency controls accessible to keyboard, touch, and screen readers at every viewport', async ({

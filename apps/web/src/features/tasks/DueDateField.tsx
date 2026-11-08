@@ -112,13 +112,13 @@ export function DueDateDialog({
                     value={displayTime.minute}
                     onChange={(event) => updateDisplayTime({ minute: event.target.value })}
                   >
-                    {Array.from({ length: 12 }, (_, index) =>
-                      String(index * 5).padStart(2, '0'),
-                    ).map((minute) => (
-                      <option key={minute} value={minute}>
-                        {minute}
-                      </option>
-                    ))}
+                    {Array.from({ length: 60 }, (_, index) => String(index).padStart(2, '0')).map(
+                      (minute) => (
+                        <option key={minute} value={minute}>
+                          {minute}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
                 <label>

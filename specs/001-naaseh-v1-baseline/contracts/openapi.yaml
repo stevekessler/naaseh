@@ -218,7 +218,7 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
       responses:
         '200':
-          description: Authorized append-only revisions.
+          description: Append-only revisions visible to the owner and authorized administrators.
           content:
             application/json:
               schema:
@@ -794,12 +794,12 @@ components:
         before:
           {
             type: object,
-            description: Safe allowlisted values only; memo and label content are excluded.,
+            description: Allowlisted task values. Hidden memo content and ciphertext are excluded.,
           }
         after:
           {
             type: object,
-            description: Safe allowlisted values only; memo and label content are excluded.,
+            description: Allowlisted task values. Hidden memo content and ciphertext are excluded.,
           }
         syncOutcome: { type: string, enum: [local-pending, applied, replayed, merged] }
         changedAt: { type: string, format: date-time }

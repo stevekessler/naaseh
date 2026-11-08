@@ -15,6 +15,7 @@ export function AttachmentPanel({
   items,
   csrfToken,
   awaitingParentSync = false,
+  readOnly = false,
   changed,
 }: {
   parentType: 'task' | 'listItem';
@@ -22,6 +23,7 @@ export function AttachmentPanel({
   items: Attachment[];
   csrfToken: string;
   awaitingParentSync?: boolean;
+  readOnly?: boolean;
   changed: () => void;
 }) {
   const [progress, setProgress] = useState<number>();
@@ -60,58 +62,62 @@ export function AttachmentPanel({
   };
   return (
     <section className="attachments">
-      <h3>Attachments</h3>
-      <label>
-        Attach a file or multiple files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or
-        CSV; up to 25 MiB each)
-        <input
-          type="file"
-          multiple
-          accept={attachmentAccept}
-          disabled={!online || awaitingParentSync || progress !== undefined || active.length >= 10}
-          onChange={(event) => {
-            const input = event.currentTarget;
-            const files = Array.from(event.target.files ?? []);
-            if (!files.length) return;
-            const availableSlots = 10 - active.length;
-            if (files.length > availableSlots) {
-              setError(
-                `This item can have up to 10 attachments. Select ${availableSlots} or fewer files.`,
-              );
-              input.value = '';
-              return;
+      {readOnly ? null : <h3>Attachments</h3>}
+      {!readOnly && (
+        <label>
+          Attach a file or multiple files (Word, Excel, PowerPoint, PDF, image, Text, Markdown, or
+          CSV; up to 25 MiB each)
+          <input
+            type="file"
+            multiple
+            accept={attachmentAccept}
+            disabled={
+              !online || awaitingParentSync || progress !== undefined || active.length >= 10
             }
-            setError(undefined);
-            setProgress(0);
-            let uploaded = 0;
-            void files
-              .reduce(
-                (previous, file) =>
-                  previous.then(() =>
-                    uploadAttachment(file, parentType, parentId, csrfToken, (fileProgress) =>
-                      setProgress(
-                        Math.round(((uploaded + fileProgress / 100) / files.length) * 100),
-                      ),
-                    ).then(() => {
-                      uploaded += 1;
-                      changed();
-                    }),
-                  ),
-                Promise.resolve(),
-              )
-              .catch((reason) =>
-                setError(reason instanceof Error ? reason.message : 'Upload failed.'),
-              )
-              .finally(() => {
-                setProgress(undefined);
-                // Selecting the same file again must trigger another change event
-                // after either a successful upload or a recoverable failure.
+            onChange={(event) => {
+              const input = event.currentTarget;
+              const files = Array.from(event.target.files ?? []);
+              if (!files.length) return;
+              const availableSlots = 10 - active.length;
+              if (files.length > availableSlots) {
+                setError(
+                  `This item can have up to 10 attachments. Select ${availableSlots} or fewer files.`,
+                );
                 input.value = '';
-              });
-          }}
-        />
-      </label>
-      {!online && <p>Connect to the internet to attach or download files.</p>}
+                return;
+              }
+              setError(undefined);
+              setProgress(0);
+              let uploaded = 0;
+              void files
+                .reduce(
+                  (previous, file) =>
+                    previous.then(() =>
+                      uploadAttachment(file, parentType, parentId, csrfToken, (fileProgress) =>
+                        setProgress(
+                          Math.round(((uploaded + fileProgress / 100) / files.length) * 100),
+                        ),
+                      ).then(() => {
+                        uploaded += 1;
+                        changed();
+                      }),
+                    ),
+                  Promise.resolve(),
+                )
+                .catch((reason) =>
+                  setError(reason instanceof Error ? reason.message : 'Upload failed.'),
+                )
+                .finally(() => {
+                  setProgress(undefined);
+                  // Selecting the same file again must trigger another change event
+                  // after either a successful upload or a recoverable failure.
+                  input.value = '';
+                });
+            }}
+          />
+        </label>
+      )}
+      {!online && <p>Connect to the internet to download files.</p>}
       {awaitingParentSync && (
         <p role="status">Syncing this new task before its files can be uploaded…</p>
       )}
@@ -121,18 +127,30 @@ export function AttachmentPanel({
         </progress>
       )}
       {error && <p role="alert">{error}</p>}
+      {readOnly && !active.length && <p>No files attached.</p>}
       <ul>
         {active.map((item) => (
           <li key={item.id}>
-            <span>
-              {item.originalFilename} — {item.status.replace('_', ' ')}
-            </span>
-            {item.status === 'available' && (
+            {readOnly && item.status === 'available' ? (
+              <button
+                type="button"
+                className="quiet attachment-download-link"
+                disabled={!online}
+                onClick={() => run(downloadAttachment(item.id))}
+              >
+                {item.originalFilename}
+              </button>
+            ) : (
+              <span>
+                {item.originalFilename} — {item.status.replace('_', ' ')}
+              </span>
+            )}
+            {!readOnly && item.status === 'available' && (
               <button type="button" onClick={() => run(downloadAttachment(item.id))}>
                 Download
               </button>
             )}
-            {item.status === 'scan_failed' && (
+            {!readOnly && item.status === 'scan_failed' && (
               <button
                 type="button"
                 disabled={!online}
@@ -141,14 +159,16 @@ export function AttachmentPanel({
                 Retry scan
               </button>
             )}
-            <button
-              type="button"
-              className="quiet"
-              disabled={!online || item.status === 'scanning'}
-              onClick={() => run(removeAttachment(item.id, csrfToken))}
-            >
-              Remove
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                className="quiet"
+                disabled={!online || item.status === 'scanning'}
+                onClick={() => run(removeAttachment(item.id, csrfToken))}
+              >
+                Remove
+              </button>
+            )}
           </li>
         ))}
       </ul>

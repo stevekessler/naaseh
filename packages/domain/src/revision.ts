@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ulidSchema } from './primitives.js';
 import { entityTypeSchema } from './sync.js';
 import { urgencySchema } from './urgency.js';
+import type { Task } from './task.js';
 
 export const revisionOperationSchema = z.enum([
   'create',
@@ -83,3 +84,54 @@ export const entityRevisionSchema = z
   .strict();
 
 export type EntityRevision = z.infer<typeof entityRevisionSchema>;
+
+const taskRevisionFields = [
+  'label',
+  'memo',
+  'memoDocument',
+  'memoHidden',
+  'link',
+  'dueAt',
+  'dueKind',
+  'dueDate',
+  'dueTimeZone',
+  'repeatInterval',
+  'repeatUnit',
+  'assigneeId',
+  'categoryId',
+  'projectId',
+  'groupId',
+  'parentId',
+  'visibility',
+  'urgency',
+  'postItColor',
+  'percentComplete',
+  'status',
+  'completedAt',
+  'completedBy',
+  'lifecycle',
+  'completionState',
+  'archiveReason',
+  'archivedAt',
+  'archivedBy',
+  'currentCompletionEventId',
+] as const satisfies readonly (keyof Task)[];
+
+export function taskRevisionChanges(task: Task, previous?: Task) {
+  const changedFields: string[] = [];
+  const before: TaskRevision['after'] = {};
+  const after: TaskRevision['after'] = {};
+  for (const field of taskRevisionFields) {
+    const value = (snapshot: Task | undefined) =>
+      field === 'memoDocument'
+        ? snapshot?.memoDocument && JSON.stringify(snapshot.memoDocument)
+        : snapshot?.[field];
+    const oldValue = value(previous) ?? null;
+    const newValue = value(task) ?? null;
+    if (oldValue === newValue) continue;
+    changedFields.push(field);
+    if (previous) before[field] = oldValue;
+    after[field] = newValue;
+  }
+  return { changedFields, ...(previous ? { before } : {}), after };
+}

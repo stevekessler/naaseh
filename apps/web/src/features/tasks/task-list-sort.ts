@@ -2,7 +2,7 @@ import { urgencyValues, type CategoryRecord, type Project, type Task } from '@na
 import { taskDueDateKey } from '../../search/task-filters.js';
 import { db } from '../../db/database.js';
 
-export type TaskListSortKey = 'due' | 'category' | 'project' | 'priority';
+export type TaskListSortKey = 'name' | 'due' | 'category' | 'project' | 'priority';
 export type TaskListSortDirection = 'ascending' | 'descending';
 export interface TaskListSort {
   key: TaskListSortKey;
@@ -17,7 +17,7 @@ export async function loadTaskListSort(): Promise<TaskListSort | undefined> {
   try {
     const candidate = JSON.parse(setting.value) as Partial<TaskListSort>;
     if (
-      ['due', 'category', 'project', 'priority'].includes(candidate.key ?? '') &&
+      ['name', 'due', 'category', 'project', 'priority'].includes(candidate.key ?? '') &&
       ['ascending', 'descending'].includes(candidate.direction ?? '')
     )
       return candidate as TaskListSort;
@@ -49,6 +49,13 @@ function compareOptional(
   return direction === 'ascending' ? comparison : -comparison;
 }
 
+function compareDueDates(left: Task, right: Task, direction: TaskListSortDirection) {
+  const dateOrder = compareOptional(taskDueDateKey(left), taskDueDateKey(right), direction);
+  if (dateOrder) return dateOrder;
+  // On the same day, timed tasks precede date-only tasks in either direction.
+  return compareOptional(left.dueAt, right.dueAt, direction);
+}
+
 export function sortTasksForTable(
   tasks: readonly Task[],
   sort: TaskListSort | undefined,
@@ -66,6 +73,7 @@ export function sortTasksForTable(
       const categoryId = task.categoryId ?? projectRecords.get(task.projectId ?? '')?.categoryId;
       return categoryId ? categoryNames.get(categoryId) : undefined;
     }
+    if (sort.key === 'name') return task.label;
     return urgencyValues.indexOf(task.urgency);
   };
   const tieBreak = (left: Task, right: Task) =>
@@ -74,24 +82,11 @@ export function sortTasksForTable(
   return tasks
     .map((task, index) => ({ task, index }))
     .sort((left, right) => {
-      if (sort.key === 'due') {
-        const leftDate = taskDueDateKey(left.task);
-        const rightDate = taskDueDateKey(right.task);
-        const dateOrder = compareOptional(leftDate, rightDate, sort.direction);
-        if (dateOrder) return dateOrder;
-        if (leftDate && rightDate) {
-          const leftIsTimed = Boolean(left.task.dueAt);
-          const rightIsTimed = Boolean(right.task.dueAt);
-          if (leftIsTimed !== rightIsTimed) return leftIsTimed ? -1 : 1;
-          if (left.task.dueAt && right.task.dueAt) {
-            const timeOrder = compareOptional(left.task.dueAt, right.task.dueAt, sort.direction);
-            if (timeOrder) return timeOrder;
-          }
-        }
-        return tieBreak(left.task, right.task) || left.index - right.index;
-      }
       return (
-        compareOptional(value(left.task), value(right.task), sort.direction) ||
+        (sort.key === 'due'
+          ? compareDueDates(left.task, right.task, sort.direction)
+          : compareOptional(value(left.task), value(right.task), sort.direction)) ||
+        (sort.key === 'priority' ? compareDueDates(left.task, right.task, 'ascending') : 0) ||
         tieBreak(left.task, right.task) ||
         left.index - right.index
       );

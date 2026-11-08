@@ -35,7 +35,10 @@ import { postItPalette } from '../../styles/category-color.js';
 import { attachmentAccept, uploadAttachment } from '../attachments/attachment-client.js';
 import { drainSequentially } from '../../sync/sync-engine.js';
 import { db } from '../../db/database.js';
-import { DueDateField } from './DueDateField.js';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { loadTaskDueDefaults } from '../../db/preferences-repository.js';
+import { relativeDueValue } from './due-value.js';
+import { DueDateField, type DueDateValue } from './DueDateField.js';
 
 const MemoEditor = lazy(() =>
   import('../memos/MemoEditor.js').then(({ MemoEditor }) => ({ default: MemoEditor })),
@@ -129,12 +132,23 @@ export function TaskForm({
   const [memoDocument, setMemoDocument] = useState<MemoDocument>(
     task?.memoDocument ?? plainMemoDocument(task?.memo ?? ''),
   );
-  const initialTimed = task?.dueAt ? instantToLocalDue(task.dueAt) : undefined;
-  const [dueKind, setDueKind] = useState<'none' | 'date' | 'timed'>(
-    task?.dueKind ?? (task?.dueDate ? 'date' : task?.dueAt ? 'timed' : 'none'),
+  const dueDefaults = useLiveQuery(
+    () =>
+      !task && defaultAssigneeId
+        ? loadTaskDueDefaults(defaultAssigneeId)
+        : Promise.resolve(undefined),
+    [task?.id, defaultAssigneeId],
   );
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? initialTimed?.localDate ?? '');
-  const [dueTime, setDueTime] = useState(initialTimed?.localTime ?? '10:00');
+  const [editedDue, setEditedDue] = useState<DueDateValue | undefined>(() => {
+    if (!task) return undefined;
+    const timed = task.dueAt ? instantToLocalDue(task.dueAt) : undefined;
+    return {
+      dueKind: task.dueKind ?? (task.dueDate ? 'date' : task.dueAt ? 'timed' : 'none'),
+      dueDate: task.dueDate ?? timed?.localDate ?? '',
+      dueTime: timed?.localTime ?? '10:00',
+    };
+  });
+  const due = editedDue ?? relativeDueValue(dueDefaults);
   const [repeatInterval, setRepeatInterval] = useState(task?.repeatInterval ?? 1);
   const [repeatUnit, setRepeatUnit] = useState<TaskRepeatUnit | ''>(task?.repeatUnit ?? '');
   const [parentId, setParentId] = useState(task?.parentId ?? '');
@@ -150,6 +164,7 @@ export function TaskForm({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving) return;
+    const { dueKind, dueDate, dueTime } = editedDue ?? relativeDueValue(dueDefaults);
     const form = event.currentTarget;
     const data = new FormData(form);
     const value = (name: string) => String(data.get(name) ?? '').trim();
@@ -218,9 +233,7 @@ export function TaskForm({
       setAssigneeId(defaultAssigneeId ?? '');
       setAssigneeTouched(false);
       setMemoDocument(plainMemoDocument(''));
-      setDueKind('none');
-      setDueDate('');
-      setDueTime('10:00');
+      setEditedDue(undefined);
       setRepeatInterval(1);
       setRepeatUnit('');
       setParentId('');
@@ -245,13 +258,9 @@ export function TaskForm({
         </label>
         <DueDateField
           nestedDialog={nestedDialogs}
-          dueKind={dueKind}
-          dueDate={dueDate}
-          dueTime={dueTime}
+          {...due}
           onChange={(next) => {
-            setDueKind(next.dueKind);
-            setDueDate(next.dueDate);
-            setDueTime(next.dueTime);
+            setEditedDue(next);
             if (next.dueKind === 'none') setRepeatUnit('');
           }}
         />
@@ -295,7 +304,7 @@ export function TaskForm({
             }
           }}
         />
-        {dueKind !== 'none' ? (
+        {due.dueKind !== 'none' ? (
           <fieldset className="repeat-schedule-field">
             <legend>Repeat</legend>
             <select

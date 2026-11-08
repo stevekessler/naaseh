@@ -1,8 +1,7 @@
-import type { CategoryRecord, Project, Task, TaskRevision } from '@naaseh/domain';
+import type { CategoryRecord, Project, Task } from '@naaseh/domain';
 import { TaskList } from './TaskList.js';
 import { TaskActions } from './TaskActions.js';
 import { SubtaskTree } from './SubtaskTree.js';
-import { RevisionLog } from './RevisionLog.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from './TaskEditDialog.js';
@@ -13,7 +12,6 @@ export function TaskListPage({
   loading = false,
   error,
   selected,
-  revisions = [],
   onToggle,
   onSelect,
   onClose,
@@ -32,7 +30,6 @@ export function TaskListPage({
   loading?: boolean;
   error?: string;
   selected?: Task | undefined;
-  revisions?: TaskRevision[];
   onToggle: (task: Task) => void;
   onSelect: (task: Task) => void;
   onClose: () => void;
@@ -69,7 +66,7 @@ export function TaskListPage({
         tasks={tasks}
         onToggle={onToggle}
         onSelect={onSelect}
-        onDueDateChange={onUpdate}
+        onUpdate={onUpdate}
         onProgressChange={(task, percent) => onUpdate(task, { percentComplete: percent })}
         categories={categories}
         projects={projects}
@@ -112,8 +109,6 @@ export function TaskListPage({
                 />
                 <h3>Subtasks</h3>
                 <SubtaskTree parentId={selected.id} tasks={parentTasks} edit={onSelect} />
-                <h3>Revision history</h3>
-                <RevisionLog revisions={revisions} />
               </section>
             }
           />

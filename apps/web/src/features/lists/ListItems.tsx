@@ -10,7 +10,6 @@ import {
   type MemoDocument,
 } from '@naaseh/domain';
 import { ListItemRow } from './ListItemRow.js';
-import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import { attachmentAccept, uploadAttachment } from '../attachments/attachment-client.js';
 import { drainSequentially } from '../../sync/sync-engine.js';
 import { db } from '../../db/database.js';
@@ -379,13 +378,7 @@ export function ListItems({
                   onPromote={() => promote(item, name)}
                   destinationLists={destinationLists.filter((list) => list.id !== item.listId)}
                   onMove={(destinationListId) => move(item, destinationListId)}
-                  attachments={
-                    <AttachmentPanelForParent
-                      parentType="listItem"
-                      parentId={item.id}
-                      csrfToken={csrfToken}
-                    />
-                  }
+                  csrfToken={csrfToken}
                   reorderable={!sort && !query.trim()}
                 />
               );

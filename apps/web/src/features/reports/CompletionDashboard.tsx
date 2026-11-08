@@ -364,21 +364,23 @@ export function CompletionDashboard({
       </p>
       {chart.kind === 'ready' ? (
         <ol className="completion-chart" aria-label="Closed task totals by period">
-          {chart.visiblePeriods.map((bucket) => (
-            <li key={bucket.key}>
-              <span>{bucket.key}</span>
-              <span
-                className="completion-bar"
-                style={
-                  {
-                    '--completion-percent': `${(bucket.count / chart.maximum) * 100}%`,
-                  } as React.CSSProperties
-                }
-              >
-                {bucket.count}
-              </span>
-            </li>
-          ))}
+          {[...chart.visiblePeriods]
+            .sort((left, right) => right.key.localeCompare(left.key))
+            .map((bucket) => (
+              <li key={bucket.key}>
+                <span>{bucket.key}</span>
+                <span
+                  className="completion-bar"
+                  style={
+                    {
+                      '--completion-percent': `${(bucket.count / chart.maximum) * 100}%`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {bucket.count}
+                </span>
+              </li>
+            ))}
         </ol>
       ) : chart.kind === 'empty' ? (
         <p className="empty completion-empty" role="status">

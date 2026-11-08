@@ -10,6 +10,7 @@ const personalStackPartition = (scope: PersonalStackKeyScope) =>
 
 export const keys = {
   user: (id: string) => ({ PK: `USER#${id}`, SK: 'PROFILE' }),
+  taskDueDefaults: (userId: string) => ({ PK: `USER#${userId}`, SK: 'TASK_DUE_DEFAULTS' }),
   username: (name: string) => ({ PK: `USERNAME#${name}`, SK: 'USER' }),
   provisionRequest: (token: string) => ({ PK: `PROVISION#${token}`, SK: 'RESULT' }),
   session: (hash: string) => ({ PK: `SESSION#${hash}`, SK: 'SESSION' }),

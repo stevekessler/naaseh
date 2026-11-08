@@ -5,9 +5,10 @@ import {
   type TaskRevision,
   contentAudienceFor,
   taskSchema,
+  taskRevisionChanges,
 } from '@naaseh/domain';
 import { commitTask, getRecord } from '../shared/store.js';
-import { QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { paginateQuery, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { prepareAudienceChange } from '../sync/change-feed-repository.js';
 import { administratorTaskFeedChange, privacyFeedChanges } from './privacy-transition.js';
@@ -92,59 +93,15 @@ export const findTask = (id: string) =>
     item ? taskSchema.parse(item.data) : undefined,
   );
 
-const revisionFieldAllowlist = new Set<keyof Task>([
-  'memo',
-  'memoDocument',
-  'link',
-  'dueAt',
-  'dueKind',
-  'dueDate',
-  'dueTimeZone',
-  'repeatInterval',
-  'repeatUnit',
-  'assigneeId',
-  'categoryId',
-  'groupId',
-  'parentId',
-  'visibility',
-  'urgency',
-  'postItColor',
-  'status',
-  'completedAt',
-  'completedBy',
-  'version',
-]);
-
-function safeRevisionValues(task: Task | undefined, changedFields: string[]) {
-  if (!task) return undefined;
-  return Object.fromEntries(
-    changedFields
-      .filter((field) => revisionFieldAllowlist.has(field as keyof Task))
-      .map((field) => {
-        const value = task[field as keyof Task];
-        const revisionValue: string | number | boolean | null =
-          field === 'memoDocument'
-            ? value
-              ? JSON.stringify(value)
-              : null
-            : typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
-              ? value
-              : null;
-        return [field, revisionValue];
-      }),
-  ) as TaskRevision['after'];
-}
 export async function saveTaskMutation(
   task: Task,
   actorId: string,
   mutationId: string,
   operation: TaskRevision['operation'],
-  changedFields: string[],
   previous?: Task,
   dependencies: TaskMutationDependencies = defaultDependencies,
   sourceClientId?: string,
 ) {
-  const revisionChangedFields = changedFields.filter((field) => field !== 'percentComplete');
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -153,10 +110,8 @@ export async function saveTaskMutation(
     version: task.version,
     changedAt: task.updatedAt,
     operation,
-    changedFields: revisionChangedFields,
+    ...taskRevisionChanges(task, previous),
     ...(sourceClientId ? { sourceClientId } : {}),
-    ...(previous ? { before: safeRevisionValues(previous, revisionChangedFields) } : {}),
-    after: safeRevisionValues(task, revisionChangedFields) ?? {},
     syncOutcome: 'applied',
   };
   let lastError: unknown;
@@ -189,16 +144,39 @@ export async function saveTaskMutation(
   }
   throw lastError;
 }
-export async function listRevisions(taskId: string): Promise<TaskRevision[]> {
+function revisionQuery(taskId: string) {
+  return {
+    TableName: tableName,
+    KeyConditionExpression: 'PK=:pk AND begins_with(SK,:rev)',
+    ExpressionAttributeValues: { ':pk': `TASK#${taskId}`, ':rev': 'REV#' },
+    ConsistentRead: true,
+  };
+}
+
+export async function countTaskRevisions(taskId: string) {
+  let count = 0;
+  for await (const page of paginateQuery(
+    { client: dynamodb },
+    { ...revisionQuery(taskId), Select: 'COUNT' },
+  ))
+    count += page.Count ?? 0;
+  return count;
+}
+
+export async function listRevisions(taskId: string, limit: number, cursor?: string) {
+  const PK = `TASK#${taskId}`;
   const result = await dynamodb.send(
     new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: 'PK=:pk AND begins_with(SK,:rev)',
-      ExpressionAttributeValues: { ':pk': `TASK#${taskId}`, ':rev': 'REV#' },
+      ...revisionQuery(taskId),
       ScanIndexForward: false,
+      Limit: limit,
+      ...(cursor ? { ExclusiveStartKey: { PK, SK: cursor } } : {}),
     }),
   );
-  return (result.Items ?? []).map((item) => item.data as TaskRevision);
+  return {
+    items: (result.Items ?? []).map((item) => item.data as TaskRevision),
+    cursor: typeof result.LastEvaluatedKey?.SK === 'string' ? result.LastEvaluatedKey.SK : null,
+  };
 }
 
 export async function findCompletionEvent(id: string) {
@@ -215,17 +193,6 @@ export async function saveTaskLifecycleMutation(
   completionEvent?: CompletionEvent,
   sourceClientId?: string,
 ) {
-  const changedFields = [
-    'status',
-    'lifecycle',
-    'completionState',
-    'archiveReason',
-    'archivedAt',
-    'archivedBy',
-    'completedAt',
-    'completedBy',
-    'currentCompletionEventId',
-  ];
   const revision: TaskRevision = {
     id: createUlid(),
     taskId: task.id,
@@ -234,9 +201,7 @@ export async function saveTaskLifecycleMutation(
     version: task.version,
     changedAt: task.updatedAt,
     operation,
-    changedFields,
-    before: safeRevisionValues(previous, changedFields),
-    after: safeRevisionValues(task, changedFields) ?? {},
+    ...taskRevisionChanges(task, previous),
     syncOutcome: 'applied',
     ...(sourceClientId ? { sourceClientId } : {}),
   };

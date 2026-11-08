@@ -3,6 +3,22 @@ import { z } from 'zod';
 export const dueCalendarDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const localTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
 
+export const taskDueDefaultsSchema = z
+  .object({
+    days: z.number().int().min(0).max(3650),
+    timeMode: z.enum(['none', 'clock', 'relative']),
+    time: localTimeSchema,
+    hours: z.number().int().min(0).max(168),
+  })
+  .strict();
+export type TaskDueDefaults = z.infer<typeof taskDueDefaultsSchema>;
+
+export const taskDueDefaultsRequestSchema = z
+  .object({
+    defaults: taskDueDefaultsSchema.nullable(),
+  })
+  .strict();
+
 function explicitZoneInstant(
   parts: { year: number; month: number; day: number; hour: number; minute: number },
   timeZone: string,
