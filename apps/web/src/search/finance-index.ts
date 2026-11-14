@@ -407,3 +407,55 @@ export class FinanceTransactionIndex {
     this.documents.clear();
   }
 }
+
+export interface FinanceBrowseDocument extends FinanceSearchDocument {
+  accountNames: string[];
+  effectiveAt: string;
+  currency: string;
+  amountMinor: number;
+  checkNumber?: string;
+}
+
+export interface FinanceWorkerRequest {
+  documents: FinanceBrowseDocument[];
+  filters: import('@naaseh/contracts').FinanceQueryFilters;
+}
+
+/** The worker has one owner and is terminated on cancellation or global Finance lock. */
+export function filterFinanceDocuments(
+  request: FinanceWorkerRequest,
+  signal: AbortSignal,
+  onProgress?: (progress: FinanceIndexProgress) => void,
+) {
+  if (signal.aborted) return Promise.reject<string[]>(signal.reason);
+  return new Promise<string[]>((resolve, reject) => {
+    const worker = new Worker(new URL('./finance-index.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    const clear = () => {
+      worker.terminate();
+      signal.removeEventListener('abort', cancel);
+      unregister();
+    };
+    const cancel = () => {
+      clear();
+      reject(new DOMException('Finance filtering cancelled.', 'AbortError'));
+    };
+    const unregister = registerFinanceSearchIndex({ clear: cancel });
+    signal.addEventListener('abort', cancel, { once: true });
+    worker.onmessage = ({
+      data,
+    }: MessageEvent<{ ids?: string[]; progress: FinanceIndexProgress }>) => {
+      onProgress?.(data.progress);
+      if (data.ids) {
+        clear();
+        resolve(data.ids);
+      }
+    };
+    worker.onerror = () => {
+      clear();
+      reject(new Error('Cached transaction filtering failed.'));
+    };
+    worker.postMessage(request);
+  });
+}

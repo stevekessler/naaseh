@@ -1,130 +1,14 @@
-import { expect, test, type Page } from '@playwright/test';
-import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
+import { expect, test } from '@playwright/test';
+import {
+  seedFinanceSearch,
+  type SeedFinanceValue,
+  signIn,
+  mockUnprotectedFinanceSecurity,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
-type SeedValue = {
-  id: string;
-  entityType: string;
-  scopeKey: string;
-  accountId?: string;
-  occurredAt?: string;
-  value: Record<string, unknown>;
-};
-
-async function seedFinanceSearch(page: Page, values: SeedValue[]) {
-  // Synthetic server acceptance for this UI fixture; real proof authentication/revocation has API tests.
-  await page.route('**/api/v1/sync/pull', async (route) => {
-    const body = route.request().postDataJSON() as {
-      financeCacheOnly?: boolean;
-      financeCacheProtocol?: number;
-      financeCacheProof?: string;
-      financeCursor?: Record<string, number>;
-    };
-    if (!body.financeCacheOnly) return route.fallback();
-    expect(body.financeCacheProtocol).toBe(1);
-    expect(body.financeCacheProof).toBe('fc1.synthetic.fixture.proof');
-    return route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        changes: [],
-        financeChanges: [],
-        cursor: {},
-        financeCursor: body.financeCursor,
-        financeCache: { status: 'current', proof: 'fc1.synthetic.fixture.proof' },
-      }),
-    });
-  });
-  await page.evaluate(async (input) => {
-    const request = indexedDB.open('naaseh');
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    const keyTransaction = database.transaction('cryptoKeys', 'readwrite');
-    const keyStore = keyTransaction.objectStore('cryptoKeys');
-    const currentRequest = keyStore.get('device');
-    const current = await new Promise<{ key: CryptoKey } | undefined>((resolve, reject) => {
-      currentRequest.onsuccess = () =>
-        resolve(currentRequest.result as { key: CryptoKey } | undefined);
-      currentRequest.onerror = () => reject(currentRequest.error);
-    });
-    const key =
-      current?.key ??
-      (await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
-        'encrypt',
-        'decrypt',
-      ]));
-    if (!current) keyStore.put({ id: 'device', key });
-    await new Promise<void>((resolve, reject) => {
-      keyTransaction.oncomplete = () => resolve();
-      keyTransaction.onerror = () => reject(keyTransaction.error);
-    });
-    const encoder = new TextEncoder();
-    const encode = (bytes: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
-    const cacheGeneration = crypto.randomUUID();
-    const encrypted = await Promise.all(
-      input.map(async (item) => {
-        const iv = crypto.getRandomValues(new Uint8Array(12));
-        const ciphertext = await crypto.subtle.encrypt(
-          {
-            name: 'AES-GCM',
-            iv,
-            additionalData: encoder.encode(`finance:${item.entityType}:${item.id}:v1`),
-          },
-          key,
-          encoder.encode(JSON.stringify(item.value)),
-        );
-        return {
-          id: item.id,
-          entityType: item.entityType,
-          scopeKey: item.scopeKey,
-          cacheGeneration,
-          version: 1,
-          updatedAt: '2026-10-28T12:00:00.000Z',
-          value: { iv: encode(iv.buffer), ciphertext: encode(ciphertext) },
-          ...(item.accountId ? { accountId: item.accountId } : {}),
-          ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
-        };
-      }),
-    );
-    const proofIv = crypto.getRandomValues(new Uint8Array(12));
-    const proofCiphertext = await crypto.subtle.encrypt(
-      {
-        name: 'AES-GCM',
-        iv: proofIv,
-        additionalData: encoder.encode('finance:delivery:local-steve:v1'),
-      },
-      key,
-      encoder.encode(
-        JSON.stringify({
-          ownerId: 'local-steve',
-          cursor: {},
-          cacheGeneration,
-          cacheProof: 'fc1.synthetic.fixture.proof',
-        }),
-      ),
-    );
-    const write = database.transaction(['secureFinanceRecords', 'settings'], 'readwrite');
-    write.objectStore('settings').put({
-      key: 'finance-delivery:local-steve',
-      value: JSON.stringify({
-        version: 1,
-        value: { iv: encode(proofIv.buffer), ciphertext: encode(proofCiphertext) },
-      }),
-    });
-    const store = write.objectStore('secureFinanceRecords');
-    for (const record of encrypted) store.put(record);
-    await new Promise<void>((resolve, reject) => {
-      write.oncomplete = () => resolve();
-      write.onerror = () => reject(write.error);
-    });
-    database.close();
-  }, values);
-}
-
-const records: SeedValue[] = [
+const records: SeedFinanceValue[] = [
   {
     id: 'account-a',
     entityType: 'financeAccount',

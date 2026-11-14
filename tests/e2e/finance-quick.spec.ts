@@ -4,6 +4,7 @@ import {
   mockUnprotectedFinanceSecurity,
   mockFinanceSnapshotEvidence,
   financeSnapshotFixtureHeaders,
+  mockFinanceTransactionBrowsing,
 } from './enhanced-helpers.js';
 
 test('completes the representative Finance account, CSV, split, budget, and offline journey', async ({
@@ -113,7 +114,8 @@ test('completes the representative Finance account, CSV, split, budget, and offl
       body: JSON.stringify({ items: [transaction], cursor: null }),
     }),
   );
-  await page.route(`**/api/v1/finance/transactions/${ids.transaction}`, (route) =>
+  await mockFinanceTransactionBrowsing(page, () => [transaction]);
+  await page.route(`**/api/v1/finance/transactions/${ids.transaction}?browse=1`, (route) =>
     route.fulfill({
       status: 200,
       headers: financeSnapshotFixtureHeaders,
@@ -212,7 +214,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
 
   await page.getByRole('button', { name: 'Transactions', exact: true }).click();
   await page.getByLabel('Search transactions').fill('Household purchase');
-  await page.getByRole('button', { name: 'Review Household purchase' }).click();
+  await page.getByRole('link', { name: 'Review Household purchase' }).click();
   await page.getByRole('button', { name: 'Add split' }).click();
   await page.getByRole('button', { name: 'Add split' }).click();
   await page.getByLabel('Split 1 amount').fill('-60.00');

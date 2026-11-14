@@ -4961,3 +4961,54 @@ html:has(.task-undo-notices) {
   margin: 0;
   padding: 0 !important;
 }
+
+.finance-transaction-table {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.finance-transaction-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.finance-transaction-filters label {
+  display: grid;
+  min-width: 0;
+}
+
+.finance-transaction-filters :is(input, select) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.finance-transaction-scroll {
+  overflow: auto;
+  max-width: 100%;
+}
+
+.finance-transaction-scroll table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.finance-transaction-scroll :is(th, td) {
+  padding: 0.5rem;
+  text-align: start;
+  vertical-align: top;
+}
+
+.finance-transaction-modal {
+  width: min(36rem, calc(100% - 2rem));
+  max-height: calc(var(--usable-viewport-height) - var(--safe-top) - var(--safe-bottom) - 2rem);
+  overflow: auto;
+  padding: 1.25rem;
+  border: 0;
+  border-radius: 0.75rem;
+}
+
+.finance-transaction-modal::backdrop {
+  background: rgb(0 0 0 / 55%);
+}

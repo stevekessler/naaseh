@@ -374,10 +374,12 @@ export class FinanceReadRepository {
       throw new Error('Finance query cursor did not advance.');
     if (examined > FINANCE_MAX_EXAMINED || rows.length > FINANCE_MAX_EXAMINED)
       throw new Error('Finance examined-row budget exceeded.');
+    const { transactionBrowse, ...summaryFilters } = filters;
     const useAggregates =
       aggregateOnly &&
       partition === financeReadKeys.account(accountId) &&
-      supportsFinanceAccountSummary(filters);
+      (!transactionBrowse || requireCompact) &&
+      supportsFinanceAccountSummary(summaryFilters);
     const compact = new Map<Row, FinanceAccountReadSummary>();
     if (requireCompact && !useAggregates)
       throw new Error('Finance ordered preview scope is invalid.');
@@ -489,7 +491,18 @@ export class FinanceReadRepository {
         })),
       ),
     ];
-    const stepTotals = sumSpendByCurrency(allSlices);
+    const stepTotals = sumSpendByCurrency(
+      filters.transactionBrowse
+        ? matches.map(({ fact }) => ({
+            transactionId: fact.id,
+            accountId: fact.accountId,
+            effectiveAt: fact.effectiveAt,
+            currency: fact.currency,
+            currencyExponent: fact.currencyExponent,
+            amountMinor: fact.amountMinor,
+          }))
+        : allSlices,
+    );
     const pageResult: FinanceReadResult = {
       items,
       ...(nextKey

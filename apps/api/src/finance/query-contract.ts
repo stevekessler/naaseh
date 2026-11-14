@@ -22,6 +22,9 @@ export interface FinanceFact {
   merchantId?: string;
   checkNumber?: string;
   sourceVersion: number;
+  paymentType?: string;
+  reviewState?: string;
+  classificationNames?: string[];
   textOrdinal?: number;
   textMonth?: string;
   sourceStatus?: 'active' | 'archived' | 'tombstone';

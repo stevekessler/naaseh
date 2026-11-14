@@ -28,6 +28,9 @@ vi.mock('../../src/db/finance-repository.js', () => ({ financeDeviceKey: f.devic
 vi.mock('../../src/features/finance/csv/csv-import.js', () => ({
   queueEncryptedCsvChunks: f.queue,
 }));
+vi.mock('../../src/features/finance/transactions/TransactionTable.js', () => ({
+  TransactionTable: () => null,
+}));
 vi.mock('../../src/features/finance/csv/CsvImportWizard.js', () => ({
   CsvImportWizard: ({ onCommit }: { onCommit: (input: unknown) => Promise<void> }) => (
     <button

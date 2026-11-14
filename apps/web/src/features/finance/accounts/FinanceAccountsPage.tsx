@@ -41,6 +41,7 @@ export function FinanceAccountsPage(props: {
   csrfToken: string;
   initialAccountId?: string;
   onOpenAccount?: (accountId: string) => void;
+  onOpenTransaction?: (id: string, focusId: string) => void;
 }) {
   return <FinanceAccountsContent key={props.ownerId} {...props} />;
 }
@@ -50,11 +51,13 @@ function FinanceAccountsContent({
   csrfToken,
   initialAccountId,
   onOpenAccount,
+  onOpenTransaction,
 }: {
   ownerId: string;
   csrfToken: string;
   initialAccountId?: string;
   onOpenAccount?: (accountId: string) => void;
+  onOpenTransaction?: (id: string, focusId: string) => void;
 }) {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [error, setError] = useState('');
@@ -109,7 +112,8 @@ function FinanceAccountsContent({
       let retained: FinanceApiSnapshot<Account[]> | undefined;
       try {
         retained = await loadFinanceApiSnapshot(
-          async (request) => (await request<{ items: Account[] }>('/finance/accounts')).items,
+          async (request) =>
+            (await request<{ items: Account[] }>('/finance/accounts', { browse: true })).items,
         );
         if (current !== serial.current) {
           disposeFinanceApiSnapshot(retained);
@@ -439,6 +443,7 @@ function FinanceAccountsContent({
           <FinanceAccountDetail
             key={selectedAccount.id}
             account={selectedAccount}
+            {...(onOpenTransaction ? { onOpenTransaction } : {})}
             csrfToken={csrfToken}
             {...(removalImpact ? { removalImpact } : {})}
             onPreviewRemoval={() => previewRemoval(selectedAccount.id)}

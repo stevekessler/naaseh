@@ -23,8 +23,13 @@ import {
   checkIndexedCsvDuplicates,
   createFinanceQueryRuntime,
   executeFinanceQueryWorker,
+  listFinanceBrowseKeys,
 } from './query-runtime.js';
 import { ulidSchema } from '@naaseh/domain';
+import {
+  browseFinanceTransactions,
+  parseTransactionBrowseRequest,
+} from './transaction-query-service.js';
 import {
   csvDuplicateCheckSchema,
   financeQueryStartSchema,
@@ -43,7 +48,7 @@ const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const financeSnapshotPaths = [
   /^\/api\/v1\/finance\/(?:accounts(?:\/[0-9A-HJKMNP-TV-Z]{26}\/transactions)?|connections|categories|merchants(?:\/[0-9A-HJKMNP-TV-Z]{26})?|tasks\/[0-9A-HJKMNP-TV-Z]{26}\/link|review-issues)$/u,
-  /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?::[1-9][0-9]{0,4})?$/u,
+  /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?$/u,
   /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?\/matches$/u,
   /^\/api\/v1\/finance\/(?:budgets(?:\/[0-9A-HJKMNP-TV-Z]{26}(?:\/reusable-offers)?)?|reusable-items)$/u,
   /^\/api\/v1\/finance\/records\/(?:transaction\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?|(?:account|reusable-item|match|category|merchant)\/[0-9A-HJKMNP-TV-Z]{26})\/deletion-preview$/u,
@@ -326,9 +331,64 @@ export function createFinanceHandler(
         await authorize(gate);
         return json(200, result);
       }
+      const metadata = /^\/api\/v1\/finance\/(accounts|categories|merchants|review-issues)$/u.exec(
+        event.rawPath,
+      );
+      if (
+        event.requestContext.http.method === 'GET' &&
+        metadata &&
+        event.headers['x-finance-browse'] === '1'
+      ) {
+        const role =
+          (event.requestContext as { authorizer?: { lambda?: { role?: string } } }).authorizer
+            ?.lambda?.role === 'admin'
+            ? 'admin'
+            : 'user';
+        const source = new FinanceSyncSourceGuard({ userId: auth.userId, role });
+        const [collection, entityType] = {
+          accounts: ['accounts', 'financeAccount'],
+          categories: ['categories', 'financeCategory'],
+          merchants: ['merchants', 'financeMerchant'],
+          'review-issues': ['reviewIssues', 'financeReviewIssue'],
+        }[metadata[1] as 'accounts' | 'categories' | 'merchants' | 'review-issues'] as [
+          'accounts' | 'categories' | 'merchants' | 'reviewIssues',
+          string,
+        ];
+        const ids = await listFinanceBrowseKeys(auth.userId, collection);
+        const items = [];
+        for (const id of ids) {
+          const value = await source.readCanonicalSource(entityType, id);
+          if (!value || (collection === 'merchants' && value.status !== 'active')) continue;
+          if (collection === 'reviewIssues' && Array.isArray(value.candidateIds)) {
+            const candidates = [];
+            for (const candidateId of value.candidateIds) {
+              if (typeof candidateId !== 'string') continue;
+              const candidate = await source.readCanonicalSource('financeTransaction', candidateId);
+              if (candidate && candidate.accountId === value.accountId) candidates.push(candidate);
+            }
+            items.push({ ...value, candidates });
+          } else items.push(value);
+        }
+        await source.assertCurrent();
+        await authorize(gate);
+        const proof = snapshotRequested
+          ? await new FinanceCacheProofService({
+              userId: auth.userId,
+              role,
+              secret: process.env.CURSOR_SIGNING_SECRET ?? '',
+              authorize: () => authorize(gate),
+            }).issue(source, priorSnapshot)
+          : undefined;
+        return json(
+          200,
+          { items, nextCursor: null },
+          proof ? { 'x-finance-cache-proof': proof } : {},
+        );
+      }
+
       const transactionPath = /^\/api\/v1\/finance\/transactions\/([^/]+)$/u.exec(event.rawPath);
       if (event.requestContext.http.method === 'GET' && transactionPath) {
-        const id = transactionPath[1]!;
+        const id = decodeURIComponent(transactionPath[1]!);
         const legacy = /^([0-9A-HJKMNP-TV-Z]{26}):([1-9][0-9]{0,4})$/u.exec(id);
         if (!ulidSchema.safeParse(id).success && !(legacy && Number(legacy[2]) <= 50000))
           return problem(404, 'finance_not_found', 'Finance record not found.', correlationId);
@@ -338,7 +398,10 @@ export function createFinanceHandler(
             ? 'admin'
             : 'user';
         const source = new FinanceSyncSourceGuard({ userId: auth.userId, role });
-        const value = await source.readCanonicalSource('financeTransaction', id);
+        const value: Record<string, unknown> | undefined =
+          event.queryStringParameters?.browse === '1'
+            ? await source.readTransactionForBrowsing(id)
+            : await source.readCanonicalSource('financeTransaction', id);
         if (!value)
           return problem(404, 'finance_not_found', 'Finance record not found.', correlationId);
         if (
@@ -363,11 +426,19 @@ export function createFinanceHandler(
         }
         return json(200, value);
       }
+      // The web client opts into the paged shape. Legacy clients keep their existing DTOs.
+      const browsePath = /^\/api\/v1\/finance\/(?:accounts\/([^/]+)\/)?transactions$/u.exec(
+        event.rawPath,
+      );
+      const browsing =
+        event.requestContext.http.method === 'GET' &&
+        browsePath &&
+        event.queryStringParameters?.browse === '1';
       // Resolve owner-only bounded jobs before the legacy registry hydrates scope data.
       const queryPath = /^\/api\/v1\/finance\/queries\/([^/]+)(\/rows)?$/.exec(event.rawPath);
       const createsQuery =
         event.requestContext.http.method === 'POST' && event.rawPath === '/api/v1/finance/queries';
-      if ((event.requestContext.http.method === 'GET' && queryPath) || createsQuery) {
+      if ((event.requestContext.http.method === 'GET' && queryPath) || createsQuery || browsing) {
         const request = createsQuery
           ? financeQueryStartSchema.parse(JSON.parse(event.body ?? '{}'))
           : queryPath?.[2]
@@ -385,6 +456,20 @@ export function createFinanceHandler(
             return job.userId === gate.userId && job.securityRevision === current.securityRevision;
           },
         });
+        if (browsing) {
+          const params = new URLSearchParams(event.rawQueryString);
+          const defaultAccounts =
+            !browsePath?.[1] && !params.has('accountIds[]')
+              ? await listFinanceBrowseKeys(auth.userId, 'accounts')
+              : undefined;
+          const result = await browseFinanceTransactions(
+            jobs,
+            { userId: auth.userId, securityRevision: visit.securityRevision },
+            parseTransactionBrowseRequest(event.rawQueryString, browsePath?.[1], defaultAccounts),
+          );
+          await authorize(gate);
+          return json(result.rowsState === 'searching' ? 202 : 200, result);
+        }
         if (createsQuery) {
           const created = await jobs.start(
             auth.userId,

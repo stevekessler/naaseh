@@ -1,3 +1,7 @@
+import {
+  TransactionFilterContext,
+  type TransactionFilterState,
+} from '../features/finance/transactions/transaction-filter-state.js';
 import { useFinanceSession } from '../features/finance/security/use-finance-session.js';
 import { peekFinanceAccess } from '../features/finance/security/finance-access.js';
 import { FinanceAccessBoundary } from '../features/finance/security/FinanceUnlock.js';
@@ -290,6 +294,10 @@ export function App() {
     'valid' | 'locked' | 'retry' | 'wrong_account'
   >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
   useFinanceSession(session?.userId, session?.csrfToken, sessionValidation === 'valid');
+  const transactionFilters = useMemo(
+    () => new Map<string, TransactionFilterState>(),
+    [session?.userId],
+  );
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
@@ -309,9 +317,7 @@ export function App() {
     | 'journal'
   >(initialRoute.section);
   const [financeRoute, setFinanceRoute] = useState<FinanceRoute>(() =>
-    initialRoute.section === 'finance'
-      ? initialRoute
-      : { section: 'finance', view: 'dashboard' },
+    initialRoute.section === 'finance' ? initialRoute : { section: 'finance', view: 'dashboard' },
   );
   useEffect(() => {
     peekFinanceAccess()?.visitFinance(section === 'finance' || section === 'search');
@@ -912,11 +918,7 @@ export function App() {
     const params = new URLSearchParams(safeSearchState(filters.query, filters));
     if (taskTab === 'filtered') params.set('taskTab', 'filtered');
     const query = taskTab === 'all' ? '' : params.toString();
-    history.replaceState(
-      history.state,
-      '',
-      `${location.pathname}${query ? `?${query}` : ''}`,
-    );
+    history.replaceState(history.state, '', `${location.pathname}${query ? `?${query}` : ''}`);
   }, [filters, taskTab, section]);
   const synchronize = useCallback(
     async (fullReplay = false) => {
@@ -1347,13 +1349,15 @@ export function App() {
                 setSection('tasks');
               }}
             >
-              <FinanceLandingPage
-                ownerId={session.userId}
-                role={session.role}
-                csrfToken={session.csrfToken}
-                route={financeRoute}
-                navigate={(route, state) => navigate(route, false, state)}
-              />
+              <TransactionFilterContext.Provider value={transactionFilters}>
+                <FinanceLandingPage
+                  ownerId={session.userId}
+                  role={session.role}
+                  csrfToken={session.csrfToken}
+                  route={financeRoute}
+                  navigate={(route, state) => navigate(route, false, state)}
+                />
+              </TransactionFilterContext.Provider>
             </FinanceAccessBoundary>
           ) : section === 'journal' ? (
             <JournalPage

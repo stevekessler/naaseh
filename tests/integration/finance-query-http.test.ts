@@ -107,6 +107,27 @@ describe('bounded Finance query status HTTP delivery', () => {
     expect(f.status).not.toHaveBeenCalled();
   });
 
+  it('starts a filtered account query before any legacy scope hydration', async () => {
+    const f = fixture();
+    f.event.rawPath = '/api/v1/finance/accounts/' + id + '/transactions';
+    f.event.queryStringParameters = { browse: '1' };
+    f.event.rawQueryString = 'browse=1&text=Market&amount=-1250&checkNumber=000123';
+    expect((await f.handler(f.event)).statusCode).toBe(200);
+    expect(f.start).toHaveBeenCalledExactlyOnceWith(
+      'owner',
+      4,
+      expect.objectContaining({
+        accountIds: [id],
+        filters: expect.objectContaining({ amount: -1250, checkNumber: '000123', text: 'Market' }),
+      }),
+    );
+    expect(f.page).toHaveBeenCalledExactlyOnceWith('owner', id, { limit: 50 });
+    expect(f.hydrate).not.toHaveBeenCalled();
+    f.event.rawQueryString += '&accountIds%5B%5D=01K7Q0Y0000000000000000002';
+    expect((await f.handler(f.event)).statusCode).toBe(400);
+    expect(f.start).toHaveBeenCalledOnce();
+  });
+
   it('rejects invalid page bounds before constructing its runtime', async () => {
     const f = fixture();
     f.event.rawPath += '/rows';

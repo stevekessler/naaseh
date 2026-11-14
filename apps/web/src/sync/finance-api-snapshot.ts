@@ -20,7 +20,10 @@ export interface FinanceApiSnapshot<T> {
   readonly token: unique symbol;
   readonly __value?: T;
 }
-export type FinanceSnapshotRequest = <T>(path: `/finance/${string}`) => Promise<T>;
+export type FinanceSnapshotRequest = <T>(
+  path: `/finance/${string}`,
+  options?: { browse?: true },
+) => Promise<T>;
 interface SnapshotContext {
   access: FinanceAccessController;
   generation: string;
@@ -58,12 +61,18 @@ export async function loadFinanceApiSnapshot<T>(
       }
       const proofs = previous.cacheProof ? [previous.cacheProof] : [];
       let received = 0;
-      const request: FinanceSnapshotRequest = <V>(path: `/finance/${string}`) =>
+      const request: FinanceSnapshotRequest = <V>(
+        path: `/finance/${string}`,
+        options?: { browse?: true },
+      ) =>
         financeRequest<V>(
           path,
           {
             signal,
-            headers: { 'x-finance-cache-protocol': '1' },
+            headers: {
+              'x-finance-cache-protocol': '1',
+              ...(options?.browse ? { 'x-finance-browse': '1' } : {}),
+            },
           },
           async (input, options) => {
             const response = await fetch(input, options);

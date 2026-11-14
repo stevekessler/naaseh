@@ -1,5 +1,57 @@
 # Finance Experience Expansion Implementation Validation
 
+## US3 account and multi-account transaction browsing — 2026-11-14
+
+The web transaction table uses the existing owner-bound query jobs, bounded
+account indexes and canonical point reads. Scope and filter bindings are checked
+before delivering rows or exact counts. Transaction browsing totals sum signed
+principal by currency. Detailed budget and refund references are resolved using
+current source access, and restricted linked identities are omitted. Existing
+Apple requests retain their established routes and response shapes. Transfers
+and refund editing can load later candidate pages through the same bounded query
+and verify each candidate before showing it.
+
+Synthetic query tests use up to 1,250 transactions per account and exercise
+sparse and zero-match results, bounded reads, independent row and aggregate
+readiness, and release under revoked source access. The focused HTTP test verifies
+that an account table request is handled before the legacy scope loader and rejects
+attempts to broaden its account. The cold fixture gates require actual rows or
+confirmed empty results within two seconds and exact count/totals within ten.
+
+Browser journeys cover account and multi-account table entry, combined filters
+and reset, direct transaction entry, back and forward navigation, scroll and
+keyboard focus restoration, and navigation from an authorized budget link to its
+full page. At 375px the table scrolls within its own region and the page fits
+the viewport. In the disconnected API fixture the browser runs the memory-only
+worker against verified encrypted cache data, shows cache freshness and coverage,
+and retains filters when it rechecks online access. The built app's service worker
+precache includes the transaction filtering worker. Receipt and task data are
+reserved for their owning stories.
+
+The focused contract, integration and component checks passed **50 tests in 6
+files / 2.34 seconds real**. The 12 new browser cases passed across Chromium,
+WebKit, iPhone and iPad. The combined focused browser run, including candidate
+pagination and existing editing journeys, passed **38 / 2 existing skips /
+40 selected / 34.52 seconds real**.
+
+| Local gate | Result | Real time |
+| --- | --- | --- |
+| Required validation | 1,886 passed in 485 files, plus runtime, typecheck, lint and builds | 69.67 s |
+| Standalone tests | 1,886 passed in 485 files | 55.41 s |
+| Quick Playwright | 31 passed | 28.65 s |
+| Full Playwright | 572 passed, 28 existing skips, 600 selected | 435.13 s |
+
+Node 24.22.2 and Playwright 1.64.1 were used. The quick selection, required test
+configuration, browser projects, retries and timeouts were retained. Earlier
+diagnostics exposed stale browser and component fixtures and loss of filters
+when Finance refreshed on reconnect. The corrected validation sequence passed
+with zero failures. Phase 8 completes T072–T081, bringing the checked task count
+to **80 of 166**.
+
+The 100,000-transaction p95 profile, real DynamoDB latency, combined AWS cost and
+hosted acceptance remain deferred under T018. The approved combined AWS ceiling is **$6.50 per month including
+contingency**, and the migration remains unrun.
+
 > Current local checkpoint (November 14, US10 manual transaction entry complete):
 > 70/166 tasks checked. T064–T071 are complete. Manual debit/credit entry works for
 > every editable account type/source with exact validation, current-access fencing,
