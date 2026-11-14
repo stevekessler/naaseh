@@ -12,6 +12,7 @@ import {
 import { FinanceUnitOfWork, financeLocatorKey } from '../../apps/api/src/finance/unit-of-work.js';
 import { financePersistenceFixture } from '../fixtures/finance/persistence.js';
 import { buildExperienceFixture, experienceId } from '../fixtures/finance/experience.js';
+import { SpendProjectionService } from '../../apps/api/src/finance/spend-projection-service.js';
 function setup() {
   const f = financePersistenceFixture();
   const fixture = buildExperienceFixture();
@@ -70,13 +71,7 @@ describe('targeted canonical spend source reconstruction', () => {
       ],
     });
     expect(result.dependencies).toEqual({ [f.owner]: 1, [f.group]: 2, 'FINANCE#CATALOG': 3 });
-    const factKey = { PK: `FINANCE#FACT#${f.transaction.id}`, SK: 'CURRENT' };
-    f.rows.set(f.key(factKey), {
-      ...factKey,
-      fact: { ...result.fact, textMonth: '2026-10', textOrdinal: 0 },
-    });
-    const countKey = { PK: `FINANCE#FACT_ACCOUNT#${f.transaction.accountId}`, SK: 'CARDINALITY' };
-    f.rows.set(f.key(countKey), { ...countKey, facts: 1 });
+    await new SpendProjectionService(f.work).publish(result.fact);
     const verifier = new FinanceAccountCoverageVerifier({
       work: f.work,
       readPage: async () => ({
@@ -89,6 +84,10 @@ describe('targeted canonical spend source reconstruction', () => {
           },
         ],
       }),
+    });
+    expect(await verifier.step(f.transaction.accountId)).toMatchObject({
+      complete: false,
+      verified: 1,
     });
     expect(await verifier.step(f.transaction.accountId)).toMatchObject({
       complete: true,

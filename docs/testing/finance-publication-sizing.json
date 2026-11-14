@@ -1,0 +1,575 @@
+{
+  "date": "2026-11-07",
+  "evidence": "offline generated transactional-command estimates; no AWS calls",
+  "method": "2 * ceil(max(old,new) UTF-8 JSON bytes plus 100/item /1024) for transactional puts/deletes; condition-check counts reported separately.",
+  "caveats": [
+    "Small synthetic source descriptions and spend graph, not the representative 100k projection sample.",
+    "Initial fixture publication/trusted verification excluded.",
+    "Only completeAccounts=true runs all child work; other many-account scenarios mock additional accounts already current.",
+    "No billed capacity, read-unit total, Lambda cost, retry estimate, latency or p95 acceptance."
+  ],
+  "results": [
+    {
+      "accountCount": 1,
+      "completeAccounts": false,
+      "action": "create",
+      "canonicalCommits": 1,
+      "outboxSteps": 19,
+      "indexedQueries": 11,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 7,
+          "estimatedWriteUnits": 36,
+          "conditionChecks": 6
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 42,
+          "conditionChecks": 46
+        },
+        "source-publication": {
+          "transactions": 4,
+          "estimatedWriteUnits": 142,
+          "conditionChecks": 6
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 7
+        }
+      },
+      "additionalAccountWork": "One actual synthetic account.",
+      "retainedSyntheticBytes": 72850
+    },
+    {
+      "accountCount": 1,
+      "completeAccounts": false,
+      "action": "correct",
+      "canonicalCommits": 1,
+      "outboxSteps": 18,
+      "indexedQueries": 10,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 7,
+          "estimatedWriteUnits": 36,
+          "conditionChecks": 6
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 42,
+          "conditionChecks": 46
+        },
+        "source-publication": {
+          "transactions": 3,
+          "estimatedWriteUnits": 56,
+          "conditionChecks": 4
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 5
+        }
+      },
+      "additionalAccountWork": "One actual synthetic account.",
+      "retainedSyntheticBytes": 68255
+    },
+    {
+      "accountCount": 1,
+      "completeAccounts": false,
+      "action": "metadata-batch",
+      "canonicalCommits": 30,
+      "outboxSteps": 158,
+      "indexedQueries": 36,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 30,
+          "estimatedWriteUnits": 300,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 150,
+          "estimatedWriteUnits": 780,
+          "conditionChecks": 120
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 40,
+          "conditionChecks": 46
+        }
+      },
+      "additionalAccountWork": "One actual synthetic account.",
+      "retainedSyntheticBytes": 191120
+    },
+    {
+      "accountCount": 10,
+      "completeAccounts": false,
+      "action": "create",
+      "canonicalCommits": 1,
+      "outboxSteps": 29,
+      "indexedQueries": 12,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 17,
+          "estimatedWriteUnits": 76,
+          "conditionChecks": 16
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 42,
+          "conditionChecks": 46
+        },
+        "source-publication": {
+          "transactions": 4,
+          "estimatedWriteUnits": 142,
+          "conditionChecks": 6
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 7
+        }
+      },
+      "additionalAccountWork": "Other accounts mocked already current; their own window/application work is excluded.",
+      "retainedSyntheticBytes": 82532
+    },
+    {
+      "accountCount": 10,
+      "completeAccounts": false,
+      "action": "correct",
+      "canonicalCommits": 1,
+      "outboxSteps": 28,
+      "indexedQueries": 11,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 17,
+          "estimatedWriteUnits": 76,
+          "conditionChecks": 16
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 42,
+          "conditionChecks": 46
+        },
+        "source-publication": {
+          "transactions": 3,
+          "estimatedWriteUnits": 56,
+          "conditionChecks": 4
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 5
+        }
+      },
+      "additionalAccountWork": "Other accounts mocked already current; their own window/application work is excluded.",
+      "retainedSyntheticBytes": 77937
+    },
+    {
+      "accountCount": 10,
+      "completeAccounts": false,
+      "action": "metadata-batch",
+      "canonicalCommits": 30,
+      "outboxSteps": 458,
+      "indexedQueries": 66,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 30,
+          "estimatedWriteUnits": 300,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 450,
+          "estimatedWriteUnits": 1980,
+          "conditionChecks": 420
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 40,
+          "conditionChecks": 46
+        }
+      },
+      "additionalAccountWork": "Other accounts mocked already current; their own window/application work is excluded.",
+      "retainedSyntheticBytes": 322901
+    },
+    {
+      "accountCount": 50,
+      "completeAccounts": false,
+      "action": "create",
+      "canonicalCommits": 1,
+      "outboxSteps": 77,
+      "indexedQueries": 20,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 65,
+          "estimatedWriteUnits": 268,
+          "conditionChecks": 64
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 42,
+          "conditionChecks": 46
+        },
+        "source-publication": {
+          "transactions": 4,
+          "estimatedWriteUnits": 142,
+          "conditionChecks": 6
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 7
+        }
+      },
+      "additionalAccountWork": "Other accounts mocked already current; their own window/application work is excluded.",
+      "retainedSyntheticBytes": 127060
+    },
+    {
+      "accountCount": 50,
+      "completeAccounts": false,
+      "action": "correct",
+      "canonicalCommits": 1,
+      "outboxSteps": 76,
+      "indexedQueries": 19,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 65,
+          "estimatedWriteUnits": 268,
+          "conditionChecks": 64
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 42,
+          "conditionChecks": 46
+        },
+        "source-publication": {
+          "transactions": 3,
+          "estimatedWriteUnits": 56,
+          "conditionChecks": 4
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 5
+        }
+      },
+      "additionalAccountWork": "Other accounts mocked already current; their own window/application work is excluded.",
+      "retainedSyntheticBytes": 122465
+    },
+    {
+      "accountCount": 50,
+      "completeAccounts": false,
+      "action": "metadata-batch",
+      "canonicalCommits": 30,
+      "outboxSteps": 1898,
+      "indexedQueries": 306,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 30,
+          "estimatedWriteUnits": 300,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 1890,
+          "estimatedWriteUnits": 7740,
+          "conditionChecks": 1860
+        },
+        "account-window": {
+          "transactions": 9,
+          "estimatedWriteUnits": 40,
+          "conditionChecks": 46
+        }
+      },
+      "additionalAccountWork": "Other accounts mocked already current; their own window/application work is excluded.",
+      "retainedSyntheticBytes": 953501
+    },
+    {
+      "accountCount": 8,
+      "completeAccounts": true,
+      "action": "create",
+      "canonicalCommits": 1,
+      "outboxSteps": 48,
+      "indexedQueries": 19,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 15,
+          "estimatedWriteUnits": 68,
+          "conditionChecks": 14
+        },
+        "account-window": {
+          "transactions": 37,
+          "estimatedWriteUnits": 182,
+          "conditionChecks": 193
+        },
+        "source-publication": {
+          "transactions": 4,
+          "estimatedWriteUnits": 142,
+          "conditionChecks": 6
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 7
+        }
+      },
+      "additionalAccountWork": "All eight synthetic account windows run with actual services and injected persistence.",
+      "retainedSyntheticBytes": 498416
+    },
+    {
+      "accountCount": 8,
+      "completeAccounts": true,
+      "action": "correct",
+      "canonicalCommits": 1,
+      "outboxSteps": 47,
+      "indexedQueries": 18,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 15,
+          "estimatedWriteUnits": 68,
+          "conditionChecks": 14
+        },
+        "account-window": {
+          "transactions": 37,
+          "estimatedWriteUnits": 182,
+          "conditionChecks": 193
+        },
+        "source-publication": {
+          "transactions": 3,
+          "estimatedWriteUnits": 56,
+          "conditionChecks": 4
+        },
+        "source-coverage-application": {
+          "transactions": 1,
+          "estimatedWriteUnits": 8,
+          "conditionChecks": 5
+        }
+      },
+      "additionalAccountWork": "All eight synthetic account windows run with actual services and injected persistence.",
+      "retainedSyntheticBytes": 493821
+    },
+    {
+      "accountCount": 8,
+      "completeAccounts": true,
+      "action": "delete",
+      "canonicalCommits": 1,
+      "outboxSteps": 48,
+      "indexedQueries": 19,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 14,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 15,
+          "estimatedWriteUnits": 70,
+          "conditionChecks": 14
+        },
+        "account-window": {
+          "transactions": 37,
+          "estimatedWriteUnits": 182,
+          "conditionChecks": 193
+        },
+        "source-publication": {
+          "transactions": 4,
+          "estimatedWriteUnits": 148,
+          "conditionChecks": 10
+        }
+      },
+      "additionalAccountWork": "All eight synthetic account windows run with actual services and injected persistence.",
+      "retainedSyntheticBytes": 489566
+    },
+    {
+      "accountCount": 8,
+      "completeAccounts": true,
+      "action": "metadata-single",
+      "canonicalCommits": 1,
+      "outboxSteps": 37,
+      "indexedQueries": 10,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 10,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 13,
+          "estimatedWriteUnits": 58,
+          "conditionChecks": 12
+        },
+        "account-window": {
+          "transactions": 32,
+          "estimatedWriteUnits": 160,
+          "conditionChecks": 168
+        }
+      },
+      "additionalAccountWork": "All eight synthetic account windows run with actual services and injected persistence.",
+      "retainedSyntheticBytes": 489107
+    },
+    {
+      "accountCount": 8,
+      "completeAccounts": true,
+      "action": "move",
+      "canonicalCommits": 1,
+      "outboxSteps": 98,
+      "indexedQueries": 72,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 1,
+          "estimatedWriteUnits": 34,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 16,
+          "estimatedWriteUnits": 80,
+          "conditionChecks": 18
+        },
+        "account-window": {
+          "transactions": 90,
+          "estimatedWriteUnits": 506,
+          "conditionChecks": 519
+        },
+        "source-coverage-application": {
+          "transactions": 2,
+          "estimatedWriteUnits": 12,
+          "conditionChecks": 10
+        }
+      },
+      "additionalAccountWork": "All eight synthetic account windows run with actual services and injected persistence.",
+      "retainedSyntheticBytes": 517061
+    },
+    {
+      "accountCount": 8,
+      "completeAccounts": true,
+      "action": "metadata-batch",
+      "canonicalCommits": 30,
+      "outboxSteps": 454,
+      "indexedQueries": 108,
+      "groups": {
+        "canonical-fixture": {
+          "transactions": 30,
+          "estimatedWriteUnits": 300,
+          "conditionChecks": 0
+        },
+        "outbox-routing-and-archive": {
+          "transactions": 390,
+          "estimatedWriteUnits": 1740,
+          "conditionChecks": 360
+        },
+        "account-window": {
+          "transactions": 72,
+          "estimatedWriteUnits": 320,
+          "conditionChecks": 368
+        }
+      },
+      "additionalAccountWork": "All eight synthetic account windows run with actual services and injected persistence.",
+      "retainedSyntheticBytes": 728141
+    }
+  ],
+  "previousHouseholdPlanning": {
+    "accountCount": 8,
+    "newTransactionsPerMonth": 250,
+    "correctionsPerMonth": 500,
+    "correctionCountSource": "Retained conservative planning assumption; not provided by the user.",
+    "otherMetadataCommitsPerMonth": 500,
+    "metadataCountSource": "Conservative explicit allowance; not a measured usage rate.",
+    "dailyBroadQueries": 30,
+    "publicationWRUs": 134575.0,
+    "workflowWRUs": 193500,
+    "otherMetadataWRUs": 109000,
+    "broadQueryWRUs": 32040,
+    "journalReserveWRUs": 20000,
+    "subtotalWRUs": 489115,
+    "remainingFrom500000": 10885,
+    "status": "Conditional quantity scenario; real reads/compute/latency/billing and retained-history acceptance remain deferred. No larger budget or transaction deletion.",
+    "recoveryReserveWriteUnits": 2500,
+    "incrementalWriteUnitsIncludingRecoveryReserve": 491615,
+    "remainingWriteUnitsIncludingRecoveryReserve": 8385,
+    "invocationAllocationWarning": "Estimated 11,500 publication plus 9,000 recovery invocations already exceed the original 20,000 incremental Lambda allowance before query HTTP/worker calls; complete request/compute/read cost acceptance remains open.",
+    "deletionSensitivity": {
+      "representativeSourceRemovalWriteUnits": 397.18,
+      "eightAccountRoutingAndWindowWriteUnits": 252,
+      "correctionTotalWriteUnits": 359.5,
+      "deletionTotalWriteUnits": 649.18,
+      "all500AssumedEditsAreDeletionsIncrementalWriteUnits": 636455,
+      "status": "Awaiting rough monthly corrections and permanent removals; quantity scenario already excludes unaccepted invocation/read/compute overages."
+    }
+  },
+  "householdPlanning": {
+    "accountCount": 8,
+    "newTransactionsPerMonth": 250,
+    "correctionsPerMonth": 100,
+    "permanentDeletionsPerMonth": 0,
+    "volumeSource": "User answers in the implementation conversation, November 6, 2026.",
+    "initialHistoryYears": 5,
+    "estimatedInitialTransactions": 15000,
+    "initialCountSource": "Five years supplied by user; 15,000 extrapolates 250/month over 60 months. No existing canonical history to backfill; actual new-ingestion files/provider coverage not inspected.",
+    "otherMetadataCommitsPerMonth": 500,
+    "metadataCountSource": "Conservative planning assumption, not user-provided.",
+    "dailyBroadQueries": 30,
+    "publicationWRUs": 93975,
+    "workflowWRUs": 90300,
+    "otherMetadataWRUs": 109000,
+    "broadQueryWRUs": 32040,
+    "journalReserveWRUs": 20000,
+    "recoveryReserveWriteUnits": 2500,
+    "incrementalWriteUnitsIncludingRecoveryReserve": 347815,
+    "remainingWriteUnitsIncludingRecoveryReserve": 152185,
+    "backgroundInvocationEstimate": 16500,
+    "status": "Conditional offline planning; initial new-ingestion canonical/publication accounting, complete invocation allocation, real reads/compute/p95 and hosted evidence remain unresolved. No larger ceiling, deployment or migration.",
+    "creationEvidenceReserve": "Small actual consumer source create now costs 142 versus 134 WRUs (+8); allocate 2,000 WRUs for 250 creates within the existing 20,000 journal reserve. Representative sizes/real capacity remain conditional.",
+    "initialDataSource": "User confirmed November 7: no Finance data currently exists in Naaseh. All initial data will be imported or ingested through SimpleFIN.",
+    "initialImportIncludesReceiptFiles": false,
+    "initialReceiptFileCount": 0,
+    "initialReceiptFileBytes": 0,
+    "initialImportContents": "Transaction records only; no receipt photos/PDFs (user clarification 2026-11-07).",
+    "ongoingReceiptUploadsPerMonth": 50,
+    "ongoingReceiptVolumeSource": "User confirmed 50/month at approximately 2 MB each, keep all in regular-tier S3 for now (2026-11-07).",
+    "ongoingReceiptAverageBytes": 2000000,
+    "ongoingReceiptAverageSizeUnit": "2 MB interpreted as 2,000,000 bytes; approximate user estimate, not a file inspection.",
+    "receiptStorageClass": "STANDARD",
+    "receiptAutomaticStorageTiering": false,
+    "ongoingReceiptViewsPerMonth": 2,
+    "ongoingReceiptViewVolumeSource": "User answered \u201cSay twice\u201d to total monthly receipt views; interpreted as 2 total/month, subject to correction. Alternative twice-per-receipt interpretation retained as 100/month sensitivity.",
+    "receiptViewsAlternativePerReceiptSensitivity": 100
+  }
+}

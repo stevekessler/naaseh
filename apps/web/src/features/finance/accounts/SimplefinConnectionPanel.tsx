@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 
 export interface SimplefinConnectionView {
   id: string;
+  scope: { type: 'owner'; ownerId: string } | { type: 'group'; groupId: string };
+  provider: 'simplefin-bridge';
   status: 'active' | 'attention' | 'revoked' | 'archived';
+  version: number;
   lastAttemptAt?: string;
   lastSuccessfulAt?: string;
   lastErrorClass?: string;

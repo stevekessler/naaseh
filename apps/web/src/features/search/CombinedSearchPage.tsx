@@ -1,3 +1,4 @@
+import { readFinanceCachedData } from '../../sync/finance-cache-access.js';
 import { peekFinanceAccess, subscribeFinanceAccess } from '../finance/security/finance-access.js';
 import {
   urgencyLabels,
@@ -15,6 +16,7 @@ import {
   registerFinanceSearchIndex,
   type FinanceIndexProgress,
   type FinanceSearchSource,
+  type FinanceSearchHit,
 } from '../../search/finance-index.js';
 import { formatDueValue } from '../tasks/due-value.js';
 import {
@@ -169,17 +171,57 @@ export function CombinedSearchPage({
           ),
     [allContent, lists, currentUserId, currentUserGroupIds],
   );
-  const financeHits = useMemo(
-    () =>
-      query.trim()
-        ? financeIndex.current.search(query, {
-            includeTransactions: preferences.includeTransactions,
-            includeMerchants: preferences.includeMerchants,
-            accountId: preferences.accountId,
-          })
-        : [],
-    [financeProgress.indexed, preferences, query],
+  const financeEnabled = preferences.includeTransactions || preferences.includeMerchants;
+  const financeRequest = useMemo(
+    () => ({
+      query,
+      preferences,
+      indexed: financeProgress.indexed,
+      complete: financeProgress.complete,
+      accessVersion: financeAccessVersion,
+    }),
+    [query, preferences, financeProgress.indexed, financeProgress.complete, financeAccessVersion],
   );
+  const [financeResult, setFinanceResult] = useState<{
+    request: typeof financeRequest;
+    hits: FinanceSearchHit[];
+  }>();
+  const financeHits = useMemo(
+    () => (financeResult?.request === financeRequest ? financeResult.hits : []),
+    [financeResult, financeRequest],
+  );
+  const financeChecking =
+    financeEnabled &&
+    Boolean(query.trim()) &&
+    !financeError &&
+    financeResult?.request !== financeRequest;
+  useEffect(() => {
+    if (!query.trim() || !financeEnabled || !financeProgress.complete || financeError) return;
+    let active = true;
+    // Avoid a network check for every intermediate keystroke; never show unchecked old hits.
+    const timer = window.setTimeout(() => {
+      void readFinanceCachedData(async () =>
+        financeIndex.current.search(query, {
+          includeTransactions: preferences.includeTransactions,
+          includeMerchants: preferences.includeMerchants,
+          accountId: preferences.accountId,
+        }),
+      )
+        .then((hits) => {
+          if (active) setFinanceResult({ request: financeRequest, hits });
+        })
+        .catch(() => {
+          if (!active) return;
+          financeIndex.current.clear();
+          setFinanceResult(undefined);
+          setFinanceError(true);
+        });
+    }, 150);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [query, financeEnabled, financeProgress.complete, financeError, financeRequest, preferences]);
   const results = useMemo(
     () =>
       buildCombinedSearchRows({
@@ -209,7 +251,11 @@ export function CombinedSearchPage({
     .filter(({ id }) => !columns.visible.has(id))
     .map(({ id }) => `hide-${id}`)
     .join(' ');
-  const financeEnabled = preferences.includeTransactions || preferences.includeMerchants;
+  const resultStatus = financeChecking
+    ? 'Checking Finance results…'
+    : financeEnabled && financeError
+      ? `${results.length} task/list results`
+      : `${results.length} ${results.length === 1 ? 'result' : 'results'}`;
 
   return (
     <section className="combined-search-page" aria-labelledby="combined-search-heading">
@@ -231,9 +277,7 @@ export function CombinedSearchPage({
           onChange={(event) => setQuery(event.target.value)}
         />
         <span role="status" aria-live="polite">
-          {query.trim()
-            ? `${results.length} ${results.length === 1 ? 'result' : 'results'}`
-            : 'Enter a search term'}
+          {query.trim() ? resultStatus : 'Enter a search term'}
         </span>
       </label>
       <CombinedSearchTypeSettings
@@ -264,6 +308,8 @@ export function CombinedSearchPage({
         <p role="status" aria-live="polite">
           Indexing Finance results… {financeProgress.indexed} of {financeProgress.total}
         </p>
+      ) : financeChecking ? (
+        <p role="status">Checking Finance results…</p>
       ) : financeEnabled && financeError ? (
         <p role="alert">Finance search is unavailable. Tasks and lists remain searchable.</p>
       ) : financeEnabled ? (
@@ -274,9 +320,7 @@ export function CombinedSearchPage({
         </p>
       ) : null}
       <div className="task-list-toolbar combined-search-toolbar">
-        <p>
-          {results.length} {results.length === 1 ? 'result' : 'results'}
-        </p>
+        <p>{resultStatus}</p>
         <CombinedSearchColumnSettings {...columns} />
       </div>
       <div className="task-table-wrap">
@@ -356,7 +400,10 @@ export function CombinedSearchPage({
             ))}
           </tbody>
         </table>
-        {query.trim() && !results.length ? (
+        {query.trim() &&
+        !results.length &&
+        !financeChecking &&
+        !(financeEnabled && financeError) ? (
           <p className="combined-search-empty">No selected content matches “{query.trim()}”.</p>
         ) : !query.trim() ? (
           <p className="combined-search-empty">

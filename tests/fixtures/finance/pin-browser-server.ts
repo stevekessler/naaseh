@@ -1,3 +1,4 @@
+import { journalSyncContractVersion } from '@naaseh/domain';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
@@ -15,6 +16,8 @@ export async function startFinancePinBrowserServer() {
     pin: '001234',
     grants: 0,
     revoked: 0,
+    financeCatchUp: false,
+    financeDeliveryCursors: [] as number[],
   };
   const preference = () => ({
     requirePin: state.requirePin,
@@ -98,7 +101,9 @@ export async function startFinancePinBrowserServer() {
         return;
       }
       if (
-        ['accounts', 'budgets', 'categories'].some((part) => path === `/api/v1/finance/${part}`)
+        ['accounts', 'budgets', 'categories', 'connections'].some(
+          (part) => path === `/api/v1/finance/${part}`,
+        )
       ) {
         if (
           state.requirePin &&
@@ -108,6 +113,7 @@ export async function startFinancePinBrowserServer() {
           json(403, { code: 'finance_locked' });
           return;
         }
+        response.setHeader('x-finance-cache-proof', 'fc1.synthetic.fixture.proof');
         json(200, { items: [], cursor: null });
         return;
       }
@@ -123,6 +129,78 @@ export async function startFinancePinBrowserServer() {
         return;
       }
       if (path === '/api/v1/sync/pull') {
+        if (body.financeCacheOnly === true && body.financeCacheProtocol === 1) {
+          if (
+            request.headers['x-finance-owner'] !== 'local-steve' ||
+            (state.requirePin &&
+              (request.headers['x-finance-unlock'] !== 'g'.repeat(43) ||
+                !/^[a-f0-9]{32}$/.test(String(request.headers['x-finance-tab']))))
+          ) {
+            json(403, { code: 'finance_locked' });
+            return;
+          }
+          json(200, {
+            changes: [],
+            financeChanges: [],
+            cursor: {},
+            financeCursor: body.financeCursor ?? {},
+            financeCache: { status: 'current', proof: 'fc1.synthetic.fixture.proof' },
+          });
+          return;
+        }
+
+        if (body.version === journalSyncContractVersion) {
+          json(200, {
+            version: journalSyncContractVersion,
+            changes: [],
+            journalCursor: body.journalCursor ?? 0,
+            hasMore: false,
+          });
+          return;
+        }
+        if (state.financeCatchUp && body.financeCacheProtocol === 1 && !body.financeCacheOnly) {
+          if (
+            request.headers['x-finance-owner'] !== 'local-steve' ||
+            (state.requirePin &&
+              (request.headers['x-finance-unlock'] !== 'g'.repeat(43) ||
+                !/^[a-f0-9]{32}$/.test(String(request.headers['x-finance-tab']))))
+          ) {
+            json(403, { code: 'finance_locked' });
+            return;
+          }
+          const id = '01K00000000000000000008101';
+          const after = Number(body.financeCursor?.owner ?? 0);
+          state.financeDeliveryCursors.push(after);
+          const next = Math.min(after + 1, 3);
+          json(200, {
+            financeState: 'ready',
+            financeCursor: { owner: next },
+            financeHasMore: next < 3,
+            financeCache: { status: 'current', proof: 'fc1.synthetic.fixture.proof' },
+            changes: [],
+            cursor: { owner: 777 },
+            financeChanges:
+              next === 2
+                ? []
+                : [
+                    {
+                      audience: 'OWNER#local-steve',
+                      sequence: next,
+                      entityId: id,
+                      entityType: 'financeBudget',
+                      version: next === 1 ? 1 : 2,
+                      changedAt: '2026-11-09T00:00:00Z',
+                      operation: 'upsert',
+                      payload: {
+                        id,
+                        version: next === 1 ? 1 : 2,
+                        name: next === 1 ? 'First synthetic budget' : 'Caught-up synthetic budget',
+                      },
+                    },
+                  ],
+          });
+          return;
+        }
         json(200, { changes: [], cursor: body.cursor ?? {}, journalCursor: 0, hasMore: false });
         return;
       }

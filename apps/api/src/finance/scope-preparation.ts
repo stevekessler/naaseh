@@ -4,11 +4,15 @@ import { FinanceUnitOfWork, type FinanceRecordKey } from './unit-of-work.js';
 import { DynamoFinanceRepository } from './dynamo-repository.js';
 import { FinanceRefundIndexVerifier } from './refund-index-coverage-service.js';
 import { FinanceExperienceFailure } from './telemetry.js';
+import {
+  FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION,
+  FinanceBudgetAccountLinkIndexVerifier,
+} from './budget-account-link-index.js';
 
 type State = {
   operation: string;
   sourceRevision: number;
-  phase: 'locators' | 'refund-index';
+  phase: 'locators' | 'budget-account-links' | 'refund-index';
   cursor?: FinanceRecordKey;
 };
 /** Explicit scope/catalog bootstrap before account or source locators are available. */
@@ -25,12 +29,17 @@ export class FinanceScopePreparation {
         scope: string,
         options: { restart?: boolean },
       ) => Promise<{ complete: boolean }>;
+      budgetAccountLinks?: (
+        scope: string,
+        options: { restart?: boolean },
+      ) => Promise<{ complete: boolean }>;
     } = {},
   ) {
     this.work = options.work ?? (() => new FinanceUnitOfWork());
   }
   async step(PK: string, options: { restart?: boolean } = {}) {
     const catalog = PK === 'FINANCE#CATALOG';
+    const group = PK.startsWith('FINANCE#SCOPE#GROUP#');
     if (!catalog && !/^FINANCE#SCOPE#(?:OWNER|GROUP)#[^#]+$/u.test(PK))
       throw new Error('Invalid Finance preparation scope.');
     const metaKey = { PK, SK: 'META' };
@@ -43,6 +52,7 @@ export class FinanceScopePreparation {
       );
     for (const field of [
       'locatorIndexVersion',
+      ...(group ? ['budgetAccountLinkIndexVersion'] : []),
       ...(catalog ? [] : ['refundRelationshipIndexVersion']),
     ]) {
       if (meta[field] !== undefined && meta[field] !== 0 && meta[field] !== 1)
@@ -52,7 +62,12 @@ export class FinanceScopePreparation {
           'user',
         );
     }
-    if (meta.locatorIndexVersion === 1 && (catalog || meta.refundRelationshipIndexVersion === 1))
+    if (
+      meta.locatorIndexVersion === 1 &&
+      (!group ||
+        meta.budgetAccountLinkIndexVersion === FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION) &&
+      (catalog || meta.refundRelationshipIndexVersion === 1)
+    )
       return { phase: 'complete' as const, complete: true };
     const key = { PK, SK: 'SCOPE_BACKFILL_DRIVER' };
     const work = this.work();
@@ -73,10 +88,13 @@ export class FinanceScopePreparation {
       saved && !options.restart
         ? structuredClone(saved)
         : { operation: createUlid(), sourceRevision: Number(meta.revision), phase: 'locators' };
-    if (!['locators', 'refund-index'].includes(state.phase))
+    if (!['locators', 'budget-account-links', 'refund-index'].includes(state.phase))
       throw new FinanceExperienceFailure('invariant', 'Finance preparation checkpoint is invalid.');
     if (meta.locatorIndexVersion === 1) {
-      state.phase = 'refund-index';
+      state.phase =
+        group && meta.budgetAccountLinkIndexVersion !== FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION
+          ? 'budget-account-links'
+          : 'refund-index';
       state.sourceRevision = Number(meta.revision);
       delete state.cursor;
     }
@@ -122,9 +140,21 @@ export class FinanceScopePreparation {
         });
         state.sourceRevision = Number(current.revision) + 1;
         delete state.cursor;
-        state.phase = 'refund-index';
+        state.phase = group ? 'budget-account-links' : 'refund-index';
         complete = catalog;
       }
+    } else if (state.phase === 'budget-account-links') {
+      if (!group)
+        throw new FinanceExperienceFailure(
+          'invariant',
+          'Finance budget/account link coverage requires a group scope.',
+        );
+      const result = await (
+        this.options.budgetAccountLinks ??
+        ((scope, opts) =>
+          new FinanceBudgetAccountLinkIndexVerifier({ work: this.work }).step(scope, opts))
+      )(PK, { restart: options.restart === true });
+      if (result.complete) state.phase = 'refund-index';
     } else {
       const result = await (
         this.options.refundIndex ??

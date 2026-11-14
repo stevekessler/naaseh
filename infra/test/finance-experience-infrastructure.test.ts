@@ -22,6 +22,16 @@ const template = Template.fromStack(
 
 describe('Finance experience serverless infrastructure and worker boundary', () => {
   it('reuses protected media/backups and grants bounded Finance self-dispatch without new always-on resources', () => {
+    const media = Object.entries(template.findResources('AWS::S3::Bucket')).find(([id]) =>
+      id.startsWith('Media'),
+    )?.[1];
+    expect(media).toBeDefined();
+    expect(media!.Properties.VersioningConfiguration).toEqual({ Status: 'Enabled' });
+    expect(media!.Properties.IntelligentTieringConfigurations).toBeUndefined();
+    for (const rule of media!.Properties.LifecycleConfiguration?.Rules ?? []) {
+      expect(rule.Transitions).toBeUndefined();
+      expect(rule.NoncurrentVersionTransitions).toBeUndefined();
+    }
     const functions = template.findResources('AWS::Lambda::Function');
     const finance = Object.entries(functions).find(([id]) =>
       id.startsWith('FinanceApiFunction'),
@@ -44,6 +54,61 @@ describe('Finance experience serverless infrastructure and worker boundary', () 
     });
     expect(policy).not.toContain('kms:Decrypt');
     expect(policy).not.toContain('secretsmanager:GetSecretValue');
+    expect(policy).toContain('events:PutEvents');
+    expect(policy).toContain('event-bus/default');
+    expect(policy).toContain('events:source');
+    expect(policy).toContain('FinancePublicationRequested');
+    expect(finance.Properties.Environment.Variables.NAASEH_FINANCE_PUBLICATION_EVENT_BUS).toBe(
+      'default',
+    );
+    const importer = Object.entries(functions).find(([id]) =>
+      id.startsWith('FinanceImportFunction'),
+    )![1];
+    expect(importer.Properties.Environment.Variables.NAASEH_FINANCE_PUBLICATION_EVENT_BUS).toBe(
+      'default',
+    );
+    const sync = Object.entries(functions).find(([id]) => id.startsWith('SyncFunction'))![1];
+    expect(sync.Properties.Environment.Variables.NAASEH_FINANCE_PUBLICATION_EVENT_BUS).toBe(
+      'default',
+    );
+    const syncPolicy = Object.entries(template.findResources('AWS::IAM::Policy')).find(([id]) =>
+      id.startsWith('SyncFunctionServiceRoleDefaultPolicy'),
+    )![1];
+    const syncStatements = syncPolicy.Properties.PolicyDocument.Statement;
+    const syncSignal = syncStatements.find((statement: { Action: string | string[] }) =>
+      [statement.Action].flat().includes('events:PutEvents'),
+    );
+    expect(syncSignal).toBeDefined();
+    expect(JSON.stringify(syncSignal.Resource)).toContain('event-bus/default');
+    expect(syncSignal.Condition.StringEquals).toEqual({
+      'events:source': 'naaseh.finance.publication',
+      'events:detail-type': 'FinancePublicationRequested',
+    });
+    const publicationRule = Object.entries(template.findResources('AWS::Events::Rule')).find(
+      ([id]) => id.startsWith('FinancePublicationRequested'),
+    )![1];
+    expect(publicationRule.Properties.EventPattern).toMatchObject({
+      source: ['naaseh.finance.publication'],
+      'detail-type': ['FinancePublicationRequested'],
+    });
+    expect(JSON.stringify(publicationRule.Properties.Targets)).toContain(
+      'naaseh.finance.publication-signal',
+    );
+    expect(JSON.stringify(publicationRule.Properties.Targets)).toContain('$.detail');
+    expect(JSON.stringify(publicationRule.Properties.Targets)).toContain('$.source');
+    expect(publicationRule.Properties.ScheduleExpression).toBe('rate(5 minutes)');
+    const publicationRuleId = Object.entries(template.findResources('AWS::Events::Rule')).find(
+      ([id]) => id.startsWith('FinancePublicationRequested'),
+    )![0];
+    expect(
+      Object.values(template.findResources('AWS::Lambda::Permission')).some(
+        (resource) =>
+          resource.Properties.Principal === 'events.amazonaws.com' &&
+          JSON.stringify(resource.Properties.SourceArn) ===
+            JSON.stringify({ 'Fn::GetAtt': [publicationRuleId, 'Arn'] }),
+      ),
+    ).toBe(true);
+    template.resourceCountIs('AWS::Events::EventBus', 0);
     expect(JSON.stringify(template.findResources('AWS::ApiGatewayV2::Route'))).toContain(
       '/api/v1/finance/receipts/{receiptId}/content',
     );

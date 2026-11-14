@@ -16,6 +16,70 @@ import { buildExperienceFixture, experienceId } from '../fixtures/finance/experi
 import { financePersistenceFixture } from '../fixtures/finance/persistence.js';
 
 describe('shared short-text index publication', () => {
+  it('updates text cardinality hints only when a bitmap bucket appears or disappears', async () => {
+    const f = financePersistenceFixture();
+    const counters: string[] = [];
+    const service = new SpendProjectionService(
+      () =>
+        new FinanceUnitOfWork(
+          {
+            get: f.persistence.get,
+            write: async (items) => {
+              for (const entry of items)
+                if (
+                  entry.Put?.Item?.SK === 'CARDINALITY' &&
+                  String(entry.Put.Item.PK).includes('#text#')
+                )
+                  counters.push(String(entry.Put.Item.PK));
+              await f.persistence.write(items);
+            },
+          },
+          'table',
+        ),
+    );
+    const fact = createFinanceFact(
+      { ...buildExperienceFixture().transactions[10]!, description: 'apple' },
+      {},
+    );
+    const key = { PK: `FINANCE#FACT_SEARCH#${fact.accountId}#text#app`, SK: 'CARDINALITY' };
+    await service.publish(fact);
+    expect(f.rows.get(f.key(key))).toMatchObject({ estimateKind: 'posting-chunks-v1', chunks: 1 });
+    counters.length = 0;
+    const neighbor = { ...fact, id: experienceId(999) };
+    await service.publish(neighbor);
+    expect(counters).toEqual([]);
+    await service.publish({ ...fact, sourceVersion: 2, description: 'zebra' });
+    expect(f.rows.get(f.key(key))?.chunks).toBe(1);
+    await service.publish({ ...neighbor, sourceVersion: 2, description: 'zebra' });
+    expect(f.rows.get(f.key(key))?.chunks).toBe(0);
+    expect(
+      f.rows.get(f.key({ PK: `FINANCE#FACT_ACCOUNT#${fact.accountId}`, SK: 'CARDINALITY' }))?.facts,
+    ).toBe(2);
+  });
+
+  it('adopts a conservative legacy text hint when another chunk appears and reverses chunks without losing facts', async () => {
+    const f = financePersistenceFixture();
+    const service = new SpendProjectionService(() => new FinanceUnitOfWork(f.persistence, 'table'));
+    const fact = createFinanceFact(
+      { ...buildExperienceFixture().transactions[10]!, description: 'apple' },
+      {},
+    );
+    await service.publish(fact);
+    const key = { PK: `FINANCE#FACT_SEARCH#${fact.accountId}#text#app`, SK: 'CARDINALITY' };
+    f.rows.set(f.key(key), { ...key, facts: 1 });
+    const ordinal = { PK: `FINANCE#TEXT_ORDINAL#${fact.accountId}#2026-10`, SK: 'CURRENT' };
+    f.rows.set(f.key(ordinal), { ...ordinal, nextOrdinal: 500 });
+    const second = { ...fact, id: experienceId(999) };
+    await service.publish(second);
+    expect(f.rows.get(f.key(key))).toMatchObject({ estimateKind: 'posting-chunks-v1', chunks: 2 });
+    await service.publish({ ...fact, sourceVersion: 2, description: 'zebra' });
+    expect(f.rows.get(f.key(key))?.chunks).toBe(1);
+    await service.publish({ ...second, sourceVersion: 2, description: 'zebra' });
+    expect(f.rows.get(f.key(key))?.chunks).toBe(0);
+    expect(
+      f.rows.get(f.key({ PK: `FINANCE#FACT_ACCOUNT#${fact.accountId}`, SK: 'CARDINALITY' }))?.facts,
+    ).toBe(2);
+  });
   it('packs shared short grams and clears only the corrected source while preserving its neighbor', async () => {
     const f = financePersistenceFixture();
     const service = new SpendProjectionService(() => new FinanceUnitOfWork(f.persistence, 'table'));
@@ -97,7 +161,10 @@ describe('shared short-text index publication', () => {
     expect(f.rows.get(f.key({ PK, SK: 'DATE#2026-10#000000000000' }))?.codec).toBe(
       'text-bitmap-v2',
     );
-    expect(f.rows.get(f.key({ PK, SK: 'CARDINALITY' }))?.facts).toBe(1);
+    expect(f.rows.get(f.key({ PK, SK: 'CARDINALITY' }))).toMatchObject({
+      estimateKind: 'posting-chunks-v1',
+      chunks: 1,
+    });
     expect(
       f.rows.get(f.key({ PK: `FINANCE#SUMMARY#${fact.accountId}#USD`, SK: 'MONTH#UTC#2026-10' }))
         ?.amountMinor,

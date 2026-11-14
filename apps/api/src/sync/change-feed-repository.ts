@@ -172,6 +172,13 @@ export async function prepareAudienceChanges(changes: readonly Omit<SyncChange, 
   return prepared;
 }
 
+// Keep SDK pagination metadata private and transient; legacy consumers still receive arrays.
+const audienceContinuations = new WeakMap<SyncFeedChange[], boolean>();
+export function hasMoreAudienceChanges(changes: SyncFeedChange[]): boolean {
+  // Injected/legacy readers without SDK metadata conservatively continue a full page.
+  return audienceContinuations.get(changes) ?? changes.length >= 200;
+}
+
 export async function pullAudience(
   audience: string,
   after: number,
@@ -190,7 +197,9 @@ export async function pullAudience(
       Limit: limit,
     }),
   );
-  return deserializeAudienceFeedItems(audience, result.Items ?? []);
+  const changes = deserializeAudienceFeedItems(audience, result.Items ?? []);
+  audienceContinuations.set(changes, Object.keys(result.LastEvaluatedKey ?? {}).length > 0);
+  return changes;
 }
 export async function appendAudienceChange(change: Omit<SyncChange, 'sequence'>) {
   const prepared = await prepareAudienceChange(change);

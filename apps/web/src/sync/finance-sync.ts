@@ -1,18 +1,46 @@
 import type { SyncChange } from '@naaseh/domain';
 import { peekFinanceAccess } from '../features/finance/security/finance-access.js';
+import { queueEncryptedBudgetMutation } from '../db/finance-repository.js';
 
-/** Hold encrypted Finance intent before generic decryption, without stalling task queues. */
+export async function queueFinanceBudgetActivityChange<
+  T extends { id: string; groupId: string; version: number },
+>(input: {
+  budget: T;
+  activity: 'active' | 'inactive';
+  actorId: string;
+  now?: Date;
+}) {
+  const changedAt = (input.now ?? new Date()).toISOString();
+  return queueEncryptedBudgetMutation({
+    entityId: input.budget.id,
+    entityType: 'financeBudget',
+    budgetId: input.budget.id,
+    scopeKey: `GROUP#${input.budget.groupId}`,
+    baseVersion: input.budget.version,
+    operation: 'update',
+    value: {
+      ...input.budget,
+      activity: input.activity,
+      activityChangedAt: changedAt,
+      activityChangedBy: input.actorId,
+      version: input.budget.version + 1,
+    },
+    payloadValue: { activity: input.activity, expectedVersion: input.budget.version },
+  });
+}
+
+/** Keep a complete replay attempt inside its original Finance visit, without stalling tasks. */
 export async function readFinanceReplayIntent<T>(
   entityType: string,
-  decrypt: () => Promise<T>,
+  operation: (signal?: AbortSignal) => Promise<T>,
 ): Promise<T | undefined> {
-  if (!entityType.startsWith('finance')) return decrypt();
+  if (!entityType.startsWith('finance')) return operation();
   const access = peekFinanceAccess();
   if (!access?.canRead()) return undefined;
   try {
     // An offline-only visit never provides authority to replay connected mutations.
     if (access.requiresPin && !access.requestHeaders()['x-finance-unlock']) return undefined;
-    return await access.read(decrypt);
+    return await access.read(operation);
   } catch (error) {
     if (!access.canRead()) return undefined;
     throw error;
@@ -70,9 +98,10 @@ export function orderFinanceHydration(changes: readonly SyncChange[]) {
     ['financeBudgetItem', 6],
     ['financeTransaction', 7],
     ['financeAllocation', 8],
-    ['financeTransactionMatch', 9],
-    ['financeReconciliation', 10],
-    ['financeTaskLink', 11],
+    ['financeRefundRelationship', 9],
+    ['financeTransactionMatch', 10],
+    ['financeReconciliation', 11],
+    ['financeTaskLink', 12],
   ]);
   return [...changes].sort(
     (a, b) =>
@@ -90,6 +119,10 @@ const budgetConflictFields = new Set([
   'description',
   'merchantId',
   'financeCategoryId',
+  'subcategoryId',
+  'classification',
+  'paymentType',
+  'checkNumber',
   'plannedAmountMinor',
   'currency',
   'currencyExponent',

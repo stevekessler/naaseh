@@ -564,11 +564,16 @@ export function claimFinanceCategoryName(
   repository: FinanceMemoryRepository,
   canonicalName: string,
   categoryId: string,
+  parentId?: string,
 ) {
-  const current = repository.categoryNameLocks.get(canonicalName);
+  const lockKey = financeCategoryNameLockKey(canonicalName, parentId);
+  const current = repository.categoryNameLocks.get(lockKey);
   if (current && current !== categoryId) throw new Error('Finance category name conflict.');
-  repository.categoryNameLocks.set(canonicalName, categoryId);
+  repository.categoryNameLocks.set(lockKey, categoryId);
 }
+
+export const financeCategoryNameLockKey = (canonicalName: string, parentId?: string) =>
+  parentId ? `${parentId}#${canonicalName}` : canonicalName;
 
 export function claimFinanceMerchantKey(
   repository: FinanceMemoryRepository,
@@ -606,6 +611,13 @@ export class FinanceMemoryRepository {
   readonly transactionMatches = new Map<string, import('@naaseh/domain').TransactionMatch>();
   readonly reviewIssues = new Map<string, import('@naaseh/domain').ImportReviewIssue>();
   readonly transactionAliases = new Map<string, string>();
+  readonly refundRelationships = new Map<
+    string,
+    import('@naaseh/domain').ExpenseRefundRelationship
+  >();
+  readonly refundRelationshipByCredit = new Map<string, string>();
+  readonly refundCreditCapacityVersions = new Map<string, number>();
+  readonly refundAllocationCapacityVersions = new Map<string, number>();
   readonly keptSeparatePairs = new Set<string>();
   readonly categoryNameLocks = new Map<string, string>();
   readonly merchantKeyLocks = new Map<string, string>();
@@ -626,7 +638,27 @@ export class FinanceMemoryRepository {
   readonly pendingSimplefinAccounts = new Map<string, Record<string, unknown>>();
   readonly deletionPreviews = new Map<string, import('./deletion-service.js').DeletionPreview>();
   readonly feedChanges: Array<Omit<SyncChange, 'sequence'>> = [];
+  /** Server-only provenance, persisted beside reconciliation data rather than in public DTOs. */
+  readonly reconciliationAccountSources = new Map<string, string[]>();
   readonly mutationReceipts = new Map<string, unknown>();
+  private readonly canonicalTransactionReferenceHooks = new Set<
+    (transfer: { fromTransactionId: string; toTransactionId: string }) => void
+  >();
+
+  /** Downstream receipt/task/fulfillment stores can move references in the same commit boundary. */
+  registerCanonicalTransactionReferenceHook(
+    hook: (transfer: { fromTransactionId: string; toTransactionId: string }) => void,
+  ) {
+    this.canonicalTransactionReferenceHooks.add(hook);
+    return () => this.canonicalTransactionReferenceHooks.delete(hook);
+  }
+
+  notifyCanonicalTransactionReferenceTransfer(transfer: {
+    fromTransactionId: string;
+    toTransactionId: string;
+  }) {
+    for (const hook of this.canonicalTransactionReferenceHooks) hook(transfer);
+  }
 
   mutation<T>(actorId: string, mutationId: string): T | undefined {
     return this.mutationReceipts.get(`${actorId}:${mutationId}`) as T | undefined;

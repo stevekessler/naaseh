@@ -137,6 +137,8 @@ test('shows nested subtasks in task details', async ({ page }) => {
   const form = page.locator('.task-form').first();
   await form.getByLabel('Task label').fill('Parent task');
   await form.getByRole('button', { name: 'Add task' }).click();
+  await expect(form.getByLabel('Task label')).toHaveValue('');
+  await expect(form.getByRole('button', { name: 'Add task' })).toBeEnabled();
   await page.getByRole('button', { name: 'Parent task', exact: true }).click();
   await page
     .getByRole('dialog', { name: 'Edit task' })

@@ -5,7 +5,10 @@ import type { EncryptedFinanceRecord, StoredMutation } from '../../src/db/databa
 
 // Queue persistence is isolated here; Finance access is exercised in finance-lock.test.tsx.
 vi.mock('../../src/features/finance/security/finance-access.js', () => ({
-  currentFinanceAccess: () => ({ read: async (work: () => Promise<unknown>) => work() }),
+  currentFinanceAccess: () => ({
+    read: async (work: (signal: AbortSignal) => Promise<unknown>) =>
+      work(new AbortController().signal),
+  }),
 }));
 
 const state = vi.hoisted(() => ({

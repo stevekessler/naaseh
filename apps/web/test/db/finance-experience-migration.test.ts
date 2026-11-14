@@ -82,4 +82,24 @@ describe('additive Finance experience migration', () => {
     expect(attempts).toBe(2);
     expect(pending.value.ciphertext).toBe('synthetic-ciphertext');
   });
+
+  it('preserves legacy and unknown payment/classification metadata without inventing values', () => {
+    const transaction = {
+      id: 'legacy-transaction',
+      paymentType: 'wire-transfer',
+      checkNumber: '000123',
+      allocations: [
+        {
+          id: 'allocation-a',
+          financeCategoryId: 'category-a',
+          subcategoryId: 'subcategory-a',
+          classification: { categoryLabel: 'Food', subcategoryLabel: 'Eating Out' },
+        },
+      ],
+    };
+    expect(migrateLegacyFinanceValue('financeTransaction', transaction)).toEqual(transaction);
+    expect(migrateLegacyFinanceValue('financeTransaction', { id: 'older' })).toEqual({
+      id: 'older',
+    });
+  });
 });

@@ -10,6 +10,8 @@ import {
 } from '@naaseh/domain';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceMemoryRepository } from './repository.js';
+import { reviewRefundRelationshipsForTransaction } from './refund-service.js';
+import { reconcileRefundTransactionAlias } from './refund-repository.js';
 
 type ReconciliationDecision = {
   decision: 'reconcile' | 'keep-separate';
@@ -59,7 +61,13 @@ function applyReconciliation(
   );
   repository.transactions[provisionalIndex] = transaction;
   repository.transactions[candidateIndex] = tombstoneFinancialTransaction(candidate);
+  reconcileRefundTransactionAlias(repository, candidate.id, provisional.id);
+  reviewRefundRelationshipsForTransaction(repository, transaction.id);
   repository.transactionAliases.set(candidate.id, provisional.id);
+  repository.notifyCanonicalTransactionReferenceTransfer({
+    fromTransactionId: candidate.id,
+    toTransactionId: provisional.id,
+  });
   const account = repository.accounts.get(provisional.accountId)!;
   const changedAt = new Date().toISOString();
   repository.feedChanges.push({
@@ -144,8 +152,6 @@ export function decideProviderReconciliation(
   input: ReconciliationDecision,
   mutationId: string,
 ) {
-  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
-  if (replay) return replay;
   const provisionalIndex = transactionIndex(repository, provisionalId);
   const candidateIndex = transactionIndex(repository, input.candidateTransactionId);
   const provisional = repository.transactions[provisionalIndex];
@@ -165,7 +171,23 @@ export function decideProviderReconciliation(
   ) {
     throw new Error('Finance record not found.');
   }
+  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  if (replay) {
+    if (
+      replay.id !== provisional.id ||
+      replay.accountId !== account.id ||
+      review.status !== 'resolved' ||
+      review.resolvedBy !== actor.id ||
+      review.decision !== (input.decision === 'reconcile' ? 'reconciled' : 'kept-separate') ||
+      review.version !== input.expectedReviewVersion + 1 ||
+      replay.version !== input.expectedProvisionalVersion + 1
+    )
+      throw new Error('Provider reconciliation version conflict.');
+    return replay;
+  }
   if (
+    review.kind !== 'provisional-reconciliation' ||
+    review.status !== 'open' ||
     provisional.version !== input.expectedProvisionalVersion ||
     candidate.version !== input.expectedCandidateVersion ||
     review.version !== input.expectedReviewVersion

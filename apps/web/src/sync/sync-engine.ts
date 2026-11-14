@@ -1,3 +1,6 @@
+import { catchUpFinanceChanges } from './finance-pull.js';
+import { invalidateFinanceForAccessRevocation } from './finance-delivery.js';
+import { commitFinanceReplayOutcome } from '../db/finance-repository.js';
 import { readOrdinaryConflict } from './finance-conflict-access.js';
 import type { EntityType, StackConflictReason, Task, VectorCursor } from '@naaseh/domain';
 import { readFinanceReplayIntent } from './finance-sync.js';
@@ -18,7 +21,7 @@ import {
   taskTimerSchema,
   taskSchema,
 } from '@naaseh/domain';
-import { db } from '../db/database.js';
+import { db, type StoredMutation } from '../db/database.js';
 import {
   commitPull,
   commitEnhancedPull,
@@ -168,6 +171,11 @@ export const shouldRefreshTaskSnapshot = (
   refreshAfterMs = 60_000,
 ) => shouldBootstrapOrganizationSnapshot(lastHydratedAt, now, refreshAfterMs);
 
+const needsCsvReview = (item: Pick<StoredMutation, 'entityType' | 'operation'>) =>
+  item.entityType === 'financeTransaction' && item.operation === 'commitCsvChunk';
+
+const automaticOutbox = () => db.outbox.filter((item) => !needsCsvReview(item));
+
 async function recoverMissingSnapshots(): Promise<void> {
   const [
     snapshot,
@@ -182,7 +190,7 @@ async function recoverMissingSnapshots(): Promise<void> {
     db.settings.get('task-snapshot-refreshed-at-v1'),
     db.settings.get('organization-snapshot-bootstrapped-v1'),
     db.settings.get('list-snapshot-bootstrapped-v1'),
-    db.outbox.count(),
+    automaticOutbox().count(),
   ]);
   const shouldRecoverTasks =
     snapshot.unreadable.length ||
@@ -379,6 +387,7 @@ async function pushMutation(
   csrfToken: string,
   mutation: Awaited<ReturnType<typeof decryptMutation>>,
   backlog: { depth: number; oldestAgeSeconds: number } | undefined,
+  signal?: AbortSignal,
 ) {
   const clientId = await getClientId();
   const isStackMutation = mutation.entityType === ('personalStackOperation' as string);
@@ -419,8 +428,17 @@ async function pushMutation(
       csrfToken,
       headers: { 'x-client-id': clientId },
       body: requestBody,
+      ...(signal ? { signal } : {}),
     });
-    return response.results[0];
+    const result =
+      Array.isArray(response?.results) && response.results.length === 1
+        ? response.results[0]
+        : undefined;
+    if (result?.mutationId !== mutation.id)
+      throw new Error(
+        'Finance synchronization did not confirm this change. Your change remains saved on this device.',
+      );
+    return result;
   }
   const response = await fetch('/api/v1/sync/push', {
     method: 'POST',
@@ -448,6 +466,56 @@ export async function drainOutbox(csrfToken: string): Promise<void> {
   for (const queue of groupSequentialMutations(stored)) {
     for (const item of queue) {
       try {
+        if (needsCsvReview(item)) continue;
+        if (item.entityType.startsWith('finance')) {
+          if (
+            item.financeDependencyId &&
+            ((await db.outbox.get(item.financeDependencyId)) ||
+              (await db.secureConflicts.get(item.financeDependencyId)))
+          )
+            continue;
+          const attempted = await readFinanceReplayIntent(item.entityType, async (signal) => {
+            if (!signal) throw new Error('Unlock Finance to continue.');
+            const mutation = await decryptMutation(item);
+            const result = await pushMutation(
+              csrfToken,
+              mutation,
+              await durableBacklogSnapshot(),
+              signal,
+            );
+            if (!result) throw new Error('Synchronization returned no mutation result.');
+            if (['applied', 'duplicate', 'alreadyApplied'].includes(result.status)) {
+              if (
+                result.version === undefined ||
+                !Number.isSafeInteger(result.version) ||
+                result.version <= item.baseVersion
+              )
+                throw new Error(
+                  'Finance synchronization did not confirm this version. Your change remains saved on this device.',
+                );
+              await commitFinanceReplayOutcome({ expected: item, signal });
+            } else if (result.status === 'conflict' || result.status === 'rejected') {
+              const value = await encryptLocalValue('conflict', item.id, { mutation, result });
+              await commitFinanceReplayOutcome({
+                expected: item,
+                signal,
+                conflict: {
+                  id: item.id,
+                  entityType: item.entityType,
+                  updatedAt: new Date().toISOString(),
+                  value,
+                },
+              });
+            } else {
+              throw new Error(
+                'Finance synchronization needs attention. Your change remains saved on this device.',
+              );
+            }
+            return true;
+          });
+          if (!attempted) break;
+          continue;
+        }
         const mutation = await readFinanceReplayIntent(item.entityType, () =>
           decryptMutation(item),
         );
@@ -563,7 +631,7 @@ export async function pullChanges(): Promise<boolean> {
     method: 'POST',
     credentials: 'include',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ contractVersion: 5, cursor: current }),
+    body: JSON.stringify({ contractVersion: 8, cursor: current, deliverFinance: false }),
   });
   if (!response.ok) throw await syncHttpResponseError('Synchronization pull', response);
   const body = (await response.json()) as {
@@ -596,6 +664,8 @@ export async function pullChanges(): Promise<boolean> {
   };
   for (const change of body.changes) {
     const entityType = change.entityType ?? 'task';
+    // Finance hydration and acknowledgement belong to their protected independent lane.
+    if (entityType.startsWith('finance')) continue;
     if (entityType === 'personalStackOperation') {
       if (change.operation !== 'upsert') {
         throw new Error('Personal stack operations cannot be tombstoned.');
@@ -796,6 +866,7 @@ export async function pullChanges(): Promise<boolean> {
       cursor,
       records.length ? (await readLocalTaskSnapshot()).unreadable : [],
     );
+  if (tombstones.length || revocations.length) await invalidateFinanceForAccessRevocation();
   return cursorAdvanced(current, cursor);
 }
 
@@ -808,7 +879,7 @@ async function refreshTaskSnapshotFromServer(): Promise<void> {
   );
   const canonical = [...new Map(records.map((record) => [record.id, record])).values()];
   await db.transaction('rw', db.secureTasks, db.outbox, db.settings, async () => {
-    if (await db.outbox.count())
+    if (await automaticOutbox().count())
       throw new Error('Pending changes must finish uploading before refreshing tasks.');
     if (canonical.length) await db.secureTasks.bulkPut(canonical);
     await db.settings.put({ key: 'task-snapshot-bootstrapped', value: 'true' });
@@ -832,6 +903,12 @@ async function performSync(csrfToken: string) {
     pushError = error;
   }
   await pullChanges();
+  try {
+    await catchUpFinanceChanges();
+  } catch {
+    // Keep the independent Finance checkpoint pending; ordinary task progress already committed.
+    console.warn('Finance delivery will retry after its next authorized synchronization.');
+  }
   if (pushError) throw pushError;
   if (recoveryError) throw recoveryError;
 }
@@ -872,7 +949,7 @@ export async function syncNow(csrfToken: string) {
 export async function resyncFromServer(csrfToken: string, maxPages = 100) {
   await runWithSyncLock(async () => {
     await drainOutbox(csrfToken);
-    if (await db.outbox.count())
+    if (await automaticOutbox().count())
       throw new Error('Pending changes must finish uploading before a full resync.');
     // A feed replay repairs a bad cursor, while the authoritative snapshot also
     // restores records that are absent from a damaged or incomplete local feed.
@@ -890,16 +967,17 @@ export async function resyncFromServer(csrfToken: string, maxPages = 100) {
 export async function drainSequentially(
   csrfToken: string,
   onRetry: (delay: number) => void = () => {},
+  failedSyncAttempts = 0,
 ): Promise<void> {
   try {
     await syncNow(csrfToken);
   } catch (error) {
-    const item = await db.outbox.orderBy('createdAt').first();
-    if (item) {
-      const delay = nextRetryDelay(item.attempts);
-      await db.outbox.update(item.id, { attempts: item.attempts + 1 });
-      onRetry(delay);
-    }
+    const item = await db.outbox
+      .orderBy('createdAt')
+      .filter((item) => !needsCsvReview(item))
+      .first();
+    if (item) await db.outbox.update(item.id, { attempts: item.attempts + 1 });
+    onRetry(nextRetryDelay(Math.max(failedSyncAttempts, item?.attempts ?? 0)));
     throw error instanceof Error ? error : new Error('Pending changes remain safely stored.');
   }
 }

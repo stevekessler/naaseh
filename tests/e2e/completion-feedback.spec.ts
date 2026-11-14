@@ -15,6 +15,7 @@ test('@enhanced-lists pointer and keyboard completion survives blocked audio wit
     expect(page.getByText('Keyboard task completed.')).toBeAttached(),
     page.keyboard.press('Enter'),
   ]);
+  await expect(page.getByRole('complementary', { name: 'Recently completed tasks' })).toBeVisible();
   const list = await createListWithItem(page, 'Done today', 'Pointer item');
   await list.getByRole('button', { name: 'Complete Pointer item' }).click();
   await expect(list.getByText('Pointer item completed.')).toBeAttached();

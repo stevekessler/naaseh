@@ -297,13 +297,16 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       .digest('hex');
     const service = createPasswordResetService({
       findUser: userByUsername,
-      verifyOrDummyPin: async (hash, pin) => {
-        const pepper = await loadPepper(process.env.PASSWORD_PEPPER_SECRET_ID);
+      verifyOrDummyPin: async (hash, pin, version) => {
+        const pepper = await loadPepper(process.env.PASSWORD_PEPPER_SECRET_ID, version);
         return verifyOrDummy(hash, pin, pepper.value);
       },
-      hashNewPassword: async (password) => {
-        const pepper = await loadPepper(process.env.PASSWORD_PEPPER_SECRET_ID);
-        return hashPassword(password, pepper.value);
+      hashNewPassword: async (password, version) => {
+        const pepper = await loadPepper(process.env.PASSWORD_PEPPER_SECRET_ID, version);
+        return {
+          passwordHash: await hashPassword(password, pepper.value),
+          pepperVersion: pepper.version,
+        };
       },
       commitPasswordReset,
       consumeAttempt: consumePasswordResetAttempt,
@@ -509,6 +512,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
     await commitPasswordReset({
       userId: authenticated.user.id,
       passwordHash: await hashPassword(body.newPassword, pepper.value),
+      pepperVersion: pepper.version,
       expectedVersion: authenticated.user.version,
       nextCredentialVersion: authenticated.user.credentialVersion + 1,
       nextSessionEpoch: authenticated.user.sessionEpoch + 1,

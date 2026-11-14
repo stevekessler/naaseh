@@ -1,9 +1,32 @@
+import {
+  createFinanceClassificationSnapshot,
+  type FinanceCategory,
+  type FinanceClassificationSnapshot,
+} from './category.js';
+
 export interface TransactionAllocationInput {
   id: string;
   amountMinor: number;
   financeCategoryId: string;
+  subcategoryId?: string;
+  classification?: FinanceClassificationSnapshot;
   budgetItemId?: string;
   note?: string;
+}
+
+export function withAllocationClassification(
+  allocation: TransactionAllocationInput,
+  category: FinanceCategory,
+  subcategory?: FinanceCategory,
+): TransactionAllocationInput {
+  if (allocation.financeCategoryId !== category.id)
+    throw new Error('The allocation category does not match the selected parent category.');
+  const classification = createFinanceClassificationSnapshot(category, subcategory);
+  return {
+    ...allocation,
+    ...(subcategory ? { subcategoryId: subcategory.id } : {}),
+    classification,
+  };
 }
 
 export interface TransactionAllocation extends TransactionAllocationInput {

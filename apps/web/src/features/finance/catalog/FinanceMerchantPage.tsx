@@ -18,22 +18,33 @@ export function FinanceMerchantPage({
   const [name, setName] = useState('');
   const [city, setCity] = useState('');
   const [region, setRegion] = useState('');
+  const refresh = async () => {
+    const { items } = await financeRequest<{ items: MerchantView[] }>('/finance/merchants');
+    setMerchants(items);
+    return items;
+  };
   useEffect(() => {
-    void financeRequest<{ items: MerchantView[] }>('/finance/merchants').then(({ items }) =>
-      setMerchants(items),
-    );
+    void refresh();
   }, []);
   useEffect(() => setSelectedId(initialMerchantId), [initialMerchantId]);
   const create = async (event: FormEvent) => {
     event.preventDefault();
-    const merchant = await financeRequest<MerchantView>('/finance/merchants', {
+    const before = new Set((await refresh()).map(({ id }) => id));
+    await financeRequest('/finance/merchants', {
       method: 'POST',
       csrfToken,
       idempotencyKey: crypto.randomUUID(),
       body: JSON.stringify({ name, ...(city ? { city } : {}), ...(region ? { region } : {}) }),
     });
-    setMerchants((current) => [...current, merchant]);
-    setSelectedId(merchant.id);
+    const current = await refresh();
+    const created = current.filter(
+      (merchant) =>
+        !before.has(merchant.id) &&
+        merchant.name === name &&
+        (merchant.city ?? '') === city &&
+        (merchant.region ?? '') === region,
+    );
+    setSelectedId(created.length === 1 ? created[0]!.id : undefined);
     setName('');
     setCity('');
     setRegion('');

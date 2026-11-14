@@ -1,3 +1,5 @@
+import { dispatchFinanceReplay } from '../finance/sync-replay.js';
+import { FinanceCacheProofService } from '../finance/cache-proof.js';
 import { saveSyncedTask } from './task-sync.js';
 import type {
   APIGatewayProxyEventV2,
@@ -23,6 +25,7 @@ import {
   taskSchema,
   type ContentActor,
   type Mutation,
+  type SyncChange,
 } from '@naaseh/domain';
 import { pushRequestSchema, stackSyncMutationSchema } from '@naaseh/contracts';
 import {
@@ -95,9 +98,24 @@ import {
 } from '../journal/journal-repository.js';
 import { JournalService } from '../journal/journal-service.js';
 import { recordSyncMutationAttempt, recordSyncMutationOutcome } from './sync-telemetry.js';
-import { createFinanceSyncHandler, pullFinanceDeliveryLanes } from './handlers.js';
-import { isFinanceSyncEntityType } from './types.js';
-import { createFinanceUnlockGuard } from '../finance/finance-unlock-guard.js';
+import {
+  createFinanceSyncHandler,
+  pullFinanceDeliveryLanes,
+  applyFinanceSourceChecks,
+} from './handlers.js';
+import {
+  FinanceSyncSourceGuard,
+  serializeFinanceFeedChange,
+} from '../finance/sync-source-guard.js';
+import {
+  financeBootstrapDynamoDependencies,
+  readFinanceBootstrapPage,
+} from '../finance/bootstrap.js';
+import { isFinanceSyncEntityType, isFinanceSyncEntityFamily } from './types.js';
+import {
+  createFinanceUnlockGuard,
+  assertFinanceClientUser,
+} from '../finance/finance-unlock-guard.js';
 const financeUnlockGuard = createFinanceUnlockGuard();
 const MAX_BODY_BYTES = 1_000_000;
 const journalRepository = new DynamoJournalRepository();
@@ -137,6 +155,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
   const actorId = context.authorizer?.lambda?.userId;
   if (!actorId)
     return problem(401, 'unauthorized', 'Authentication required.', event.requestContext.requestId);
+  assertFinanceClientUser(actorId, event.headers['x-finance-owner']);
   const actor: ContentActor = {
     id: actorId,
     role: context.authorizer?.lambda?.role ?? 'user',
@@ -211,34 +230,107 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       });
     }
     const cursor = (parsed as { cursor?: Record<string, number> }).cursor ?? {};
-    const memberships = (await listUserMemberships(actorId)).filter(
-      (item) => item.status === 'active',
-    );
-    const feeds = [
-      ['public', 'PUBLIC'],
-      ['owner', `OWNER#${actorId}`],
-      ['access', `ACCESS#${actorId}`],
-      ...memberships.map((item) => [`group:${item.groupId}`, `GROUP#${item.groupId}`]),
-      ...(context.authorizer?.lambda?.role === 'admin'
-        ? Array.from({ length: 16 }, (_, index) => [`admin:${index}`, `ADMIN#${index}`])
-        : []),
-    ] as [string, string][];
-    const pulled = await Promise.all(
-      feeds.map(async ([name, audience]) => {
-        const after = Number(cursor[name] ?? 0);
-        const changes = await pullAudience(audience, after, 200);
-        return { name, after, changes };
-      }),
-    );
+    // Cache authorization renews prior evidence; it neither discovers nor acknowledges feed data.
+    // Current scope/membership/task dependencies are checked by FinanceCacheProofService below.
+    const cacheOnly =
+      (parsed as { financeCacheOnly?: unknown }).financeCacheOnly === true &&
+      (parsed as { financeCacheProtocol?: unknown }).financeCacheProtocol === 1;
+    const memberships = cacheOnly
+      ? []
+      : (await listUserMemberships(actorId)).filter((item) => item.status === 'active');
+    const feeds = cacheOnly
+      ? []
+      : ([
+          ['public', 'PUBLIC'],
+          ['owner', `OWNER#${actorId}`],
+          ['access', `ACCESS#${actorId}`],
+          ...memberships.map((item) => [`group:${item.groupId}`, `GROUP#${item.groupId}`]),
+          ...(context.authorizer?.lambda?.role === 'admin'
+            ? Array.from({ length: 16 }, (_, index) => [`admin:${index}`, `ADMIN#${index}`])
+            : []),
+        ] as [string, string][]);
+    const bootstrapOnly = (parsed as { financeBootstrapProtocol?: unknown })
+      .financeBootstrapProtocol;
+    const pulled =
+      bootstrapOnly === 1
+        ? []
+        : await Promise.all(
+            feeds.map(async ([name, audience]) => {
+              const after = Number(cursor[name] ?? 0);
+              const changes = await pullAudience(audience, after, 200);
+              return { name, after, changes };
+            }),
+          );
     const financeRequest = parsed as {
       contractVersion?: number;
       version?: number;
       financeCursor?: Record<string, number>;
+      deliverFinance?: boolean;
+      financeCacheProtocol?: number;
+      financeCacheProof?: string | string[];
+      financeCacheOnly?: boolean;
+      financeBootstrapProtocol?: number;
+      financeBootstrapCursor?: string;
     };
+    const evidence = financeRequest.financeCacheProof;
+    const validEvidence =
+      typeof evidence === 'string'
+        ? evidence.length > 0 && evidence.length <= 45000
+        : Array.isArray(evidence) &&
+          evidence.length > 0 &&
+          evidence.length <= 64 &&
+          evidence.every(
+            (token) => typeof token === 'string' && token.length > 0 && token.length <= 45000,
+          ) &&
+          evidence.reduce((bytes, token) => bytes + token.length, 0) <= 250000;
     if (
+      (financeRequest.financeCacheOnly !== undefined &&
+        (typeof financeRequest.financeCacheOnly !== 'boolean' ||
+          financeRequest.financeCacheProtocol !== 1)) ||
+      (financeRequest.financeCacheProtocol !== undefined &&
+        financeRequest.financeCacheProtocol !== 1) ||
+      (financeRequest.financeCacheProof !== undefined &&
+        (financeRequest.financeCacheProtocol !== 1 || !validEvidence)) ||
+      (financeRequest.financeBootstrapProtocol !== undefined &&
+        (financeRequest.financeBootstrapProtocol !== 1 ||
+          financeRequest.financeCacheProtocol !== 1 ||
+          (financeRequest.financeBootstrapCursor !== undefined &&
+            (typeof financeRequest.financeBootstrapCursor !== 'string' ||
+              financeRequest.financeBootstrapCursor.length < 1 ||
+              financeRequest.financeBootstrapCursor.length > 100_000))))
+    )
+      return problem(
+        400,
+        'invalid_finance_cache_protocol',
+        'Refresh Naaseh before synchronizing Finance.',
+        event.requestContext.requestId,
+      );
+    if (
+      financeRequest.financeCacheProtocol === 1 &&
+      (financeRequest.contractVersion ?? financeRequest.version ?? 1) < 8
+    )
+      return problem(
+        426,
+        'finance_upgrade_required',
+        'Refresh Naaseh before synchronizing Finance.',
+        event.requestContext.requestId,
+      );
+    if (
+      financeRequest.deliverFinance !== undefined &&
+      typeof financeRequest.deliverFinance !== 'boolean'
+    )
+      return problem(
+        400,
+        'invalid_finance_delivery',
+        'Finance delivery must be a boolean.',
+        event.requestContext.requestId,
+      );
+    if (
+      financeRequest.deliverFinance === false ||
+      financeRequest.financeCacheProtocol === 1 ||
       financeRequest.financeCursor !== undefined ||
       pulled.some((page) =>
-        page.changes.some((change) => isFinanceSyncEntityType(change.entityType ?? '')),
+        page.changes.some((change) => isFinanceSyncEntityFamily(change.entityType ?? '')),
       )
     ) {
       const gate = {
@@ -246,20 +338,78 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         sessionHash: context.authorizer?.lambda?.sessionHash ?? '',
         grant: event.headers['x-finance-unlock'],
         tabNonce: event.headers['x-finance-tab'],
+        expectedUserId: event.headers['x-finance-owner'],
       };
       let requirePin = true;
       let unlocked = false;
-      try {
-        const protection = await financeUnlockGuard(gate);
-        requirePin = protection.requirePin;
-        unlocked = true;
-      } catch (error) {
-        if (!(error instanceof SafeApiError) || error.code !== 'finance_locked') throw error;
+      if (financeRequest.deliverFinance !== false)
+        try {
+          const protection = await financeUnlockGuard(gate);
+          requirePin = protection.requirePin;
+          unlocked = true;
+        } catch (error) {
+          if (!(error instanceof SafeApiError) || error.code !== 'finance_locked') throw error;
+        }
+      const sourceGuard = new FinanceSyncSourceGuard({ userId: actorId, role: actor.role });
+      if (financeRequest.financeBootstrapProtocol === 1) {
+        if (!unlocked)
+          return json(200, {
+            financeState: 'locked',
+            financeCache: { status: 'locked' },
+          });
+        try {
+          const page = await readFinanceBootstrapPage({
+            userId: actorId,
+            partitions: [
+              'FINANCE#CATALOG',
+              `FINANCE#SCOPE#OWNER#${actorId}`,
+              ...memberships.map(({ groupId }) => `FINANCE#SCOPE#GROUP#${groupId}`),
+            ],
+            ...(financeRequest.financeBootstrapCursor
+              ? { cursor: financeRequest.financeBootstrapCursor }
+              : {}),
+            secret: process.env.CURSOR_SIGNING_SECRET ?? '',
+            dependencies: financeBootstrapDynamoDependencies(sourceGuard),
+          });
+          await financeUnlockGuard(gate);
+          const proofService = new FinanceCacheProofService({
+            userId: actorId,
+            role: actor.role,
+            secret: process.env.CURSOR_SIGNING_SECRET ?? '',
+            authorize: () => financeUnlockGuard(gate),
+          });
+          return json(200, {
+            financeState: 'ready',
+            financeBootstrap: page,
+            financeCache: {
+              status: 'current',
+              proof: await proofService.issue(sourceGuard, financeRequest.financeCacheProof),
+            },
+          });
+        } catch (error) {
+          if (error instanceof SafeApiError) throw error;
+          const message = error instanceof Error ? error.message : '';
+          if (/invalid|expired|changed|restart/iu.test(message))
+            return problem(
+              /invalid|expired/iu.test(message) ? 400 : 409,
+              /invalid|expired/iu.test(message)
+                ? 'invalid_finance_bootstrap_cursor'
+                : 'finance_bootstrap_restart_required',
+              'Finance changed during setup. Restart synchronization.',
+              event.requestContext.requestId,
+            );
+          throw error;
+        }
       }
-      const lanes = await pullFinanceDeliveryLanes({
+      const pulledLanes = await pullFinanceDeliveryLanes({
         feeds,
         cursor,
         ...(financeRequest.financeCursor ? { financeCursor: financeRequest.financeCursor } : {}),
+        ...(financeRequest.financeCacheOnly === true
+          ? { deliverFinance: false }
+          : financeRequest.deliverFinance !== undefined
+            ? { deliverFinance: financeRequest.deliverFinance }
+            : {}),
         contractVersion: financeRequest.contractVersion ?? financeRequest.version ?? 1,
         requirePin,
         unlocked,
@@ -271,16 +421,82 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
           return cached?.changes ?? pullAudience(audience, after, limit);
         },
       });
-      // A late reset/revocation must not release data computed under an old grant.
+      if (cacheOnly) pulledLanes.cursor = { ...cursor };
+      let lanes = await applyFinanceSourceChecks(
+        pulledLanes,
+        sourceGuard,
+        financeRequest.financeCursor,
+      );
+      let financeCache:
+        | { status: 'current'; proof: string }
+        | { status: 'locked' | 'refresh-required' }
+        | undefined;
+      const withholdFinance = () => {
+        lanes = {
+          ...lanes,
+          changes: lanes.changes.filter(
+            (change) => !isFinanceSyncEntityFamily(change.entityType ?? ''),
+          ),
+          financeChanges: [],
+          financeHasMore: false,
+          financeCursor: { ...financeRequest.financeCursor },
+          financeState: 'locked',
+        };
+      };
+      if (financeRequest.financeCacheProtocol === 1) {
+        financeCache = { status: 'locked' };
+        if (
+          unlocked &&
+          (lanes.financeState === 'ready' || financeRequest.financeCacheOnly === true) &&
+          financeRequest.deliverFinance !== false
+        ) {
+          const proofService = new FinanceCacheProofService({
+            userId: actorId,
+            role: actor.role,
+            secret: process.env.CURSOR_SIGNING_SECRET ?? '',
+            authorize: () => financeUnlockGuard(gate),
+          });
+          try {
+            financeCache = {
+              status: 'current',
+              proof: await proofService.issue(sourceGuard, financeRequest.financeCacheProof),
+            };
+          } catch (error) {
+            if (!(error instanceof SafeApiError)) throw error;
+            if (error.code === 'finance_locked') financeCache = { status: 'locked' };
+            else if (
+              ['finance_cache_refresh_required', 'finance_sync_sources_changed'].includes(
+                error.code,
+              )
+            )
+              financeCache = { status: 'refresh-required' };
+            else throw error;
+            withholdFinance();
+          }
+        }
+      }
+      // A late Finance lock withholds that lane while leaving ordinary task progress intact.
       if (
         lanes.financeChanges.length ||
-        lanes.changes.some((change) => isFinanceSyncEntityType(change.entityType ?? ''))
-      )
-        await financeUnlockGuard(gate);
+        lanes.changes.some((change) => isFinanceSyncEntityFamily(change.entityType ?? ''))
+      ) {
+        try {
+          await financeUnlockGuard(gate);
+        } catch (error) {
+          if (!(error instanceof SafeApiError) || error.code !== 'finance_locked') throw error;
+          withholdFinance();
+          if (financeCache) financeCache = { status: 'locked' };
+        }
+      }
       const serialize = (change: SyncFeedChange) =>
-        change.entityType === 'personalStackOperation' ? change : serializeSharedWorkChange(change);
+        isFinanceSyncEntityFamily(change.entityType ?? '')
+          ? serializeFinanceFeedChange(change as SyncChange)
+          : change.entityType === 'personalStackOperation'
+            ? change
+            : serializeSharedWorkChange(change);
       return json(200, {
         ...lanes,
+        ...(financeCache ? { financeCache } : {}),
         changes: lanes.changes.map(serialize),
         financeChanges: lanes.financeChanges.map(serialize),
       });
@@ -380,10 +596,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       // retains encrypted intent and cannot echo a prior protected entity.
       try {
         const replay = createFinanceSyncHandler(
-          async () => ({
-            mutationId: mutation.id,
-            status: 'retry' as const,
-          }),
+          async () => dispatchFinanceReplay(event, mutation),
           async () => {
             try {
               const protection = await financeUnlockGuard({
@@ -391,6 +604,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
                 sessionHash: context.authorizer?.lambda?.sessionHash ?? '',
                 grant: event.headers['x-finance-unlock'],
                 tabNonce: event.headers['x-finance-tab'],
+                expectedUserId: event.headers['x-finance-owner'],
               });
               if (protection.requirePin && (body.contractVersion ?? body.version ?? 1) < 8)
                 throw new SafeApiError(
@@ -415,15 +629,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
             }
           },
         );
-        results.push({
-          ...(await replay(actorId, mutation)),
-          problem: {
-            code: 'finance_replay_pending',
-            message: 'Finance replay is not available yet. Pending changes remain saved.',
-            correlationId: event.requestContext.requestId,
-            retryAfterSeconds: 30,
-          },
-        });
+        results.push(await replay(actorId, mutation));
       } catch (error) {
         const safe = recordError(error, {
           operation: 'sync.finance',

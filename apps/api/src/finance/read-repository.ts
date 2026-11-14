@@ -1,3 +1,4 @@
+import { identifyCsvDuplicateOrdinals } from './csv-import-service.js';
 import { BatchGetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
 import { sumSpendByCurrency, filterSpendSlices } from '@naaseh/domain';
 import {
@@ -5,6 +6,8 @@ import {
   decodeFinanceCursor,
   encodeFinanceCursor,
   matchesFinanceFact,
+  isFinanceFactBefore,
+  compareFinanceRows,
   normalizeFinanceText,
   parseFinanceReadRequest,
   type FinanceFact,
@@ -15,6 +18,11 @@ import {
 } from './query-contract.js';
 import { textPostingOrdinals, textOrdinalKey } from './text-postings.js';
 import { financeTextGrams } from './text-postings.js';
+import {
+  financeAccountReadSummarySchema,
+  supportsFinanceAccountSummary,
+  type FinanceAccountReadSummary,
+} from './account-read-summary.js';
 
 type Row = {
   PK?: string;
@@ -27,6 +35,7 @@ type Row = {
   baseOrdinal?: number;
   bits?: Uint8Array;
   sourceOrdinal?: number;
+  aggregate?: unknown;
 };
 export interface FinanceQueryClient {
   send(command: QueryCommand | BatchGetCommand): Promise<{
@@ -68,6 +77,83 @@ export class FinanceReadRepository {
 
   async read(input: FinanceReadRequest): Promise<FinanceReadResult> {
     return (await this.scan(input)).page;
+  }
+
+  /** Caller establishes the canonical account revision before and after this bounded read. */
+  async csvDuplicateOrdinals(
+    accountId: string,
+    rows: Parameters<typeof identifyCsvDuplicateOrdinals>[1]['rows'],
+  ): Promise<number[]> {
+    const normalized = rows.map((row) => ({
+      ...row,
+      transactedAt: new Date(row.transactedAt).toISOString(),
+    }));
+    const times = normalized.map(({ transactedAt }) => transactedAt).sort();
+    if (!times.length || times.length > 100) throw new Error('Invalid CSV duplicate check.');
+    const partition = financeReadKeys.account(accountId);
+    const page = await this.options.client.send(
+      new QueryCommand({
+        TableName: this.options.tableName,
+        KeyConditionExpression: 'PK = :pk AND SK BETWEEN :start AND :end',
+        ExpressionAttributeValues: {
+          ':pk': partition,
+          ':start': `DATE#${times[0]}#`,
+          ':end': `DATE#${times.at(-1)}#\uffff`,
+        },
+        ConsistentRead: true,
+        Limit: 200,
+      }),
+    );
+    if (page.LastEvaluatedKey || (page.Items?.length ?? 0) > 200)
+      throw new Error('CSV duplicate check needs a narrower date range.');
+    const entries = page.Items ?? [];
+    const timesToCheck = new Set(times);
+    const references = entries.filter((row) => {
+      if (
+        row.PK !== partition ||
+        !row.transactionId ||
+        !row.SK?.endsWith(`#${row.transactionId}`) ||
+        !row.SK.startsWith('DATE#')
+      )
+        throw new Error('Finance CSV projection is incomplete.');
+      return timesToCheck.has(row.SK.slice(5, -row.transactionId.length - 1));
+    });
+    const facts = new Map<string, FinanceFact>();
+    const keys = [
+      ...new Set(references.filter((row) => !row.fact).map((row) => row.transactionId!)),
+    ];
+    for (let offset = 0; offset < keys.length; offset += 100) {
+      const result = await this.options.client.send(
+        new BatchGetCommand({
+          RequestItems: {
+            [this.options.tableName]: {
+              Keys: keys.slice(offset, offset + 100).map(financeReadKeys.fact),
+              ConsistentRead: true,
+            },
+          },
+        }),
+      );
+      if (result.UnprocessedKeys && Object.keys(result.UnprocessedKeys).length)
+        throw new Error('Finance CSV projection is incomplete.');
+      for (const row of result.Responses?.[this.options.tableName] ?? []) {
+        const fact = row.fact ?? row.data;
+        if (fact) facts.set(fact.id, fact);
+      }
+    }
+    const matched = references.map((row) => {
+      const fact = row.fact ?? facts.get(row.transactionId!);
+      if (
+        !fact ||
+        fact.id !== row.transactionId ||
+        fact.accountId !== accountId ||
+        financeReadKeys.date(fact) !== row.SK ||
+        !Number.isSafeInteger(fact.amountMinor) ||
+        typeof fact.description !== 'string'
+      )
+        throw new Error('Finance CSV projection is incomplete.');
+      return fact;
+    });
+    return identifyCsvDuplicateOrdinals(matched, { accountId, rows: normalized });
   }
 
   private async expandShortPostings(
@@ -143,9 +229,32 @@ export class FinanceReadRepository {
   }
 
   async scan(input: FinanceReadRequest) {
+    return this.scanPartition(input, false);
+  }
+
+  /** Only private workers consume compact aggregates; public reads always hydrate real facts. */
+  async scanForJob(input: FinanceReadRequest) {
+    return (await this.scanPartition(input, true)).step;
+  }
+  async preview(input: FinanceReadRequest) {
+    return (await this.scanPartition(input, true, true)).step;
+  }
+
+  private async scanPartition(
+    input: FinanceReadRequest,
+    aggregateOnly: boolean,
+    requireCompact = false,
+  ) {
     const request = parseFinanceReadRequest(input);
     const { userId, accountId, sourceRevision, securityRevision, filters, limit } = request;
-    const context = { userId, accountId, sourceRevision, securityRevision, filters };
+    const context = {
+      userId,
+      accountId,
+      sourceRevision,
+      securityRevision,
+      filters,
+      ...(request.before ? { before: request.before } : {}),
+    };
     const key = request.cursor
       ? decodeFinanceCursor(request.cursor, context, this.options.cursorSecret)
       : undefined;
@@ -230,8 +339,14 @@ export class FinanceReadRepository {
     let last = broadTo
       ? `DATE#${compactText ? broadTo.slice(0, 7) : broadTo}\uffff`
       : 'DATE#\uffff';
+    if (request.before) {
+      // Keep the boundary day/month inclusive; exact timestamp/ID ordering is
+      // checked after loading candidates, including legacy ISO precision variants.
+      const before = `DATE#${request.before.effectiveAt.slice(0, compactText ? 7 : 10)}\uffff`;
+      if (before < last) last = before;
+    }
     if (key?.beforeOrdinal !== undefined && key.SK < last) last = key.SK;
-    const ranged = Boolean(from || to || key?.beforeOrdinal !== undefined);
+    const ranged = Boolean(from || to || request.before || key?.beforeOrdinal !== undefined);
     const page = await this.options.client.send(
       new QueryCommand({
         TableName: this.options.tableName,
@@ -259,9 +374,34 @@ export class FinanceReadRepository {
       throw new Error('Finance query cursor did not advance.');
     if (examined > FINANCE_MAX_EXAMINED || rows.length > FINANCE_MAX_EXAMINED)
       throw new Error('Finance examined-row budget exceeded.');
+    const useAggregates =
+      aggregateOnly &&
+      partition === financeReadKeys.account(accountId) &&
+      supportsFinanceAccountSummary(filters);
+    const compact = new Map<Row, FinanceAccountReadSummary>();
+    if (requireCompact && !useAggregates)
+      throw new Error('Finance ordered preview scope is invalid.');
+    if (useAggregates)
+      for (const row of rows) {
+        if (requireCompact && row.aggregate === undefined)
+          throw new Error('Finance ordered aggregate reference is unavailable.');
+        if (row.aggregate === undefined) continue; // Legacy references still load bounded canonical facts.
+        const parsed = financeAccountReadSummarySchema.safeParse(row.aggregate);
+        if (
+          !parsed.success ||
+          parsed.data.accountId !== accountId ||
+          parsed.data.id !== row.transactionId ||
+          row.PK !== partition ||
+          row.SK !== financeReadKeys.date(parsed.data)
+        )
+          throw new Error('Finance aggregate projection invariant failed.');
+        compact.set(row, parsed.data);
+      }
     const references = [
       ...new Set(
-        rows.filter((row) => !row.fact && row.transactionId).map((row) => row.transactionId!),
+        rows
+          .filter((row) => !compact.has(row) && !row.fact && row.transactionId)
+          .map((row) => row.transactionId!),
       ),
     ];
     const loaded = new Map<string, FinanceFact>();
@@ -284,12 +424,25 @@ export class FinanceReadRepository {
       }
     }
     const matches: Array<{ fact: FinanceFact; row: Row }> = [];
+    const aggregateMatches: FinanceAccountReadSummary[] = [];
     for (const row of rows) {
+      const summary = compact.get(row);
+      if (summary) {
+        if (
+          summary.active &&
+          (!filters.postedSpendOnly || summary.hasSpend) &&
+          (!filters.accountIds?.length || filters.accountIds.includes(accountId)) &&
+          isFinanceFactBefore(summary, request.before)
+        )
+          aggregateMatches.push(summary);
+        continue;
+      }
       const fact = row.fact ?? (row.transactionId ? loaded.get(row.transactionId) : undefined);
       if (!fact) throw new Error('Finance projection incomplete; rebuild required.');
       if (fact.accountId !== accountId)
         throw new Error('Finance projection account invariant failed.');
-      if (matchesFinanceFact(fact, filters)) matches.push({ fact, row });
+      if (matchesFinanceFact(fact, filters) && isFinanceFactBefore(fact, request.before))
+        matches.push({ fact, row });
     }
     const selected = matches.slice(0, limit);
     let nextKey: FinanceCursorKey | undefined;
@@ -308,20 +461,34 @@ export class FinanceReadRepository {
       nextKey = { PK: last.PK, SK: last.SK };
     }
     const originals = [
-      ...new Set(matches.flatMap(({ fact }) => fact.originalSourceAccountIds ?? [])),
+      ...new Set([
+        ...matches.flatMap(({ fact }) => fact.originalSourceAccountIds ?? []),
+        ...aggregateMatches.flatMap((summary) => summary.originalSourceAccountIds),
+      ]),
     ];
     const budgets = [
-      ...new Set(
-        matches.flatMap(({ fact }) =>
+      ...new Set([
+        ...matches.flatMap(({ fact }) =>
           fact.slices.flatMap((slice) => (slice.budgetId ? [slice.budgetId] : [])),
         ),
-      ),
+        ...aggregateMatches.flatMap((summary) => summary.budgetIds),
+      ]),
     ];
     if (!(await this.options.authorize(context, originals, budgets)))
       throw new Error('Finance read authorization changed.');
     const items = selected.map(({ fact }) => fact);
     const complete = !page.LastEvaluatedKey && !request.cursor;
-    const allSlices = matches.flatMap(({ fact }) => filterSpendSlices(fact.slices, filters));
+    const allSlices = [
+      ...matches.flatMap(({ fact }) => filterSpendSlices(fact.slices, filters)),
+      ...aggregateMatches.flatMap((summary) =>
+        summary.totals.map((total) => ({
+          ...total,
+          transactionId: summary.id,
+          accountId: summary.accountId,
+          effectiveAt: summary.effectiveAt,
+        })),
+      ),
+    ];
     const stepTotals = sumSpendByCurrency(allSlices);
     const pageResult: FinanceReadResult = {
       items,
@@ -344,11 +511,17 @@ export class FinanceReadRepository {
     return {
       page: pageResult,
       step: {
-        topRows: matches
-          .map(({ fact }) => fact)
-          .sort((a, b) => b.effectiveAt.localeCompare(a.effectiveAt) || b.id.localeCompare(a.id))
+        topRows: [
+          ...matches.map(({ fact }) => fact),
+          ...aggregateMatches.map(({ id, accountId, effectiveAt }) => ({
+            id,
+            accountId,
+            effectiveAt,
+          })),
+        ]
+          .sort(compareFinanceRows)
           .slice(0, 200),
-        matchedCount: matches.length,
+        matchedCount: matches.length + aggregateMatches.length,
         totalsByCurrency: stepTotals,
         examined,
         ...(scanKey

@@ -1,5 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
+import {
+  signIn,
+  mockUnprotectedFinanceSecurity,
+  mockFinanceSnapshotEvidence,
+  financeSnapshotFixtureHeaders,
+} from './enhanced-helpers.js';
 
 test('completes the representative Finance account, CSV, split, budget, and offline journey', async ({
   context,
@@ -13,7 +18,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
     budget: '01J00000000000000000000905',
   };
   let accounts: Array<Record<string, unknown>> = [];
-  const transaction = {
+  let transaction = {
     id: ids.transaction,
     accountId: ids.account,
     description: 'Household purchase',
@@ -78,6 +83,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
     if (route.request().method() === 'GET') {
       return route.fulfill({
         status: 200,
+        headers: financeSnapshotFixtureHeaders,
         contentType: 'application/json',
         body: JSON.stringify({ items: accounts, cursor: null }),
       });
@@ -102,8 +108,17 @@ test('completes the representative Finance account, CSV, split, budget, and offl
   await page.route(`**/api/v1/finance/accounts/${ids.account}/transactions`, (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [transaction], cursor: null }),
+    }),
+  );
+  await page.route(`**/api/v1/finance/transactions/${ids.transaction}`, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: financeSnapshotFixtureHeaders,
+      contentType: 'application/json',
+      body: JSON.stringify(transaction),
     }),
   );
   await page.route(
@@ -112,20 +127,19 @@ test('completes the representative Finance account, CSV, split, budget, and offl
       const input = route.request().postDataJSON() as {
         allocations: typeof transaction.allocations;
       };
+      transaction = { ...transaction, allocations: input.allocations, version: 2 };
       return route.fulfill({
         status: 200,
+        headers: financeSnapshotFixtureHeaders,
         contentType: 'application/json',
-        body: JSON.stringify({
-          ...transaction,
-          allocations: input.allocations,
-          version: 2,
-        }),
+        body: JSON.stringify(transaction),
       });
     },
   );
   await page.route('**/api/v1/finance/categories', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({
         items: [
@@ -139,6 +153,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
   await page.route('**/api/v1/finance/merchants', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [], cursor: null }),
     }),
@@ -146,6 +161,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
   await page.route('**/api/v1/finance/review-issues', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [], cursor: null }),
     }),
@@ -153,14 +169,25 @@ test('completes the representative Finance account, CSV, split, budget, and offl
   await page.route('**/api/v1/finance/budgets', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [budget], cursor: null }),
     }),
   );
 
-  await mockUnprotectedFinanceSecurity(page);
+  await page.route(`**/api/v1/finance/budgets/${ids.budget}`, (route) =>
+    route.fulfill({
+      status: 200,
+      headers: financeSnapshotFixtureHeaders,
+      contentType: 'application/json',
+      body: JSON.stringify(budget),
+    }),
+  );
+  await mockUnprotectedFinanceSecurity(page, { role: 'user' });
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
-  await page.getByRole('button', { name: 'Finance' }).click();
+  await page.getByRole('button', { name: 'Show Finance menu' }).click();
+  await page.getByRole('button', { name: 'New Account' }).click();
   await page.getByLabel('Organization name').fill('Fixture Bank');
   await page.getByLabel('Account name').fill('Checking');
   await page.getByLabel('Opening balance').fill('1250.00');
@@ -194,6 +221,7 @@ test('completes the representative Finance account, CSV, split, budget, and offl
   await page.getByLabel('Split 2 category').selectOption(ids.categoryHome);
   await page.getByRole('button', { name: 'Save splits' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Allocations saved.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Close transaction' }).click();
 
   await page.getByRole('button', { name: 'Budgets', exact: true }).click();
   await page.getByRole('button', { name: 'Open budget' }).click();

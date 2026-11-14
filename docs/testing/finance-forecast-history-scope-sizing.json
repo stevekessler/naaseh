@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-09",
+  "userRule": "Non-budgeted history only upon explicit forecast request; budget-only reporting only selected-budget activity.",
+  "defaultIncludeNonBudgetedHistory": false,
+  "outputs": [
+    "budgetRows",
+    "nonBudgetedRows"
+  ],
+  "scopeRequirements": [
+    "Canonical current budget and account authorization, derived by trusted readers.",
+    "Optional non-budgeted rows must come from currently linked accounts.",
+    "Other-budget and unresolved assignment rows never become extra history.",
+    "Allocation portions are retained; no implicit transaction reassignment.",
+    "Inputs completeness is not a proof of complete query/data coverage."
+  ],
+  "reportIsolation": "Existing report filters reject includeNonBudgetedHistory and filter monetary contribution slices to selected budget IDs.",
+  "runtimeSideEffects": {
+    "awsCalls": 0,
+    "writes": 0,
+    "routesAdded": 0,
+    "pollersAdded": 0,
+    "migrationRun": false
+  },
+  "forecastModelsImplemented": false,
+  "tasks": {
+    "originalTaskIdsPreserved": "T001-T159",
+    "newDependentTasks": "T160-T166",
+    "total": 166,
+    "checked": 28
+  },
+  "requiredDiscovery": {
+    "before": 1722,
+    "after": 1728,
+    "files": 460
+  },
+  "forecastWindowDecision": "Open-ended budgets default to the next 12 calendar months. Dated budgets default to their budget dates. Both windows are adjustable."
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   financeBudgetDetailSchema,
   financeBudgetInputSchema,
+  financeBudgetLifecycleInputSchema,
   financeBudgetPageSchema,
   financeBudgetPatchSchema,
 } from '@naaseh/contracts';
@@ -14,6 +15,9 @@ const budget = {
   startDate: '2026-04-01',
   endDate: '2026-04-30',
   status: 'active',
+  activity: 'active',
+  activityChangedAt: '2026-04-01T00:00:00.000Z',
+  activityChangedBy: 'member-a',
   items: [
     {
       id: '01J00000000000000000000203',
@@ -70,6 +74,26 @@ describe('Finance budget HTTP contracts', () => {
     expect(
       financeBudgetPatchSchema.safeParse({ expectedVersion: 1, groupId: budget.groupId }).success,
     ).toBe(false);
+  });
+
+  it('uses version-only lifecycle commands and keeps activity separate from closure', () => {
+    expect(financeBudgetLifecycleInputSchema.parse({ expectedVersion: 3 })).toEqual({
+      expectedVersion: 3,
+    });
+    expect(
+      financeBudgetLifecycleInputSchema.safeParse({
+        expectedVersion: 3,
+        activity: 'inactive',
+      }).success,
+    ).toBe(false);
+    expect(
+      financeBudgetDetailSchema.parse({
+        ...budget,
+        activity: 'inactive',
+        closedAt: '2026-04-30T00:00:00.000Z',
+        closedBy: 'member-a',
+      }),
+    ).toMatchObject({ activity: 'inactive', status: 'active' });
   });
 
   it('returns exact grouped totals and a mandatory viewer-completeness flag', () => {

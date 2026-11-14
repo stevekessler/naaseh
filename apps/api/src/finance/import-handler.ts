@@ -102,14 +102,12 @@ export async function executeFinanceImport(
     });
     await dependencies.repository.checkpoint();
     log('finance.import.completed', {
-      operation: 'finance.import',
       outcome: partial ? 'partial' : 'success',
       jobId: event.jobId,
       connectionId: event.connectionId,
       accountCount: counts.accounts,
       insertedCount: counts.inserted,
     });
-    metric('FinanceImportCompletions', 1, 'Count', { outcome: partial ? 'partial' : 'success' });
     return job;
   } catch (error) {
     const errorClass = providerErrorClass(error);

@@ -25,10 +25,25 @@ function fixture() {
       coverage: { examined: 0, scopeComplete: false },
       queryId: id,
     });
+  const start = vi.fn(async () => id);
+  const page = vi
+    .fn<(userId: string, queryId: string, request: unknown) => Promise<FinanceReadResult>>()
+    .mockResolvedValue({
+      items: [],
+      asOf: '2026-11-03T00:00:00.000Z',
+      projectionRevision: 'opaque',
+      complete: true,
+      rowsState: 'confirmed-empty',
+      aggregateState: 'exact',
+      coverage: { examined: 0, scopeComplete: true },
+      totalCount: 0,
+      totalsByCurrency: [],
+      queryId: id,
+    });
   const runtime = vi.fn(
     (_options: Parameters<NonNullable<Parameters<typeof createFinanceHandler>[2]>>[0]) => {
       void _options;
-      return { status };
+      return { status, start, page };
     },
   );
   const event = {
@@ -46,11 +61,146 @@ function fixture() {
     },
   } as unknown as APIGatewayProxyEventV2;
   const handler = createFinanceHandler(undefined, authorize, runtime);
-  return { hydrate, authorize, status, runtime, event, handler };
+  return { hydrate, authorize, status, start, page, runtime, event, handler };
+}
+function creationFixture() {
+  const f = fixture();
+  f.event.rawPath = '/api/v1/finance/queries';
+  f.event.requestContext.http.method = 'POST';
+  f.event.headers = {
+    ...f.event.headers,
+    origin: 'http://localhost:4173',
+    'x-csrf-token': 'csrf',
+    'idempotency-key': 'query-request-1',
+  };
+  Object.assign(f.event.requestContext.authorizer!.lambda!, { csrfToken: 'csrf' });
+  f.event.body = JSON.stringify({ accountIds: [id], filters: { text: 'Synthetic' } });
+  return f;
 }
 afterEach(() => vi.restoreAllMocks());
 
 describe('bounded Finance query status HTTP delivery', () => {
+  it('serves owner-bound row pages and pending continuation responses without scope hydration', async () => {
+    const f = fixture();
+    f.event.rawPath += '/rows';
+    f.event.queryStringParameters = {
+      limit: '25',
+      cursor: 'encrypted-page',
+      userId: 'another-owner',
+    };
+    expect((await f.handler(f.event)).statusCode).toBe(200);
+    expect(f.page).toHaveBeenCalledWith('owner', id, { limit: 25, cursor: 'encrypted-page' });
+    f.page.mockResolvedValueOnce({
+      items: [],
+      asOf: '2026-11-03T00:00:00.000Z',
+      projectionRevision: 'opaque',
+      complete: false,
+      rowsState: 'searching',
+      aggregateState: 'pending',
+      coverage: { examined: 1000, scopeComplete: false },
+      queryId: id,
+    });
+    const pending = await f.handler(f.event);
+    expect(pending.statusCode).toBe(202);
+    expect(typeof pending === 'object' && pending.headers?.['retry-after']).toBe('1');
+    expect(f.hydrate).not.toHaveBeenCalled();
+    expect(f.status).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid page bounds before constructing its runtime', async () => {
+    const f = fixture();
+    f.event.rawPath += '/rows';
+    for (const limit of ['0', '201', '1.5', 'invalid']) {
+      f.event.queryStringParameters = { limit };
+      expect((await f.handler(f.event)).statusCode).toBe(400);
+    }
+    f.event.queryStringParameters = { cursor: 'x'.repeat(4097) };
+    expect((await f.handler(f.event)).statusCode).toBe(400);
+    expect(f.runtime).not.toHaveBeenCalled();
+    expect(f.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('withholds a row page when the visit locks during its lookup', async () => {
+    const f = fixture();
+    f.event.rawPath += '/rows';
+    f.authorize
+      .mockResolvedValueOnce({ requirePin: true, securityRevision: 4, sessionEpoch: 2 })
+      .mockRejectedValue(
+        new SafeApiError(403, 'finance_locked', 'Unlock Finance to continue.', 'authorization'),
+      );
+    const response = await f.handler(f.event);
+    expect(response.statusCode).toBe(403);
+    expect(f.page).toHaveBeenCalledOnce();
+    expect(JSON.stringify(response)).not.toContain('opaque');
+    expect(f.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('creates a bounded job for the current owner and canonical visit without legacy hydration', async () => {
+    const f = creationFixture();
+    const response = await f.handler(f.event);
+    expect(response.statusCode).toBe(202);
+    expect(JSON.parse(typeof response === 'object' ? response.body! : '{}')).toEqual({
+      queryId: id,
+    });
+    expect(f.start).toHaveBeenCalledExactlyOnceWith(
+      'owner',
+      4,
+      expect.objectContaining({
+        accountIds: [id],
+        filters: expect.objectContaining({ text: 'Synthetic' }),
+      }),
+      'query-request-1',
+    );
+    expect(f.hydrate).not.toHaveBeenCalled();
+    expect(f.status).not.toHaveBeenCalled();
+    expect(typeof response === 'object' && response.headers?.['cache-control']).toBe('no-store');
+  });
+
+  it('rejects malformed or forged creation payloads before constructing a query runtime', async () => {
+    const f = creationFixture();
+    for (const body of [
+      '{',
+      JSON.stringify({ accountIds: [id], userId: 'another-owner' }),
+      JSON.stringify({ accountIds: [id], sourceRevisions: { private: 'forged' } }),
+      JSON.stringify({ accountIds: [id], kind: 'naaseh.finance.query-worker' }),
+    ]) {
+      f.event.body = body;
+      expect((await f.handler(f.event)).statusCode).toBe(400);
+    }
+    expect(f.runtime).not.toHaveBeenCalled();
+    expect(f.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('requires origin, CSRF and a request identity before starting a query', async () => {
+    const f = creationFixture();
+    const headers = { ...f.event.headers };
+    for (const [patch, expected] of [
+      [{ origin: 'https://untrusted.invalid' }, 403],
+      [{ 'x-csrf-token': 'wrong' }, 403],
+      [{ 'idempotency-key': undefined }, 400],
+    ] as const) {
+      f.event.headers = { ...headers, ...patch };
+      expect((await f.handler(f.event)).statusCode).toBe(expected);
+    }
+    expect(f.start).not.toHaveBeenCalled();
+    expect(f.runtime).not.toHaveBeenCalled();
+    expect(f.hydrate).not.toHaveBeenCalled();
+  });
+
+  it('withholds the new query identifier when the visit locks during creation', async () => {
+    const f = creationFixture();
+    f.authorize
+      .mockResolvedValueOnce({ requirePin: true, securityRevision: 4, sessionEpoch: 2 })
+      .mockRejectedValue(
+        new SafeApiError(403, 'finance_locked', 'Unlock Finance to continue.', 'authorization'),
+      );
+    const response = await f.handler(f.event);
+    expect(response.statusCode).toBe(403);
+    expect(f.start).toHaveBeenCalledOnce();
+    expect(JSON.stringify(response)).not.toContain(id);
+    expect(f.hydrate).not.toHaveBeenCalled();
+  });
+
   it('uses the authenticated owner and current visit without legacy scope hydration', async () => {
     const f = fixture();
     const response = await f.handler(f.event);
@@ -118,4 +268,27 @@ describe('bounded Finance query status HTTP delivery', () => {
     }
     expect(f.hydrate).not.toHaveBeenCalled();
   });
+});
+
+it('routes CSV duplicate checks through the Finance gate without scope hydration', async () => {
+  const f = creationFixture();
+  f.event.rawPath = `/api/v1/finance/accounts/${id}/csv-duplicates`;
+  const input = {
+    rows: [
+      {
+        ordinal: 1,
+        amountMinor: -100,
+        transactedAt: '2026-10-01T12:00:00.000Z',
+        description: 'Synthetic expense',
+      },
+    ],
+  };
+  f.event.body = JSON.stringify(input);
+  const check = vi.fn(async () => ({ ordinals: [1] }));
+  const handler = createFinanceHandler(undefined, f.authorize, f.runtime, check);
+  const response = await handler(f.event);
+  expect(response).toMatchObject({ statusCode: 200, body: '{"ordinals":[1]}' });
+  expect(check).toHaveBeenCalledWith('owner', id, input);
+  expect(f.authorize).toHaveBeenCalledTimes(2);
+  expect(f.hydrate).not.toHaveBeenCalled();
 });

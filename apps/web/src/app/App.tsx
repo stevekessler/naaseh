@@ -97,7 +97,7 @@ import {
 } from '../db/list-repository.js';
 import { listLocalDirectoryItems, saveDirectoryItem } from '../db/directory-repository.js';
 import { SearchResults } from '../features/search/SearchResults.js';
-import { navigate, parseAppRoute } from './router.js';
+import { navigate, parseAppRoute, type FinanceRoute } from './router.js';
 import { listLocalArchive } from '../db/archive-repository.js';
 import { listLocalProjects } from '../db/project-repository.js';
 import {
@@ -308,6 +308,11 @@ export function App() {
     | 'admin-categories'
     | 'journal'
   >(initialRoute.section);
+  const [financeRoute, setFinanceRoute] = useState<FinanceRoute>(() =>
+    initialRoute.section === 'finance'
+      ? initialRoute
+      : { section: 'finance', view: 'dashboard' },
+  );
   useEffect(() => {
     peekFinanceAccess()?.visitFinance(section === 'finance' || section === 'search');
   }, [section]);
@@ -664,6 +669,7 @@ export function App() {
   const validatingSession = useRef(false);
   const hiddenAt = useRef<number | undefined>(undefined);
   const syncRetryTimer = useRef<number | undefined>(undefined);
+  const syncRetryAttempt = useRef(0);
   const visible = useMemo(() => {
     const filtered = filterTasksForViewer(
       tasks,
@@ -902,12 +908,15 @@ export function App() {
     };
   }, [session, section, adminLoadAttempt]);
   useEffect(() => {
+    if (section !== 'tasks') return;
     const params = new URLSearchParams(safeSearchState(filters.query, filters));
-    if (section === 'tasks') {
-      if (taskTab === 'filtered') params.set('taskTab', 'filtered');
-    }
-    const query = section === 'tasks' && taskTab === 'all' ? '' : params.toString();
-    history.replaceState({}, '', `${location.pathname}${query ? `?${query}` : ''}`);
+    if (taskTab === 'filtered') params.set('taskTab', 'filtered');
+    const query = taskTab === 'all' ? '' : params.toString();
+    history.replaceState(
+      history.state,
+      '',
+      `${location.pathname}${query ? `?${query}` : ''}`,
+    );
   }, [filters, taskTab, section]);
   const synchronize = useCallback(
     async (fullReplay = false) => {
@@ -937,14 +946,20 @@ export function App() {
           journalError = error;
         }
         if (fullReplay) await resyncFromServer(session.csrfToken);
-        else
-          await drainSequentially(session.csrfToken, (delay) => {
-            if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
-            syncRetryTimer.current = window.setTimeout(() => {
-              syncRetryTimer.current = undefined;
-              void synchronize();
-            }, delay);
-          });
+        else {
+          await drainSequentially(
+            session.csrfToken,
+            (delay) => {
+              syncRetryAttempt.current += 1;
+              syncRetryTimer.current = window.setTimeout(() => {
+                syncRetryTimer.current = undefined;
+                void synchronize();
+              }, delay);
+            },
+            syncRetryAttempt.current,
+          );
+          syncRetryAttempt.current = 0;
+        }
         if (journalError) throw journalError;
         setSyncError(undefined);
       } catch (error) {
@@ -1058,6 +1073,7 @@ export function App() {
     const syncRoute = () => {
       const route = parseAppRoute(location.pathname);
       setSection(route.section);
+      if (route.section === 'finance') setFinanceRoute(route);
       setSelectedId(route.section === 'tasks' ? route.taskId : undefined);
       setSelectedListId(route.section === 'lists' ? route.listId : undefined);
     };
@@ -1260,6 +1276,11 @@ export function App() {
             </div>
             <nav aria-label="Main navigation">
               <TasksNavigation section={section} navigate={(next) => navigate({ section: next })} />
+              <ListsNavigation section={section} navigate={(next) => navigate({ section: next })} />
+              <FinanceNavigation
+                active={section === 'finance'}
+                navigate={(route) => navigate(route)}
+              />
               <button
                 className="quiet"
                 aria-current={section === 'journal' ? 'page' : undefined}
@@ -1274,11 +1295,6 @@ export function App() {
               >
                 Search
               </button>
-              <ListsNavigation section={section} navigate={(next) => navigate({ section: next })} />
-              <FinanceNavigation
-                active={section === 'finance'}
-                navigate={() => navigate({ section: 'finance' })}
-              />
               <AdminNavigation
                 isAdmin={session.role === 'admin'}
                 section={section}
@@ -1335,6 +1351,8 @@ export function App() {
                 ownerId={session.userId}
                 role={session.role}
                 csrfToken={session.csrfToken}
+                route={financeRoute}
+                navigate={(route, state) => navigate(route, false, state)}
               />
             </FinanceAccessBoundary>
           ) : section === 'journal' ? (

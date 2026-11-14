@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
+import {
+  signIn,
+  mockUnprotectedFinanceSecurity,
+  mockFinanceSnapshotEvidence,
+  financeSnapshotFixtureHeaders,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -52,6 +57,7 @@ async function routeFinance(page: Page) {
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [] }),
     }),
@@ -59,6 +65,7 @@ async function routeFinance(page: Page) {
   await page.route('**/api/v1/finance/categories**', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [{ id: ids.category, name: 'Utilities' }] }),
     }),
@@ -66,6 +73,7 @@ async function routeFinance(page: Page) {
   await page.route('**/api/v1/finance/budgets', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [budget], cursor: null }),
     }),
@@ -73,6 +81,7 @@ async function routeFinance(page: Page) {
   await page.route(`**/api/v1/finance/budgets/${ids.budget}`, (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify(budget),
     }),
@@ -99,6 +108,7 @@ test('creates a task from a budget item and navigates to the ordinary task', asy
     });
   });
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   const item = page.getByRole('article', { name: 'Utility bill budget item' });
@@ -145,6 +155,7 @@ test('keeps the form recoverable after an atomic creation failure', async ({ pag
     );
   });
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   const item = page.getByRole('article', { name: 'Utility bill budget item' });
@@ -161,6 +172,7 @@ test('shows no financial relationship hint when the Finance-only link is absent'
   page,
 }) => {
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto('/tasks');
   await expect(page.getByRole('link', { name: /related financial item/i })).toHaveCount(0);

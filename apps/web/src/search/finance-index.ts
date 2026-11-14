@@ -1,4 +1,4 @@
-import { currentFinanceAccess } from '../features/finance/security/finance-access.js';
+import { readFinanceCachedData } from '../sync/finance-cache-access.js';
 import MiniSearch from 'minisearch';
 import type { FinanceMerchant, FinancialTransaction } from '@naaseh/domain';
 import { db } from '../db/database.js';
@@ -239,7 +239,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 /** Decrypts only authorized local projections, then returns short-lived indexing documents. */
 export async function loadAuthorizedFinanceSearchSource(): Promise<FinanceSearchSource> {
-  return currentFinanceAccess().read(async () => {
+  return readFinanceCachedData(async (lease) => {
     const records = await db.secureFinanceRecords
       .filter(({ entityType }) =>
         ['financeAccount', 'financeTransaction', 'financeMerchant'].includes(entityType),
@@ -248,7 +248,10 @@ export async function loadAuthorizedFinanceSearchSource(): Promise<FinanceSearch
     if (!records.length) return { accounts: [], transactions: [], merchants: [] };
     const key = await financeDeviceKey();
     const decrypted = await Promise.all(
-      records.map(async (record) => ({ record, value: await decryptFinanceRecord(record, key) })),
+      records.map(async (record) => ({
+        record,
+        value: await decryptFinanceRecord(record, key, lease),
+      })),
     );
     const accounts = decrypted
       .filter(({ record }) => record.entityType === 'financeAccount')

@@ -2,6 +2,7 @@ import type {
   FinancePersistence,
   FinanceRecordKey,
 } from '../../../apps/api/src/finance/unit-of-work.js';
+import { isDeepStrictEqual } from 'node:util';
 
 const id = (key: FinanceRecordKey) => JSON.stringify([key.PK, key.SK]);
 /** Transactional command double: validates the real generated conditions before mutating any row. */
@@ -35,7 +36,7 @@ export function financePersistenceFixture() {
           throw new Error('Conditional conflict.');
         for (const [alias, name] of Object.entries(operation.ExpressionAttributeNames ?? {})) {
           const expected = operation.ExpressionAttributeValues?.[alias.replace('#', ':')];
-          if (JSON.stringify(current?.[name]) !== JSON.stringify(expected))
+          if (!isDeepStrictEqual(current?.[name], expected))
             throw new Error('Conditional conflict.');
         }
       }

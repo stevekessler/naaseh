@@ -5,11 +5,13 @@ import type { BudgetDetailView, ReconciliationRecordView } from './FinanceBudget
 export function BudgetReconciliation({
   budget,
   csrfToken,
+  verifyAccess,
   onReconciled,
 }: {
   budget: BudgetDetailView;
   csrfToken: string;
-  onReconciled: (record: ReconciliationRecordView) => void;
+  verifyAccess: () => Promise<boolean>;
+  onReconciled: () => void;
 }) {
   const [online, setOnline] = useState(navigator.onLine);
   const [confirming, setConfirming] = useState(false);
@@ -35,7 +37,8 @@ export function BudgetReconciliation({
     setSubmitting(true);
     setError('');
     try {
-      const record = await financeRequest<ReconciliationRecordView>(
+      if (!(await verifyAccess())) return;
+      await financeRequest<ReconciliationRecordView>(
         `/finance/budgets/${budget.id}/reconcile`,
         {
           method: 'POST',
@@ -44,7 +47,8 @@ export function BudgetReconciliation({
           body: JSON.stringify({ expectedVersion: budget.version }),
         },
       );
-      onReconciled(record);
+      if (!(await verifyAccess())) return;
+      onReconciled();
       setConfirming(false);
     } catch {
       setConfirming(false);

@@ -71,6 +71,9 @@ const legacyFinanceSyncEntities = new Set<string>([
 export const isLegacyFinanceSyncEntityType = (value: string) =>
   legacyFinanceSyncEntities.has(value);
 
+/** Unknown Finance types stay inside the protected lane until explicitly supported. */
+export const isFinanceSyncEntityFamily = (value: string) => value.startsWith('finance');
+
 export type FinanceSyncEntityType = (typeof financeSyncEntityTypes)[number];
 export const isFinanceSyncEntityType = (value: string): value is FinanceSyncEntityType =>
   financeSyncEntityTypes.includes(value as FinanceSyncEntityType);

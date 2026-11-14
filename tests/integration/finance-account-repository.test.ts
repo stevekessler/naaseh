@@ -27,8 +27,20 @@ describe('Finance account repository', () => {
   it('persists a manual account and idempotent opening balance', async () => {
     const repository = new FinanceMemoryRepository();
     const first = await createManualAccount(repository, actor, input, 'mutation-0001');
-    const replay = await createManualAccount(repository, actor, input, 'mutation-0001');
+    const replay = await createManualAccount(
+      repository,
+      actor,
+      { ...input, id: '01J00000000000000000000002' },
+      'mutation-0001',
+    );
     expect(replay).toEqual(first);
+    repository.accounts.set(first.id, {
+      ...first,
+      scope: { type: 'group', groupId: 'private-group' },
+    });
+    await expect(createManualAccount(repository, actor, input, 'mutation-0001')).rejects.toThrow(
+      'Finance record not found.',
+    );
     expect(repository.balanceSnapshots).toHaveLength(1);
   });
 
@@ -97,21 +109,39 @@ describe('Finance account repository', () => {
       amountMinor: -200,
       effectiveAt: '2026-01-03T00:00:00.000Z',
     });
+    const balanceInput = {
+      id: 'snap-2',
+      expectedAccountVersion: 1,
+      balanceMinor: 2_000,
+      effectiveAt: '2026-01-02T00:00:00.000Z',
+      recordedAt: '2026-01-04T00:00:00.000Z',
+    };
     const result = await recordManualBalance(
       repository,
       actor,
       input.id,
-      {
-        id: 'snap-2',
-        expectedAccountVersion: 1,
-        balanceMinor: 2_000,
-        effectiveAt: '2026-01-02T00:00:00.000Z',
-        recordedAt: '2026-01-04T00:00:00.000Z',
-      },
+      balanceInput,
       'mutation-0002',
     );
     expect(result.account.currentBalanceMinor).toBe(1_800);
     expect(repository.transactions).toHaveLength(1);
+    await expect(
+      recordManualBalance(
+        repository,
+        actor,
+        input.id,
+        { ...balanceInput, id: 'snap-retry' },
+        'mutation-0002',
+      ),
+    ).resolves.toEqual(result);
+    repository.accounts.set(input.id, {
+      ...result.account,
+      scope: { type: 'group', groupId: 'private-group' },
+    });
+    await expect(
+      recordManualBalance(repository, actor, input.id, balanceInput, 'mutation-0002'),
+    ).rejects.toThrow('Finance record not found.');
+    expect(repository.balanceSnapshots).toHaveLength(2);
   });
 
   it('persists account/source identities and import jobs under collision-safe keys', () => {

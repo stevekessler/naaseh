@@ -152,3 +152,91 @@ docs/{architecture,operations,testing}/
 ## Complexity Tracking
 
 No constitution exception. Bounded read projections are justified by observed full-scope hydration and the 100k latency target. The transaction claim ledger is necessary to prevent duplicate payment fulfillment; refund credit/original-allocation ledgers separately prevent duplicate expense offsets. Shared spending rules are Foundation-owned before either projection or UI calculations. Budget activity is separate from closure/reconciliation, and original entry date context is distinct from server acceptance time. An independent Finance sync lane is necessary to keep non-Finance sync running while locked without losing protected changes. The range adapter reuses existing HTTP API/Lambda and avoids a new streaming origin. A small audited Office-container dependency is preferable to inventing a full format parser. Any future always-on service, cost ceiling increase or validation expansion above ten minutes remains subject to the explicit approval rules; none is authorized by this plan.
+
+
+### Financial planning scope clarification — November 9, 2026
+
+Steve clarified that models means financial forecasts/planning inside Na'aseh.
+Detailed models belong to individual budgets; the Finance dashboard should provide
+an overview under the viewer's existing access rights. This does not change the
+household AWS estimate or ceiling, grant access to another person's private data,
+or authorize deployment. Keep the existing spec, plan and task list. The existing
+budget/dashboard work provides composition points; no financial forecasting
+calculation has been implemented or accepted from this scope clarification.
+Resolve the model's calculation/inputs before implementing that dependent feature;
+continue the unfinished access/replay foundation first.
+
+
+#### Initial forecast proposal — superseded by the both-method decision below
+
+For review only; not an implemented feature or accepted calculation. A deterministic
+per-budget model would combine actual budget-assigned activity with remaining
+planned income/expense items and unpaid Upcoming Expenses for the selected period.
+Linked planned/upcoming/actual records must contribute once, using their existing
+identities and allocations. Show projected income, expenses and surplus/shortfall
+separately by currency; do not label a budget projection as an account's cash
+balance or introduce currency conversion. Dashboard summaries respect the viewer's
+current budget/source permissions and do not treat the same account balance as
+independent money in every budget. Existing partial/stale coverage rules apply.
+
+The alternative is predicting future amounts from historical patterns, which is
+not specified by the existing Finance 016 tasks. Ask which method the first model
+should use before defining forecast implementation tasks. Preserve the existing
+spec/plan/task structure and do not mark a dashboard or forecasting task complete
+from this proposal. No forecast route, algorithm, persistent model, AWS resource,
+migration or production change is introduced by this note.
+
+
+### Both budget forecast methods — November 9, 2026
+
+Steve selected both known-plan and history-based forecasts. Retain the earlier
+per-budget detail and authorized Finance dashboard overview direction. Replace
+the proposed either/or decision with two clearly labeled methods/scenarios. Never
+sum alternative forecasts, silently convert currencies, disclose inaccessible
+history, or count a linked planned/upcoming/actual obligation more than once.
+Keep projected budget surplus/shortfall separate from actual bank cash balances.
+
+Known-plan inputs are actual activity plus remaining explicit plans and unpaid
+Upcoming Expenses. The historical method must show its observed period, missing
+coverage and insufficient-history state; its statistical result is an estimate,
+not an exact committed obligation. No algorithm, historical input scope or model
+training has been implemented/accepted from this selection alone. Determine whether
+older currently authorized transactions from linked accounts may inform a new
+budget even when they were never assigned to that budget. This matters because
+there is no existing Na'aseh financial history or prior budget assignment and the
+initial five-year import contains transaction records only. Continue foundation
+access/replay work before these dependent forecast/dashboard implementations.
+
+No AWS service, AI API, scheduled model job, deployment, migration, ceiling change
+or new data access is authorized by choosing both forecasting methods. Existing
+plan/task structure is preserved; future work must be additive and evidence-based.
+
+
+### Historical input rule accepted — November 9, 2026
+
+Steve permits non-budgeted history when a user explicitly requests it. Budget-only
+reporting must use only budget transactions. Default expanded forecast history off;
+keep it a separate forecast input rather than widening report filters/actuals.
+Use only currently authorized history from the budget's linked accounts for that
+explicit opt-in. Do not silently include records assigned to other budgets or
+classify missing/unresolved budget metadata as non-budgeted data. Preserve canonical
+allocation boundaries for partly budgeted transactions. An option grants no new
+account/group rights and does not permit sharing private inputs through a dashboard.
+
+Both forecast methods and the per-budget/dashboard scope remain accepted direction.
+History selection is not a forecasting algorithm, model training or completed
+dashboard story. Continue foundational authorization/read work before dependent
+forecast implementations. No new AWS resource, changed $6.50/30% ceiling, migration
+or production operation is authorized.
+
+
+#### Forecast execution mapping — November 9
+
+Accepted scope is both methods, with non-budgeted history only upon explicit
+request and budget-only reporting always strict (FR-057–FR-060, SC-016, US13).
+The shared history-selection policy is foundational input selection only. Additive
+T160–T166 track the new model/kernel/contracts/source/UI/dashboard/evidence work
+after its prerequisites and before full-feature release acceptance. Original
+T001–T159 are preserved. Total planned tasks166; checked28 unchanged. No external
+model service, always-on capacity or ceiling increase is implied. Open-ended forecasts default to the next 12 calendar months. Dated forecasts default
+to their budget dates. An explicit forecast range overrides either default.

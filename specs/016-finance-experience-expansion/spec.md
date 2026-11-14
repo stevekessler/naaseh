@@ -12,6 +12,17 @@
 
 ## Clarifications
 
+### Session 2026-11-09
+
+- Q: May forecasts use history that was not assigned to the budget? → A: Non-budgeted history may be used when the user explicitly requests it. Budget-only reporting must use only that budget's transactions. Default expanded history off; keep optional historical inputs separate from report actuals and subject to current access rights.
+- Q: What forecast period should an open-ended budget show by default? → A: The next 12 months, with an adjustable window. Dated budgets default to their own dates.
+
+- Q: Should per-budget financial forecasts use actuals with remaining planned/upcoming activity, or predictions from history? → A: Both. Provide a known-plan forecast and a history-based prediction for each budget, with an authorized Finance dashboard overview. Label the methods distinctly and do not add overlapping predictions and explicit plans as independent obligations. Historical input follows the explicit opt-in and budget-only reporting rule above.
+
+- Q: What does per-budget modeling with a dashboard overview refer to? → A: Financial forecasts/planning inside Na’aseh. Keep the detailed model scoped to each budget and provide an authorized overview on the Finance dashboard. This is separate from AWS operating-cost estimation; forecast calculations remain to be specified before implementation.
+
+- Q: May an application administrator use personally owned and actual member-group Finance? → A: Yes. Apply the same PIN/session requirements and ordinary group roles. Administrator status grants no access to other owners, nonmember groups, private Finance task relationships or another person's PIN.
+
 ### Session 2026-10-30
 
 - Q: How should refunds reduce reported spending? → A: Link each refund to its original expense; default to that expense’s budget/category, support partial refunds, and count the refund on the date it was received.
@@ -216,6 +227,35 @@ As a user, I can create a related task from any expense transaction or upcoming 
 5. **Given** a task viewer without financial access or with Finance locked, **When** the task/post-it renders or is exported, **Then** no protected expense details, identifiers, counts, or financial metadata are disclosed; a permitted locked viewer can unlock the embedded Finance view without leaving the task.
 6. **Given** a task linked to an upcoming expense, **When** I complete or delete that task, **Then** the expense is not automatically paid, cancelled, deleted, or posted as a transaction; changing the financial record updates its linked display independently.
 
+### User Story 13 - Forecast and Plan Within a Budget (Clarified 2026-11-09, Priority: P2)
+
+As a Finance user, I can compare a known-plan forecast with a history-based prediction
+for an individual budget and see an authorized overview on the Finance dashboard.
+
+**Independent Test**: Compare both methods against independent budget/ledger fixtures,
+request non-budgeted history explicitly, and verify that budget-only reports and
+another viewer's access remain unchanged.
+
+**Acceptance Scenarios**:
+
+1. **Given** an accessible budget and period, **When** I view forecasts, **Then** known-plan
+   and history-based results are labeled separately with per-currency amounts,
+   coverage and freshness; insufficient history is explicit rather than invented.
+2. **Given** no explicit history opt-in, **When** I request a historical prediction,
+   **Then** it uses only currently authorized budget-assigned activity.
+3. **Given** an explicit request for non-budgeted history, **When** I request a prediction,
+   **Then** authorized non-budgeted activity from linked accounts may inform it;
+   that input stays separate from the budget's actual rows and report totals.
+4. **Given** opt-in historical inputs, **When** I open a budget-only report or dashboard
+   actuals, **Then** only the selected budget's assigned activity contributes.
+5. **Given** overlapping planned/upcoming/actual links or alternative predictions,
+   **When** values are shown, **Then** obligations and alternative methods are not
+   added twice, currencies stay separate and projected budget results are not
+   presented as bank cash balances.
+6. **Given** lock, source withdrawal, incomplete coverage or a different viewer,
+   **When** model results are read, **Then** current Finance access and truthful
+   partial/unavailable states apply to details and dashboard overview alike.
+
 ### Edge Cases
 
 - An offline expense was validly future-dated when entered but becomes overdue before reconnection, or the user/server changes time zones; validate against the original entry’s local calendar context and preserve the date-only obligation rather than rejecting, moving, or duplicating it solely because synchronization was delayed.
@@ -318,6 +358,11 @@ As a user, I can create a related task from any expense transaction or upcoming 
 - **FR-055**: Finance links and optional task/post-it displays MUST enforce task visibility, current financial authorization, and personal Finance unlock independently. Users with task access alone MUST NOT gain protected source identifiers, existence/counts, descriptions, amounts, dates, account/budget/group names, or receipt access. Locked embedded displays MAY offer a generic Unlock Finance control to an authorized user; unlocking MUST not broaden task sharing. Task creation from Finance MUST default to a generic editable task title such as Review expense, with no automatic copy of protected financial details into task titles, memos, notifications, search indexes, or existing task exports.
 - **FR-056**: Upcoming Expenses, fulfillment relationships, and task-to-Finance links MUST preserve existing data lifecycle, backup/restore, offline pending-change, and revocation behavior. Creating a task and its link MUST either succeed together or explicitly report which part succeeded and offer a retry that cannot create another task. Edits/retries MUST not lose references or silently overwrite concurrent fulfillment decisions; source removal MUST retain an appropriate historical relationship without exposing inaccessible financial details.
 
+- **FR-057**: Finance MUST provide both a known-plan forecast and a history-based prediction per budget, with an overview on the authorized Finance dashboard. Methods MUST be labeled separately, with explicit period, source freshness, coverage and insufficient-history states. Dated budgets MUST default to their inclusive budget dates. Open-ended budgets MUST default to the next 12 calendar months from the reference date or a later budget start. Users MUST be able to select an explicit forecast range without changing the budget dates.
+- **FR-058**: Non-budgeted history MUST be off by default and usable only upon explicit user request for a forecast. Only currently authorized linked-account sources may supplement it. Budget-only reporting and actual totals MUST use only the selected budget's assigned transactions/allocation portions; a forecast opt-in MUST NOT widen report filters or confer access. Missing assignment metadata MUST NOT be treated as non-budgeted history.
+- **FR-059**: Both methods MUST preserve canonical planned/upcoming/actual obligation identity, existing posting/refund/transfer rules and allocation conservation. Keep income, expenses and projected budget surplus/shortfall separate by currency. Do not sum alternative forecasts or present budget projections as account cash balances.
+- **FR-060**: Forecast details and dashboard overview MUST use current source authorization/PIN and revision-bound cache/query results, with method/period/history-opt-in included in result identity. Known revocation removes protected output; partial/offline inputs are labeled and never presented as exact complete historical coverage. Forecasting MUST remain within the existing architecture and approved combined AWS ceiling.
+
 ### Non-Functional Requirements
 
 - **NFR-001 Security & Data Boundaries**: Finance PIN settings and verification data belong only to their user. The PIN is an additional Finance access gate, independent of Journal protection; it MUST NOT be advertised as Journal-style end-to-end encryption. Finance content and receipts remain subject to existing individual/group boundaries, authenticated least-privilege access, and protection in transit and at rest. PINs, passwords, provider credentials, raw receipts, and protected financial content MUST NOT appear in diagnostics or logs. Locked content MUST be withheld from screen rendering, accessible labels, search snippets, previews, and cached history restoration. Tests MUST exercise administrative denial, direct entry/download denial, revocation, and offline locking.
@@ -367,6 +412,8 @@ As a user, I can create a related task from any expense transaction or upcoming 
 - **SC-013**: Manual-entry fixtures for each supported account type and source save exactly one transaction, preserve optional payment/classification fields, and obey manual/provider balance rules; later provider reconciliation retains all receipt/task/fulfillment relationships without duplicate spending.
 - **SC-014**: Two representative users can each create an Upcoming Expense with date, account, budget, and group and locate it on the dashboard without assistance within two minutes. Required-field and relationship mismatch fixtures are all rejected; rescheduling, overdue (including valid offline entries synchronized after their due date), cancellation, partial payment, and full payment fixtures produce exactly the expected list state and actual spending, with every delayed-entry date preserved across differing browser/server time zones.
 - **SC-015**: Both representative users can create a task from an expense, link a new task to either financial record type, and enable the task/post-it expense display without assistance within two minutes per workflow. Relationship fixtures preserve both navigation directions, prevent duplicate links/tasks on retry, and leave expense payment/status unchanged by task completion. Locked and unauthorized viewers, notifications, search, and exports reveal zero protected linked financial fields.
+
+- **SC-016**: Independent fixtures verify both per-budget methods and dashboard overview, explicit non-budgeted-history consent, current private/shared source access, no doubled obligations or currencies, and strict isolation of budget-only report rows/totals. Estimates and insufficient/partial history are labeled; source/runtime/cost evidence remains independently required.
 
 ## Assumptions
 

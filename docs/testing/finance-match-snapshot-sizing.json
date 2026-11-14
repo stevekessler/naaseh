@@ -1,0 +1,41 @@
+{
+  "date": "2026-11-09",
+  "evidence": "Source-path request accounting and local component/browser checks; not live metering.",
+  "requiredDiscovery": {
+    "before": 1714,
+    "after": 1718,
+    "files": 457
+  },
+  "financeHttpCalls": {
+    "loadReview": {
+      "canonicalGet": 1,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 4
+    },
+    "decisionWithCanonicalReload": {
+      "priorReadChecks": 2,
+      "decisionPost": 1,
+      "canonicalReload": 4,
+      "total": 7
+    },
+    "removalPreview": {
+      "priorReadChecks": 2,
+      "previewGet": 1,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 6
+    }
+  },
+  "exclusions": [
+    "Authentication freshness, other sync/API traffic, retries, failed/racing requests, source/permission work behind proofs and coalesced leases.",
+    "No new polling interval, AWS resource, migration or persistent DTO.",
+    "Not complete T029/T032 acceptance or an accepted $6.50 combined bill."
+  ],
+  "household": {
+    "simultaneouslyVisibleDevices": 2,
+    "dailyOverallHours": 10,
+    "financeHoursIncluded": 2,
+    "accountAudienceLayout": "User confirmed a mix of private personal and shared accounts on November 9; exact counts and group layout are not specified."
+  }
+}

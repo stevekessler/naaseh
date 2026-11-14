@@ -7,6 +7,7 @@ import { SafeApiError } from '../shared/http.js';
 
 export interface FinanceGateContext {
   userId: string;
+  expectedUserId?: string | undefined;
   sessionHash: string;
   grant?: string | undefined;
   tabNonce?: string | undefined;
@@ -29,6 +30,10 @@ const preferenceSchema = z.object({
 });
 const unauthorized = () =>
   new SafeApiError(401, 'unauthorized', 'Authentication required.', 'authorization');
+/** A client expectation only; authorization always uses the canonical session principal. */
+export function assertFinanceClientUser(userId: string, expectedUserId?: string) {
+  if (expectedUserId !== undefined && expectedUserId !== userId) throw unauthorized();
+}
 const locked = () =>
   new SafeApiError(403, 'finance_locked', 'Unlock Finance to continue.', 'authorization');
 const unavailable = () =>
@@ -77,6 +82,7 @@ export function createFinanceUnlockGuard(
   const now = options.now ?? (() => Date.now());
   return async (context: FinanceGateContext) => {
     if (!context.userId || !/^[a-f0-9]{64}$/.test(context.sessionHash)) throw unauthorized();
+    assertFinanceClientUser(context.userId, context.expectedUserId);
     const digest =
       context.grant && /^[A-Za-z0-9_-]{43}$/.test(context.grant)
         ? createHash('sha256').update(context.grant).digest('hex')

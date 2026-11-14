@@ -1,0 +1,75 @@
+{
+  "recorded_on": "2026-11-09",
+  "status": "Local command-count arithmetic only; no live capacity, latency, billing or full-bootstrap acceptance.",
+  "source_files": [
+    "apps/api/src/sync/change-feed-repository.ts",
+    "apps/api/src/sync/handlers.ts",
+    "apps/web/src/sync/finance-pull.ts",
+    "apps/web/src/sync/sync-engine.ts"
+  ],
+  "bounds": {
+    "sdk_feed_query_item_limit_per_audience": 200,
+    "protected_http_pages_per_foreground_cycle": 5,
+    "existing_visible_foreground_interval_seconds": 60,
+    "new_scheduler_or_resource": false
+  },
+  "continuation": {
+    "production_signal": "SDK LastEvaluatedKey retained privately with the returned array; no key is sent to the browser.",
+    "meaning": "Another raw audience-feed query is indicated; this is not a count of authorized Finance rows.",
+    "idle": "One existing protected request, no speculative follow-up when financeHasMore is false.",
+    "older_server": "Missing hint stops after one page with continuation unknown.",
+    "checkpoint": "Encrypted records, proof and independent Finance cursor commit per page before reading the next page.",
+    "stop_conditions": [
+      "five committed pages",
+      "no continuation",
+      "missing hint",
+      "network/validation failure",
+      "lock, stale access or controller replacement"
+    ],
+    "not_covered": "Historical bootstrap, complete retained-history coverage and other replay families remain open."
+  },
+  "synthetic_one_audience_example": {
+    "feed_entries": 15000,
+    "assumption": "Dense 200-entry feed pages; allow one empty terminal query at a boundary. Not a bound on the five-year transaction import, which may create multiple events/audiences per transaction.",
+    "protected_http_requests_range": [
+      75,
+      76
+    ],
+    "prior_one_page_cycle_count_range": [
+      75,
+      76
+    ],
+    "new_max_five_page_cycle_count_range": [
+      15,
+      16
+    ],
+    "claim": "Request count is not reduced; already-committed continuation pages can run within the same foreground cycle."
+  },
+  "foreground_sensitivities": [
+    {
+      "clients": 1,
+      "conditional_scheduled_cycles_per_30_days": 18000,
+      "idle_protected_http_requests": 18000,
+      "continuously_full_backlog_max_protected_http_requests": 90000,
+      "continuously_full_backlog_max_extra_protected_http_requests": 72000
+    },
+    {
+      "clients": 2,
+      "conditional_scheduled_cycles_per_30_days": 36000,
+      "idle_protected_http_requests": 36000,
+      "continuously_full_backlog_max_protected_http_requests": 180000,
+      "continuously_full_backlog_max_extra_protected_http_requests": 144000
+    }
+  ],
+  "sensitivity_qualifications": [
+    "Ten visible online unlocked hours/day, including two Finance hours; not twelve hours. Two clients remain an unconfirmed sensitivity.",
+    "A continuously full backlog is a stress upper scenario, not the household monthly forecast.",
+    "Focus/manual calls, other UI snapshots, per-audience queries, source dependency checks, Lambda duration and writes require separate accounting.",
+    "No fivefold multiplier applies to idle polls. Additional catch-up usage is not accepted as fitting an old allowance without measurement.",
+    "$6.50 combined monthly ceiling including 30% contingency remains unchanged; migration unrun."
+  ],
+  "official_semantics_sources": [
+    "https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_Query.html",
+    "https://docs.aws.amazon.com/us_en/amazondynamodb/latest/developerguide/Query.Pagination.html"
+  ]
+}

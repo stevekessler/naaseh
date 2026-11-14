@@ -1,4 +1,7 @@
 import { FormEvent, useMemo, useState } from 'react';
+import { createUlid } from '@naaseh/domain';
+import { queueEncryptedBudgetMutation } from '../../../db/finance-repository.js';
+import { queueFinanceBudgetActivityChange } from '../../../sync/finance-sync.js';
 import { financeRequest } from '../finance-client.js';
 import { BudgetReconciliation } from './BudgetReconciliation.js';
 import { CreateFinancialTask } from './CreateFinancialTask.js';
@@ -45,6 +48,11 @@ export interface BudgetDetailView {
   startDate: string;
   endDate?: string | null;
   status: string;
+  activity?: 'active' | 'inactive';
+  activityChangedAt?: string;
+  activityChangedBy?: string;
+  closedAt?: string;
+  closedBy?: string;
   items: BudgetItemView[];
   totals: BudgetTotalView[];
   categoryTotals?: Array<BudgetTotalView & { financeCategoryId: string }>;
@@ -79,6 +87,7 @@ export function FinanceBudgetDetail({
   categories,
   csrfToken,
   currentUserId,
+  verifyAccess,
   onChange,
 }: {
   budget: BudgetDetailView;
@@ -86,6 +95,7 @@ export function FinanceBudgetDetail({
   categories: CategoryView[];
   csrfToken: string;
   currentUserId: string;
+  verifyAccess: () => Promise<boolean>;
   onChange: (budget: BudgetDetailView) => void;
 }) {
   const [adding, setAdding] = useState(false);
@@ -94,6 +104,9 @@ export function FinanceBudgetDetail({
   const [kind, setKind] = useState<'debit' | 'credit'>('debit');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
+  const [lifecycleError, setLifecycleError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [changingLifecycle, setChangingLifecycle] = useState(false);
   const accountIds = useMemo(() => accounts.map(({ id }) => id), [accounts]);
   const categoryTotals = useMemo(
     () =>
@@ -109,8 +122,66 @@ export function FinanceBudgetDetail({
       })),
     [budget.categoryTotals, budget.items],
   );
+  const activity =
+    budget.activity ??
+    (budget.status === 'active' || budget.status === 'changed-since-reconciliation'
+      ? 'active'
+      : 'inactive');
 
-  const saveItem = (event: FormEvent) => {
+  const changeLifecycle = async (
+    action: 'deactivate' | 'reactivate' | 'close' | 'reopen' | 'save-as-active',
+  ) => {
+    setLifecycleError('');
+    setNotice('');
+    if (!(await verifyAccess())) return;
+    setChangingLifecycle(true);
+    try {
+      await financeRequest(
+        action === 'save-as-active'
+          ? `/finance/budgets/${budget.id}`
+          : `/finance/budgets/${budget.id}/${action}`,
+        {
+          method: action === 'save-as-active' ? 'PATCH' : 'POST',
+          csrfToken,
+          idempotencyKey: crypto.randomUUID(),
+          body: JSON.stringify({
+            expectedVersion: budget.version,
+            ...(action === 'save-as-active' ? { status: 'active' } : {}),
+          }),
+        },
+      );
+      if (!(await verifyAccess())) return;
+      onChange(budget);
+    } catch {
+      if (!navigator.onLine && (action === 'deactivate' || action === 'reactivate')) {
+        const nextActivity = action === 'deactivate' ? 'inactive' : 'active';
+        try {
+          await queueFinanceBudgetActivityChange({
+            budget,
+            activity: nextActivity,
+            actorId: currentUserId,
+          });
+          if (!(await verifyAccess())) return;
+          setNotice(
+            `Budget ${nextActivity === 'active' ? 'reactivation' : 'deactivation'} queued securely and will sync when online.`,
+          );
+          return;
+        } catch {
+          setLifecycleError(
+            'The budget activity change could not be queued securely. Refresh and retry when connected.',
+          );
+          return;
+        }
+      }
+      setLifecycleError(
+        'The budget state could not be changed. Your membership or budget version may have changed; refresh and retry.',
+      );
+    } finally {
+      setChangingLifecycle(false);
+    }
+  };
+
+  const saveItem = async (event: FormEvent) => {
     event.preventDefault();
     const major = Number(amount);
     if (
@@ -124,41 +195,63 @@ export function FinanceBudgetDetail({
       return;
     }
     const plannedAmountMinor = Math.round(major * 100) * (kind === 'debit' ? -1 : 1);
-    const optimistic: BudgetItemView = {
-      id: crypto.randomUUID(),
-      description: description.trim(),
-      financeCategoryId: categoryId,
-      plannedAmountMinor,
-      actualAmountMinor: 0,
-      varianceMinor: -plannedAmountMinor,
-      currency: 'USD',
-      currencyExponent: 2,
-      relatedAccountIds: accountIds,
-      version: 1,
-    };
-    onChange({ ...budget, items: [...budget.items, optimistic], version: budget.version + 1 });
-    setAdding(false);
-    setDescription('');
-    setAmount('');
     setError('');
-    void financeRequest<BudgetItemView>(`/finance/budgets/${budget.id}/items`, {
-      method: 'POST',
-      csrfToken,
-      idempotencyKey: crypto.randomUUID(),
-      body: JSON.stringify({
-        expectedBudgetVersion: budget.version,
-        description: optimistic.description,
-        financeCategoryId: optimistic.financeCategoryId,
-        plannedAmountMinor,
-        currency: optimistic.currency,
-        currencyExponent: optimistic.currencyExponent,
-        relatedAccountIds: optimistic.relatedAccountIds,
-      }),
-    })
-      .then((saved) =>
-        onChange({ ...budget, items: [...budget.items, saved], version: budget.version + 1 }),
-      )
-      .catch(() => setError('The item is saved locally and will need to be retried.'));
+    setNotice('');
+    if (!(await verifyAccess())) return;
+    try {
+      await financeRequest<BudgetItemView>(`/finance/budgets/${budget.id}/items`, {
+        method: 'POST',
+        csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        body: JSON.stringify({
+          expectedBudgetVersion: budget.version,
+          description: description.trim(),
+          financeCategoryId: categoryId,
+          plannedAmountMinor,
+          currency: 'USD',
+          currencyExponent: 2,
+          relatedAccountIds: accountIds,
+        }),
+      });
+      // A mutation response is not retained display evidence. Recheck the source and let the
+      // parent replace this view from canonical proof-bearing GETs.
+      if (!(await verifyAccess())) return;
+      onChange(budget);
+    } catch {
+      if (!navigator.onLine) {
+        const id = createUlid();
+        try {
+          await queueEncryptedBudgetMutation({
+            entityId: id,
+            entityType: 'financeBudgetItem',
+            budgetId: budget.id,
+            scopeKey: `GROUP#${budget.groupId}`,
+            baseVersion: 0,
+            value: {
+              id,
+              budgetId: budget.id,
+              expectedBudgetVersion: budget.version,
+              description: description.trim(),
+              financeCategoryId: categoryId,
+              plannedAmountMinor,
+              currency: 'USD',
+              currencyExponent: 2,
+              relatedAccountIds: accountIds,
+              creatorId: 'pending',
+              status: 'active',
+              version: 1,
+            },
+          });
+          if (!(await verifyAccess())) return;
+          setAdding(false);
+          setDescription('');
+          setAmount('');
+          setNotice('Budget item queued securely and will sync when online.');
+        } catch {
+          setError('The item could not be queued securely. Your form is still available.');
+        }
+      } else setError('The item could not be saved. Refresh the budget before retrying.');
+    }
   };
 
   return (
@@ -170,8 +263,39 @@ export function FinanceBudgetDetail({
             {budget.startDate} – {budget.endDate ?? 'Open-ended'}
           </p>
         </div>
-        <button onClick={() => setAdding(true)}>Add budget item</button>
+        <div>
+          <button onClick={() => setAdding(true)}>Add budget item</button>
+          {budget.status === 'draft' ? (
+            <button
+              disabled={changingLifecycle}
+              onClick={() => void changeLifecycle('save-as-active')}
+            >
+              Save as active
+            </button>
+          ) : activity === 'active' ? (
+            <button disabled={changingLifecycle} onClick={() => void changeLifecycle('deactivate')}>
+              Deactivate
+            </button>
+          ) : (
+            <button disabled={changingLifecycle} onClick={() => void changeLifecycle('reactivate')}>
+              Reactivate
+            </button>
+          )}
+          {budget.closedAt ? (
+            <button disabled={changingLifecycle} onClick={() => void changeLifecycle('reopen')}>
+              Reopen
+            </button>
+          ) : (
+            <button disabled={changingLifecycle} onClick={() => void changeLifecycle('close')}>
+              Close
+            </button>
+          )}
+        </div>
       </header>
+      <p>Budget activity: {activity === 'active' ? 'Active' : 'Inactive'}</p>
+      <p>{budget.status === 'draft' ? 'Legacy draft' : budget.closedAt ? 'Closed' : 'Open'}</p>
+      {notice ? <p role="status">{notice}</p> : null}
+      {lifecycleError ? <p role="alert">{lifecycleError}</p> : null}
       {!budget.totalsComplete ? (
         <p role="alert">
           Totals are incomplete because this view cannot access every linked account.
@@ -180,15 +304,8 @@ export function FinanceBudgetDetail({
       <BudgetReconciliation
         budget={budget}
         csrfToken={csrfToken}
-        onReconciled={(record) =>
-          onChange({
-            ...budget,
-            status: 'active',
-            lastReconciledAt: record.reconciledAt,
-            reconciliations: [record, ...(budget.reconciliations ?? [])],
-            version: budget.version + 1,
-          })
-        }
+        verifyAccess={verifyAccess}
+        onReconciled={() => onChange(budget)}
       />
       <div className="finance-budget-totals">
         {budget.totals.map((total) => (
@@ -251,13 +368,14 @@ export function FinanceBudgetDetail({
               {...(item.applicableDate ? { applicableDate: item.applicableDate } : {})}
               currentUserId={currentUserId}
               csrfToken={csrfToken}
+              verifyAccess={verifyAccess}
             />
           </article>
         ))}
       </div>
       {adding ? (
         <dialog open aria-label="Add budget item">
-          <form onSubmit={saveItem}>
+          <form onSubmit={(event) => void saveItem(event)}>
             <h2>Add budget item</h2>
             <label>
               Description

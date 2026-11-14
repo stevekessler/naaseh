@@ -18,17 +18,28 @@ export async function createManualAccount(
   input: Parameters<typeof createFinancialAccount>[0],
   mutationId: string,
 ) {
+  if (!authorizeFinanceScope(actor, input.scope, 'connect').allowed)
+    throw new Error('Finance record not found.');
   const replay = repository.mutation<ReturnType<typeof createFinancialAccount>>(
     actor.id,
     mutationId,
   );
-  if (replay) return replay;
-  if (!authorizeFinanceScope(actor, input.scope, 'connect').allowed)
-    throw new Error('Finance record not found.');
+  if (replay) {
+    const current = repository.accounts.get(replay.id);
+    if (!current || !authorizeFinanceScope(actor, current.scope, 'connect').allowed)
+      throw new Error('Finance record not found.');
+    if (
+      financeAudience(current.scope) !== financeAudience(input.scope) ||
+      !replay.scope ||
+      financeAudience(replay.scope) !== financeAudience(input.scope)
+    )
+      throw new Error('Account version conflict.');
+    return replay;
+  }
   if (repository.accounts.has(input.id)) throw new Error('Account already exists.');
   const account = createFinancialAccount(input);
   const snapshot: BalanceSnapshot = {
-    id: `${input.id}-opening`,
+    id: createUlid(),
     accountId: input.id,
     balanceMinor: input.openingBalanceMinor,
     ...(input.availableBalanceMinor === undefined
@@ -42,6 +53,28 @@ export async function createManualAccount(
   };
   repository.accounts.set(account.id, account);
   repository.balanceSnapshots.push(snapshot);
+  // Feed publication time is current; the original balance/history dates remain unchanged.
+  const changedAt = new Date().toISOString();
+  repository.feedChanges.push(
+    {
+      audience: financeAudience(account.scope),
+      entityType: 'financeAccount',
+      entityId: account.id,
+      version: account.version,
+      changedAt,
+      operation: 'upsert',
+      payload: account,
+    },
+    {
+      audience: financeAudience(account.scope),
+      entityType: 'financeBalanceSnapshot',
+      entityId: snapshot.id,
+      version: 1,
+      changedAt,
+      operation: 'upsert',
+      payload: snapshot,
+    },
+  );
   return repository.remember(actor.id, mutationId, account);
 }
 
@@ -59,14 +92,24 @@ export async function recordManualBalance(
   },
   mutationId: string,
 ) {
+  const account = repository.accounts.get(accountId);
+  if (!account || !authorizeFinanceScope(actor, account.scope, 'edit').allowed)
+    throw new Error('Finance record not found.');
   const replay = repository.mutation<{
     account: ReturnType<typeof createFinancialAccount>;
     snapshot: BalanceSnapshot;
   }>(actor.id, mutationId);
-  if (replay) return replay;
-  const account = repository.accounts.get(accountId);
-  if (!account || !authorizeFinanceScope(actor, account.scope, 'edit').allowed)
-    throw new Error('Finance record not found.');
+  if (replay) {
+    if (
+      replay.account?.id !== accountId ||
+      replay.snapshot?.accountId !== accountId ||
+      financeAudience(replay.account.scope) !== financeAudience(account.scope) ||
+      (replay.account.version !== input.expectedAccountVersion &&
+        replay.account.version !== input.expectedAccountVersion + 1)
+    )
+      throw new Error('Account version conflict.');
+    return replay;
+  }
   if (account.connectionId)
     throw new Error('Manual balance snapshots are not permitted for provider-managed accounts.');
   if (account.version !== input.expectedAccountVersion)

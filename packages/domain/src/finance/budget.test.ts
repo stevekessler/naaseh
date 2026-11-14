@@ -7,6 +7,11 @@ import {
   createBudget,
   createBudgetAccountLink,
   createBudgetItem,
+  closeBudget,
+  deactivateBudget,
+  isBudgetEligibleForNewUpcoming,
+  reactivateBudget,
+  reopenBudget,
   tombstoneBudget,
   tombstoneBudgetItem,
 } from './budget.js';
@@ -122,6 +127,34 @@ describe('Finance budget domain', () => {
         relatedAccountIds: [ids.groupAccount, ids.groupAccount],
       }),
     ).toThrow(/account/i);
+  });
+
+  it('keeps reversible activity independent from closure and history', () => {
+    const active = createBudget({
+      id: ids.budget,
+      groupId: ids.group,
+      name: 'Household plan',
+      budgetDate: '2026-04-01',
+      startDate: '2026-04-01',
+      status: 'active',
+    });
+    const inactive = deactivateBudget(active, 'member-a', new Date('2026-04-02T00:00:00.000Z'));
+    expect(inactive).toMatchObject({ activity: 'inactive', status: 'active', version: 2 });
+    expect(isBudgetEligibleForNewUpcoming(inactive)).toBe(false);
+
+    const closed = closeBudget(inactive, 'member-a', new Date('2026-04-03T00:00:00.000Z'));
+    const reactivated = reactivateBudget(closed, 'member-a', new Date('2026-04-04T00:00:00.000Z'));
+    expect(reactivated).toMatchObject({
+      activity: 'active',
+      closedAt: '2026-04-03T00:00:00.000Z',
+      version: 4,
+    });
+    expect(isBudgetEligibleForNewUpcoming(reactivated)).toBe(false);
+    expect(reopenBudget(reactivated)).toMatchObject({
+      activity: 'active',
+      status: 'active',
+      version: 5,
+    });
   });
 
   it('calculates exact item, category, and currency totals with signed variance', () => {

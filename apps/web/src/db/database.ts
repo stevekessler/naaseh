@@ -30,6 +30,8 @@ export interface EncryptedTaskRecord {
 }
 export interface StoredMutation extends Omit<Mutation, 'payload'> {
   payload: Ciphertext;
+  /** Local-only replay ordering; omitted from the wire mutation. */
+  financeDependencyId?: string;
 }
 export interface StoredCryptoKey {
   id: string;
@@ -95,6 +97,8 @@ export interface EncryptedCrisisPlanRecord {
   value: unknown;
 }
 export interface EncryptedFinanceRecord {
+  /** Bound to a server-verified encrypted delivery generation; absent on unproven intent. */
+  cacheGeneration?: string;
   id: string;
   entityType: string;
   scopeKey: string;

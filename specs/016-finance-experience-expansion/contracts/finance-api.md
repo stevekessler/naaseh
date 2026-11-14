@@ -11,6 +11,24 @@ Design contract, not implemented endpoints. Base path `/api/v1`; extend existing
 - Paged query envelope: `{items,nextCursor?,asOf,projectionRevision,complete,rowsState,aggregateState,queryId?,coverage:{examined,scopeComplete},totalCount?,totalsByCurrency?}`. `rowsState` is searching/ready/confirmed-empty; `aggregateState` is pending/exact/failed. A queryId continues automatic bounded calculation independently of row pagination. Counts/totals are omitted/null until exact, or have an explicit partial label. An empty page with nextCursor is not proof of zero matching records. Match count and display-page count are distinct.
 - Money fields are integer minor units. Positive eligible expense magnitude is used in spending results while transactions preserve signed debit/credit semantics. Date filters use named local calendar basis and inclusive endpoints. Filter dimensions combine AND, selected values within a dimension OR; budget/category/subcategory must match the same allocation.
 
+## Administrator ownership and membership clarification — 2026-11-09
+
+An active application administrator may use personally owned Finance and actual
+active member-group Finance. Apply the ordinary group-role restrictions and the
+same canonical session/PIN requirements, including the existing administrator MFA
+prerequisite. The application role supplies no foreign-owner or nonmember-group
+audience, destructive group-role elevation, private-task override through Finance,
+or operation on another person's PIN. This applies to legacy repository loading,
+bounded replay/query paths, source reads, protected delivery and cache proofs.
+Ordinary application administrative task auditing and catalogue maintenance retain
+their existing separate policies. No HTTP envelope or Apple-facing contract changes.
+
+Budget directory/detail retained views now request and merge existing source proofs,
+recheck the retained snapshot before opening or saving, and replace write responses
+with protected canonical reads. Lock/owner replacement disposes the snapshot and
+clears dependent views and drafts. This is partial T029 coverage; reusable-item,
+receipt and other retained subviews still require their own complete audit.
+
 ## Self-only Finance security
 
 These endpoints accept no targetUserId. Caller's canonical authenticated identity is the target. Management requires current password online and strict rate limits; the existing password-recovery PIN is not an alternate credential.
@@ -120,3 +138,164 @@ Actual matching rows or a confirmed full-scope empty state MUST be available at 
 Receipt content requires one `Range: bytes=start-end` with raw range ≤1,048,576 bytes and `If-Match` from available metadata. Invalid/multiple/oversized ranges return 416; changed ETag returns 412. Valid response 206 includes `Content-Range`, `Content-Length`, `Accept-Ranges: bytes`, stable ETag, fixed approved Content-Type, `Cache-Control: no-store`, and `X-Content-Type-Options: nosniff`. Read the exact clean/policy-approved S3 version. Every chunk independently checks current permissions/security revision; abort on any denial. Assemble at most 10,000,000 bytes and verify SHA-256 before a locally created Blob preview/download. Lock/revocation aborts pending requests and revokes Blob URLs. Client saves original bytes under a sanitized recognizable filename.
 
 Signed PUT sessions are upload-only, checksum-bound, expiring and limited to a new receipt blob; upload completion checks current edit/unlock rights and never publishes metadata from an abandoned upload. Generic attachment metadata/download/retry/completion routes must enforce the same Finance parent policy. Finance receipt objects are never reachable through the generic profile-media CDN origin. Office preview is a labeled download fallback; PDF/image preview does not execute active content. Content scanners must inspect actual file structure, not MIME alone.
+
+
+### Local foundation implementation: targeted transaction evidence
+
+Additive GET `/finance/transactions/{id}` point-reads the current canonical row
+and its authorized parent graph using existing locators, before any legacy scope
+hydration. Missing locator/source, withdrawn source or inaccessible parent returns
+no Finance body; there is no scan/history fallback. IDs support ULIDs and legacy
+CSV `batchULID:ordinal` (1..50,000, matching canonical CSV metadata). Session/PIN
+checks apply independently of optional snapshot support. `x-finance-cache-protocol:
+1` opts into the existing opaque proof response header and current source checks.
+GET `/finance/merchants/{id}` and `/finance/tasks/{id}/link` also opt in; the task
+response's final canonical task authority is included in private proof dependencies.
+Legacy responses stay unchanged. Post-save web views point-read affected rows
+(two for a transfer), merge proof evidence without advancing ordinary/Finance
+cursors, and derive retained views only from same-controller/same-generation
+verified contexts. No mutation-response DTO alone becomes trusted cached data.
+Other budget/reconciliation routes still require explicit proof integration.
+
+
+### Local protected feed continuation (November 9)
+
+The v8 sync response adds `financeHasMore`. True indicates that another raw
+feed query is needed, including ordinary-only pages traversed by the independent
+Finance cursor; it does not promise additional authorized Finance records.
+Production uses the SDK continuation metadata rather than inferring exhaustion
+from fewer than 200 returned rows. SDK keys remain server-private. Locked,
+unsupported-source and refresh-required responses withhold the hint (false) and
+preserve the last acknowledged Finance cursor while ordinary sync progresses.
+Existing arrays/cursors and legacy DTO fields retain their shape.
+
+The PWA runs at most five sequential protected pages per foreground sync cycle,
+committing each page's encrypted records/proof/Finance cursor before requesting
+the next one. A continuation without cursor progress, a malformed hint, failed
+request, lock or controller replacement stops the burst. A missing hint from an
+older server permits one page with continuation unknown. There is no speculative
+idle follow-up, new polling timer, scan or historical-bootstrap fallback. A feed
+frontier is not proof that all retained Finance history has been bootstrapped.
+
+
+### Protected current-state bootstrap (local foundation, November 12)
+
+A fresh v8 PWA sends `financeCacheProtocol:1` and
+`financeBootstrapProtocol:1` to the existing POST `/sync/pull` route. The opt-in
+response contains `financeBootstrap:{records,frontier,complete,nextCursor?}` and
+the existing current cache proof. Legacy/Apple requests and response DTOs are
+unchanged. The route requires the current user/session/tab/PIN gate and derives
+catalogue, owner and active-group partitions server-side; the client cannot name
+a partition or account to widen access.
+
+The server captures strongly consistent canonical scope revisions and feed
+counters once, then returns at most 100 current canonical rows from one authorized
+partition per page. It uses direct partition `Query`, never table Scan, filtered
+scope fallback, history replay or Lambda whole-scope hydration. The encrypted,
+15-minute continuation is bound to the user, exact partition set, all captured
+revisions, feed frontier and exclusive key. Every page checks all revisions before
+and after its query and rechecks source/membership/task authority. A canonical,
+membership or task-authority change returns a restart requirement rather than
+mixing snapshots. At most 64 proof scopes are supported, matching the existing
+cache-proof closure.
+
+The PWA encrypts each page and atomically commits its cache proof plus opaque
+bootstrap continuation in IndexedDB. The Finance delivery cursor remains unchanged
+until `complete:true`; that final transaction clears the bootstrap continuation and
+advances the independent Finance cursor to the captured frontier. Subsequent
+protected pulls deliver changes after that frontier. Pending encrypted outbox
+records win collisions and are never removed by snapshot pages. A restart-required,
+expired or invalid continuation purges only downloaded cache/proof/checkpoint data,
+retains pending intent and begins again. No new AWS resource, index, migration,
+polling timer or Apple field is introduced.
+
+
+### Protected reusable creation replay (local foundation)
+
+Sync v8 now accepts `financeReusableItem` / `create` with baseVersion0 and a stable
+ULID entity ID. Business fields use the existing strict reusable-item input schema.
+Optional local projection fields are accepted only when consistent: id matches the
+entity, version1, status active, and creator pending/current principal. They are
+not forwarded as authoritative server fields. Unknown fields or inconsistent local
+metadata are rejected; unsupported operations remain retry/pending.
+
+The sync adapter invokes the existing protected Finance handler through the
+header-gated bridge POST `/finance/reusable-items/{reusableItemId}` with
+`x-finance-sync-replay: reusable-create-v1`. This header selects the bounded loader
+and exact-intent receipt; it does not replace authentication, mutation security,
+current memberships or Finance unlock checks. The bridge requires this opt-in;
+ordinary POST `/finance/reusable-items` keeps its original server-generated IDs
+and request/response schema. The existing gateway proxy/function/IAM are reused.
+
+Replay point-reads the authorized group, named account parents, active catalogue
+sources and their reference counters; there is no history or whole-catalogue
+fallback. Missing locator evidence stays retryable. Foreign pointers are denied
+before foreign metadata/body reads. The canonical record, locator, reference-count
+updates, feed and fingerprinted receipt commit together under existing conditional
+scope revisions. An exact retry acknowledges the original creation; changed intent
+or a pre-existing conflicting identity cannot create a second item. Sync outcomes
+contain IDs/status/version and safe problems, never a private response model.
+
+After a successful creation acknowledgement, the PWA atomically removes only the
+unverified version1 draft projection if no later queued edit or verified server
+projection exists. It then receives the canonical copy through protected delivery;
+an acknowledgement response alone never grants a cache generation. Conflicts,
+newer drafts, other queued edits and unrelated receipt bytes are retained, and a
+lock aborts the acknowledgement transaction. This is local proof initialization,
+not completion of the deferred full-history bootstrap or other replay families.
+
+
+For a replay into a scope with missing metadata, a known canonical row holds the
+operation pending for trusted repair. Otherwise one strongly consistent key-only
+Query (`PK = :pk`, `Limit:1`, projection `PK, SK`) checks the namespace. Any row,
+surviving publication state or continuation also keeps replay retryable without
+writes. Only an empty namespace may initialize metadata, fenced by conditional
+META creation. This is not a history fallback or automatic metadata repair.
+Legacy state remains unchanged and the migration remains unrun. The conditional
+query is additional to the point-Get formula and must be included in metered cost
+acceptance. Existing-metadata replay fixtures use zero Finance history queries.
+
+
+Client-selected reusable IDs are also fenced against the other supported Finance
+source-locator namespaces in the canonical transaction. At this checkpoint these
+are13 additional negative condition checks for a new creation; their transactional
+read cost is separate from the point-Get formula. A known cross-type ID conflicts
+without foreign body reads or any partial canonical/counter/feed writes. Exact
+saved retries do not create or charge those checks again. No new registry table,
+namespace migration or IAM permission was introduced.
+
+
+### Protected budget creation replay (local foundation, November 12)
+
+Sync v8 accepts `financeBudget` / `create` with baseVersion0 and the queued
+budget's stable ULID. The payload uses the existing strict budget input schema;
+optional local `id` and `version` metadata must match the entity and version1.
+Archived creation and unknown fields are rejected. The adapter invokes replay-only
+POST `/finance/budgets/{budgetId}` with
+`x-finance-sync-replay: budget-create-v1`. Direct requests to that path are
+rejected, while ordinary POST `/finance/budgets` continues to generate its ID on
+the server with the existing contract.
+
+The targeted loader verifies current group edit access, reads group metadata,
+the exact budget locator and at most the exact canonical retry row. It does not
+hydrate group Finance history. A foreign locator is denied before any foreign
+scope read; incomplete locator/row evidence remains retryable. When metadata is
+absent, the same strongly consistent key-only `Limit:1` namespace proof described
+above is required before initializing an empty scope. The stable budget ID is
+fenced in the `budgets` locator namespace by the canonical transaction.
+
+The canonical budget, locator, protected feed change and fingerprinted receipt
+commit with the existing scope revision fence. An exact retry returns version1
+without another write. A changed intent conflicts, and sync results never echo
+the protected budget model. This adds no route, function, table, index, IAM grant,
+migration or Apple DTO. Other creation/link/item/archive replay families remain
+held until their own bounded source loaders and validation exist.
+
+When the retained budget source is still trusted but the PWA is offline, a budget
+form with no selected account links may generate the stable ULID and atomically
+encrypt a version1 draft plus its create intent. After exact acknowledgement, the
+client removes only that unverified draft and queue entry in one transaction; a
+later edit, conflict, verified projection or lock preserves it. The canonical copy
+still arrives through protected delivery. If the form has selected accounts, the
+client keeps the form and selections and requires reconnection because account-link
+replay is not yet implemented; it never silently drops those choices.

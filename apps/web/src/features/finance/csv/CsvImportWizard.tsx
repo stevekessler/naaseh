@@ -2,7 +2,19 @@ import { parseProtectedFinanceCsv } from './csv-worker-client.js';
 import { currentFinanceAccess } from '../security/finance-access.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { mapFinanceCsvRows } from '@naaseh/domain';
-import { DuplicateReview, type CsvMappingState, type DuplicateCandidate } from './csv-import.js';
+import {
+  DuplicateReview,
+  type CsvMappingState,
+  type DuplicateCandidate,
+  type CsvCommitRow,
+} from './csv-import.js';
+
+export interface ReviewedCsvImport {
+  mappedRows: ReturnType<typeof mapFinanceCsvRows>;
+  rows: CsvCommitRow[];
+  mapping: CsvMappingState;
+  review: DuplicateReview;
+}
 
 export function CsvImportWizard({
   duplicates = [],
@@ -11,7 +23,7 @@ export function CsvImportWizard({
 }: {
   duplicates?: DuplicateCandidate[];
   currency?: string;
-  onCommit: (rows?: ReturnType<typeof mapFinanceCsvRows>) => Promise<void>;
+  onCommit: (input: ReviewedCsvImport) => Promise<void>;
 }) {
   const [rawRows, setRawRows] = useState<string[][]>([]);
   const [progress, setProgress] = useState('');
@@ -22,7 +34,7 @@ export function CsvImportWizard({
     dateFormat: 'YYYY-MM-DD',
     amountMapping: { mode: 'signed', amountColumn: '' },
   });
-  const [review] = useState(() => new DuplicateReview(duplicates));
+  const [review, setReview] = useState(() => new DuplicateReview(duplicates));
   const [, render] = useState(0);
   const parseRequest = useRef<AbortController | undefined>(undefined);
   useEffect(() => {
@@ -57,6 +69,7 @@ export function CsvImportWizard({
     }
   }, [currency, mapping, rawRows]);
   const mapped = mappingResult.rows;
+  const rowsToCommit = review.complete ? review.commitRows(mapped) : [];
   const select = (label: string, value: string, change: (next: string) => void) => (
     <label>
       {label}
@@ -75,6 +88,7 @@ export function CsvImportWizard({
     const request = new AbortController();
     parseRequest.current = request;
     setRawRows([]);
+    setReview(new DuplicateReview(duplicates));
     setError('');
     setProgress('');
     if (!file) return;
@@ -170,8 +184,8 @@ export function CsvImportWizard({
         </fieldset>
       ) : null}
       <button
-        disabled={!review.complete || mapped.length === 0}
-        onClick={() => void onCommit(mapped)}
+        disabled={rowsToCommit.length === 0}
+        onClick={() => void onCommit({ mappedRows: mapped, rows: rowsToCommit, mapping, review })}
       >
         Commit reviewed import
       </button>

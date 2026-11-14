@@ -7,6 +7,7 @@ export { normalizeFinanceText } from './text-postings.js';
 export const FINANCE_MAX_EXAMINED = 1_000;
 export const FINANCE_MAX_ROWS = 200;
 export const FINANCE_QUERY_LIFETIME_MS = 15 * 60_000;
+export const FINANCE_QUERY_ROW_ORDER_VERSION = 2;
 export interface FinanceFact {
   id: string;
   accountId: string;
@@ -29,6 +30,10 @@ export interface FinanceFact {
   slices: SpendSlice[];
   originalSourceAccountIds?: string[];
 }
+export interface FinanceRowBoundary {
+  id: string;
+  effectiveAt: string;
+}
 export interface FinanceReadRequest {
   userId: string;
   accountId: string;
@@ -37,6 +42,7 @@ export interface FinanceReadRequest {
   filters: Partial<FinanceQueryFilters>;
   limit?: number;
   cursor?: string | undefined;
+  before?: FinanceRowBoundary;
 }
 export type FinanceReadContext = Omit<FinanceReadRequest, 'limit' | 'cursor'>;
 export interface FinanceReadResult {
@@ -66,7 +72,29 @@ export function parseFinanceReadRequest(request: FinanceReadRequest) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > FINANCE_MAX_ROWS)
     throw new Error('Finance row limit must be 1–200.');
   const filters = financeQueryFiltersSchema.parse(request.filters);
+  if (
+    request.before &&
+    (typeof request.before.id !== 'string' ||
+      !request.before.id ||
+      request.before.id.length > 200 ||
+      typeof request.before.effectiveAt !== 'string' ||
+      !Number.isFinite(Date.parse(request.before.effectiveAt)))
+  )
+    throw new Error('Invalid Finance row boundary.');
   return { ...request, filters, limit };
+}
+
+export function isFinanceFactBefore(fact: FinanceRowBoundary, before?: FinanceRowBoundary) {
+  if (!before) return true;
+  return compareFinanceRows(fact, before) > 0;
+}
+
+/** ISO strings may use different precision; equal instants must use the same ID tie-breaker. */
+export function compareFinanceRows(left: FinanceRowBoundary, right: FinanceRowBoundary) {
+  const a = Date.parse(left.effectiveAt);
+  const b = Date.parse(right.effectiveAt);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) throw new Error('Invalid Finance row date.');
+  return b - a || right.id.localeCompare(left.id);
 }
 
 const canonical = (value: unknown): unknown => {

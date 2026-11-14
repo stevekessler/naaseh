@@ -26,6 +26,16 @@ function setup(PK = 'FINANCE#SCOPE#OWNER#legacy') {
       });
       return { complete: true };
     },
+    budgetAccountLinks: async () => {
+      calls.push('budget-account-links');
+      const row = f.rows.get(f.key(meta))!;
+      f.rows.set(f.key(meta), {
+        ...row,
+        revision: Number(row.revision) + 1,
+        budgetAccountLinkIndexVersion: 1,
+      });
+      return { complete: true };
+    },
   });
   return { ...f, PK, meta, service, calls };
 }
@@ -71,5 +81,21 @@ describe('trusted legacy scope preparation', () => {
     });
     expect(await f.service.step(f.PK)).toMatchObject({ phase: 'complete', complete: true });
     expect(f.calls).toEqual(['locators']);
+  });
+  it('prepares the active budget/account pair index before refund coverage in group scopes', async () => {
+    const f = setup('FINANCE#SCOPE#GROUP#legacy');
+    expect(await f.service.step(f.PK)).toMatchObject({ phase: 'locators', complete: false });
+    expect(await f.service.step(f.PK)).toMatchObject({
+      phase: 'budget-account-links',
+      complete: false,
+    });
+    expect(await f.service.step(f.PK)).toMatchObject({ phase: 'refund-index', complete: false });
+    expect(await f.service.step(f.PK)).toMatchObject({ phase: 'complete', complete: true });
+    expect(f.calls).toEqual(['locators', 'locators-next', 'budget-account-links', 'refund-index']);
+    expect(f.rows.get(f.key(f.meta))).toMatchObject({
+      locatorIndexVersion: 1,
+      budgetAccountLinkIndexVersion: 1,
+      refundRelationshipIndexVersion: 1,
+    });
   });
 });

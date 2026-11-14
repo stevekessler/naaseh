@@ -26,11 +26,6 @@ function setup() {
   let now = Date.parse('2026-11-01T18:00:00Z');
   let state: FinanceOfflineState | undefined;
   const listeners = new Set<(securityChanged?: boolean) => void>();
-  const pending = {
-    transaction: 'retained-encrypted-edit',
-    bytes: 'retained-encrypted-receipt',
-    deviceKey: 'retained-device-key',
-  };
   const store = {
     read: async () => structuredClone(state),
     update: async (
@@ -77,7 +72,6 @@ function setup() {
   return {
     create,
     store,
-    pending,
     options,
     now: () => now,
     advance: (milliseconds: number) => {
@@ -89,6 +83,70 @@ function setup() {
 const preference = { requirePin: true, revision: 1, sessionEpoch: 1 };
 
 describe('Finance visit and offline access controller', () => {
+  it('withholds PIN-off reads before notifying lock subscribers of stale security', async () => {
+    const f = setup();
+    const controller = f.create();
+    await controller.synchronize({ ...preference, requirePin: false });
+    const observed: boolean[] = [];
+    const unsubscribe = controller.subscribe(() => observed.push(controller.canRead()));
+    await controller.markStale();
+    unsubscribe();
+    expect(observed).not.toHaveLength(0);
+    expect(observed).not.toContain(true);
+  });
+
+  it('blocks PIN-off reads in peer tabs when shared Finance evidence is revoked', async () => {
+    const f = setup();
+    const active = f.create();
+    const peer = f.create();
+    await active.synchronize({ ...preference, requirePin: false });
+    await peer.restore();
+    expect(peer.canRead()).toBe(true);
+    await active.markStale({ notifySecurityChange: true });
+    expect(peer.securityReady).toBe(false);
+    expect(peer.canRead()).toBe(false);
+  });
+
+  it.each(['online', 'offline'] as const)(
+    'keeps security stale when a completed %s unlock write returns after invalidation',
+    async (mode) => {
+      const f = setup();
+      const controller = f.create();
+      await controller.synchronize(preference);
+      if (mode === 'offline') {
+        await controller.unlockOnline('001234');
+        controller.lock(false);
+      }
+      const update = f.store.update;
+      let release!: () => void;
+      let started!: () => void;
+      const writing = new Promise<void>((resolve) => {
+        started = resolve;
+      });
+      const paused = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      vi.spyOn(f.store, 'update').mockImplementation(async (ownerId, change) => {
+        const result = await update(ownerId, change);
+        if (result.verifier && !result.knownStale && !result.leaseId) {
+          started();
+          await paused;
+        }
+        return result;
+      });
+      const unlock =
+        mode === 'online' ? controller.unlockOnline('001234') : controller.unlockOffline('001234');
+      const cancelled = expect(unlock).rejects.toThrow(/unlock/i);
+      await writing;
+      await controller.markStale();
+      release();
+      await cancelled;
+      expect(controller.securityReady).toBe(false);
+      expect(controller.canRead()).toBe(false);
+      expect(f.state()?.knownStale).toBe(true);
+    },
+  );
+
   it('never decrypts known Finance conflicts in ordinary review while ordinary records remain usable', async () => {
     const decrypt = vi.fn(async () => ({ mutation: { entityType: 'task' }, label: 'ordinary' }));
     expect(await readOrdinaryConflict({ entityType: 'financeBudget' }, decrypt)).toBeUndefined();
@@ -169,7 +227,7 @@ describe('Finance visit and offline access controller', () => {
     expect(await readFinanceReplayIntent('task', decrypt)).toEqual({ private: 'queued-intent' });
     expect(decrypt).toHaveBeenCalledTimes(2);
   });
-  it('withholds queued Finance plaintext when lock occurs during decryption and retains the encrypted intent', async () => {
+  it('withholds queued Finance plaintext when lock occurs during decryption', async () => {
     const f = setup();
     const controller = f.create();
     await controller.synchronize(preference);
@@ -186,7 +244,86 @@ describe('Finance visit and offline access controller', () => {
     controller.lock();
     finish('late-plaintext');
     expect(await intent).toBeUndefined();
-    expect(f.pending.transaction).toBe('retained-encrypted-edit');
+  });
+  it('does not dispatch an old replay after lock and reopen during preparation', async () => {
+    const f = setup(),
+      controller = f.create();
+    await controller.synchronize(preference);
+    await controller.unlockOnline('001234');
+    installFinanceAccess(controller);
+    let ready!: () => void;
+    const prepared = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ accepted: true }));
+    const replay = readFinanceReplayIntent('financeBudget', async (signal) => {
+      await prepared;
+      return financeRequest('/sync/push', { method: 'POST', signal }, fetcher);
+    });
+    const rejected = expect(replay).rejects.toThrow(/unlock/i);
+    controller.lock(false);
+    await controller.unlockOnline('001234');
+    ready();
+    await rejected;
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(controller.canRead()).toBe(true);
+  });
+  it('aborts a replay response with its original visit and allows a fresh attempt', async () => {
+    const f = setup(),
+      controller = f.create();
+    await controller.synchronize(preference);
+    await controller.unlockOnline('001234');
+    installFinanceAccess(controller);
+    let received!: () => void, finish!: (response: Response) => void;
+    const started = new Promise<void>((resolve) => {
+      received = resolve;
+    });
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => {
+      received();
+      return new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    });
+    let attemptSignal: AbortSignal | undefined;
+    const replay = readFinanceReplayIntent('financeBudget', async (signal) => {
+      attemptSignal = signal;
+      return financeRequest('/sync/push', { method: 'POST', signal }, fetcher);
+    });
+    const rejected = expect(replay).rejects.toThrow(/unlock/i);
+    await started;
+    controller.lock(false);
+    await controller.unlockOnline('001234');
+    finish(Response.json({ private: 'late' }));
+    await rejected;
+    expect(attemptSignal?.aborted).toBe(true);
+    const fresh = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ applied: true }));
+    expect(
+      await readFinanceReplayIntent('financeBudget', (signal) =>
+        financeRequest('/sync/push', { method: 'POST', signal }, fresh),
+      ),
+    ).toEqual({ applied: true });
+    expect(fresh).toHaveBeenCalledOnce();
+  });
+  it('does not invalidate a reopened visit when an aborted request returns a late lock response', async () => {
+    const f = setup();
+    const controller = f.create();
+    await controller.synchronize(preference);
+    await controller.unlockOnline('001234');
+    installFinanceAccess(controller);
+    let finish!: (response: Response) => void;
+    const fetcher = vi.fn<typeof fetch>(
+      () => new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const old = financeRequest('/finance/accounts', {}, fetcher);
+    const rejected = expect(old).rejects.toThrow();
+    controller.lock(false);
+    await controller.unlockOnline('001234');
+    finish(Response.json({ code: 'finance_locked' }, { status: 403 }));
+    await rejected;
+    expect(controller.canRead()).toBe(true);
+    expect(f.state()?.knownStale).toBe(false);
   });
   it('does not start a CSV worker when file reading completes after lock', async () => {
     const f = setup();
@@ -392,11 +529,8 @@ describe('Finance visit and offline access controller', () => {
     await expect(controller.synchronize(preference)).rejects.toThrow(/connect/i);
     expect(f.state()?.revision).toBe(2);
     expect(controller.canRead()).toBe(false);
-    expect(f.pending).toEqual({
-      transaction: 'retained-encrypted-edit',
-      bytes: 'retained-encrypted-receipt',
-      deviceKey: 'retained-device-key',
-    });
+    // Actual encrypted edits, receipt bytes and device-key retention are exercised
+    // across reset in the real IndexedDB PIN browser journey.
   });
   it('clears grants and plaintext cleanup callbacks when the canonical epoch changes', async () => {
     const f = setup();

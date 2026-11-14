@@ -1,14 +1,39 @@
+import {
+  assertFinanceTaskResultAccess,
+  financeSyncSourceCollections,
+} from './sync-source-guard.js';
+import {
+  financeAuthorizationPartitions,
+  nextFinanceAuthorizationRevision,
+} from './authorization-revision.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
-import { createUlid, financeAudience, type FinanceScope } from '@naaseh/domain';
-import type { FinanceActor } from './authorization.js';
+import {
+  createUlid,
+  financeAudience,
+  ulidSchema,
+  type FinanceScope,
+  type SyncChange,
+} from '@naaseh/domain';
+import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceMemoryRepository, financeKeys } from './repository.js';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { buildTaskTransaction, feedTransactionItems } from '../shared/store.js';
 import { prepareAudienceChanges } from '../sync/change-feed-repository.js';
-import { FinanceUnitOfWork, financeLocatorKey } from './unit-of-work.js';
+import { FinanceUnitOfWork, financeLocatorKey, type FinanceRecordKey } from './unit-of-work.js';
+import { requestFinancePublication } from './publication-dispatch.js';
+import { SafeApiError } from '../shared/http.js';
+import {
+  describeFinanceCanonicalChange,
+  financePublicationJournalRecords,
+} from './publication-change-journal.js';
+import {
+  FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION,
+  financeBudgetAccountPairKey,
+  type FinanceBudgetAccountPairLocator,
+} from './budget-account-link-index.js';
 
 const catalog = 'FINANCE#CATALOG';
 const partitionFor = (scope: FinanceScope) => `FINANCE#SCOPE#${financeAudience(scope)}`;
@@ -50,7 +75,40 @@ type StateRow = {
   collection: Collection;
   entryKey: string;
   data: unknown;
+  financeSourceAccountIds?: string[];
 };
+interface ReusableCreateSources {
+  id: string;
+  groupId: string;
+  financeCategoryId: string;
+  merchantId?: string | undefined;
+  relatedAccountIds: string[];
+}
+interface BudgetCreateSources {
+  id: string;
+  groupId: string;
+}
+interface ManualTransactionCreateSources {
+  id: string;
+  accountId: string;
+  merchantId?: string | undefined;
+  financeCategoryIds: string[];
+}
+interface BudgetAccountLinkCreateSources {
+  id: string;
+  budgetId: string;
+  accountId: string;
+}
+interface BudgetItemCreateSources {
+  id: string;
+  budgetId: string;
+  expectedBudgetVersion: number;
+  financeCategoryId: string;
+  merchantId?: string | undefined;
+  sourceReusableItemId?: string | undefined;
+  currency: string;
+  relatedAccountIds: string[];
+}
 type Writes = NonNullable<TransactWriteCommandInput['TransactItems']>;
 const rowId = (row: { PK: string; SK: string }) => `${row.PK}/${row.SK}`;
 // CSV batches contain Sets, including the empty Set that DynamoDB cannot marshal natively.
@@ -99,22 +157,22 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
       }),
     );
     const collections = new Set([
-      'accounts',
-      'transactions',
-      'budgets',
-      'budgetItems',
-      'categories',
-      'merchants',
+      ...Object.values(financeSyncSourceCollections),
       'refundRelationships',
     ]);
     for (const candidate of page.Items ?? []) {
       if (!collections.has(candidate.collection as string)) continue;
       const row = await work.get({ PK: partition, SK: String(candidate.SK) });
-      if (row)
-        await work.put({
-          ...financeLocatorKey(String(row.collection), String(row.entryKey)),
-          storageKey: { PK: partition, SK: String(row.SK) },
-        });
+      if (row) {
+        const key = financeLocatorKey(String(row.collection), String(row.entryKey));
+        const storageKey = { PK: partition, SK: String(row.SK) };
+        const previous = await work.get(key);
+        if (previous && !isDeepStrictEqual(previous.storageKey, storageKey))
+          throw new Error(
+            'Finance locator conflict. Review duplicate source identifiers before backfill.',
+          );
+        await work.put({ ...key, storageKey });
+      }
     }
     const nextCursor = page.LastEvaluatedKey as { PK: string; SK: string } | undefined;
     return work.commit({
@@ -132,20 +190,81 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
   }
   private readonly versions = new Map<string, number>();
   private readonly scopeMetadata = new Map<string, Record<string, unknown>>();
+  private readonly scopesWithRows = new Set<string>();
+  private creationIdentity?: { id: string; collection: Collection };
   private baseline = new Map<string, StateRow>();
   private readonly loadedTaskIds = new Set<string>();
   private readonly loadedReceipts = new Set<string>();
   private readonly effects: Array<() => Promise<void>> = [];
 
-  static async forActor(actor: FinanceActor, mutationId?: string) {
+  private requestFingerprint: string | undefined;
+
+  static async forActor(
+    actor: FinanceActor,
+    mutationId?: string,
+    requestFingerprint?: string,
+    budgetEditId?: string,
+    reusableCreate?: ReusableCreateSources,
+    budgetCreate?: BudgetCreateSources,
+    budgetAccountLinkCreate?: BudgetAccountLinkCreateSources,
+    budgetItemCreate?: BudgetItemCreateSources,
+    manualTransactionCreate?: ManualTransactionCreateSources,
+  ) {
     const repository = new DynamoFinanceRepository();
+    if (
+      requestFingerprint !== undefined &&
+      (!mutationId || !/^[a-f0-9]{64}$/u.test(requestFingerprint))
+    )
+      throw new Error('Invalid Finance request fingerprint.');
+    repository.requestFingerprint = requestFingerprint;
     const partitions = [catalog];
-    if (actor.active && actor.role !== 'admin') {
+    if (actor.active) {
       partitions.push(partitionFor({ type: 'owner', ownerId: actor.id }));
       for (const { groupId } of actor.groupMemberships)
         partitions.push(partitionFor({ type: 'group', groupId }));
     }
-    await repository.load([...new Set(partitions)]);
+    if (
+      [
+        budgetEditId,
+        reusableCreate,
+        budgetCreate,
+        budgetAccountLinkCreate,
+        budgetItemCreate,
+        manualTransactionCreate,
+      ].filter((value) => value !== undefined).length > 1
+    )
+      throw new Error('A Finance replay must select one source loader.');
+    if (manualTransactionCreate !== undefined) {
+      if (!requestFingerprint)
+        throw new Error('Targeted manual transactions require intent evidence.');
+      await repository.loadManualTransactionCreate(actor, manualTransactionCreate);
+      repository.creationIdentity = { id: manualTransactionCreate.id, collection: 'transactions' };
+    } else if (budgetItemCreate !== undefined) {
+      if (!requestFingerprint) throw new Error('Targeted budget items require intent evidence.');
+      await repository.loadBudgetItemCreate(actor, budgetItemCreate);
+      repository.creationIdentity = { id: budgetItemCreate.id, collection: 'budgetItems' };
+    } else if (budgetAccountLinkCreate !== undefined) {
+      if (!requestFingerprint)
+        throw new Error('Targeted budget account linking requires intent evidence.');
+      await repository.loadBudgetAccountLinkCreate(actor, budgetAccountLinkCreate);
+      repository.creationIdentity = {
+        id: budgetAccountLinkCreate.id,
+        collection: 'budgetAccountLinks',
+      };
+    } else if (budgetCreate !== undefined) {
+      if (!requestFingerprint)
+        throw new Error('Targeted budget creation requires intent evidence.');
+      await repository.loadBudgetCreate(actor, budgetCreate);
+      repository.creationIdentity = { id: budgetCreate.id, collection: 'budgets' };
+    } else if (reusableCreate !== undefined) {
+      if (!requestFingerprint)
+        throw new Error('Targeted reusable creation requires intent evidence.');
+      await repository.loadReusableCreate(actor, reusableCreate);
+      repository.creationIdentity = { id: reusableCreate.id, collection: 'reusableItems' };
+    } else if (budgetEditId !== undefined) {
+      if (!requestFingerprint) throw new Error('Targeted budget edits require intent evidence.');
+      await repository.loadBudgetEdit(actor, budgetEditId);
+    } else await repository.load([...new Set(partitions)]);
     if (mutationId) {
       const result = await dynamodb.send(
         new GetCommand({
@@ -155,14 +274,883 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
         }),
       );
       const required = result.Item?.requiredPartitions as string[] | undefined;
+      const authorization = result.Item?.requiredAuthorizationRevisions as
+        | Record<string, unknown>
+        | undefined;
+      // An earlier receipt may name additional scopes. Verify only their current metadata;
+      // never hydrate unrelated history merely to acknowledge a proven saved result.
+      if (
+        (budgetEditId !== undefined ||
+          reusableCreate !== undefined ||
+          budgetCreate !== undefined ||
+          budgetAccountLinkCreate !== undefined ||
+          budgetItemCreate !== undefined ||
+          manualTransactionCreate !== undefined) &&
+        Array.isArray(required) &&
+        required.length <= 256
+      ) {
+        for (const PK of required) {
+          if (partitions.includes(PK) && !repository.versions.has(PK))
+            repository.versions.set(PK, await repository.revision(PK));
+        }
+      }
       // A receipt can contain protected results. Revoked scopes must not survive via replay.
-      if (result.Item && required && required.every((pk) => repository.versions.has(pk))) {
+      if (result.Item) {
+        if (
+          !Array.isArray(required) ||
+          !authorization ||
+          typeof authorization !== 'object' ||
+          Array.isArray(authorization) ||
+          new Set(required).size !== required.length ||
+          Object.keys(authorization).length !== required.length ||
+          required.some(
+            (pk) =>
+              typeof pk !== 'string' ||
+              !repository.versions.has(pk) ||
+              !Number.isSafeInteger(authorization[pk]) ||
+              Number(authorization[pk]) < 0 ||
+              authorization[pk] !==
+                (nextFinanceAuthorizationRevision(
+                  repository.scopeMetadata.get(pk)?.financeAuthorizationRevision,
+                  false,
+                ) ?? 0),
+          )
+        )
+          throw new SafeApiError(
+            409,
+            'finance_mutation_sources_changed',
+            'Finance access or records changed. Refresh before reviewing this saved operation.',
+            'authorization',
+          );
+        if (
+          requestFingerprint !== undefined &&
+          result.Item.requestFingerprint !== requestFingerprint
+        )
+          throw new SafeApiError(
+            409,
+            'finance_mutation_intent_changed',
+            'This saved Finance operation has different intent. Refresh before reviewing it.',
+            'conflict',
+          );
         const key = `${actor.id}:${mutationId}`;
-        repository.mutationReceipts.set(key, decode(result.Item.data));
+        const data = decode(result.Item.data);
+        await assertFinanceTaskResultAccess(data, {
+          ...actor,
+          groupIds: actor.groupMemberships.map(({ groupId }) => groupId),
+        });
+        repository.mutationReceipts.set(key, data);
         repository.loadedReceipts.add(key);
       }
     }
     return repository;
+  }
+
+  /** Manual creation point-loads only its account, exact retry row and authorization revisions. */
+  private async loadManualTransactionCreate(
+    actor: FinanceActor,
+    input: ManualTransactionCreateSources,
+  ) {
+    const unavailable = () =>
+      new SafeApiError(
+        503,
+        'finance_replay_refresh_required',
+        'Finance synchronization needs refreshed source evidence.',
+        'dependency_failure',
+      );
+    const notFound = () =>
+      new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'authorization');
+    if (
+      !actor.active ||
+      ![
+        input.id,
+        input.accountId,
+        ...(input.merchantId ? [input.merchantId] : []),
+        ...input.financeCategoryIds,
+      ].every((id) => ulidSchema.safeParse(id).success) ||
+      input.financeCategoryIds.length > 200 ||
+      new Set(input.financeCategoryIds).size !== input.financeCategoryIds.length
+    )
+      throw unavailable();
+    const locator = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: financeLocatorKey('accounts', input.accountId),
+        ConsistentRead: true,
+      }),
+    );
+    const accountLocation = locator.Item?.storageKey as { PK?: unknown; SK?: unknown } | undefined;
+    if (
+      !accountLocation ||
+      typeof accountLocation.PK !== 'string' ||
+      accountLocation.SK !== `ROW#accounts#${digest(input.accountId)}`
+    )
+      throw notFound();
+    const PK = accountLocation.PK;
+    const locatedScope: FinanceScope | undefined = PK.startsWith('FINANCE#SCOPE#OWNER#')
+      ? { type: 'owner', ownerId: PK.slice('FINANCE#SCOPE#OWNER#'.length) }
+      : PK.startsWith('FINANCE#SCOPE#GROUP#')
+        ? { type: 'group', groupId: PK.slice('FINANCE#SCOPE#GROUP#'.length) }
+        : undefined;
+    if (!locatedScope || !authorizeFinanceScope(actor, locatedScope, 'edit').allowed)
+      throw notFound();
+    const revision = await this.revision(PK);
+    const accountRow = await dynamodb.send(
+      new GetCommand({ TableName: tableName, Key: accountLocation, ConsistentRead: true }),
+    );
+    if (!accountRow.Item) throw notFound();
+    const row = accountRow.Item as StateRow;
+    const account = decode(row.data) as import('@naaseh/domain').FinancialAccount;
+    if (
+      row.collection !== 'accounts' ||
+      row.entryKey !== input.accountId ||
+      account.id !== input.accountId ||
+      partitionFor(account.scope) !== PK ||
+      !authorizeFinanceScope(actor, account.scope, 'edit').allowed ||
+      !['active', 'attention'].includes(account.status)
+    )
+      throw notFound();
+    this.accounts.set(account.id, account);
+    this.baseline.set(rowId(row), row);
+    this.scopesWithRows.add(PK);
+
+    const catalogReferences: Array<['categories' | 'merchants', string, string]> = [
+      ...input.financeCategoryIds.map(
+        (id) => ['categories', id, `category:${id}`] as ['categories', string, string],
+      ),
+      ...(input.merchantId
+        ? [
+            ['merchants', input.merchantId, `merchant:${input.merchantId}`] as [
+              'merchants',
+              string,
+              string,
+            ],
+          ]
+        : []),
+    ];
+    const catalogRevision = catalogReferences.length ? await this.revision(catalog) : undefined;
+    for (const [collection, id, counterId] of catalogReferences) {
+      const sourceResult = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: catalog, SK: `ROW#${collection}#${digest(id)}` },
+          ConsistentRead: true,
+        }),
+      );
+      if (!sourceResult.Item) throw notFound();
+      const source = sourceResult.Item as StateRow;
+      const data = decode(source.data) as Record<string, unknown>;
+      if (
+        source.collection !== collection ||
+        source.entryKey !== id ||
+        !data ||
+        data.id !== id ||
+        data.status !== 'active'
+      )
+        throw unavailable();
+      this.baseline.set(rowId(source), source);
+      this.scopesWithRows.add(catalog);
+      if (collection === 'categories')
+        this.categories.set(id, data as unknown as import('@naaseh/domain').FinanceCategory);
+      else this.merchants.set(id, data as unknown as import('@naaseh/domain').FinanceMerchant);
+      const counterResult = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: catalog, SK: `ROW#catalogReferenceCounts#${digest(counterId)}` },
+          ConsistentRead: true,
+        }),
+      );
+      if (counterResult.Item) {
+        const counter = counterResult.Item as StateRow;
+        if (
+          counter.collection !== 'catalogReferenceCounts' ||
+          counter.entryKey !== counterId ||
+          !Number.isSafeInteger(counter.data) ||
+          Number(counter.data) < 0
+        )
+          throw unavailable();
+        this.baseline.set(rowId(counter), counter);
+        this.catalogReferenceCounts.set(counterId, Number(counter.data));
+      }
+    }
+
+    const transactionLocator = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: financeLocatorKey('transactions', input.id),
+        ConsistentRead: true,
+      }),
+    );
+    const expected = { PK, SK: `ROW#transactions#${digest(input.id)}` };
+    const location = transactionLocator.Item?.storageKey as
+      | { PK?: unknown; SK?: unknown }
+      | undefined;
+    if (location && (location.PK !== expected.PK || location.SK !== expected.SK)) throw notFound();
+    const existing = await dynamodb.send(
+      new GetCommand({ TableName: tableName, Key: expected, ConsistentRead: true }),
+    );
+    if (location && !existing.Item) throw notFound();
+    if (existing.Item) {
+      if (!location) throw unavailable();
+      const transactionRow = existing.Item as StateRow;
+      const transaction = decode(
+        transactionRow.data,
+      ) as import('@naaseh/domain').FinancialTransaction;
+      if (
+        transactionRow.collection !== 'transactions' ||
+        transactionRow.entryKey !== input.id ||
+        transaction.id !== input.id ||
+        transaction.accountId !== input.accountId
+      )
+        throw unavailable();
+      this.transactions.push(transaction);
+      this.baseline.set(rowId(transactionRow), transactionRow);
+    }
+    if (
+      (await this.revision(PK)) !== revision ||
+      (catalogRevision !== undefined && (await this.revision(catalog)) !== catalogRevision)
+    )
+      throw unavailable();
+    this.versions.set(PK, revision);
+    if (catalogRevision !== undefined) this.versions.set(catalog, catalogRevision);
+  }
+
+  /** Budget header edits need no catalog, account graph or transaction history. */
+  private async loadBudgetEdit(actor: FinanceActor, budgetId: string) {
+    const unavailable = () =>
+      new SafeApiError(
+        503,
+        'finance_replay_refresh_required',
+        'Finance synchronization needs refreshed source evidence.',
+        'dependency_failure',
+      );
+    const notFound = () =>
+      new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'authorization');
+    if (!actor.active) throw notFound();
+    const locator = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: financeLocatorKey('budgets', budgetId),
+        ConsistentRead: true,
+      }),
+    );
+    const key = locator.Item?.storageKey as { PK?: unknown; SK?: unknown } | undefined;
+    if (!key) throw unavailable(); // Missing migration evidence must not trigger a scope scan.
+    if (typeof key.PK !== 'string' || key.SK !== `ROW#budgets#${digest(budgetId)}`)
+      throw unavailable();
+    const groupId = /^FINANCE#SCOPE#GROUP#([^#]+)$/u.exec(key.PK)?.[1];
+    if (!groupId || !actor.groupMemberships.some((membership) => membership.groupId === groupId))
+      throw notFound(); // Authorize the locator's scope before reading its metadata or body.
+    const PK = key.PK;
+    const revision = await this.revision(PK);
+    const result = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { PK, SK: String(key.SK) },
+        ConsistentRead: true,
+      }),
+    );
+    if (!result.Item) throw notFound();
+    const row = result.Item as StateRow;
+    const value = decode(row.data) as Record<string, unknown>;
+    if (
+      row.PK !== PK ||
+      row.SK !== key.SK ||
+      row.collection !== 'budgets' ||
+      row.entryKey !== budgetId ||
+      !value ||
+      value.id !== budgetId ||
+      value.groupId !== groupId ||
+      !Number.isSafeInteger(value.version) ||
+      Number(value.version) < 1
+    )
+      throw unavailable();
+    if ((await this.revision(PK)) !== revision) throw unavailable();
+    this.versions.set(PK, revision);
+    this.scopesWithRows.add(PK);
+    this.baseline.set(rowId(row), row);
+    this.budgets.set(budgetId, value as unknown as import('@naaseh/domain').Budget);
+  }
+
+  /** Account linking reads two named parents, one pair singleton and an optional exact retry row. */
+  private async loadBudgetAccountLinkCreate(
+    actor: FinanceActor,
+    input: BudgetAccountLinkCreateSources,
+  ) {
+    const unavailable = () =>
+      new SafeApiError(
+        503,
+        'finance_replay_refresh_required',
+        'Finance synchronization needs refreshed source evidence.',
+        'dependency_failure',
+      );
+    const notFound = () =>
+      new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'authorization');
+    if (
+      !actor.active ||
+      ![input.id, input.budgetId, input.accountId].every((id) => ulidSchema.safeParse(id).success)
+    )
+      throw notFound();
+    const locate = async (collection: Collection, id: string) => {
+      const result = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: financeLocatorKey(collection, id),
+          ConsistentRead: true,
+        }),
+      );
+      const storageKey = result.Item?.storageKey as { PK?: unknown; SK?: unknown } | undefined;
+      if (
+        !storageKey ||
+        typeof storageKey.PK !== 'string' ||
+        storageKey.SK !== `ROW#${collection}#${digest(id)}`
+      )
+        throw unavailable();
+      return { PK: storageKey.PK, SK: String(storageKey.SK) };
+    };
+    const budgetKey = await locate('budgets', input.budgetId);
+    const groupId = /^FINANCE#SCOPE#GROUP#([^#]+)$/u.exec(budgetKey.PK)?.[1];
+    if (!groupId || !authorizeFinanceScope(actor, { type: 'group', groupId }, 'edit').allowed)
+      throw notFound();
+    const accountKey = await locate('accounts', input.accountId);
+    const accountScope: FinanceScope | undefined = accountKey.PK.startsWith('FINANCE#SCOPE#OWNER#')
+      ? {
+          type: 'owner',
+          ownerId: accountKey.PK.slice('FINANCE#SCOPE#OWNER#'.length),
+        }
+      : accountKey.PK.startsWith('FINANCE#SCOPE#GROUP#')
+        ? {
+            type: 'group',
+            groupId: accountKey.PK.slice('FINANCE#SCOPE#GROUP#'.length),
+          }
+        : undefined;
+    if (
+      !accountScope ||
+      !authorizeFinanceScope(actor, accountScope, 'read').allowed ||
+      (accountScope.type === 'group' && accountScope.groupId !== groupId)
+    )
+      throw notFound(); // Authorize both locator scopes before reading either protected body.
+    const partitions = [...new Set([budgetKey.PK, accountKey.PK])];
+    for (const PK of partitions) {
+      const revision = await this.revision(PK);
+      if (!Number.isSafeInteger(revision) || revision < 1) throw unavailable();
+      this.versions.set(PK, revision);
+    }
+    if (
+      this.scopeMetadata.get(budgetKey.PK)?.budgetAccountLinkIndexVersion !==
+      FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION
+    )
+      throw unavailable();
+    const read = async (key: { PK: string; SK: string }) => {
+      const result = await dynamodb.send(
+        new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }),
+      );
+      return result.Item as StateRow | undefined;
+    };
+    const retain = <T>(
+      row: StateRow,
+      collection: Collection,
+      id: string,
+      target: Map<string, T>,
+    ) => {
+      if (
+        row.PK === undefined ||
+        row.SK !== `ROW#${collection}#${digest(id)}` ||
+        row.collection !== collection ||
+        row.entryKey !== id ||
+        row.data === undefined
+      )
+        throw unavailable();
+      const value = decode(row.data) as T;
+      target.set(id, value);
+      this.baseline.set(rowId(row), row);
+      this.scopesWithRows.add(row.PK);
+      return value;
+    };
+    const budgetRow = await read(budgetKey);
+    const accountRow = await read(accountKey);
+    if (!budgetRow || !accountRow) throw notFound();
+    const budget = retain(budgetRow, 'budgets', input.budgetId, this.budgets);
+    const account = retain(accountRow, 'accounts', input.accountId, this.accounts);
+    if (
+      (budget as import('@naaseh/domain').Budget).groupId !== groupId ||
+      (account as import('@naaseh/domain').FinancialAccount).scope.type !== accountScope.type ||
+      financeAudience((account as import('@naaseh/domain').FinancialAccount).scope) !==
+        financeAudience(accountScope)
+    )
+      throw unavailable();
+    const pairResult = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: financeBudgetAccountPairKey(input.budgetId, input.accountId),
+        ConsistentRead: true,
+      }),
+    );
+    const pair = pairResult.Item as FinanceBudgetAccountPairLocator | undefined;
+    const linkLocator = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: financeLocatorKey('budgetAccountLinks', input.id),
+        ConsistentRead: true,
+      }),
+    );
+    const requestedLocation = linkLocator.Item?.storageKey as
+      | { PK?: unknown; SK?: unknown }
+      | undefined;
+    if (
+      requestedLocation &&
+      (requestedLocation.PK !== budgetKey.PK ||
+        requestedLocation.SK !== `ROW#budgetAccountLinks#${digest(input.id)}`)
+    )
+      throw notFound();
+    const requestedKey = {
+      PK: budgetKey.PK,
+      SK: `ROW#budgetAccountLinks#${digest(input.id)}`,
+    };
+    const requestedRow = await read(requestedKey);
+    if (requestedRow && !requestedLocation) throw unavailable();
+    if (requestedLocation && !requestedRow) throw unavailable();
+    const loadLink = async (linkId: string, key: FinanceRecordKey) => {
+      if (key.PK !== budgetKey.PK || key.SK !== `ROW#budgetAccountLinks#${digest(linkId)}`)
+        throw unavailable();
+      const row = await read(key);
+      if (!row) throw unavailable();
+      const link = retain(row, 'budgetAccountLinks', linkId, this.budgetAccountLinks);
+      const value = link as import('@naaseh/domain').BudgetAccountLink;
+      if (
+        value.id !== linkId ||
+        value.budgetId !== input.budgetId ||
+        value.accountId !== input.accountId ||
+        value.status !== 'active'
+      )
+        throw unavailable();
+    };
+    if (requestedLocation) await loadLink(input.id, requestedKey);
+    if (pair) {
+      if (
+        pair.PK !== financeBudgetAccountPairKey(input.budgetId, input.accountId).PK ||
+        pair.SK !== 'ACTIVE' ||
+        !ulidSchema.safeParse(pair.linkId).success ||
+        !pair.storageKey
+      )
+        throw unavailable();
+      if (!this.budgetAccountLinks.has(pair.linkId)) await loadLink(pair.linkId, pair.storageKey);
+    }
+    for (const [PK, revision] of this.versions)
+      if ((await this.revision(PK)) !== revision) throw unavailable();
+  }
+
+  /** Budget-item creation point-loads its parent, references and active account links. */
+  private async loadBudgetItemCreate(actor: FinanceActor, input: BudgetItemCreateSources) {
+    const unavailable = () =>
+      new SafeApiError(
+        503,
+        'finance_replay_refresh_required',
+        'Finance synchronization needs refreshed source evidence.',
+        'dependency_failure',
+      );
+    const notFound = () =>
+      new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'authorization');
+    const ids = [
+      input.id,
+      input.budgetId,
+      input.financeCategoryId,
+      ...(input.merchantId ? [input.merchantId] : []),
+      ...(input.sourceReusableItemId ? [input.sourceReusableItemId] : []),
+      ...input.relatedAccountIds,
+    ];
+    if (
+      !actor.active ||
+      ids.some((id) => !ulidSchema.safeParse(id).success) ||
+      input.relatedAccountIds.length > 50 ||
+      new Set(input.relatedAccountIds).size !== input.relatedAccountIds.length
+    )
+      throw notFound();
+    const locate = async (collection: Collection, id: string, required = true) => {
+      const result = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: financeLocatorKey(collection, id),
+          ConsistentRead: true,
+        }),
+      );
+      const storageKey = result.Item?.storageKey as { PK?: unknown; SK?: unknown } | undefined;
+      if (!storageKey) {
+        if (required) throw unavailable();
+        return undefined;
+      }
+      if (typeof storageKey.PK !== 'string' || storageKey.SK !== `ROW#${collection}#${digest(id)}`)
+        throw unavailable();
+      return { PK: storageKey.PK, SK: String(storageKey.SK) };
+    };
+    const budgetKey = await locate('budgets', input.budgetId);
+    const groupId = /^FINANCE#SCOPE#GROUP#([^#]+)$/u.exec(budgetKey!.PK)?.[1];
+    if (!groupId || !authorizeFinanceScope(actor, { type: 'group', groupId }, 'edit').allowed)
+      throw notFound();
+    const accountKeys = new Map<string, FinanceRecordKey>();
+    for (const accountId of input.relatedAccountIds) {
+      const key = (await locate('accounts', accountId))!;
+      const scope: FinanceScope | undefined = key.PK.startsWith('FINANCE#SCOPE#OWNER#')
+        ? { type: 'owner', ownerId: key.PK.slice('FINANCE#SCOPE#OWNER#'.length) }
+        : key.PK.startsWith('FINANCE#SCOPE#GROUP#')
+          ? { type: 'group', groupId: key.PK.slice('FINANCE#SCOPE#GROUP#'.length) }
+          : undefined;
+      if (
+        !scope ||
+        !authorizeFinanceScope(actor, scope, 'read').allowed ||
+        (scope.type === 'group' && scope.groupId !== groupId)
+      )
+        throw notFound();
+      accountKeys.set(accountId, key);
+    }
+    const partitions = [
+      ...new Set([budgetKey!.PK, ...[...accountKeys.values()].map(({ PK }) => PK)]),
+    ];
+    for (const PK of [...partitions, catalog]) {
+      const revision = await this.revision(PK);
+      if (PK !== catalog && (!Number.isSafeInteger(revision) || revision < 1)) throw unavailable();
+      this.versions.set(PK, revision);
+    }
+    if (
+      this.scopeMetadata.get(budgetKey!.PK)?.budgetAccountLinkIndexVersion !==
+      FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION
+    )
+      throw unavailable();
+    const read = async (key: FinanceRecordKey) => {
+      const result = await dynamodb.send(
+        new GetCommand({ TableName: tableName, Key: key, ConsistentRead: true }),
+      );
+      return result.Item as StateRow | undefined;
+    };
+    const retain = <T>(
+      row: StateRow,
+      collection: Collection,
+      id: string,
+      target: Map<string, T>,
+    ) => {
+      if (
+        row.SK !== `ROW#${collection}#${digest(id)}` ||
+        row.collection !== collection ||
+        row.entryKey !== id ||
+        row.data === undefined
+      )
+        throw unavailable();
+      const value = decode(row.data) as T;
+      target.set(id, value);
+      this.baseline.set(rowId(row), row);
+      this.scopesWithRows.add(row.PK);
+      return value;
+    };
+    const budgetRow = await read(budgetKey!);
+    if (!budgetRow) throw notFound();
+    const budget = retain(budgetRow, 'budgets', input.budgetId, this.budgets);
+    if ((budget as import('@naaseh/domain').Budget).groupId !== groupId) throw unavailable();
+
+    const existingKey = await locate('budgetItems', input.id, false);
+    if (existingKey && existingKey.PK !== budgetKey!.PK) throw notFound();
+    const expectedItemKey = { PK: budgetKey!.PK, SK: `ROW#budgetItems#${digest(input.id)}` };
+    const existingRow = await read(expectedItemKey);
+    if (Boolean(existingKey) !== Boolean(existingRow)) throw unavailable();
+    if (existingRow) retain(existingRow, 'budgetItems', input.id, this.budgetItems);
+
+    for (const [accountId, key] of accountKeys) {
+      const row = await read(key);
+      if (!row) throw notFound();
+      const account = retain(row, 'accounts', accountId, this.accounts);
+      if ((account as import('@naaseh/domain').FinancialAccount).currency !== input.currency)
+        throw notFound();
+      const pairResult = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: financeBudgetAccountPairKey(input.budgetId, accountId),
+          ConsistentRead: true,
+        }),
+      );
+      const pair = pairResult.Item as FinanceBudgetAccountPairLocator | undefined;
+      if (
+        !pair ||
+        !ulidSchema.safeParse(pair.linkId).success ||
+        !pair.storageKey ||
+        pair.storageKey.PK !== budgetKey!.PK ||
+        pair.storageKey.SK !== `ROW#budgetAccountLinks#${digest(pair.linkId)}`
+      )
+        throw notFound();
+      const linkRow = await read(pair.storageKey);
+      if (!linkRow) throw unavailable();
+      const link = retain(linkRow, 'budgetAccountLinks', pair.linkId, this.budgetAccountLinks);
+      const value = link as import('@naaseh/domain').BudgetAccountLink;
+      if (
+        value.budgetId !== input.budgetId ||
+        value.accountId !== accountId ||
+        value.status !== 'active'
+      )
+        throw unavailable();
+    }
+
+    const references: Array<['categories' | 'merchants', string, string]> = [
+      ['categories', input.financeCategoryId, `category:${input.financeCategoryId}`],
+      ...(input.merchantId
+        ? [
+            ['merchants', input.merchantId, `merchant:${input.merchantId}`] as [
+              'merchants',
+              string,
+              string,
+            ],
+          ]
+        : []),
+    ];
+    for (const [collection, id, counter] of references) {
+      const row = await read({ PK: catalog, SK: `ROW#${collection}#${digest(id)}` });
+      if (!row) throw notFound();
+      const value =
+        collection === 'categories'
+          ? retain(row, collection, id, this.categories)
+          : retain(row, collection, id, this.merchants);
+      if (value.status !== 'active') throw notFound();
+      const count = await read({
+        PK: catalog,
+        SK: `ROW#catalogReferenceCounts#${digest(counter)}`,
+      });
+      if (count) {
+        if (!Number.isSafeInteger(count.data) || Number(count.data) < 0) throw unavailable();
+        retain(count, 'catalogReferenceCounts', counter, this.catalogReferenceCounts);
+      }
+    }
+    if (input.sourceReusableItemId) {
+      const key = await locate('reusableItems', input.sourceReusableItemId);
+      if (key!.PK !== budgetKey!.PK) throw notFound();
+      const row = await read(key!);
+      if (!row) throw notFound();
+      const reusable = retain(row, 'reusableItems', input.sourceReusableItemId, this.reusableItems);
+      if ((reusable as { status?: unknown }).status !== 'active') throw notFound();
+    }
+    for (const [PK, revision] of this.versions)
+      if ((await this.revision(PK)) !== revision) throw unavailable();
+  }
+
+  /** Budget creation reads only the named group scope and an optional exact retry row. */
+  private async loadBudgetCreate(actor: FinanceActor, input: BudgetCreateSources) {
+    const unavailable = () =>
+      new SafeApiError(
+        503,
+        'finance_replay_refresh_required',
+        'Finance synchronization needs refreshed source evidence.',
+        'dependency_failure',
+      );
+    const notFound = () =>
+      new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'authorization');
+    if (
+      !actor.active ||
+      !ulidSchema.safeParse(input.id).success ||
+      !ulidSchema.safeParse(input.groupId).success ||
+      !authorizeFinanceScope(actor, { type: 'group', groupId: input.groupId }, 'edit').allowed
+    )
+      throw notFound();
+    const PK = partitionFor({ type: 'group', groupId: input.groupId });
+    const revision = await this.revision(PK);
+    const locator = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: financeLocatorKey('budgets', input.id),
+        ConsistentRead: true,
+      }),
+    );
+    const expected = { PK, SK: `ROW#budgets#${digest(input.id)}` };
+    const location = locator.Item?.storageKey as { PK?: unknown; SK?: unknown } | undefined;
+    if (location && (location.PK !== expected.PK || location.SK !== expected.SK)) throw notFound();
+    const result = await dynamodb.send(
+      new GetCommand({ TableName: tableName, Key: expected, ConsistentRead: true }),
+    );
+    if (location && !result.Item) throw notFound();
+    if (result.Item) {
+      if (!location) throw unavailable();
+      const row = result.Item as StateRow;
+      const value = decode(row.data) as Record<string, unknown>;
+      if (
+        row.PK !== expected.PK ||
+        row.SK !== expected.SK ||
+        row.collection !== 'budgets' ||
+        row.entryKey !== input.id ||
+        !value ||
+        value.id !== input.id ||
+        value.groupId !== input.groupId ||
+        !Number.isSafeInteger(value.version) ||
+        Number(value.version) < 1
+      )
+        throw unavailable();
+      this.baseline.set(rowId(row), row);
+      this.scopesWithRows.add(PK);
+      this.budgets.set(input.id, value as unknown as import('@naaseh/domain').Budget);
+    }
+    if (revision === 0 && !result.Item) {
+      const witness = await dynamodb.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': PK },
+          ProjectionExpression: 'PK, SK',
+          Limit: 1,
+          ConsistentRead: true,
+        }),
+      );
+      if (witness.Items?.length || Object.keys(witness.LastEvaluatedKey ?? {}).length)
+        throw unavailable();
+    }
+    if ((await this.revision(PK)) !== revision) throw unavailable();
+    this.versions.set(PK, revision);
+  }
+
+  /** Creation reads only the named group, existing parents and their reference counters. */
+  private async loadReusableCreate(actor: FinanceActor, input: ReusableCreateSources) {
+    const unavailable = () =>
+      new SafeApiError(
+        503,
+        'finance_replay_refresh_required',
+        'Finance synchronization needs refreshed source evidence.',
+        'dependency_failure',
+      );
+    const notFound = () =>
+      new SafeApiError(404, 'finance_not_found', 'Finance record not found.', 'authorization');
+    if (!authorizeFinanceScope(actor, { type: 'group', groupId: input.groupId }, 'edit').allowed)
+      throw notFound();
+    if (
+      ![
+        input.id,
+        input.groupId,
+        input.financeCategoryId,
+        ...(input.merchantId ? [input.merchantId] : []),
+        ...input.relatedAccountIds,
+      ].every((id) => ulidSchema.safeParse(id).success) ||
+      input.relatedAccountIds.length > 50 ||
+      new Set(input.relatedAccountIds).size !== input.relatedAccountIds.length
+    )
+      throw unavailable();
+    const PK = partitionFor({ type: 'group', groupId: input.groupId });
+    const groupRevision = await this.revision(PK);
+    const catalogRevision = await this.revision(catalog);
+    const locate = async (collection: string, id: string, required: boolean) => {
+      const result = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: financeLocatorKey(collection, id),
+          ConsistentRead: true,
+        }),
+      );
+      if (!result.Item) {
+        if (required) throw unavailable();
+        return false;
+      }
+      const key = result.Item.storageKey as { PK?: unknown; SK?: unknown } | undefined;
+      if (!key || typeof key.PK !== 'string' || key.SK !== `ROW#${collection}#${digest(id)}`)
+        throw unavailable();
+      if (key.PK !== PK) throw notFound(); // Never read a foreign locator's scope metadata/body.
+      return true;
+    };
+    const row = async (collection: Collection, id: string, scope: string) => {
+      const result = await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: scope, SK: `ROW#${collection}#${digest(id)}` },
+          ConsistentRead: true,
+        }),
+      );
+      if (!result.Item) return undefined;
+      const value = result.Item as StateRow;
+      if (
+        value.PK !== scope ||
+        value.SK !== `ROW#${collection}#${digest(id)}` ||
+        value.collection !== collection ||
+        value.entryKey !== id ||
+        value.data === undefined
+      )
+        throw unavailable();
+      return value;
+    };
+    const retain = <T>(value: StateRow, target: Map<string, T>) => {
+      const data = decode(value.data) as T;
+      target.set(value.entryKey, data);
+      this.baseline.set(rowId(value), value);
+      this.scopesWithRows.add(value.PK);
+      return data;
+    };
+    const object = (value: StateRow, id: string) => {
+      const data = decode(value.data) as Record<string, unknown>;
+      if (!data || typeof data !== 'object' || Array.isArray(data) || data.id !== id)
+        throw unavailable();
+      return data;
+    };
+    const existingLocator = await locate('reusableItems', input.id, false);
+    const existing = await row('reusableItems', input.id, PK);
+    if (existingLocator && !existing) throw notFound();
+    if (existing) {
+      if (!existingLocator) throw unavailable();
+      const data = object(existing, input.id);
+      if (
+        data.groupId !== input.groupId ||
+        !Number.isSafeInteger(data.version) ||
+        Number(data.version) < 1
+      )
+        throw unavailable();
+      retain(existing, this.reusableItems);
+    }
+    for (const id of input.relatedAccountIds) {
+      await locate('accounts', id, true);
+      const account = await row('accounts', id, PK);
+      if (!account) throw notFound();
+      const data = object(account, id);
+      const scope = data.scope as FinanceScope | undefined;
+      if (!scope || scope.type !== 'group' || scope.groupId !== input.groupId) throw notFound();
+      retain(account, this.accounts);
+    }
+    const references: Array<['categories' | 'merchants', string, string]> = [
+      ['categories', input.financeCategoryId, `category:${input.financeCategoryId}`],
+      ...(input.merchantId
+        ? [
+            ['merchants', input.merchantId, `merchant:${input.merchantId}`] as [
+              'merchants',
+              string,
+              string,
+            ],
+          ]
+        : []),
+    ];
+    for (const [collection, id, counter] of references) {
+      const source = await row(collection, id, catalog);
+      if (!source) throw notFound();
+      const data = object(source, id);
+      if (data.status !== 'active') throw notFound();
+      if (collection === 'categories') retain(source, this.categories);
+      else retain(source, this.merchants);
+      const count = await row('catalogReferenceCounts', counter, catalog);
+      if (count) {
+        if (!Number.isSafeInteger(count.data) || Number(count.data) < 0) throw unavailable();
+        retain(count, this.catalogReferenceCounts);
+      }
+    }
+    if (groupRevision === 0) {
+      if (this.scopesWithRows.has(PK)) throw unavailable();
+      // Missing META is not a new-scope proof: canonical rows or surviving
+      // publication state require trusted repair. Inspect one key only; a
+      // genuinely empty namespace is fenced by conditional META creation.
+      const witness = await dynamodb.send(
+        new QueryCommand({
+          TableName: tableName,
+          KeyConditionExpression: 'PK = :pk',
+          ExpressionAttributeValues: { ':pk': PK },
+          ProjectionExpression: 'PK, SK',
+          Limit: 1,
+          ConsistentRead: true,
+        }),
+      );
+      if (witness.Items?.length || Object.keys(witness.LastEvaluatedKey ?? {}).length)
+        throw unavailable();
+    }
+    if (
+      (await this.revision(PK)) !== groupRevision ||
+      (await this.revision(catalog)) !== catalogRevision
+    )
+      throw unavailable();
+    this.versions.set(PK, groupRevision);
+    this.versions.set(catalog, catalogRevision);
   }
 
   static async forConnection(connectionId: string) {
@@ -199,6 +1187,31 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     return Number(result.Item?.revision ?? 0);
   }
 
+  /** Private dependency evidence for the explicitly supported REST snapshot routes. */
+  cacheAuthorizationScopes() {
+    return [...this.versions.keys()].flatMap((PK) => {
+      const meta = this.scopeMetadata.get(PK);
+      if (!meta?.PK && !this.scopesWithRows.has(PK) && PK !== catalog) return [];
+      const authorizationRevision =
+        meta?.financeAuthorizationRevision === undefined ? 0 : meta.financeAuthorizationRevision;
+      if (
+        (!meta?.PK && PK !== catalog) ||
+        !Number.isSafeInteger(authorizationRevision) ||
+        Number(authorizationRevision) < 0
+      )
+        throw new Error('Finance snapshot source evidence is unavailable.');
+      return [{ PK, authorizationRevision: Number(authorizationRevision) }];
+    });
+  }
+
+  /** Recheck the loaded snapshot with point reads before releasing its response. */
+  async assertReadCurrent() {
+    for (const [PK, expected] of this.versions) {
+      if ((await this.revision(PK)) !== expected)
+        throw new Error('Finance storage version conflict.');
+    }
+  }
+
   private async load(partitions: string[]) {
     for (const PK of partitions) {
       const revision = await this.revision(PK);
@@ -214,6 +1227,7 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
             ...(cursor ? { ExclusiveStartKey: cursor } : {}),
           }),
         );
+        if (page.Items?.length) this.scopesWithRows.add(PK);
         for (const item of page.Items ?? []) {
           const row = item as StateRow;
           // New server-only relationships are retained, but never hydrated into legacy DTOs.
@@ -221,6 +1235,22 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
           if (!collections.includes(row.collection))
             throw new Error('Invalid Finance storage row.');
           this.baseline.set(rowId(row), row);
+          if (
+            row.collection === 'budgetReconciliations' &&
+            row.financeSourceAccountIds !== undefined
+          ) {
+            if (
+              !Array.isArray(row.financeSourceAccountIds) ||
+              !row.financeSourceAccountIds.length ||
+              row.financeSourceAccountIds.length > 1000 ||
+              row.financeSourceAccountIds.some(
+                (id) => typeof id !== 'string' || !id || id.length > 256,
+              ) ||
+              new Set(row.financeSourceAccountIds).size !== row.financeSourceAccountIds.length
+            )
+              throw new Error('Invalid Finance reconciliation source evidence.');
+            this.reconciliationAccountSources.set(row.entryKey, [...row.financeSourceAccountIds]);
+          }
           const target = this[row.collection] as Map<string, unknown> | unknown[] | Set<string>;
           const value = decode(row.data);
           if (target instanceof Map) target.set(row.entryKey, value);
@@ -344,6 +1374,10 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
           collection,
           entryKey,
           data: encode(value),
+          ...(collection === 'budgetReconciliations' &&
+          this.reconciliationAccountSources.has(entryKey)
+            ? { financeSourceAccountIds: [...this.reconciliationAccountSources.get(entryKey)!] }
+            : {}),
         };
         rows.set(rowId(row), row);
       }
@@ -371,6 +1405,13 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     if (!changed.length && !removed.length && !newReceipts.length && !this.feedChanges.length)
       return;
     const changedPartitions = new Set([...changed, ...removed].map(([, row]) => row.PK));
+    const authorizationPartitions = financeAuthorizationPartitions([
+      ...changed.map(([id, row]) => ({
+        ...(this.baseline.get(id) ? { before: this.baseline.get(id)! } : {}),
+        after: row,
+      })),
+      ...removed.map(([, row]) => ({ before: row })),
+    ]);
     const writes: Writes = [
       ...changed.map(([, row]) => ({ Put: { TableName: tableName, Item: row } })),
       ...removed.map(([, row]) => ({
@@ -379,30 +1420,164 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     ];
     // Server-only locators bridge legacy scope rows to touched-record reads. Keep both writers
     // on the same scope META revision so a new service and an older request cannot overwrite.
-    const locatorCollections = new Set<Collection>([
-      'accounts',
-      'transactions',
-      'budgets',
-      'budgetItems',
-      'categories',
-      'merchants',
-    ]);
+    const locatorCollections = new Set(Object.values(financeSyncSourceCollections));
+    const priorLocations = new Map<string, { PK: string; SK: string }>();
+    for (const row of this.baseline.values()) {
+      if (!locatorCollections.has(row.collection)) continue;
+      const key = rowId(financeLocatorKey(row.collection, row.entryKey));
+      const previous = priorLocations.get(key);
+      const location = { PK: row.PK, SK: row.SK };
+      if (previous && !isDeepStrictEqual(previous, location))
+        throw new Error('Finance locator conflict. Review duplicate source identifiers.');
+      priorLocations.set(key, location);
+    }
+    const locatorCondition = (previous?: { PK: string; SK: string }) =>
+      previous
+        ? {
+            ConditionExpression: 'attribute_not_exists(PK) OR #location = :expectedLocation',
+            ExpressionAttributeNames: { '#location': 'storageKey' },
+            ExpressionAttributeValues: { ':expectedLocation': previous },
+          }
+        : { ConditionExpression: 'attribute_not_exists(PK)' };
     const liveLocators = new Set<string>();
     for (const [, row] of changed)
       if (locatorCollections.has(row.collection)) {
         const key = financeLocatorKey(row.collection, row.entryKey);
         liveLocators.add(rowId(key));
         writes.push({
-          Put: { TableName: tableName, Item: { ...key, storageKey: { PK: row.PK, SK: row.SK } } },
+          Put: {
+            TableName: tableName,
+            Item: { ...key, storageKey: { PK: row.PK, SK: row.SK } },
+            ...locatorCondition(priorLocations.get(rowId(key))),
+          },
         });
       }
     for (const [, row] of removed)
       if (locatorCollections.has(row.collection)) {
         const key = financeLocatorKey(row.collection, row.entryKey);
         if (!liveLocators.has(rowId(key)))
-          writes.push({ Delete: { TableName: tableName, Key: key } });
+          writes.push({
+            Delete: {
+              TableName: tableName,
+              Key: key,
+              ...locatorCondition({ PK: row.PK, SK: row.SK }),
+            },
+          });
       }
+    // Pair locators make active budget/account uniqueness a point condition for targeted replay.
+    // Existing scopes are trusted only after the separate bounded verifier stamps META coverage.
+    const priorPairs = new Map<
+      string,
+      {
+        key: ReturnType<typeof financeBudgetAccountPairKey>;
+        locator: FinanceBudgetAccountPairLocator;
+      }
+    >();
+    for (const row of this.baseline.values()) {
+      if (row.collection !== 'budgetAccountLinks') continue;
+      const link = decode(row.data) as import('@naaseh/domain').BudgetAccountLink;
+      if (link.status !== 'active') continue;
+      const key = financeBudgetAccountPairKey(link.budgetId, link.accountId);
+      const locator = { ...key, linkId: link.id, storageKey: { PK: row.PK, SK: row.SK } };
+      const previous = priorPairs.get(rowId(key));
+      if (previous && !isDeepStrictEqual(previous.locator, locator))
+        throw new Error('Duplicate active Finance budget/account links require operator review.');
+      priorPairs.set(rowId(key), { key, locator });
+    }
+    const changedPairKeys = new Set<string>();
+    for (const [, row] of changed) {
+      if (row.collection !== 'budgetAccountLinks') continue;
+      const link = decode(row.data) as import('@naaseh/domain').BudgetAccountLink;
+      const key = financeBudgetAccountPairKey(link.budgetId, link.accountId);
+      const keyId = rowId(key);
+      changedPairKeys.add(keyId);
+      const previous = priorPairs.get(keyId)?.locator;
+      if (link.status === 'active') {
+        const nextLocator = { ...key, linkId: link.id, storageKey: { PK: row.PK, SK: row.SK } };
+        writes.push({
+          Put: {
+            TableName: tableName,
+            Item: nextLocator,
+            ...(previous
+              ? {
+                  ConditionExpression:
+                    'attribute_not_exists(PK) OR (#linkId = :linkId AND #storageKey = :storageKey)',
+                  ExpressionAttributeNames: {
+                    '#linkId': 'linkId',
+                    '#storageKey': 'storageKey',
+                  },
+                  ExpressionAttributeValues: {
+                    ':linkId': previous.linkId,
+                    ':storageKey': previous.storageKey,
+                  },
+                }
+              : { ConditionExpression: 'attribute_not_exists(PK)' }),
+          },
+        });
+      } else if (previous) {
+        writes.push({
+          Delete: {
+            TableName: tableName,
+            Key: key,
+            ConditionExpression:
+              'attribute_not_exists(PK) OR (#linkId = :linkId AND #storageKey = :storageKey)',
+            ExpressionAttributeNames: { '#linkId': 'linkId', '#storageKey': 'storageKey' },
+            ExpressionAttributeValues: {
+              ':linkId': previous.linkId,
+              ':storageKey': previous.storageKey,
+            },
+          },
+        });
+      }
+    }
+    for (const [, row] of removed) {
+      if (row.collection !== 'budgetAccountLinks') continue;
+      const link = decode(row.data) as import('@naaseh/domain').BudgetAccountLink;
+      if (link.status !== 'active') continue;
+      const key = financeBudgetAccountPairKey(link.budgetId, link.accountId);
+      const previous = priorPairs.get(rowId(key))?.locator;
+      if (previous && !changedPairKeys.has(rowId(key)))
+        writes.push({
+          Delete: {
+            TableName: tableName,
+            Key: key,
+            ConditionExpression:
+              'attribute_not_exists(PK) OR (#linkId = :linkId AND #storageKey = :storageKey)',
+            ExpressionAttributeNames: { '#linkId': 'linkId', '#storageKey': 'storageKey' },
+            ExpressionAttributeValues: {
+              ':linkId': previous.linkId,
+              ':storageKey': previous.storageKey,
+            },
+          },
+        });
+    }
+    const creation = this.creationIdentity;
+    if (
+      creation &&
+      changed.some(
+        ([id, row]) =>
+          row.collection === creation.collection &&
+          row.entryKey === creation.id &&
+          !this.baseline.has(id),
+      )
+    ) {
+      // A client chooses this ID, while the device cache keys all Finance types
+      // by ID. Fence other existing namespaces without reading their bodies.
+      for (const collection of locatorCollections)
+        if (collection !== creation.collection)
+          writes.push({
+            ConditionCheck: {
+              TableName: tableName,
+              Key: financeLocatorKey(collection, creation.id),
+              ConditionExpression: 'attribute_not_exists(PK)',
+            },
+          });
+    }
     for (const [PK, revision] of this.versions) {
+      const authorizationRevision = nextFinanceAuthorizationRevision(
+        this.scopeMetadata.get(PK)?.financeAuthorizationRevision,
+        authorizationPartitions.has(PK),
+      );
       const condition = revision === 0 ? 'attribute_not_exists(PK)' : '#revision = :expected';
       const attributes =
         revision === 0
@@ -416,7 +1591,24 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
           ? {
               Put: {
                 TableName: tableName,
-                Item: { ...this.scopeMetadata.get(PK), PK, SK: 'META', revision: revision + 1 },
+                Item: {
+                  ...this.scopeMetadata.get(PK),
+                  ...(revision === 0 &&
+                  PK !== catalog &&
+                  !this.scopeMetadata.get(PK)?.PK &&
+                  !this.scopesWithRows.has(PK) &&
+                  ![...next.values()].some(
+                    (row) => row.PK === PK && (row.collection as string) === 'refundRelationships',
+                  )
+                    ? { refundRelationshipIndexVersion: 1 }
+                    : {}),
+                  ...(authorizationRevision === undefined
+                    ? {}
+                    : { financeAuthorizationRevision: authorizationRevision }),
+                  PK,
+                  SK: 'META',
+                  revision: revision + 1,
+                },
                 ConditionExpression: condition,
                 ...attributes,
               },
@@ -430,6 +1622,65 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
               },
             },
       );
+    }
+    const canonicalChanges = [
+      ...changed.flatMap(([id, row]) => {
+        const change = describeFinanceCanonicalChange(row, this.baseline.get(id), row);
+        return change ? [change] : [];
+      }),
+      ...removed.flatMap(([, row]) => {
+        const change = describeFinanceCanonicalChange(row, row);
+        return change ? [change] : [];
+      }),
+    ];
+    const publicationRecords = financePublicationJournalRecords(
+      canonicalChanges,
+      [...changedPartitions].map((PK) => ({
+        PK,
+        beforeRevision: this.versions.get(PK)!,
+        afterRevision: this.versions.get(PK)! + 1,
+      })),
+    );
+    for (const row of publicationRecords) {
+      let condition = { ConditionExpression: 'attribute_not_exists(PK)' } as {
+        ConditionExpression: string;
+        ExpressionAttributeNames?: Record<string, string>;
+        ExpressionAttributeValues?: Record<string, unknown>;
+      };
+      if (
+        [
+          'finance-publication-deletion-v1',
+          'finance-publication-account-deletion-v1',
+          'finance-publication-account-birth-v1',
+        ].includes(String(row.format))
+      ) {
+        const saved = await dynamodb.send(
+          new GetCommand({
+            TableName: tableName,
+            Key: { PK: row.PK, SK: row.SK },
+            ConsistentRead: true,
+          }),
+        );
+        if (saved.Item) {
+          if (
+            saved.Item.format !== row.format ||
+            (saved.Item.transactionId ?? saved.Item.accountId) !==
+              (row.transactionId ?? row.accountId)
+          )
+            throw new Error('Finance deletion proof identity conflict.');
+          condition = {
+            ConditionExpression: '#publicationId = :publicationId AND #format = :format',
+            ExpressionAttributeNames: { '#publicationId': 'publicationId', '#format': 'format' },
+            ExpressionAttributeValues: {
+              ':publicationId': saved.Item.publicationId,
+              ':format': row.format,
+            },
+          };
+        }
+      }
+      writes.push({
+        Put: { TableName: tableName, Item: row, ...condition },
+      });
     }
     // A reassigned provider account can live outside its connection's original scope.
     // The importer follows server-only locators so it preserves the existing identity owner.
@@ -485,7 +1736,21 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
           Item: {
             ...financeKeys.mutationReceipt(key.slice(0, separator), key.slice(separator + 1)),
             data: encode(data),
+            ...(this.requestFingerprint === undefined
+              ? {}
+              : { requestFingerprint: this.requestFingerprint }),
             requiredPartitions: [...this.versions.keys()].filter((pk) => pk !== catalog),
+            requiredAuthorizationRevisions: Object.fromEntries(
+              [...this.versions.keys()]
+                .filter((pk) => pk !== catalog)
+                .map((PK) => [
+                  PK,
+                  nextFinanceAuthorizationRevision(
+                    this.scopeMetadata.get(PK)?.financeAuthorizationRevision,
+                    authorizationPartitions.has(PK),
+                  ) ?? 0,
+                ]),
+            ),
             expiresAt: Math.floor(Date.now() / 1000) + 2_592_000,
           },
           ConditionExpression: 'attribute_not_exists(PK)',
@@ -512,7 +1777,44 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
         ).TransactItems!,
       );
     }
-    const changes = await prepareAudienceChanges(this.feedChanges);
+    // Legacy routes sometimes update the canonical maps without explicitly publishing.
+    // Derive supported source events here, in the same atomic commit as their rows.
+    // Keep the request queue unchanged so a failed checkpoint can safely be retried.
+    const pendingChanges = [...this.feedChanges];
+    const published = new Set(
+      pendingChanges.map((change) => `${change.entityType}:${change.entityId}`),
+    );
+    const types = new Map(
+      Object.entries(financeSyncSourceCollections).map(([type, collection]) => [collection, type]),
+    );
+    const changedAt = new Date().toISOString();
+    for (const [, row] of changed) {
+      const entityType = types.get(row.collection) as SyncChange['entityType'];
+      if (!entityType || published.has(`${entityType}:${row.entryKey}`)) continue;
+      const value = decode(row.data) as Record<string, unknown>;
+      const version =
+        value.version ??
+        (['balanceSnapshots', 'budgetReconciliations'].includes(row.collection) ? 1 : undefined);
+      if (value.id !== row.entryKey || !Number.isSafeInteger(version) || Number(version) < 1)
+        throw new Error('Finance sync source identity or version is invalid.');
+      const audience = row.PK === catalog ? 'PUBLIC' : row.PK.slice('FINANCE#SCOPE#'.length);
+      if (row.PK !== catalog && !/^FINANCE#SCOPE#(?:OWNER|GROUP)#[^#]+$/u.test(row.PK))
+        throw new Error('Finance sync source audience is invalid.');
+      const operation = ['tombstone', 'removed'].includes(String(value.status))
+        ? 'tombstone'
+        : 'upsert';
+      pendingChanges.push({
+        audience,
+        entityType,
+        entityId: row.entryKey,
+        version: Number(version),
+        changedAt,
+        operation,
+        ...(operation === 'upsert' ? { payload: value } : {}),
+      });
+      published.add(`${entityType}:${row.entryKey}`);
+    }
+    const changes = await prepareAudienceChanges(pendingChanges);
     writes.push(...feedTransactionItems(changes));
     // Fail before writing anything; callers checkpoint large imports in bounded batches.
     if (writes.length > 100 || Buffer.byteLength(JSON.stringify(writes)) > 3_500_000)
@@ -525,10 +1827,20 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
       throw error;
     }
     this.baseline = next;
+    // A later checkpoint in this request must retain protocol metadata established
+    // by its first commit, just as a freshly loaded request would.
+    for (const write of writes) {
+      const item = write.Put?.Item;
+      if (item?.SK === 'META' && changedPartitions.has(String(item.PK)))
+        this.scopeMetadata.set(String(item.PK), { ...item });
+    }
     for (const PK of changedPartitions) this.versions.set(PK, this.versions.get(PK)! + 1);
     for (const [key] of newReceipts) this.loadedReceipts.add(key);
     for (const id of this.tasks.keys()) this.loadedTaskIds.add(id);
     this.feedChanges.length = 0;
+    await requestFinancePublication(
+      publicationRecords.flatMap((row) => (typeof row.id === 'string' ? [row.id] : [])),
+    );
   }
 
   private updateCatalogReferences(next: Map<string, StateRow>) {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FinanceClientError, financeRequest } from '../finance-client.js';
 
 type TransactionView = {
@@ -12,56 +12,86 @@ type TransactionView = {
   providerSnapshot?: { description: string };
 };
 
+export type ReconciliationDecision = 'reconcile' | 'keep-separate';
+
 export type ReconciliationIssueView = {
   id: string;
   version: number;
   candidateIds: string[];
+  status?: 'open' | 'resolved' | 'dismissed';
   provisional?: TransactionView;
   candidate?: TransactionView;
   candidates?: TransactionView[];
 };
 
+export function reconciliationCandidate(issue: ReconciliationIssueView, transactionId: string) {
+  const candidates = issue.candidates ?? [issue.provisional, issue.candidate];
+  return candidates.find(
+    (candidate) =>
+      candidate && candidate.id !== transactionId && issue.candidateIds.includes(candidate.id),
+  );
+}
+
 export function ReconciliationReview({
   transaction,
   issue,
   csrfToken,
+  authorizeDecision,
   onResolved,
 }: {
   transaction: TransactionView;
   issue: ReconciliationIssueView;
   csrfToken: string;
-  onResolved: (transaction: TransactionView) => void;
+  authorizeDecision: (
+    transactionId: string,
+    transactionVersion: number,
+    issue: ReconciliationIssueView,
+    candidateId: string,
+    candidateVersion: number,
+  ) => Promise<boolean>;
+  onResolved: (decision: ReconciliationDecision) => Promise<void>;
 }) {
   const [message, setMessage] = useState('');
   const [refreshRequired, setRefreshRequired] = useState(false);
-  const candidates =
-    issue.candidates ?? ([issue.provisional, issue.candidate].filter(Boolean) as TransactionView[]);
-  const candidate = candidates.find(({ id }) => id !== transaction.id) ?? issue.candidate;
-  const decide = async (decision: 'reconcile' | 'keep-separate') => {
-    if (!candidate) return;
+  const [pending, setPending] = useState(false);
+  const active = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  const candidate = reconciliationCandidate(issue, transaction.id);
+  const decide = async (decision: ReconciliationDecision) => {
+    if (!candidate || pending || refreshRequired) return;
+    setPending(true);
     setMessage('');
     setRefreshRequired(false);
     try {
-      const updated = await financeRequest<TransactionView>(
-        `/finance/transactions/${transaction.id}/provider-reconciliation`,
-        {
-          method: 'POST',
-          csrfToken,
-          idempotencyKey: crypto.randomUUID(),
-          body: JSON.stringify({
-            decision,
-            reviewIssueId: issue.id,
-            candidateTransactionId: candidate.id,
-            expectedProvisionalVersion: transaction.version,
-            expectedCandidateVersion: candidate.version,
-            expectedReviewVersion: issue.version,
-          }),
-        },
-      );
-      onResolved(updated);
-      setMessage(
-        decision === 'reconcile' ? 'Transactions reconciled.' : 'Transactions kept separate.',
-      );
+      if (
+        !(await authorizeDecision(
+          transaction.id,
+          transaction.version,
+          issue,
+          candidate.id,
+          candidate.version,
+        ))
+      )
+        return;
+      await financeRequest(`/finance/transactions/${transaction.id}/provider-reconciliation`, {
+        method: 'POST',
+        csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        body: JSON.stringify({
+          decision,
+          reviewIssueId: issue.id,
+          candidateTransactionId: candidate.id,
+          expectedProvisionalVersion: transaction.version,
+          expectedCandidateVersion: candidate.version,
+          expectedReviewVersion: issue.version,
+        }),
+      });
+      if (active.current) await onResolved(decision);
     } catch (error) {
       const safe =
         error instanceof FinanceClientError
@@ -69,6 +99,8 @@ export function ReconciliationReview({
           : 'Reconciliation could not be completed.';
       setMessage(safe);
       setRefreshRequired(true);
+    } finally {
+      setPending(false);
     }
   };
   return (
@@ -89,10 +121,16 @@ export function ReconciliationReview({
         </article>
       </div>
       <div className="finance-actions">
-        <button onClick={() => void decide('reconcile')} disabled={!candidate}>
+        <button
+          onClick={() => void decide('reconcile')}
+          disabled={!candidate || pending || refreshRequired}
+        >
           Reconcile transactions
         </button>
-        <button onClick={() => void decide('keep-separate')} disabled={!candidate}>
+        <button
+          onClick={() => void decide('keep-separate')}
+          disabled={!candidate || pending || refreshRequired}
+        >
           Keep separate
         </button>
         {refreshRequired ? (

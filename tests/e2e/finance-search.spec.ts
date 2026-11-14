@@ -13,6 +13,29 @@ type SeedValue = {
 };
 
 async function seedFinanceSearch(page: Page, values: SeedValue[]) {
+  // Synthetic server acceptance for this UI fixture; real proof authentication/revocation has API tests.
+  await page.route('**/api/v1/sync/pull', async (route) => {
+    const body = route.request().postDataJSON() as {
+      financeCacheOnly?: boolean;
+      financeCacheProtocol?: number;
+      financeCacheProof?: string;
+      financeCursor?: Record<string, number>;
+    };
+    if (!body.financeCacheOnly) return route.fallback();
+    expect(body.financeCacheProtocol).toBe(1);
+    expect(body.financeCacheProof).toBe('fc1.synthetic.fixture.proof');
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        changes: [],
+        financeChanges: [],
+        cursor: {},
+        financeCursor: body.financeCursor,
+        financeCache: { status: 'current', proof: 'fc1.synthetic.fixture.proof' },
+      }),
+    });
+  });
   await page.evaluate(async (input) => {
     const request = indexedDB.open('naaseh');
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -40,6 +63,7 @@ async function seedFinanceSearch(page: Page, values: SeedValue[]) {
     });
     const encoder = new TextEncoder();
     const encode = (bytes: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+    const cacheGeneration = crypto.randomUUID();
     const encrypted = await Promise.all(
       input.map(async (item) => {
         const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -56,6 +80,7 @@ async function seedFinanceSearch(page: Page, values: SeedValue[]) {
           id: item.id,
           entityType: item.entityType,
           scopeKey: item.scopeKey,
+          cacheGeneration,
           version: 1,
           updatedAt: '2026-10-28T12:00:00.000Z',
           value: { iv: encode(iv.buffer), ciphertext: encode(ciphertext) },
@@ -64,7 +89,31 @@ async function seedFinanceSearch(page: Page, values: SeedValue[]) {
         };
       }),
     );
-    const write = database.transaction('secureFinanceRecords', 'readwrite');
+    const proofIv = crypto.getRandomValues(new Uint8Array(12));
+    const proofCiphertext = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: proofIv,
+        additionalData: encoder.encode('finance:delivery:local-steve:v1'),
+      },
+      key,
+      encoder.encode(
+        JSON.stringify({
+          ownerId: 'local-steve',
+          cursor: {},
+          cacheGeneration,
+          cacheProof: 'fc1.synthetic.fixture.proof',
+        }),
+      ),
+    );
+    const write = database.transaction(['secureFinanceRecords', 'settings'], 'readwrite');
+    write.objectStore('settings').put({
+      key: 'finance-delivery:local-steve',
+      value: JSON.stringify({
+        version: 1,
+        value: { iv: encode(proofIv.buffer), ciphertext: encode(proofCiphertext) },
+      }),
+    });
     const store = write.objectStore('secureFinanceRecords');
     for (const record of encrypted) store.put(record);
     await new Promise<void>((resolve, reject) => {
@@ -150,7 +199,7 @@ const records: SeedValue[] = [
 ];
 
 test('Finance types are opt-in and mixed results respect account scope', async ({ page }) => {
-  await mockUnprotectedFinanceSecurity(page);
+  await mockUnprotectedFinanceSecurity(page, { role: 'user' });
   await signIn(page);
   await seedFinanceSearch(page, records);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -172,10 +221,20 @@ test('Finance types are opt-in and mixed results respect account scope', async (
   await expect(results.getByRole('link', { name: 'Juniper hotel' })).toHaveCount(0);
   await expect(page).toHaveURL(/transactions=1/);
   await expect(page).not.toHaveURL(/juniper/i);
+  await page.route('**/api/v1/sync/pull', (route) => {
+    if (!route.request().postDataJSON().financeCacheOnly) return route.fallback();
+    return route.fulfill({ json: { financeCache: { status: 'refresh-required' } } });
+  });
+  await page.getByLabel('Search tasks and list items').fill('JUNIPER');
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Finance search is unavailable' }),
+  ).toBeVisible();
+  await expect(results.getByRole('link', { name: 'Juniper groceries' })).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Tasks', exact: true })).toBeChecked();
 });
 
 test('Finance search remains complete for synchronized data offline', async ({ page, context }) => {
-  await mockUnprotectedFinanceSecurity(page);
+  await mockUnprotectedFinanceSecurity(page, { role: 'user' });
   await signIn(page);
   await seedFinanceSearch(page, records);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
@@ -194,8 +253,9 @@ test('Finance search remains complete for synchronized data offline', async ({ p
 
 test('Finance empty state and controls remain accessible on a phone layout', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await mockUnprotectedFinanceSecurity(page);
+  await mockUnprotectedFinanceSecurity(page, { role: 'user' });
   await signIn(page);
+  await seedFinanceSearch(page, []);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Transactions' }).check();
   await page.getByLabel('Search tasks and list items').fill('nothing matches');
@@ -205,7 +265,7 @@ test('Finance empty state and controls remain accessible on a phone layout', asy
 });
 
 test('Finance indexing failures keep ordinary search available', async ({ page }) => {
-  await mockUnprotectedFinanceSecurity(page);
+  await mockUnprotectedFinanceSecurity(page, { role: 'user' });
   await signIn(page);
   await seedFinanceSearch(page, [records[0]!]);
   await page.evaluate(async () => {

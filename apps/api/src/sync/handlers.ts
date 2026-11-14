@@ -10,8 +10,18 @@ import {
   type JournalRepository,
 } from '../journal/journal-repository.js';
 import type { Mutation, StableMutationResult } from '@naaseh/domain';
-import { isFinanceSyncEntityType, isLegacyFinanceSyncEntityType } from './types.js';
-import { pullAudience, type SyncFeedChange } from './change-feed-repository.js';
+import {
+  isFinanceSyncEntityType,
+  isFinanceSyncEntityFamily,
+  isLegacyFinanceSyncEntityType,
+} from './types.js';
+import {
+  pullAudience,
+  hasMoreAudienceChanges,
+  type SyncFeedChange,
+} from './change-feed-repository.js';
+import { SafeApiError } from '../shared/http.js';
+import type { SyncChange } from '@naaseh/domain';
 
 /** Ordinary progress never acknowledges withheld Finance rows in its independent lane. */
 export async function pullFinanceDeliveryLanes(input: {
@@ -19,6 +29,7 @@ export async function pullFinanceDeliveryLanes(input: {
   cursor: Record<string, number>;
   financeCursor?: Record<string, number>;
   contractVersion: number;
+  deliverFinance?: boolean;
   requirePin: boolean;
   unlocked: boolean;
   read?: (audience: string, after: number, limit: number) => Promise<SyncFeedChange[]>;
@@ -33,14 +44,15 @@ export async function pullFinanceDeliveryLanes(input: {
     })),
   );
   const legacy = input.contractVersion < 8;
-  const allowed = !input.requirePin || (!legacy && input.unlocked);
+  const allowed =
+    input.deliverFinance !== false && (!input.requirePin || (!legacy && input.unlocked));
   const financeState =
     legacy &&
     (input.requirePin ||
       pulled.some((page) =>
         page.changes.some(
           (change) =>
-            isFinanceSyncEntityType(change.entityType ?? '') &&
+            isFinanceSyncEntityFamily(change.entityType ?? '') &&
             !isLegacyFinanceSyncEntityType(change.entityType ?? ''),
         ),
       ))
@@ -48,7 +60,7 @@ export async function pullFinanceDeliveryLanes(input: {
       : !allowed
         ? ('locked' as const)
         : ('ready' as const);
-  const isFinance = (change: SyncFeedChange) => isFinanceSyncEntityType(change.entityType ?? '');
+  const isFinance = (change: SyncFeedChange) => isFinanceSyncEntityFamily(change.entityType ?? '');
   const dedupe = (changes: SyncFeedChange[]) => {
     const rows = new Map<string, SyncFeedChange>();
     for (const change of changes) {
@@ -73,10 +85,12 @@ export async function pullFinanceDeliveryLanes(input: {
   );
   const financeCursor = { ...input.financeCursor };
   const financeChanges: SyncFeedChange[] = [];
+  let financeHasMore = false;
   if (!legacy && allowed) {
     for (const page of pulled) {
       const after = financeCursor[page.name] ?? 0;
       const rows = after === page.after ? page.changes : await read(page.audience, after, 200);
+      financeHasMore ||= hasMoreAudienceChanges(rows);
       financeChanges.push(...rows.filter(isFinance));
       financeCursor[page.name] = rows.at(-1)?.sequence ?? after;
     }
@@ -85,11 +99,65 @@ export async function pullFinanceDeliveryLanes(input: {
     changes,
     financeChanges: dedupe(financeChanges),
     financeCursor,
+    financeHasMore,
     financeState,
     cursor: Object.fromEntries(
       pulled.map((page) => [page.name, page.changes.at(-1)?.sequence ?? page.after]),
     ),
   };
+}
+
+/** Source revocation withholds only Finance and leaves its last acknowledged cursor intact. */
+export async function applyFinanceSourceChecks(
+  lanes: Awaited<ReturnType<typeof pullFinanceDeliveryLanes>>,
+  guard: {
+    canDeliver: (change: SyncChange) => Promise<boolean>;
+    supports?: (entityType: string) => boolean;
+    assertCurrent: () => Promise<void>;
+  },
+  previousCursor: Record<string, number> = {},
+) {
+  const ordinary = (change: SyncFeedChange) => !isFinanceSyncEntityFamily(change.entityType ?? '');
+  if (
+    [...lanes.changes, ...lanes.financeChanges].some(
+      (change) =>
+        !ordinary(change) &&
+        (!isFinanceSyncEntityType(change.entityType ?? '') ||
+          guard.supports?.(change.entityType ?? '') === false),
+    )
+  )
+    return {
+      ...lanes,
+      changes: lanes.changes.filter(ordinary),
+      financeChanges: [],
+      financeHasMore: false,
+      financeCursor: { ...previousCursor },
+      financeState: 'upgrade-required' as const,
+    };
+  const filter = async (changes: SyncFeedChange[]) => {
+    const result: SyncFeedChange[] = [];
+    for (const change of changes)
+      if (ordinary(change) || (await guard.canDeliver(change as SyncChange))) result.push(change);
+    return result;
+  };
+  try {
+    const changes = await filter(lanes.changes);
+    const financeChanges = await filter(lanes.financeChanges);
+    if (financeChanges.length || changes.some((change) => !ordinary(change)))
+      await guard.assertCurrent();
+    return { ...lanes, changes, financeChanges };
+  } catch (error) {
+    if (!(error instanceof SafeApiError) || error.code !== 'finance_sync_sources_changed')
+      throw error;
+    return {
+      ...lanes,
+      changes: lanes.changes.filter(ordinary),
+      financeChanges: [],
+      financeHasMore: false,
+      financeCursor: { ...previousCursor },
+      financeState: 'locked' as const,
+    };
+  }
 }
 
 export function createJournalSyncHandlers(repository: JournalRepository) {

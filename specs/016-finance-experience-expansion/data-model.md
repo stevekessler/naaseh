@@ -154,3 +154,35 @@ For large updates, use idempotent projection checkpoints rather than exceeding D
 - Canonical user security revision/session epoch is checked before Finance pull/replay. General task sync may continue while locked; it must not advance undisclosed Finance changes past the Finance cursor. See [sync-security.md](contracts/sync-security.md).
 - Apply memberships/revocation, parents/accounts/groups/budgets, transaction/expense records, refund relationships/capacity snapshots and fulfillment/receipts, then task links. Original browser entryContext survives all outbox replay and restore steps; server acceptance time never overwrites it. Purge revoked source records, worker indexes, blobs and related projections together.
 - Restore validation checks record counts, canonical transaction aliases, fulfillment/refund capacity and contribution conservation, link uniqueness, original calendar context, receipt metadata-to-objectVersion/checksum, policy/scan state, user-only preferences and closed/open budget semantics. Restore security records but do not reactivate prior unlock grants or reset stale session epochs to a weaker value. Preserve inherited Finance RPO ≤5 minutes for committed DynamoDB state and RTO ≤4 hours; document receipt-byte recovery separately against actual version/backup policy and never promise uncommitted local bytes are backed up.
+
+
+## Clarified forecast history input boundary — 2026-11-09
+
+This is a shared selection contract, not a new persisted financial entity or an
+implemented forecast model. The trusted reader supplies current authorized budget
+and account IDs, current linked-account IDs, and canonical allocation-level rows.
+Each row has explicit assignment: a specific budget, verified non-budgeted, or
+unresolved. Missing DTO fields are not evidence of non-budgeted activity.
+
+`selectBudgetHistoryRows` returns separate budgetRows and nonBudgetedRows. The first
+always contains only the selected budget's currently authorized assigned activity,
+including its authorized history after unlinking an account. The second is empty
+unless includeNonBudgetedHistory is explicitly true; it contains only verified
+non-budgeted rows from currently authorized linked accounts, excluding other
+budgets and unresolved rows. Mixed transactions retain their allocation portions.
+Input authorization/assignment completeness is distinct from full reader/query
+coverage; both must be proven before claiming complete input or confirmed no data.
+The option never grants access, modifies assignment or widens budget report actuals.
+
+Future model/query/cache identity must bind viewer, budget, period/time-zone,
+method, opt-in and canonical source revisions. An expanded historical input/result
+must not satisfy a budget-only report request. Forecast outputs remain derived,
+method-labeled and currency-separated; they are not bank balances, payments or new
+transactions. Existing encrypted cache/PIN and revocation rules apply. No migration
+is run and no canonical transaction retention is changed by this addition.
+
+Forecast windows use inclusive calendar dates and an explicit reference date. An open-ended
+budget starts at the later of its start date and the reference date, and ends the day before
+the 12-month anniversary. A February 29 anniversary in a non-leap year is clamped to February 28.
+An explicit forecast range can extend outside a dated budget period without changing the budget
+or widening the forecast’s authorized sources.

@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
+import {
+  signIn,
+  mockUnprotectedFinanceSecurity,
+  mockFinanceSnapshotEvidence,
+  financeSnapshotFixtureHeaders,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -59,6 +64,7 @@ async function routes(page: Page, detail: Record<string, unknown>, reconcileStat
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({
         items: [
@@ -75,6 +81,7 @@ async function routes(page: Page, detail: Record<string, unknown>, reconcileStat
   await page.route('**/api/v1/finance/categories**', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [{ id: ids.category, name: 'Utilities' }] }),
     }),
@@ -82,15 +89,28 @@ async function routes(page: Page, detail: Record<string, unknown>, reconcileStat
   await page.route('**/api/v1/finance/budgets', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [detail], cursor: null }),
     }),
   );
   await page.route(`**/api/v1/finance/budgets/${ids.budget}`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detail) }),
-  );
-  await page.route(`**/api/v1/finance/budgets/${ids.budget}/reconcile`, (route) =>
     route.fulfill({
+      status: 200,
+      headers: financeSnapshotFixtureHeaders,
+      contentType: 'application/json',
+      body: JSON.stringify(detail),
+    }),
+  );
+  await page.route(`**/api/v1/finance/budgets/${ids.budget}/reconcile`, (route) => {
+    if (reconcileStatus === 201)
+      Object.assign(detail, {
+        status: 'active',
+        version: Number(detail.version) + 1,
+        lastReconciledAt: prior.reconciledAt,
+        reconciliations: [prior, ...((detail.reconciliations ?? []) as unknown[])],
+      });
+    return route.fulfill({
       status: reconcileStatus,
       contentType: reconcileStatus === 201 ? 'application/json' : 'application/problem+json',
       body: JSON.stringify(
@@ -103,13 +123,14 @@ async function routes(page: Page, detail: Record<string, unknown>, reconcileStat
               correlationId: 'safe-correlation',
             },
       ),
-    }),
-  );
+    });
+  });
 }
 
 test('confirms reconciliation and displays immutable actor/time history', async ({ page }) => {
   await routes(page, budget());
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByText('Not reconciled')).toBeVisible();
@@ -136,6 +157,7 @@ test('explains incomplete and offline prerequisites without allowing completion'
     }),
   );
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByRole('button', { name: 'Reconcile budget' })).toBeDisabled();
@@ -159,6 +181,7 @@ test('retains prior history through later changes and failed retries', async ({ 
     409,
   );
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByText('Changed since reconciliation')).toBeVisible();

@@ -54,6 +54,13 @@ describe('Finance security HTTP boundary', () => {
       enrolled: true,
       revision: 2,
     });
+    const foreign = f.event();
+    foreign.headers['x-finance-owner'] = 'another-tab-account';
+    expect(await f.handle(foreign)).toMatchObject({ statusCode: 401 });
+    const foreignSave = f.event('PUT', '/api/v1/auth/finance-security', {});
+    foreignSave.headers['x-finance-owner'] = 'another-tab-account';
+    expect(await f.handle(foreignSave)).toMatchObject({ statusCode: 401 });
+    expect(f.service.update).not.toHaveBeenCalled();
     f.authenticate.mockResolvedValueOnce(undefined as never);
     expect(await f.handle(f.event())).toMatchObject({ statusCode: 401 });
     expect(f.service.get).toHaveBeenCalledTimes(1);

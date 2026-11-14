@@ -1,5 +1,18 @@
-import { matchesFinanceFact, type FinanceFact, type FinanceReadContext } from './query-contract.js';
-import { financeQueryFiltersSchema } from '@naaseh/contracts';
+import { getMembership } from '../groups/group-repository.js';
+import { SafeApiError } from '../shared/http.js';
+import {
+  matchesFinanceFact,
+  normalizeFinanceText,
+  isFinanceFactBefore,
+  compareFinanceRows,
+  type FinanceFact,
+  type FinanceReadContext,
+} from './query-contract.js';
+import {
+  financeQueryFiltersSchema,
+  financeQueryStartSchema,
+  type csvDuplicateCheckSchema,
+} from '@naaseh/contracts';
 import {
   emitFinanceExperienceEvent,
   financeExperienceFailureDetails,
@@ -8,17 +21,26 @@ import {
 } from './telemetry.js';
 import { createHash } from 'node:crypto';
 import { BatchGetCommand, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { createUlid, membershipSchema, financeScopeSchema, financeAudience } from '@naaseh/domain';
+import {
+  createUlid,
+  membershipSchema,
+  financeScopeSchema,
+  financeAudience,
+  ulidSchema,
+} from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
-import { FinanceUnitOfWork, financeLocatorKey } from './unit-of-work.js';
+import { financeLocatorKey } from './unit-of-work.js';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceReadRepository } from './read-repository.js';
 import {
   DynamoFinanceQueryJobStore,
   FinanceQueryJobService,
   type FinanceQueryJob,
+  type FinanceQueryJobStore,
 } from './query-job-service.js';
 import { dispatchFinanceQueryWorker } from './query-worker.js';
+import { supportsFinanceAccountSummary } from './account-read-summary.js';
+import { sumSpendByCurrency, addMinorUnits } from '@naaseh/domain';
 
 /** Strong reads of the canonical profile/membership copies; never load password hashes. */
 async function currentActor(userId: string) {
@@ -32,7 +54,8 @@ async function currentActor(userId: string) {
     }),
   );
   const user = profile.Item?.data;
-  if (!user || user.id !== userId || user.active !== true || user.role !== 'user') return undefined;
+  if (!user || user.id !== userId || user.active !== true || !['user', 'admin'].includes(user.role))
+    return undefined;
   const memberships = [];
   let cursor: Record<string, unknown> | undefined;
   do {
@@ -54,7 +77,7 @@ async function currentActor(userId: string) {
   const active = memberships.filter((m) => m.status === 'active' && m.userId === userId);
   const actor: FinanceActor = {
     id: userId,
-    role: 'user',
+    role: user.role,
     active: true,
     groupMemberships: active.map(({ groupId, role }) => ({ groupId, role })),
   };
@@ -130,8 +153,14 @@ async function scopedRows(collection: string, ids: string[]) {
   }
   return resolved;
 }
-async function sourceSnapshot(actor: FinanceActor, ids: string[]) {
-  const accounts = await scopedRows('accounts', ids);
+async function sourceSnapshot(
+  actor: FinanceActor,
+  ids: string[],
+  resolvedAccounts?: Awaited<ReturnType<typeof scopedRows>>,
+  originalAccounts?: Set<string>,
+  orderedAccounts?: Set<string>,
+) {
+  const accounts = resolvedAccounts ?? (await scopedRows('accounts', ids));
   const records = await batchRows([
     ...[...accounts.values()].map((account) => ({ PK: account.partition, SK: 'META' })),
     ...ids.map((id) => ({ PK: `FINANCE#PROJECTION_ACCOUNT#${id}`, SK: 'CURRENT' })),
@@ -140,6 +169,17 @@ async function sourceSnapshot(actor: FinanceActor, ids: string[]) {
   const dependencyKeys = new Map<string, RecordKey>();
   for (const id of ids) {
     const marker = records.get(recordId({ PK: `FINANCE#PROJECTION_ACCOUNT#${id}`, SK: 'CURRENT' }));
+    const proofVersion = marker?.sourceAccountProofVersion;
+    const originalIds = marker?.originalSourceAccountIds;
+    if (
+      (proofVersion === undefined && originalIds !== undefined) ||
+      (proofVersion !== undefined &&
+        (proofVersion !== 1 ||
+          !Array.isArray(originalIds) ||
+          originalIds.length > 100 ||
+          originalIds.some((id) => !ulidSchema.safeParse(id).success)))
+    )
+      continue;
     const raw = marker?.coverageDependencies;
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const entries = Object.entries(raw);
@@ -181,6 +221,7 @@ async function sourceSnapshot(actor: FinanceActor, ids: string[]) {
       !marker ||
       marker.state !== 'ready' ||
       marker.coverageVerified !== true ||
+      Number(marker.coverageDeferredSourceCount ?? 0) !== 0 ||
       coverageDependencies.get(id)?.[account.partition] !== meta.revision ||
       Object.entries(coverageDependencies.get(id) ?? {}).some(
         ([PK, revision]) => dependencyRows.get(recordId({ PK, SK: 'META' }))?.revision !== revision,
@@ -190,32 +231,136 @@ async function sourceSnapshot(actor: FinanceActor, ids: string[]) {
     )
       continue;
     revisions.set(id, JSON.stringify([meta.revision, marker.revision]));
+    if (marker.sourceAccountProofVersion === 1 && marker.accountIndexOrderVersion === 1)
+      orderedAccounts?.add(id);
+    if (originalAccounts && marker.sourceAccountProofVersion === 1)
+      for (const original of marker.originalSourceAccountIds as string[])
+        originalAccounts.add(original);
   }
   return revisions;
 }
 
 /** No delivery credential is present in a background invocation; status/create fail closed there. */
+export async function checkIndexedCsvDuplicates(
+  userId: string,
+  accountId: string,
+  input: ReturnType<typeof csvDuplicateCheckSchema.parse>,
+) {
+  const verify = async () => {
+    const current = await currentActor(userId);
+    const accounts = await scopedRows('accounts', [accountId]);
+    const record = accounts.get(accountId);
+    const scope = financeScopeSchema.safeParse(record?.data.scope);
+    if (
+      !current ||
+      !record ||
+      !scope.success ||
+      record.partition !== `FINANCE#SCOPE#${financeAudience(scope.data)}` ||
+      !authorizeFinanceScope(current.actor, scope.data, 'edit').allowed
+    )
+      throw new Error('Finance record not found.');
+    if (scope.data.type === 'group') {
+      const member = await getMembership(scope.data.groupId, userId);
+      if (
+        member?.status !== 'active' ||
+        member.userId !== userId ||
+        member.groupId !== scope.data.groupId ||
+        !current.actor.groupMemberships.some(
+          (entry) => entry.groupId === member.groupId && entry.role === member.role,
+        )
+      )
+        throw new Error('Finance record not found.');
+    }
+    const ordered = new Set<string>();
+    const revisions = await sourceSnapshot(
+      current.actor,
+      [accountId],
+      accounts,
+      undefined,
+      ordered,
+    );
+    const revision = revisions.get(accountId);
+    if (!revision || !ordered.has(accountId))
+      throw new SafeApiError(
+        409,
+        'finance_csv_coverage_unavailable',
+        'Current account coverage is unavailable. Refresh Finance and try again.',
+        'conflict',
+      );
+    return JSON.stringify([current.fingerprint, revision]);
+  };
+  const before = await verify();
+  const reader = new FinanceReadRepository({
+    tableName,
+    cursorSecret: process.env.CURSOR_SIGNING_SECRET ?? '',
+    client: {
+      send: async (command) =>
+        command instanceof QueryCommand ? dynamodb.send(command) : dynamodb.send(command),
+    },
+    authorize: async () => false,
+  });
+  const ordinals = await reader
+    .csvDuplicateOrdinals(accountId, input.rows)
+    .catch((error: unknown) => {
+      if (
+        error instanceof Error &&
+        error.message === 'CSV duplicate check needs a narrower date range.'
+      )
+        throw new SafeApiError(
+          409,
+          'finance_csv_narrower_range_required',
+          error.message,
+          'conflict',
+        );
+      throw error;
+    });
+  if ((await verify()) !== before)
+    throw new SafeApiError(
+      409,
+      'finance_csv_source_changed',
+      'Account transactions changed. Check for duplicates again.',
+      'conflict',
+    );
+  return { ordinals };
+}
+
 export function createFinanceQueryRuntime(
   options: {
     authorizeDelivery?: (job: FinanceQueryJob) => Promise<boolean>;
+    store?: FinanceQueryJobStore;
+    dispatch?: (job: { userId: string; queryId: string }) => Promise<void>;
   } = {},
 ) {
   let currentJob: FinanceQueryJob | undefined;
   let currentPolicy: Awaited<ReturnType<typeof currentActor>>;
   let currentSources = new Map<string, string>();
+  let currentOrderedSources = new Set<string>();
   const validate = async (job: FinanceQueryJob) => {
     const current = await currentActor(job.userId);
     if (!current || job.sourceRevisions.$authorization !== current.fingerprint) return false;
-    const work = new FinanceUnitOfWork();
-    const preference = await work.get({ PK: `USER#${job.userId}`, SK: 'FINANCE_SECURITY' });
+    // Query computation needs the revision only, never the PIN verifier or salt.
+    // Keep PK so an existing malformed preference cannot look like an absent one.
+    const preference = (
+      await dynamodb.send(
+        new GetCommand({
+          TableName: tableName,
+          Key: { PK: `USER#${job.userId}`, SK: 'FINANCE_SECURITY' },
+          ConsistentRead: true,
+          ProjectionExpression: 'PK, #revision',
+          ExpressionAttributeNames: { '#revision': 'revision' },
+        }),
+      )
+    ).Item;
     const revision = preference ? Number(preference.revision) : 0;
     if (!Number.isSafeInteger(revision) || revision !== job.securityRevision) return false;
     const ids = Object.keys(job.sourceRevisions).filter((id) => id !== '$authorization');
     if (!ids.length || ids.length > 100) return false;
-    const revisions = await sourceSnapshot(current.actor, ids);
+    const ordered = new Set<string>();
+    const revisions = await sourceSnapshot(current.actor, ids, undefined, undefined, ordered);
     for (const id of ids) if (revisions.get(id) !== job.sourceRevisions[id]) return false;
     currentPolicy = current;
     currentSources = revisions;
+    currentOrderedSources = ordered;
     currentJob = job;
     return true;
   };
@@ -267,20 +412,81 @@ export function createFinanceQueryRuntime(
     },
     estimate: async (partitions) => {
       const counts = await batchRows(partitions.map((PK) => ({ PK, SK: 'CARDINALITY' })));
-      return new Map(
-        partitions.map((PK) => [
-          PK,
-          Number(counts.get(recordId({ PK, SK: 'CARDINALITY' }))?.facts ?? 0),
-        ]),
-      );
+      const estimates = new Map<string, number>();
+      for (const PK of partitions) {
+        const row = counts.get(recordId({ PK, SK: 'CARDINALITY' }));
+        const value = PK.includes('#text#')
+          ? row?.estimateKind === 'posting-chunks-v1'
+            ? Number(row.chunks) * 500
+            : undefined
+          : row?.facts;
+        if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
+          estimates.set(PK, value);
+      }
+      return estimates;
     },
     authorize: authorizeSources,
   });
-  return new FinanceQueryJobService({
+  const service = new FinanceQueryJobService({
     repository,
-    store: new DynamoFinanceQueryJobStore(),
+    cursorSecret: process.env.CURSOR_SIGNING_SECRET ?? '',
+    store: options.store ?? new DynamoFinanceQueryJobStore(),
     validate,
     authorizeDelivery: options.authorizeDelivery ?? (async () => false),
+    preview: async (job) => {
+      const filters = financeQueryFiltersSchema.parse(job.filters);
+      if (
+        !supportsFinanceAccountSummary(filters) ||
+        !job.partitions.every((partition) => currentOrderedSources.has(partition.accountId))
+      )
+        return undefined;
+      const results: Array<Awaited<ReturnType<FinanceReadRepository['preview']>>> = [];
+      for (let offset = 0; offset < job.partitions.length; offset += 5) {
+        results.push(
+          ...(await Promise.all(
+            job.partitions.slice(offset, offset + 5).map((partition) =>
+              repository.preview({
+                userId: job.userId,
+                accountId: partition.accountId,
+                sourceRevision: job.sourceRevisions[partition.accountId]!,
+                securityRevision: job.securityRevision,
+                filters,
+                limit: 200,
+              }),
+            ),
+          )),
+        );
+      }
+      if (results.some((result) => result.nextCursor && result.topRows.length < 200))
+        return undefined;
+      const firstIds = results
+        .flatMap((result) => result.topRows)
+        .sort(compareFinanceRows)
+        .slice(0, 200)
+        .map(({ id, accountId, effectiveAt }) => ({ id, accountId, effectiveAt }));
+      const complete = results.every((result) => !result.nextCursor);
+      return {
+        firstIds,
+        examined: addMinorUnits(results.map((result) => result.examined)),
+        ...(complete
+          ? {
+              exact: {
+                count: addMinorUnits(results.map((result) => result.matchedCount)),
+                totals: sumSpendByCurrency(
+                  results.flatMap((result) =>
+                    result.totalsByCurrency.map((total) => ({
+                      ...total,
+                      transactionId: job.id,
+                      accountId: '',
+                      effectiveAt: job.createdAt,
+                    })),
+                  ),
+                ),
+              },
+            }
+          : {}),
+      };
+    },
     authorizeFacts: async (job, facts) => {
       const byAccount = new Map<string, FinanceFact[]>();
       for (const fact of facts)
@@ -309,7 +515,7 @@ export function createFinanceQueryRuntime(
       }
       return true;
     },
-    dispatch: dispatchFinanceQueryWorker,
+    dispatch: options.dispatch ?? dispatchFinanceQueryWorker,
     hydrate: async (job) => {
       const facts: FinanceFact[] = [];
       const expected = new Map(job.firstIds.map((ref) => [ref.id, ref]));
@@ -342,7 +548,8 @@ export function createFinanceQueryRuntime(
             fact.accountId !== ref.accountId ||
             fact.effectiveAt !== ref.effectiveAt ||
             !Array.isArray(fact.slices) ||
-            !matchesFinanceFact(fact, filters)
+            !matchesFinanceFact(fact, filters) ||
+            !isFinanceFactBefore(fact, job.before)
           )
             throw new FinanceExperienceFailure(
               'invariant',
@@ -354,9 +561,65 @@ export function createFinanceQueryRuntime(
       }
       if (facts.length !== job.firstIds.length)
         throw new Error('Finance query source changed; restart required.');
-      return facts.sort(
-        (a, b) => b.effectiveAt.localeCompare(a.effectiveAt) || b.id.localeCompare(a.id),
-      );
+      return facts.sort(compareFinanceRows);
+    },
+  });
+  return Object.assign(service, {
+    /** Server caller supplies authenticated identity/revision; request bodies cannot supply authority. */
+    async start(userId: string, securityRevision: number, request: unknown, requestId?: string) {
+      const { accountIds, filters } = financeQueryStartSchema.parse(request);
+      if (!userId || !Number.isSafeInteger(securityRevision) || securityRevision < 0)
+        throw new FinanceExperienceFailure('validation', 'Invalid Finance query context.', 'user');
+      const current = await currentActor(userId);
+      if (!current)
+        throw new FinanceExperienceFailure('authorization', 'Finance query access denied.', 'user');
+      const accounts = await scopedRows('accounts', accountIds);
+      const originalAccounts = new Set<string>();
+      const revisions = await sourceSnapshot(current.actor, accountIds, accounts, originalAccounts);
+      if (revisions.size !== accountIds.length)
+        throw new FinanceExperienceFailure(
+          'authorization',
+          'Finance query source access or coverage is unavailable.',
+          'user',
+        );
+      // Verified account coverage supplies these IDs; never accept a client source
+      // vector. Dependencies authorize computation but do not expand selected rows.
+      const additional = [...originalAccounts].filter((id) => !revisions.has(id));
+      if (revisions.size + additional.length > 100)
+        throw new FinanceExperienceFailure(
+          'capacity',
+          'Finance source account bound exceeded.',
+          'user',
+        );
+      const dependencies = await sourceSnapshot(current.actor, additional);
+      if (dependencies.size !== additional.length)
+        throw new FinanceExperienceFailure(
+          'authorization',
+          'Finance original source access or coverage is unavailable.',
+          'user',
+        );
+      for (const [id, revision] of dependencies) revisions.set(id, revision);
+      const name = normalizeFinanceText(filters.accountName ?? '');
+      const selected = accountIds.filter((id) => {
+        if (!name) return true;
+        const friendlyName = accounts.get(id)!.data.friendlyName;
+        if (typeof friendlyName !== 'string')
+          throw new FinanceExperienceFailure('invariant', 'Finance account name is unavailable.');
+        return normalizeFinanceText(friendlyName).includes(name);
+      });
+      // Keep the whole requested vector: a name-filtered empty result still depends
+      // on those canonical account names, current access and verified coverage.
+      return service.create({
+        userId,
+        securityRevision,
+        accountIds: selected,
+        sourceRevisions: {
+          $authorization: current.fingerprint,
+          ...Object.fromEntries(revisions),
+        },
+        filters,
+        ...(requestId === undefined ? {} : { requestId }),
+      });
     },
   });
 }

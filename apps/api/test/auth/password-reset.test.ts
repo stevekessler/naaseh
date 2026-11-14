@@ -42,7 +42,7 @@ describe('PIN password reset', () => {
     const service = createPasswordResetService({
       findUser: vi.fn(async () => user),
       verifyOrDummyPin: vi.fn(async () => true),
-      hashNewPassword: vi.fn(async () => 'new-hash'),
+      hashNewPassword: vi.fn(async () => ({ passwordHash: 'new-hash', pepperVersion: '1' })),
       commitPasswordReset,
       consumeAttempt: vi.fn(async () => true),
     });
@@ -56,6 +56,7 @@ describe('PIN password reset', () => {
       expect.objectContaining({
         userId: 'user',
         passwordHash: 'new-hash',
+        pepperVersion: '1',
         expectedVersion: 2,
         nextCredentialVersion: 5,
         nextSessionEpoch: 4,

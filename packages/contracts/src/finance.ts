@@ -5,6 +5,7 @@ import {
   ulidSchema,
   isFinanceDate,
   localFinanceDate,
+  expenseRefundRelationshipSchema,
 } from '@naaseh/domain';
 
 export const financeContractVersion = 2 as const;
@@ -53,6 +54,55 @@ export const financeUnlockResponseSchema = z
   .strict();
 
 export { expenseRefundRelationshipSchema, refundedAllocationSchema } from '@naaseh/domain';
+
+export const financeRefundAllocationInputSchema = z
+  .object({
+    originalAllocationId: z.string().min(1).max(100),
+    amountMinor: z.number().int().safe().positive(),
+  })
+  .strict();
+
+export const financeRefundRelationshipPutSchema = z
+  .object({
+    originalExpenseTransactionId: ulidSchema,
+    linkedAmountMinor: z.number().int().safe().positive(),
+    refundedAllocations: z.array(financeRefundAllocationInputSchema).min(1).max(100).optional(),
+    confirmedPartialAllocations: z.boolean(),
+    expectedRefundVersion: z.number().int().positive(),
+    expectedOriginalVersion: z.number().int().positive(),
+    expectedRelationshipVersion: z.number().int().positive().optional(),
+    expectedCreditCapacityVersion: z.number().int().nonnegative(),
+    expectedAllocationCapacityVersions: z.record(
+      z.string().min(1).max(100),
+      z.number().int().nonnegative(),
+    ),
+  })
+  .strict();
+
+export const financeRefundRelationshipDeleteSchema = z
+  .object({
+    expectedRelationshipVersion: z.number().int().positive(),
+    expectedCreditCapacityVersion: z.number().int().nonnegative(),
+    expectedAllocationCapacityVersions: z.record(
+      z.string().min(1).max(100),
+      z.number().int().nonnegative(),
+    ),
+  })
+  .strict();
+
+export const financeRefundCapacitySchema = z
+  .object({
+    creditCapacityVersion: z.number().int().nonnegative(),
+    allocationCapacityVersions: z.record(
+      z.string().min(1).max(100),
+      z.number().int().nonnegative(),
+    ),
+  })
+  .strict();
+
+export const financeRefundRelationshipResponseSchema = financeRefundCapacitySchema
+  .extend({ relationship: expenseRefundRelationshipSchema })
+  .strict();
 
 export const financeEntryContextSchema = z
   .object({
@@ -136,6 +186,41 @@ export const financeQueryFiltersSchema = z
     }
   });
 export type FinanceQueryFilters = z.infer<typeof financeQueryFiltersSchema>;
+
+/** Request scope only: canonical owner, security and source revisions are server-derived. */
+export const financeQueryStartSchema = z
+  .object({
+    accountIds: z.array(ulidSchema).min(1).max(50),
+    filters: financeQueryFiltersSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const scope = new Set(value.accountIds);
+    const filtered = value.filters?.accountIds;
+    if (
+      filtered &&
+      (new Set(filtered).size !== scope.size || filtered.some((id) => !scope.has(id)))
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['filters', 'accountIds'],
+        message: 'Account filters must match the selected query scope.',
+      });
+  })
+  .transform((value) => {
+    const accountIds = [...new Set(value.accountIds)].sort();
+    return {
+      accountIds,
+      filters: financeQueryFiltersSchema.parse({ ...value.filters, accountIds }),
+    };
+  });
+
+export const financeQueryPageSchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(200).default(50),
+    cursor: z.string().min(1).max(4096).optional(),
+  })
+  .strict();
 
 export const financeQueryEnvelopeSchema = z
   .object({
@@ -256,11 +341,28 @@ export const balanceSnapshotSchema = z
   })
   .strict();
 
+export const financeClassificationSnapshotSchema = z
+  .object({
+    categoryId: ulidSchema,
+    categoryLabel: z.string().min(1).max(100),
+    categoryVersion: z.number().int().positive(),
+    subcategoryId: ulidSchema.optional(),
+    subcategoryLabel: z.string().min(1).max(100).optional(),
+    subcategoryVersion: z.number().int().positive().optional(),
+  })
+  .strict();
+
 export const transactionAllocationInputSchema = z
   .object({
     id: ulidSchema,
-    amountMinor: z.number().int().safe(),
+    amountMinor: z
+      .number()
+      .int()
+      .safe()
+      .refine((value) => value !== 0, 'Amount must be non-zero.'),
     financeCategoryId: ulidSchema,
+    subcategoryId: ulidSchema.optional(),
+    classification: financeClassificationSnapshotSchema.optional(),
     budgetItemId: ulidSchema.optional(),
     note: z.string().max(1000).optional(),
   })
@@ -270,12 +372,18 @@ export const transactionSourceSnapshotSchema = z
   .object({
     postedAt: z.string().datetime().nullable().optional(),
     transactedAt: z.string().datetime().optional(),
+    currency: z
+      .string()
+      .regex(/^[A-Z]{3}$/)
+      .optional(),
     amountMinor: z.number().int().safe(),
     description: z.string().trim().min(1).max(1000),
     payee: z.string().max(500).optional(),
     memo: z.string().max(4000).optional(),
     pending: z.boolean(),
     merchantCategoryCode: z.string().max(20).optional(),
+    paymentType: z.string().trim().min(1).max(64).optional(),
+    checkNumber: z.string().trim().min(1).max(64).optional(),
   })
   .strict();
 
@@ -287,10 +395,13 @@ export const financialTransactionSchema = z
     csvImportBatchId: ulidSchema.optional(),
     csvRowOrdinal: z.number().int().min(1).max(50_000).optional(),
     sourceTransactionId: z.string().min(1).max(500).optional(),
+    providerConnectionId: z.string().min(1).max(500).optional(),
+    providerAccountId: z.string().min(1).max(500).optional(),
     entrySnapshot: transactionSourceSnapshotSchema.optional(),
     providerSnapshot: transactionSourceSnapshotSchema.optional(),
     postedAt: z.string().datetime().nullable().optional(),
     transactedAt: z.string().datetime().optional(),
+    effectiveAt: z.string().datetime().optional(),
     amountMinor: z.number().int().safe(),
     currency: z.string().regex(/^[A-Z]{3}$/),
     currencyExponent: z.number().int().min(0).max(6),
@@ -299,6 +410,8 @@ export const financialTransactionSchema = z
     memo: z.string().max(4000).optional(),
     pending: z.boolean(),
     merchantCategoryCode: z.string().max(20).optional(),
+    paymentType: z.string().trim().min(1).max(64).optional(),
+    checkNumber: z.string().trim().min(1).max(64).optional(),
     merchantId: ulidSchema.optional(),
     transferId: ulidSchema.optional(),
     allocations: z.array(transactionAllocationInputSchema).max(100),
@@ -318,6 +431,7 @@ export const financialTransactionSchema = z
       'reconciliation-review',
       'possible-duplicate',
     ]),
+    status: z.enum(['active', 'archived', 'tombstone']).optional(),
     version: z.number().int().positive(),
   })
   .strict();
@@ -354,7 +468,12 @@ export const providerReconciliationDecisionInputSchema = z.discriminatedUnion('d
 
 export const manualFinanceTransactionInputSchema = z
   .object({
-    amountMinor: z.number().int().safe(),
+    expectedAccountVersion: z.number().int().positive().optional(),
+    amountMinor: z
+      .number()
+      .int()
+      .safe()
+      .refine((value) => value !== 0, 'Amount must be non-zero.'),
     transactedAt: z.string().datetime(),
     postedAt: z.string().datetime().optional(),
     description: z.string().trim().min(1).max(1000),
@@ -362,7 +481,21 @@ export const manualFinanceTransactionInputSchema = z
     memo: z.string().max(4000).optional(),
     pending: z.boolean().default(false),
     merchantId: ulidSchema.optional(),
+    paymentType: z.enum(['cash', 'check', 'card', 'ach', 'digital-other']).optional(),
+    checkNumber: z.string().trim().min(1).max(64).optional(),
     allocations: z.array(transactionAllocationInputSchema).max(100).optional(),
+  })
+  .strict();
+
+export const manualFinanceTransactionReplayInputSchema = manualFinanceTransactionInputSchema
+  .extend({ id: ulidSchema })
+  .strict();
+
+export const financeTransactionMetadataPatchSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    paymentType: z.enum(['cash', 'check', 'card', 'ach', 'digital-other']).nullable().optional(),
+    checkNumber: z.string().trim().min(1).max(64).nullable().optional(),
   })
   .strict();
 
@@ -424,6 +557,23 @@ const csvImportRowInputSchema = z
     duplicateDisposition: z.enum(['not-suspected', 'included-after-review']),
   })
   .strict();
+
+export const csvDuplicateCheckSchema = z
+  .object({
+    rows: z
+      .array(
+        csvImportRowInputSchema.pick({
+          ordinal: true,
+          amountMinor: true,
+          transactedAt: true,
+          description: true,
+        }),
+      )
+      .min(1)
+      .max(100),
+  })
+  .strict()
+  .refine(({ rows }) => new Set(rows.map(({ ordinal }) => ordinal)).size === rows.length);
 
 export const csvImportChunkInputSchema = z
   .object({
@@ -496,6 +646,7 @@ export const importJobSchema = z
 export const financeCategoryInputSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
+    parentId: ulidSchema.optional(),
   })
   .strict();
 
@@ -504,6 +655,7 @@ export const financeCategoryPatchSchema = z
     expectedVersion: z.number().int().positive(),
     name: z.string().trim().min(1).max(100).optional(),
     status: z.enum(['active', 'archived']).optional(),
+    parentId: ulidSchema.nullable().optional(),
   })
   .strict();
 
@@ -514,6 +666,7 @@ export const financeCategorySchema = z
     origin: z.enum(['bank', 'user']),
     merchantCategoryCode: z.string().max(20).optional(),
     creatorId: z.string().max(200).optional(),
+    parentId: ulidSchema.optional(),
     status: z.enum(['active', 'archived']),
     version: z.number().int().positive(),
   })
@@ -532,6 +685,16 @@ export const financeMerchantInputSchema = z
     region: z.string().max(120).optional(),
     merchantCategoryCode: z.string().max(20).optional(),
     financeCategoryId: ulidSchema.optional(),
+  })
+  .strict();
+
+export const financeMerchantPatchSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    name: z.string().trim().min(1).max(200).optional(),
+    city: z.string().max(120).nullable().optional(),
+    region: z.string().max(120).nullable().optional(),
+    financeCategoryId: ulidSchema.nullable().optional(),
   })
   .strict();
 
@@ -626,6 +789,7 @@ export const financeBudgetItemInputSchema = z
     description: z.string().trim().min(1).max(300),
     merchantId: ulidSchema.optional(),
     financeCategoryId: ulidSchema,
+    subcategoryId: ulidSchema.optional(),
     plannedAmountMinor: z
       .number()
       .int()
@@ -659,6 +823,8 @@ export const financeBudgetItemSchema = z
     description: z.string().min(1).max(300),
     merchantId: ulidSchema.optional(),
     financeCategoryId: ulidSchema,
+    subcategoryId: ulidSchema.optional(),
+    classification: financeClassificationSnapshotSchema.optional(),
     plannedAmountMinor: z.number().int().safe(),
     actualAmountMinor: z.number().int().safe().optional(),
     varianceMinor: z.number().int().safe().optional(),
@@ -683,6 +849,12 @@ export const financeBudgetAccountLinkSchema = z
   .strict();
 
 export const financeBudgetReconciliationInputSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+  })
+  .strict();
+
+export const financeBudgetLifecycleInputSchema = z
   .object({
     expectedVersion: z.number().int().positive(),
   })

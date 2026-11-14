@@ -1,5 +1,6 @@
 import { currencyExponentFor } from './money.js';
 import type { FinanceScope } from './scope.js';
+import type { FinanceClassificationSnapshot } from './category.js';
 
 export type BudgetStatus =
   | 'draft'
@@ -16,6 +17,12 @@ export interface Budget {
   startDate: string;
   endDate: string | null;
   status: BudgetStatus;
+  /** Missing only on records created before independent budget activity existed. */
+  activity?: 'active' | 'inactive';
+  activityChangedAt?: string;
+  activityChangedBy?: string;
+  closedAt?: string;
+  closedBy?: string;
   lastReconciledAt?: string;
   version: number;
 }
@@ -28,6 +35,8 @@ export interface CreateBudgetInput {
   startDate: string;
   endDate?: string | null;
   status?: 'draft' | 'active';
+  activityChangedAt?: string;
+  activityChangedBy?: string;
 }
 
 export interface BudgetAccountLink {
@@ -55,6 +64,8 @@ export interface BudgetItem {
   description: string;
   merchantId?: string;
   financeCategoryId: string;
+  subcategoryId?: string;
+  classification?: FinanceClassificationSnapshot;
   plannedAmountMinor: number;
   currency: string;
   currencyExponent: number;
@@ -73,6 +84,8 @@ export interface CreateBudgetItemInput {
   description: string;
   merchantId?: string;
   financeCategoryId: string;
+  subcategoryId?: string;
+  classification?: FinanceClassificationSnapshot;
   plannedAmountMinor: number;
   currency: string;
   currencyExponent?: number;
@@ -107,6 +120,7 @@ export function createBudget(input: CreateBudgetInput): Budget {
   if (endDate !== null && endDate < startDate) {
     throw new Error('Budget end date cannot be before its start date.');
   }
+  const status = input.status ?? 'draft';
   return {
     id: input.id,
     groupId: input.groupId,
@@ -114,9 +128,78 @@ export function createBudget(input: CreateBudgetInput): Budget {
     budgetDate: dateOnly(input.budgetDate, 'Budget date'),
     startDate,
     endDate,
-    status: input.status ?? 'draft',
+    status,
+    activity: status === 'active' ? 'active' : 'inactive',
+    ...(input.activityChangedAt ? { activityChangedAt: input.activityChangedAt } : {}),
+    ...(input.activityChangedBy ? { activityChangedBy: input.activityChangedBy } : {}),
     version: 1,
   };
+}
+
+export function effectiveBudgetActivity(budget: Budget): 'active' | 'inactive' {
+  if (budget.activity) return budget.activity;
+  return budget.status === 'active' || budget.status === 'changed-since-reconciliation'
+    ? 'active'
+    : 'inactive';
+}
+
+const activityTimestamp = (value: Date) => {
+  if (Number.isNaN(value.valueOf())) throw new Error('Budget activity time must be valid.');
+  return value.toISOString();
+};
+
+export function deactivateBudget(budget: Budget, actorId: string, now = new Date()): Budget {
+  if (!actorId) throw new Error('Budget activity requires an actor.');
+  if (effectiveBudgetActivity(budget) === 'inactive') return budget;
+  return {
+    ...budget,
+    activity: 'inactive',
+    activityChangedAt: activityTimestamp(now),
+    activityChangedBy: actorId,
+    version: budget.version + 1,
+  };
+}
+
+export function reactivateBudget(budget: Budget, actorId: string, now = new Date()): Budget {
+  if (!actorId) throw new Error('Budget activity requires an actor.');
+  if (budget.status === 'archived' || budget.status === 'tombstone') {
+    throw new Error('An archived budget cannot be reactivated.');
+  }
+  if (effectiveBudgetActivity(budget) === 'active') return budget;
+  return {
+    ...budget,
+    activity: 'active',
+    activityChangedAt: activityTimestamp(now),
+    activityChangedBy: actorId,
+    version: budget.version + 1,
+  };
+}
+
+export function closeBudget(budget: Budget, actorId: string, now = new Date()): Budget {
+  if (!actorId) throw new Error('Budget closure requires an actor.');
+  if (budget.closedAt) return budget;
+  return {
+    ...budget,
+    closedAt: activityTimestamp(now),
+    closedBy: actorId,
+    version: budget.version + 1,
+  };
+}
+
+export function reopenBudget(budget: Budget): Budget {
+  if (!budget.closedAt) return budget;
+  const updated = { ...budget, version: budget.version + 1 };
+  delete updated.closedAt;
+  delete updated.closedBy;
+  return updated;
+}
+
+export function isBudgetEligibleForNewUpcoming(budget: Budget): boolean {
+  return (
+    effectiveBudgetActivity(budget) === 'active' &&
+    (budget.status === 'active' || budget.status === 'changed-since-reconciliation') &&
+    !budget.closedAt
+  );
 }
 
 export function createBudgetAccountLink(input: CreateBudgetAccountLinkInput): BudgetAccountLink {
@@ -157,6 +240,8 @@ export function createBudgetItem(input: CreateBudgetItemInput): BudgetItem {
     description: requiredText(input.description, 'Budget item description', 300),
     ...(input.merchantId ? { merchantId: input.merchantId } : {}),
     financeCategoryId: input.financeCategoryId,
+    ...(input.subcategoryId ? { subcategoryId: input.subcategoryId } : {}),
+    ...(input.classification ? { classification: input.classification } : {}),
     plannedAmountMinor: input.plannedAmountMinor,
     currency: input.currency,
     currencyExponent,

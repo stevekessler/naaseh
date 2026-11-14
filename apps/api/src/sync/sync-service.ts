@@ -259,13 +259,14 @@ const financeBootstrapOrder = new Map<string, number>([
   ['financeBudgetItem', 5],
   ['financeTransaction', 6],
   ['financeAllocation', 7],
-  ['financeTransfer', 8],
-  ['financeReusableItem', 9],
-  ['financeTransactionMatch', 10],
-  ['financeReconciliation', 11],
-  ['financeTaskLink', 12],
-  ['financeReviewIssue', 13],
-  ['financeBalanceSnapshot', 14],
+  ['financeRefundRelationship', 8],
+  ['financeTransfer', 9],
+  ['financeReusableItem', 10],
+  ['financeTransactionMatch', 11],
+  ['financeReconciliation', 12],
+  ['financeTaskLink', 13],
+  ['financeReviewIssue', 14],
+  ['financeBalanceSnapshot', 15],
 ]);
 
 /** Parents and global labels hydrate before dependent protected records. */

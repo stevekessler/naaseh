@@ -7,12 +7,14 @@ export function CreateFinancialTask({
   applicableDate,
   currentUserId,
   csrfToken,
+  verifyAccess,
 }: {
   budgetItemId: string;
   description: string;
   applicableDate?: string;
   currentUserId: string;
   csrfToken: string;
+  verifyAccess: () => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState(description);
@@ -26,6 +28,7 @@ export function CreateFinancialTask({
     setBusy(true);
     setError('');
     try {
+      if (!(await verifyAccess())) return;
       const created = await financeRequest<{ taskId: string; financialTaskLinkId: string }>(
         `/finance/budget-items/${budgetItemId}/tasks`,
         {
@@ -39,6 +42,7 @@ export function CreateFinancialTask({
           }),
         },
       );
+      if (!(await verifyAccess())) return;
       setTaskId(created.taskId);
       setOpen(false);
     } catch {

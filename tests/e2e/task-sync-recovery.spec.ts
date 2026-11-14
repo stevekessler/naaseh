@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { createList, createListItem, createTask } from '@naaseh/domain';
+import { createList, createListItem, createTask, journalSyncContractVersion } from '@naaseh/domain';
 import { openTaskSection } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
@@ -73,8 +73,18 @@ for (const brokenCache of [false, true]) {
         },
       }),
     );
-    await page.route('**/api/v1/sync/pull', (route) =>
-      route.fulfill({
+    await page.route('**/api/v1/sync/pull', (route) => {
+      const body = route.request().postDataJSON() as { version?: number; journalCursor?: number };
+      if (body.version === journalSyncContractVersion || body.journalCursor !== undefined)
+        return route.fulfill({
+          json: {
+            version: journalSyncContractVersion,
+            changes: [],
+            journalCursor: body.journalCursor ?? 0,
+            hasMore: false,
+          },
+        });
+      return route.fulfill({
         json: {
           changes: (Number(route.request().postDataJSON().cursor?.owner ?? 0) < 10
             ? serverTasks
@@ -87,8 +97,8 @@ for (const brokenCache of [false, true]) {
           })),
           cursor: { owner: serverTasks.length ? 10 : 0 },
         },
-      }),
-    );
+      });
+    });
     await page.route('**/api/v1/sync/push', (route) => {
       const { mutations } = route.request().postDataJSON();
       return route.fulfill({
@@ -109,11 +119,6 @@ for (const brokenCache of [false, true]) {
     const pendingTask = createTask({ label: 'Unsent local wording' }, ownerId);
     const serverList = createList({ name: 'Recovered owned list' }, ownerId);
     const serverListItem = createListItem(serverList.id, { name: 'Recovered list item' }, ownerId);
-    serverTasks = [serverTask, { ...pendingTask, label: 'Older server wording' }];
-    serverLists = [serverList];
-    serverListItems = [serverListItem];
-    organizationSnapshotAvailable = true;
-    listSnapshotAvailable = true;
     await page.evaluate(
       async ({ serverTask, pendingTask, brokenCache }) => {
         const database = await new Promise<IDBDatabase>((resolve) => {
@@ -205,7 +210,16 @@ for (const brokenCache of [false, true]) {
       { serverTask, pendingTask, brokenCache },
     );
     const before = await readRecoveryState(page);
-    await page.reload();
+    // Stop the old page before publishing recovery data. Otherwise its in-flight initial
+    // pull can replace the deliberately damaged fixture before the recovery visit starts.
+    const appUrl = page.url();
+    await page.goto('about:blank');
+    serverTasks = [serverTask, { ...pendingTask, label: 'Older server wording' }];
+    serverLists = [serverList];
+    serverListItems = [serverListItem];
+    organizationSnapshotAvailable = true;
+    listSnapshotAvailable = true;
+    await page.goto(appUrl);
     await expect(page.getByRole('heading', { name: 'Recovered server task' })).toBeVisible();
     await page.getByRole('button', { name: 'Lists', exact: true }).click();
     const recoveredListRow = page.getByRole('row', { name: /Recovered owned list/u });

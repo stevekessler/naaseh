@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  Fragment,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { refreshFinanceSecurity } from './finance-access-session.js';
 import { peekFinanceAccess, subscribeFinanceAccess } from './finance-access.js';
 import type { FinanceAccessController } from './finance-access-controller.js';
@@ -110,7 +118,7 @@ export function FinanceAccessBoundary({
   useEffect(() => subscribeFinanceAccess(() => changed((value) => value + 1)), []);
   const controller = peekFinanceAccess();
   async function refresh() {
-    if (!controller) return;
+    if (!controller || controller.ownerId !== ownerId) return;
     setStatus('Checking Finance security…');
     try {
       await controller.markStale();
@@ -119,7 +127,7 @@ export function FinanceAccessBoundary({
       setStatus('Connect to refresh Finance security.');
     }
   }
-  if (!controller || !controller.securityReady)
+  if (!controller || controller.ownerId !== ownerId || !controller.securityReady)
     return (
       <section>
         <h1>Finance</h1>
@@ -132,6 +140,7 @@ export function FinanceAccessBoundary({
     return (
       <>
         <FinanceUnlock
+          key={JSON.stringify([ownerId, controller.tabNonce])}
           controller={controller}
           onUnlocked={() => changed((value) => value + 1)}
           onCancel={onCancel}
@@ -145,7 +154,7 @@ export function FinanceAccessBoundary({
       {controller.requiresPin ? (
         <button onClick={() => controller.lock()}>Lock Finance</button>
       ) : null}
-      {children}
+      <Fragment key={JSON.stringify([ownerId, controller.tabNonce])}>{children}</Fragment>
     </>
   );
 }

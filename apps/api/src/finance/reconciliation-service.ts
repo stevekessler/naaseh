@@ -166,9 +166,24 @@ export function listBudgetReconciliationHistory(
   actor: FinanceActor,
   budgetId: string,
 ) {
-  authorizedBudget(repository, actor, budgetId);
+  const budget = repository.budgets.get(budgetId);
+  if (
+    !budget ||
+    budget.status === 'tombstone' ||
+    !authorizeFinanceScope(actor, scopeFor(budget), 'read').allowed
+  )
+    throw new Error('Finance record not found.');
   return repository.budgetReconciliations
     .filter((record) => record.budgetId === budgetId)
+    .filter((record) => {
+      const sources = repository.reconciliationAccountSources.get(record.id);
+      if (!sources?.length)
+        throw new Error('Finance reconciliation source evidence is unavailable.');
+      return sources.every((id) => {
+        const account = repository.accounts.get(id);
+        return account && authorizeFinanceScope(actor, account.scope, 'read').allowed;
+      });
+    })
     .sort(
       (left, right) =>
         right.reconciledAt.localeCompare(left.reconciledAt) || right.id.localeCompare(left.id),
@@ -221,6 +236,10 @@ export async function reconcileFinanceBudget(
     throw new Error('Budget reconciliation version conflict.');
   }
   repository.budgetReconciliations.push(record);
+  repository.reconciliationAccountSources.set(
+    record.id,
+    [...new Set(snapshot.source.accounts.map(({ id }) => id))].sort(),
+  );
   repository.budgets.set(updatedBudget.id, updatedBudget);
   repository.feedChanges.push({
     audience: financeAudience(scopeFor(updatedBudget)),

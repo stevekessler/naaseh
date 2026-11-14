@@ -43,6 +43,7 @@ export async function financeRequest<T>(
       });
     const headers = new Headers(options.headers);
     headers.set('accept', 'application/json');
+    headers.set('x-finance-owner', access.ownerId);
     if (options.body !== undefined) headers.set('content-type', 'application/json');
     if (options.csrfToken) headers.set('x-csrf-token', options.csrfToken);
     if (options.idempotencyKey) headers.set('idempotency-key', options.idempotencyKey);
@@ -57,7 +58,9 @@ export async function financeRequest<T>(
     const body = await response.json().catch(() => undefined);
     if (!response.ok) {
       const problem = safeProblem(body, response.status);
-      if (problem.code === 'finance_locked' || response.status === 401) await access.markStale();
+      // A response from a cancelled visit cannot invalidate a later unlock.
+      if (!signal.aborted && (problem.code === 'finance_locked' || response.status === 401))
+        await access.markStale();
       throw new FinanceClientError(problem);
     }
     return body as T;

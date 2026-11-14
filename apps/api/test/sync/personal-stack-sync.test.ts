@@ -10,6 +10,7 @@ import {
   changeFeedKeyRange,
   deserializeAudienceFeedItems,
   pullAudience,
+  hasMoreAudienceChanges,
   type PersonalStackFeedChange,
 } from '../../src/sync/change-feed-repository.js';
 import { dynamodb } from '../../src/shared/dynamodb.js';
@@ -233,4 +234,34 @@ describe('contract-v4 personal stack synchronization', () => {
       }),
     ).toThrow(/rank|position/iu);
   });
+});
+
+it('retains actual query continuation privately even below the item limit without changing legacy feed arrays', async () => {
+  const row = {
+    audience: 'PUBLIC',
+    sequence: 8,
+    entityId: 'example',
+    entityType: 'task',
+    operation: 'upsert',
+    payload: { label: 'Synthetic public task' },
+  };
+  const send = vi
+    .spyOn(dynamodb, 'send')
+    .mockResolvedValueOnce({
+      Items: [{ SK: 'CHANGE#00000000000000000008', data: row }],
+      LastEvaluatedKey: { PK: 'FEED#PUBLIC', SK: 'CHANGE#00000000000000000008' },
+    })
+    .mockResolvedValueOnce({ Items: Array.from({ length: 200 }, () => ({ data: row })) });
+  try {
+    const partial = await pullAudience('PUBLIC', 7);
+    expect(partial).toEqual([row]);
+    expect(hasMoreAudienceChanges(partial)).toBe(true);
+    expect(JSON.stringify(partial)).toBe(JSON.stringify([row]));
+    const finished = await pullAudience('PUBLIC', 7);
+    expect(finished).toHaveLength(200);
+    expect(hasMoreAudienceChanges(finished)).toBe(false);
+    expect(send).toHaveBeenCalledTimes(2);
+  } finally {
+    send.mockRestore();
+  }
 });

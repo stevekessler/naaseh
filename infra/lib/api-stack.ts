@@ -145,6 +145,48 @@ export function createApplicationApi(
     logGroup: options.logGroups.sync,
   });
   financeImport.grantInvoke(finance);
+  // Default-bus delivery avoids Function -> importer -> Function environment cycles.
+  // Only durable publication identifiers cross this internal boundary.
+  for (const fn of [finance, financeImport, sync]) {
+    fn.addEnvironment('NAASEH_FINANCE_PUBLICATION_EVENT_BUS', 'default');
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        actions: ['events:PutEvents'],
+        resources: [
+          Stack.of(scope).formatArn({
+            service: 'events',
+            resource: 'event-bus',
+            resourceName: 'default',
+          }),
+        ],
+        conditions: {
+          StringEquals: {
+            'events:source': 'naaseh.finance.publication',
+            'events:detail-type': 'FinancePublicationRequested',
+          },
+        },
+      }),
+    );
+  }
+  new events.Rule(scope, 'FinancePublicationRequested', {
+    schedule: events.Schedule.rate(Duration.minutes(5)),
+    eventPattern: {
+      account: [Stack.of(scope).account],
+      region: [Stack.of(scope).region],
+      source: ['naaseh.finance.publication'],
+      detailType: ['FinancePublicationRequested'],
+      detail: { publicationId: [{ exists: true }] },
+    },
+    targets: [
+      new eventTargets.LambdaFunction(finance, {
+        event: events.RuleTargetInput.fromObject({
+          kind: 'naaseh.finance.publication-signal',
+          source: events.EventField.fromPath('$.source'),
+          detail: events.EventField.fromPath('$.detail'),
+        }),
+      }),
+    ],
+  });
   // A self-ARN reference cycles Function -> RolePolicy -> Function. Restrict invocation by
   // account/region and this function's unique deployment tag without renaming the function.
   const financeWorkerBoundary = `${scope.node.path}/FinanceApiFunction`;

@@ -1,21 +1,16 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
+import { useCatalogRemovalPreview } from './use-catalog-removal-preview.js';
 
 type CategoryView = {
   id: string;
   name: string;
   origin: 'bank' | 'user';
   creatorId?: string;
+  parentId?: string;
   status: 'active' | 'archived';
   version: number;
 };
-type DeletionPreview = {
-  expectedVersion: number;
-  outcome: 'archive' | 'permanent-delete' | 'tombstone';
-  confirmationToken: string;
-  dependentCounts: Record<string, number>;
-};
-
 export function FinanceCategoryManager({
   userId,
   isAdmin,
@@ -27,63 +22,80 @@ export function FinanceCategoryManager({
 }) {
   const [categories, setCategories] = useState<CategoryView[]>([]);
   const [name, setName] = useState('');
+  const [parentId, setParentId] = useState('');
   const [message, setMessage] = useState('');
-  const [previews, setPreviews] = useState<Record<string, DeletionPreview>>({});
+  const removal = useCatalogRemovalPreview('category', userId, csrfToken);
+  const refresh = async () => {
+    const { items } = await financeRequest<{ items: CategoryView[] }>('/finance/categories');
+    setCategories(items);
+    return items;
+  };
   useEffect(() => {
-    void financeRequest<{ items: CategoryView[] }>('/finance/categories').then(({ items }) =>
-      setCategories(items),
-    );
+    void refresh();
   }, []);
   const create = async (event: FormEvent) => {
     event.preventDefault();
-    const category = await financeRequest<CategoryView>('/finance/categories', {
+    await refresh();
+    await financeRequest('/finance/categories', {
       method: 'POST',
       csrfToken,
       idempotencyKey: crypto.randomUUID(),
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, ...(parentId ? { parentId } : {}) }),
     });
-    setCategories((current) => [...current, category]);
+    await refresh();
     setName('');
+    setParentId('');
     setMessage('Category created.');
   };
+  const reparent = async (category: CategoryView, nextParentId: string) => {
+    const current = (await refresh()).find(({ id }) => id === category.id);
+    if (!current || current.version !== category.version) {
+      setMessage('Category changed. Review the current value before moving it.');
+      return;
+    }
+    try {
+      await financeRequest(`/finance/categories/${category.id}`, {
+        method: 'PATCH',
+        csrfToken,
+        idempotencyKey: crypto.randomUUID(),
+        body: JSON.stringify({
+          expectedVersion: category.version,
+          parentId: nextParentId || null,
+        }),
+      });
+      await refresh();
+      setMessage('Category hierarchy updated.');
+    } catch {
+      setMessage('This category cannot be moved because its hierarchy or history would change.');
+    }
+  };
   const rename = async (category: CategoryView, nextName: string) => {
-    const updated = await financeRequest<CategoryView>(`/finance/categories/${category.id}`, {
+    const current = (await refresh()).find(({ id }) => id === category.id);
+    if (!current || current.version !== category.version) {
+      setMessage('Category changed. Review the current value before renaming.');
+      return;
+    }
+    await financeRequest(`/finance/categories/${category.id}`, {
       method: 'PATCH',
       csrfToken,
       idempotencyKey: crypto.randomUUID(),
       body: JSON.stringify({ expectedVersion: category.version, name: nextName }),
     });
-    setCategories((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    await refresh();
     setMessage('Category renamed.');
   };
   const preview = async (category: CategoryView) => {
-    const value = await financeRequest<DeletionPreview>(
-      `/finance/records/category/${category.id}/deletion-preview`,
-    );
-    setPreviews((current) => ({ ...current, [category.id]: value }));
+    if (!(await removal.load(category.id)))
+      setMessage('Refresh Finance to review category removal.');
   };
   const confirm = async (category: CategoryView) => {
-    const value = previews[category.id];
-    if (!value) return;
-    await financeRequest(`/finance/records/category/${category.id}/deletion`, {
-      method: 'POST',
-      csrfToken,
-      idempotencyKey: crypto.randomUUID(),
-      body: JSON.stringify({
-        expectedVersion: value.expectedVersion,
-        confirmationToken: value.confirmationToken,
-      }),
-    });
-    setCategories((current) =>
-      value.outcome === 'permanent-delete'
-        ? current.filter(({ id }) => id !== category.id)
-        : current.map((item) =>
-            item.id === category.id
-              ? { ...item, status: 'archived', version: item.version + 1 }
-              : item,
-          ),
-    );
-    setMessage(value.outcome === 'permanent-delete' ? 'Category removed.' : 'Category archived.');
+    const outcome = await removal.confirm(category.id);
+    if (!outcome) {
+      setMessage('Refresh Finance to review category removal.');
+      return;
+    }
+    await refresh();
+    setMessage(outcome === 'permanent-delete' ? 'Category removed.' : 'Category archived.');
   };
   return (
     <section>
@@ -96,6 +108,19 @@ export function FinanceCategoryManager({
           Category name
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
+        <label>
+          Parent category
+          <select value={parentId} onChange={(event) => setParentId(event.target.value)}>
+            <option value="">No parent (top level)</option>
+            {categories
+              .filter(({ parentId, status }) => !parentId && status === 'active')
+              .map((category) => (
+                <option key={category.id} value={category.id}>
+                  Use as parent: {category.name}
+                </option>
+              ))}
+          </select>
+        </label>
         <button type="submit">Create category</button>
       </form>
       <ul>
@@ -105,7 +130,9 @@ export function FinanceCategoryManager({
           return (
             <li key={category.id}>
               <span>
-                {category.name}
+                {category.parentId
+                  ? `${categories.find(({ id }) => id === category.parentId)?.name ?? 'Missing parent'} → ${category.name}`
+                  : category.name}
                 {category.status === 'archived' ? ' (archived)' : ''}
               </span>
               {canManage && category.status === 'active' ? (
@@ -120,10 +147,33 @@ export function FinanceCategoryManager({
                       }}
                     />
                   </label>
-                  <button onClick={() => void preview(category)}>Review category removal</button>
-                  {previews[category.id] ? (
-                    <button onClick={() => void confirm(category)}>
-                      {previews[category.id]!.outcome === 'permanent-delete'
+                  <label>
+                    Parent for {category.name}
+                    <select
+                      value={category.parentId ?? ''}
+                      onChange={(event) => void reparent(category, event.target.value)}
+                    >
+                      <option value="">No parent (top level)</option>
+                      {categories
+                        .filter(
+                          (candidate) =>
+                            candidate.id !== category.id &&
+                            !candidate.parentId &&
+                            candidate.status === 'active',
+                        )
+                        .map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            Move under: {candidate.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <button disabled={removal.pending} onClick={() => void preview(category)}>
+                    Review category removal
+                  </button>
+                  {removal.preview?.recordId === category.id ? (
+                    <button disabled={removal.pending} onClick={() => void confirm(category)}>
+                      {removal.preview.outcome === 'permanent-delete'
                         ? 'Remove mistaken category'
                         : 'Archive category'}
                     </button>

@@ -16,7 +16,9 @@ import {
   createFinanceReusableItem,
   evaluateFinanceTransactionMatches,
   invalidateChangedTransactionMatches,
+  listFinanceTransactionMatches,
   listReusableOffers,
+  rejectFinanceTransactionMatch,
   undoFinanceTransactionMatch,
 } from '../../apps/api/src/finance/matching-service.js';
 import {
@@ -189,6 +191,54 @@ describe('Finance matching service', () => {
     );
     expect(undone.status).toBe('undone');
     expect(repository.transactions[0]?.allocations[0]?.budgetItemId).toBeUndefined();
+  });
+
+  it('withholds fresh and replayed matches when a related account is no longer visible', async () => {
+    const { repository, reusable } = await setup(-45_000);
+    const item = await copyReusableItemToBudget(
+      repository,
+      actor,
+      ids.budget,
+      reusable.id,
+      '2027-09-15',
+      ids.item,
+      2,
+      'copy-reusable',
+    );
+    const otherAccountId = '01J00000000000000000000711';
+    const otherAccount = {
+      ...repository.accounts.get(ids.account)!,
+      id: otherAccountId,
+      scope: { type: 'owner' as const, ownerId: actor.id },
+    };
+    repository.accounts.set(otherAccountId, otherAccount);
+    repository.budgetItems.set(item.id, {
+      ...item,
+      relatedAccountIds: [ids.account, otherAccountId],
+    });
+    const evaluate = (mutationId: string) =>
+      evaluateFinanceTransactionMatches(
+        repository,
+        actor,
+        ids.transaction,
+        () => ids.match,
+        mutationId,
+      );
+    expect(await evaluate('first-evaluation')).toMatchObject([
+      { id: ids.match, status: 'suggested' },
+    ]);
+    const reject = () =>
+      rejectFinanceTransactionMatch(repository, actor, ids.match, 1, 1, 'reject-match');
+    expect(await reject()).toMatchObject({ status: 'rejected' });
+    expect(await reject()).toMatchObject({ status: 'rejected' });
+    repository.accounts.set(otherAccountId, {
+      ...otherAccount,
+      scope: { type: 'owner', ownerId: 'different-owner' },
+    });
+    await expect(evaluate('first-evaluation')).rejects.toThrow('Finance record not found.');
+    await expect(reject()).rejects.toThrow('Finance record not found.');
+    expect(await evaluate('new-evaluation')).toEqual([]);
+    expect(listFinanceTransactionMatches(repository, actor, ids.transaction).items).toEqual([]);
   });
 
   it('invalidates an accepted match and detaches it when the transaction source changes', async () => {

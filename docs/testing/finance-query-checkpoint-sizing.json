@@ -1,0 +1,349 @@
+{
+  "kind": "offline-synthetic-query-sizing",
+  "estimatedBytesPerItem": "UTF-8 JSON + 100",
+  "scenarios": [
+    {
+      "compact": false,
+      "previewEnabled": false,
+      "accounts": 1,
+      "each": 2000,
+      "total": 2000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 64,
+        "metadataGets": 11,
+        "indexQueries": 2,
+        "factBatchGets": 20,
+        "indexAndFactReadUnitsEstimate": 2130,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 2330,
+        "candidates": 2000,
+        "maxItemBytes": 13448,
+        "retainedBytesEstimate": 14169,
+        "retainedItems": 4
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 130,
+        "metadataGets": 27,
+        "indexQueries": 4,
+        "factBatchGets": 39,
+        "indexAndFactReadUnitsEstimate": 4048,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 4448,
+        "candidates": 3801,
+        "maxItemBytes": 13598,
+        "retainedBytesEstimate": 28490,
+        "retainedItems": 8
+      }
+    },
+    {
+      "compact": false,
+      "previewEnabled": false,
+      "accounts": 50,
+      "each": 2000,
+      "total": 100000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 1022,
+        "metadataGets": 83,
+        "indexQueries": 100,
+        "factBatchGets": 1000,
+        "indexAndFactReadUnitsEstimate": 106500,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 106700,
+        "candidates": 100000,
+        "maxItemBytes": 24114,
+        "retainedBytesEstimate": 29711,
+        "retainedItems": 22
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 2044,
+        "metadataGets": 171,
+        "indexQueries": 200,
+        "factBatchGets": 2000,
+        "indexAndFactReadUnitsEstimate": 212850,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 213250,
+        "candidates": 199850,
+        "maxItemBytes": 24267,
+        "retainedBytesEstimate": 59572,
+        "retainedItems": 44
+      }
+    },
+    {
+      "compact": true,
+      "previewEnabled": true,
+      "accounts": 1,
+      "each": 2000,
+      "total": 2000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 92,
+        "metadataGets": 14,
+        "indexQueries": 3,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 417,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 617,
+        "candidates": 3000,
+        "maxItemBytes": 13465,
+        "retainedBytesEstimate": 14538,
+        "retainedItems": 5
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 158,
+        "metadataGets": 30,
+        "indexQueries": 5,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 668,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 1068,
+        "candidates": 4801,
+        "maxItemBytes": 13598,
+        "retainedBytesEstimate": 28859,
+        "retainedItems": 9
+      }
+    },
+    {
+      "compact": true,
+      "previewEnabled": true,
+      "accounts": 50,
+      "each": 2000,
+      "total": 100000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 1068,
+        "metadataGets": 86,
+        "indexQueries": 150,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 20850,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 21050,
+        "candidates": 150000,
+        "maxItemBytes": 24167,
+        "retainedBytesEstimate": 30082,
+        "retainedItems": 23
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 2090,
+        "metadataGets": 174,
+        "indexQueries": 250,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 34750,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 35150,
+        "candidates": 249850,
+        "maxItemBytes": 24267,
+        "retainedBytesEstimate": 59943,
+        "retainedItems": 45
+      }
+    }
+  ],
+  "date": "2026-11-06",
+  "previousCheckpointEncoding": {
+    "kind": "offline-synthetic-query-sizing",
+    "estimatedBytesPerItem": "UTF-8 JSON + 100",
+    "scenarios": [
+      {
+        "accounts": 1,
+        "each": 2000,
+        "total": 2000,
+        "firstRows": 200,
+        "secondRows": 200,
+        "root": {
+          "writeUnitsEstimate": 108,
+          "metadataGets": 11,
+          "indexQueries": 2,
+          "factBatchGets": 20,
+          "indexAndFactReadUnitsEstimate": 2130,
+          "candidates": 2000,
+          "maxItemBytes": 25021,
+          "retainedBytesEstimate": 25742,
+          "retainedItems": 4
+        },
+        "afterSecondWindow": {
+          "writeUnitsEstimate": 218,
+          "metadataGets": 27,
+          "indexQueries": 4,
+          "factBatchGets": 39,
+          "indexAndFactReadUnitsEstimate": 4048,
+          "candidates": 3801,
+          "maxItemBytes": 25171,
+          "retainedBytesEstimate": 51636,
+          "retainedItems": 8
+        }
+      },
+      {
+        "accounts": 50,
+        "each": 2000,
+        "total": 100000,
+        "firstRows": 200,
+        "secondRows": 200,
+        "root": {
+          "writeUnitsEstimate": 1462,
+          "metadataGets": 83,
+          "indexQueries": 100,
+          "factBatchGets": 1000,
+          "indexAndFactReadUnitsEstimate": 106500,
+          "candidates": 100000,
+          "maxItemBytes": 35562,
+          "retainedBytesEstimate": 41124,
+          "retainedItems": 22
+        },
+        "afterSecondWindow": {
+          "writeUnitsEstimate": 2924,
+          "metadataGets": 171,
+          "indexQueries": 200,
+          "factBatchGets": 2000,
+          "indexAndFactReadUnitsEstimate": 212850,
+          "candidates": 199850,
+          "maxItemBytes": 35715,
+          "retainedBytesEstimate": 82398,
+          "retainedItems": 44
+        }
+      }
+    ]
+  },
+  "beforeIndependentRowReadiness": [
+    {
+      "compact": false,
+      "accounts": 1,
+      "each": 2000,
+      "total": 2000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 64,
+        "metadataGets": 11,
+        "indexQueries": 2,
+        "factBatchGets": 20,
+        "indexAndFactReadUnitsEstimate": 2130,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 2330,
+        "candidates": 2000,
+        "maxItemBytes": 13448,
+        "retainedBytesEstimate": 14169,
+        "retainedItems": 4
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 130,
+        "metadataGets": 27,
+        "indexQueries": 4,
+        "factBatchGets": 39,
+        "indexAndFactReadUnitsEstimate": 4048,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 4448,
+        "candidates": 3801,
+        "maxItemBytes": 13598,
+        "retainedBytesEstimate": 28490,
+        "retainedItems": 8
+      }
+    },
+    {
+      "compact": false,
+      "accounts": 50,
+      "each": 2000,
+      "total": 100000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 1022,
+        "metadataGets": 83,
+        "indexQueries": 100,
+        "factBatchGets": 1000,
+        "indexAndFactReadUnitsEstimate": 106500,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 106700,
+        "candidates": 100000,
+        "maxItemBytes": 24114,
+        "retainedBytesEstimate": 29711,
+        "retainedItems": 22
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 2044,
+        "metadataGets": 171,
+        "indexQueries": 200,
+        "factBatchGets": 2000,
+        "indexAndFactReadUnitsEstimate": 212850,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 213250,
+        "candidates": 199850,
+        "maxItemBytes": 24267,
+        "retainedBytesEstimate": 59572,
+        "retainedItems": 44
+      }
+    },
+    {
+      "compact": true,
+      "accounts": 1,
+      "each": 2000,
+      "total": 2000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 64,
+        "metadataGets": 11,
+        "indexQueries": 2,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 278,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 478,
+        "candidates": 2000,
+        "maxItemBytes": 13448,
+        "retainedBytesEstimate": 14169,
+        "retainedItems": 4
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 130,
+        "metadataGets": 27,
+        "indexQueries": 4,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 529,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 929,
+        "candidates": 3801,
+        "maxItemBytes": 13598,
+        "retainedBytesEstimate": 28490,
+        "retainedItems": 8
+      }
+    },
+    {
+      "compact": true,
+      "accounts": 50,
+      "each": 2000,
+      "total": 100000,
+      "firstRows": 200,
+      "secondRows": 200,
+      "root": {
+        "writeUnitsEstimate": 1022,
+        "metadataGets": 83,
+        "indexQueries": 100,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 13900,
+        "hydrationReads": 200,
+        "readUnitsIncludingHydrationEstimate": 14100,
+        "candidates": 100000,
+        "maxItemBytes": 24114,
+        "retainedBytesEstimate": 29711,
+        "retainedItems": 22
+      },
+      "afterSecondWindow": {
+        "writeUnitsEstimate": 2044,
+        "metadataGets": 171,
+        "indexQueries": 200,
+        "factBatchGets": 0,
+        "indexAndFactReadUnitsEstimate": 27800,
+        "hydrationReads": 400,
+        "readUnitsIncludingHydrationEstimate": 28200,
+        "candidates": 199850,
+        "maxItemBytes": 24267,
+        "retainedBytesEstimate": 59572,
+        "retainedItems": 44
+      }
+    }
+  ]
+}

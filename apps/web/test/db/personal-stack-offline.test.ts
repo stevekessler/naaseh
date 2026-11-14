@@ -46,6 +46,9 @@ const database = vi.hoisted(() => {
       bulkDelete: vi.fn(async (ids: string[]) => ids.forEach((id) => records.delete(id))),
       clear: vi.fn(async () => records.clear()),
       count: vi.fn(async () => records.size),
+      filter: (predicate: (row: Row) => boolean) => ({
+        count: async () => [...records.values()].filter(predicate).length,
+      }),
       toArray: vi.fn(async () => [...records.values()]),
       update: vi.fn(async (id: string, patch: Row) => {
         const current = records.get(id);
@@ -197,6 +200,15 @@ describe('encrypted offline personal-stack persistence', () => {
       visibility: 'private',
       version: 1,
     };
+    const savedCsv = {
+      id: 'saved-csv',
+      entityId: 'batch:0',
+      entityType: 'financeTransaction',
+      operation: 'commitCsvChunk',
+      createdAt: '2026-11-10T00:00:00.000Z',
+      payload: { iv: 'fixture', ciphertext: 'private' },
+    };
+    state.outbox.set(savedCsv.id, savedCsv);
     state.settings.set('sync-cursor', {
       key: 'sync-cursor',
       value: JSON.stringify({ owner: 900 }),
@@ -220,6 +232,7 @@ describe('encrypted offline personal-stack persistence', () => {
 
     await resyncFromServer('csrf');
 
+    expect(state.outbox.get(savedCsv.id)).toEqual(savedCsv);
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/sync/bootstrap', {
       credentials: 'include',

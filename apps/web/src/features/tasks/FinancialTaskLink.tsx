@@ -1,8 +1,5 @@
-import {
-  currentFinanceAccess,
-  peekFinanceAccess,
-  subscribeFinanceAccess,
-} from '../finance/security/finance-access.js';
+import { readFinanceCachedData } from '../../sync/finance-cache-access.js';
+import { peekFinanceAccess, subscribeFinanceAccess } from '../finance/security/finance-access.js';
 import { useEffect, useRef, useState } from 'react';
 import { FinanceUnlock } from '../finance/security/FinanceUnlock.js';
 import { db } from '../../db/database.js';
@@ -17,7 +14,7 @@ export interface LocalFinancialTaskLink {
 }
 
 export async function readLocalFinancialTaskLink(taskId: string) {
-  return currentFinanceAccess().read(async () => {
+  return readFinanceCachedData(async (lease) => {
     const records = await db.secureFinanceRecords
       .where('entityType')
       .equals('financeTaskLink')
@@ -25,7 +22,11 @@ export async function readLocalFinancialTaskLink(taskId: string) {
     if (!records.length) return undefined;
     const key = await financeDeviceKey();
     for (const record of records) {
-      const value = (await decryptFinanceRecord(record, key)) as Partial<LocalFinancialTaskLink>;
+      const value = (await decryptFinanceRecord(
+        record,
+        key,
+        lease,
+      )) as Partial<LocalFinancialTaskLink>;
       if (
         value.taskId === taskId &&
         value.status === 'active' &&

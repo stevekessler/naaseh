@@ -32,6 +32,17 @@ On reconnect: fetch current session/security metadata and revocations first; inv
 
 ## Conflict and retry rules
 
+Budget creation with selected accounts is replayed as one stable budget mutation
+followed by stable link mutations whose local dependency order prevents a child from
+overtaking a pending or conflicted parent. Active budget/account uniqueness is decided
+by an authorization-checked server-side pair singleton, never by downloading group
+relationship history to the device. Missing verified singleton coverage pauses replay
+for safe retry rather than scanning protected rows.
+Budget-item creation is also a stable protected mutation. Its replay revalidates the
+current budget, catalog references, every related account and each active account-link
+singleton before committing; local queue failure preserves the form and optimistic
+acknowledgement never substitutes for canonical protected delivery.
+
 All writes include stable mutation identity and expected versions. Duplicate task-target pair resolves to the existing relationship only if still authorized. Fulfillment and refund credit/original-allocation capacity conflicts are semantic conflicts requiring review, never last-writer-wins. Budget activity is independent of closure/reconciliation: active on ordinary creation, versioned deactivate/reactivate commands retain historical links/flags. Current inactive-budget rejection applies to new/reassigned associations, not review/reschedule/fulfillment of an unchanged linked expense. New dates are validated against their original captured calendar context, never later reconnect today. Check-number/payment-type user edits survive provider source updates. Category reparenting and account/group/budget changes cannot silently alter historical classifications or obligation scope. Concurrent personal flags use expected version or a documented per-field deterministic merge with visible conflicts; shared records never store a personal flag.
 
 Grant/authentication failure is not a financial-data conflict: retain queued intent, pause protected replay and request unlock. Failed file transfer reuses upload/receipt identity; same checksum/version reuse is explicit. Receipt availability requires both clean verdicts on the exact object version; an older clean verdict cannot approve an overwritten version.

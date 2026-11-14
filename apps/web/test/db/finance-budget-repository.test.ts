@@ -21,6 +21,7 @@ describe('offline Finance budget projections', () => {
       change('financeTransaction', 6),
       change('financeReconciliation', 7),
       change('financeTaskLink', 8),
+      change('financeRefundRelationship', 9),
     ]);
     expect(ordered.map(({ entityType }) => entityType)).toEqual([
       'financeReusableItem',
@@ -28,6 +29,7 @@ describe('offline Finance budget projections', () => {
       'financeBudgetAccountLink',
       'financeBudgetItem',
       'financeTransaction',
+      'financeRefundRelationship',
       'financeTransactionMatch',
       'financeReconciliation',
       'financeTaskLink',

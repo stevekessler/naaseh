@@ -70,6 +70,44 @@ function assertMerchantEditor(merchant: FinanceMerchant, actor: FinanceCatalogAc
   }
 }
 
+export function updateMerchant(
+  merchant: FinanceMerchant,
+  patch: {
+    name?: string;
+    city?: string | null;
+    region?: string | null;
+    financeCategoryId?: string | null;
+  },
+  actor: FinanceCatalogActor,
+): FinanceMerchant {
+  assertMerchantEditor(merchant, actor);
+  if (merchant.status !== 'active') throw new Error('Only an active merchant can be edited.');
+  const name = bounded(patch.name ?? merchant.name, 200);
+  if (!name) throw new Error('Merchant name is required.');
+  const city = bounded(patch.city === undefined ? merchant.city : (patch.city ?? undefined), 120);
+  const region = bounded(
+    patch.region === undefined ? merchant.region : (patch.region ?? undefined),
+    120,
+  );
+  const financeCategoryId =
+    patch.financeCategoryId === undefined
+      ? merchant.financeCategoryId
+      : (patch.financeCategoryId ?? undefined);
+  const updated: FinanceMerchant = {
+    ...merchant,
+    name,
+    canonicalKey: canonicalMerchantKey(name, city, region),
+    version: merchant.version + 1,
+  };
+  if (city) updated.city = city;
+  else delete updated.city;
+  if (region) updated.region = region;
+  else delete updated.region;
+  if (financeCategoryId) updated.financeCategoryId = financeCategoryId;
+  else delete updated.financeCategoryId;
+  return updated;
+}
+
 export function archiveMerchant(
   merchant: FinanceMerchant,
   actor: FinanceCatalogActor,

@@ -7,6 +7,8 @@ const help = `Finance projection migration (Node 24)
 Prepare the catalog and every relevant Finance scope before rebuilding accounts.
 Each call is bounded and resumes durable checkpoints. This is not an interactive
 read fallback, a deployment command or proof of AWS cost/performance acceptance.
+Group preparation also verifies the active budget/account pair singletons required
+by targeted link replay; it stamps coverage only after the complete bounded pass.
 
   --help
   --apply --scope FINANCE#CATALOG [--steps 1..100] [--restart]

@@ -36,6 +36,29 @@ describe('Finance authorization boundaries', () => {
     expect(authorizeFinanceScope(manager, scope, 'delete').allowed).toBe(true);
   });
 
+  it('allows administrators only their own owner scope and actual member roles', () => {
+    const admin: FinanceActor = { ...owner, role: 'admin' };
+    const own = { type: 'owner' as const, ownerId: owner.id };
+    const group = { type: 'group' as const, groupId: 'shared' };
+    expect(authorizeFinanceScope(admin, own, 'edit').allowed).toBe(true);
+    expect(authorizeFinanceScope({ ...admin, active: false }, own, 'read').allowed).toBe(false);
+    expect(authorizeFinanceScope(admin, group, 'read').allowed).toBe(false);
+    const member: FinanceActor = {
+      ...admin,
+      groupMemberships: [{ groupId: 'shared', role: 'member' }],
+    };
+    expect(authorizeFinanceScope(member, group, 'edit').allowed).toBe(true);
+    for (const action of ['connect', 'reassign', 'delete'] as const)
+      expect(authorizeFinanceScope(member, group, action).allowed).toBe(false);
+    expect(
+      authorizeFinanceScope(
+        { ...member, groupMemberships: [{ groupId: 'shared', role: 'manager' }] },
+        group,
+        'delete',
+      ).allowed,
+    ).toBe(true);
+  });
+
   it('maps inaccessible protected resources to one generic not-found problem', () => {
     expect(financeNotFound('fixture-correlation')).toEqual({
       status: 404,

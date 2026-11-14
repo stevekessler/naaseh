@@ -17,7 +17,11 @@ export function FinanceSecuritySettings({
   const [status, setStatus] = useState('Loading Finance security…');
   useEffect(() => {
     let active = true;
-    void fetch('/api/v1/auth/finance-security', { credentials: 'include', cache: 'no-store' })
+    void fetch('/api/v1/auth/finance-security', {
+      credentials: 'include',
+      cache: 'no-store',
+      headers: { 'x-finance-owner': ownerId },
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error();
         const value = financeSecurityResponseSchema.parse(await response.json());
@@ -50,7 +54,11 @@ export function FinanceSecuritySettings({
         method: newPin ? 'PUT' : 'PATCH',
         credentials: 'include',
         cache: 'no-store',
-        headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+        headers: {
+          'content-type': 'application/json',
+          'x-csrf-token': csrfToken,
+          'x-finance-owner': ownerId,
+        },
         body: JSON.stringify({
           currentPassword: String(values.get('financePassword') ?? ''),
           requirePin,

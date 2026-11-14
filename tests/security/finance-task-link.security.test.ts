@@ -82,6 +82,17 @@ describe('Finance task-link isolation', () => {
     ).toBeUndefined();
   });
 
+  it('allows a member administrator ordinary task access without a private-task override', () => {
+    const { repository, member } = setup();
+    const admin = { ...member, id: 'admin', role: 'admin' as const };
+    expect(authorizedFinancialTaskLinkForTask(repository, admin, taskId)).toBeDefined();
+    const task = repository.tasks.get(taskId)!;
+    repository.tasks.set(taskId, { ...task, visibility: 'private' });
+    expect(authorizedFinancialTaskLinkForTask(repository, admin, taskId)).toBeUndefined();
+    expect(
+      authorizedFinancialTaskLinkForTask(repository, { ...member, role: 'admin' }, taskId),
+    ).toBeDefined();
+  });
   it('does not grant application administrators protected Finance access', () => {
     const { repository } = setup();
     expect(

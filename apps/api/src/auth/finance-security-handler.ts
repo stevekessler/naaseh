@@ -1,3 +1,4 @@
+import { assertFinanceClientUser } from '../finance/finance-unlock-guard.js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import { log } from '@naaseh/observability';
 import { financeSecurityResponseSchema, financeUnlockResponseSchema } from '@naaseh/contracts';
@@ -32,6 +33,7 @@ export function createFinanceSecurityHttpHandler(options: {
       const authenticated = await options.authenticate(event);
       if (!authenticated)
         throw new SafeApiError(401, 'unauthorized', 'Authentication required.', 'authorization');
+      assertFinanceClientUser(authenticated.userId, event.headers['x-finance-owner']);
       if (!(preference ? ['GET', 'PUT', 'PATCH'] : unlock ? ['POST'] : ['DELETE']).includes(method))
         return problem(405, 'method_not_allowed', 'Method not allowed.', correlationId);
       const context = { userId: authenticated.userId, sessionHash: authenticated.sessionHash };

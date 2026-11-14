@@ -37,7 +37,8 @@ describe('foundation infrastructure', () => {
     const resourceCount = Object.keys(template.toJSON().Resources ?? {}).length;
     expect(resourceCount).toBeLessThanOrEqual(400);
     template.resourceCountIs('AWS::ApiGatewayV2::Integration', 21);
-    template.resourceCountIs('AWS::Lambda::Permission', 26);
+    // One source-ARN-restricted rule handles publication delivery and recovery.
+    template.resourceCountIs('AWS::Lambda::Permission', 27);
   });
 
   it('keeps focused helpers inside one deployable stack', () => {

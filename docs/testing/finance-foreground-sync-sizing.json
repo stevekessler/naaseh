@@ -1,0 +1,122 @@
+{
+  "date": "2026-11-09",
+  "evidence": "User usage estimate, source inspection and injected SDK command fixture; no AWS calls or consumed-capacity measurements.",
+  "userAnswer": {
+    "dailyNaasehUseHours": 10,
+    "dailyBudgetUseHours": 2,
+    "interpretation": "Two budget/Finance hours are included in ten overall hours, not added to make twelve.",
+    "concurrentDevices": 2,
+    "concurrencyInterpretation": "User confirmed usually two visible devices simultaneously during the ten-hour daily use window; two included Finance hours are not additional.",
+    "accountAudienceLayout": "A mix of private personal and shared accounts; exact counts and group layout not specified."
+  },
+  "scheduler": {
+    "intervalSeconds": 60,
+    "monthDays": 30,
+    "visibleOnly": true,
+    "financeMayRemainUnlockedOutsideFinanceScreen": true,
+    "additionalFocusPageshowManualRequestsIncluded": false,
+    "ordinaryRequestIncludedInProtectedIdleMeasurement": false
+  },
+  "idleProtectedPullFixture": {
+    "scope": "Owner plus global catalogue, no active groups, empty feeds, prior proof, Require PIN off.",
+    "before": {
+      "transactionalSecuritySnapshots": 3,
+      "transactionalSecurityItems": 9,
+      "strongMetadataGets": 5,
+      "eventualEmptyFeedQueries": 3,
+      "writes": 0
+    },
+    "after": {
+      "transactionalSecuritySnapshots": 3,
+      "transactionalSecurityItems": 9,
+      "strongMetadataGets": 4,
+      "eventualEmptyFeedQueries": 3,
+      "writes": 0
+    },
+    "queryLimit": 200,
+    "historyHydration": false,
+    "sourceChecks": "Two independent current-scope verification rounds and three canonical security snapshots retained.",
+    "readUnitAssumptions": {
+      "maximumItemBytes": 4096,
+      "transactionalReadPerItem": 2,
+      "strongPointReadPerItem": 1,
+      "eventualEmptyQueryMinimum": 0.5,
+      "beforeNoPinRru": 24.5,
+      "afterNoPinRru": 23.5,
+      "withPinRru": 29.5,
+      "withPinEvidence": "Inspection sensitivity: three extra grant items across the existing three security snapshots; not separately measured by this fixture."
+    }
+  },
+  "scenarios": [
+    {
+      "scenario": "single-equivalent-client",
+      "hoursPerDayPerClient": 10,
+      "visibleClients": 1,
+      "matchesCurrentUnlockedScheduling": true,
+      "scheduledProtectedPullsPerMonth": 18000,
+      "ordinaryPlusProtectedScheduledCoreRequests": 36000,
+      "estimatedProtectedIdleRruNoPinSmallItems": 423000.0,
+      "estimatedProtectedIdleRruWithPinSmallItems": 531000.0,
+      "metadataPointReadsAvoidedPerMonth": 18000,
+      "householdPrimary": false,
+      "ordinaryScheduledPullsPerMonth": 18000,
+      "authorizationAssumption": "Finance remains unlocked for the stated per-client hours; the PIN-on ten-hour case additionally assumes repeated explicit unlocks because grants expire."
+    },
+    {
+      "scenario": "two-simultaneous-clients",
+      "hoursPerDayPerClient": 10,
+      "visibleClients": 2,
+      "matchesCurrentUnlockedScheduling": true,
+      "scheduledProtectedPullsPerMonth": 36000,
+      "ordinaryPlusProtectedScheduledCoreRequests": 72000,
+      "estimatedProtectedIdleRruNoPinSmallItems": 846000.0,
+      "estimatedProtectedIdleRruWithPinSmallItems": 1062000.0,
+      "metadataPointReadsAvoidedPerMonth": 36000,
+      "householdPrimary": true,
+      "ordinaryScheduledPullsPerMonth": 36000,
+      "authorizationAssumption": "Finance remains unlocked for the stated per-client hours; the PIN-on ten-hour case additionally assumes repeated explicit unlocks because grants expire."
+    },
+    {
+      "scenario": "finance-only-counterfactual",
+      "hoursPerDayPerClient": 2,
+      "visibleClients": 1,
+      "matchesCurrentUnlockedScheduling": false,
+      "scheduledProtectedPullsPerMonth": 3600,
+      "ordinaryPlusProtectedScheduledCoreRequests": 21600,
+      "estimatedProtectedIdleRruNoPinSmallItems": 84600.0,
+      "estimatedProtectedIdleRruWithPinSmallItems": 106200.0,
+      "metadataPointReadsAvoidedPerMonth": 3600,
+      "householdPrimary": false,
+      "ordinaryScheduledPullsPerMonth": 18000,
+      "authorizationAssumption": "Finance remains unlocked for the stated per-client hours; the PIN-on ten-hour case additionally assumes repeated explicit unlocks because grants expire."
+    },
+    {
+      "scenario": "two-clients-finance-only-counterfactual",
+      "hoursPerDayPerClient": 2,
+      "visibleClients": 2,
+      "householdPrimary": false,
+      "matchesCurrentUnlockedScheduling": false,
+      "scheduledProtectedPullsPerMonth": 7200,
+      "ordinaryScheduledPullsPerMonth": 36000,
+      "ordinaryPlusProtectedScheduledCoreRequests": 43200,
+      "estimatedProtectedIdleRruNoPinSmallItems": 169200,
+      "estimatedProtectedIdleRruWithPinSmallItems": 212400,
+      "metadataPointReadsAvoidedPerMonth": 7200,
+      "authorizationAssumption": "Both clients use the app ten hours but Finance is locked outside its two included hours. This is a counterfactual authorization pattern, not a scheduler change or confirmed setting."
+    }
+  ],
+  "exclusions": [
+    "The read-unit arithmetic uses minimum empty-query charges and <=4 KiB items. AWS may charge more for empty/sparse partition queries; this is not a live upper bound. Projection expressions do not reduce billed full-item sizes.",
+    "Full item sizes, source delivery pages, group membership discovery/checks, task authority reads, Lambda authorizer, other ordinary-sync snapshot requests, active Finance GET/CRUD/cache-proof requests, retries, response/log bytes and compute.",
+    "No end-to-end accepted household bill; do not blindly add requests to existing allowances or count the same requests twice.",
+    "Two Finance-use hours do not cap the current Finance scheduler while the app and controller remain visible/unlocked.",
+    "No change to the $6.50 monthly ceiling, receipt retention/tier, deployment, real DynamoDB or unrun migration.",
+    "Device count is confirmed; keeping Finance unlocked for all ten hours is a conditional scenario. Finance-only authorization still retains ten hours of ordinary sync; older counterfactual ordinary totals based on two app hours have been corrected."
+  ],
+  "sourcesVerifiedDate": "2026-11-08",
+  "capacityRulesSources": [
+    "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/read-write-operations.html",
+    "https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Query.Other.html"
+  ],
+  "primaryScenario": "two-simultaneous-clients"
+}

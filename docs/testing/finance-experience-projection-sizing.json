@@ -66,7 +66,1135 @@
     "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
   },
   "note": "Completed checkpoints retain transition identity only; rebuilding checkpoints retain both facts until commit. Removing the duplicate next fact reduces the prior 513,383,799-byte estimate by 77,788,220 bytes. The write sample remains unchanged because pending-item write size still applies.",
-  "recheckedDate": "2026-11-01",
+  "recheckedDate": "2026-11-06",
   "coverageNote": "Bounded canonical/refund proof services and explicit migration drivers exist with local tests. Automatic incremental publication and live acceptance remain incomplete. Account/scope driver metadata is outside the retained-row estimate; the generated write sample includes current publication marker writes.",
-  "previousEstimatedBytes": 513383799
+  "previousEstimatedBytes": 513383799,
+  "accountAggregateReadOptimization": {
+    "evidence": "offline synthetic representation estimate; no AWS calls",
+    "accountCount": 50,
+    "transactionCount": 100000,
+    "calendarMonths": 1,
+    "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+    "excludes": [
+      "TTL receipts/query jobs",
+      "canonical Finance 015 rows",
+      "receipt/security/upcoming metadata",
+      "GSI overhead",
+      "multiple currencies/calendar bases",
+      "AWS consumed capacity and latency"
+    ],
+    "categories": {
+      "facts": {
+        "rows": 100000,
+        "estimatedBytes": 94088220
+      },
+      "ordinalCopies": {
+        "rows": 100000,
+        "estimatedBytes": 96988220
+      },
+      "correctedCheckpoints": {
+        "rows": 100000,
+        "estimatedBytes": 53800000
+      },
+      "references": {
+        "rows": 590000,
+        "estimatedBytes": 201846190
+      },
+      "shortPostings": {
+        "rows": 33740,
+        "estimatedBytes": 11881628
+      },
+      "cardinalities": {
+        "rows": 49175,
+        "estimatedBytes": 9908571
+      }
+    },
+    "writeAmplification": {
+      "sampleCount": 100,
+      "createEstimatedWriteUnits": 40544,
+      "correctionEstimatedWriteUnits": 11560,
+      "createEstimatedWriteUnitsPerSource": 405.44,
+      "correctionEstimatedWriteUnitsPerSource": 115.6,
+      "strongGetCalls": 25392,
+      "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+      "excludes": [
+        "canonical writes",
+        "conflict retries",
+        "read/condition-check capacity",
+        "GSI writes"
+      ]
+    },
+    "estimatedBytes": 468512829,
+    "estimatedDecimalGB": 0.468512829,
+    "referencesPerTransaction": 5.9,
+    "shortBitUpdatesPerTransaction": 89.489,
+    "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+  },
+  "textCardinalityOptimization": {
+    "evidence": "offline synthetic representation estimate; no AWS calls",
+    "accountCount": 50,
+    "transactionCount": 100000,
+    "calendarMonths": 1,
+    "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+    "excludes": [
+      "TTL receipts/query jobs",
+      "canonical Finance 015 rows",
+      "receipt/security/upcoming metadata",
+      "GSI overhead",
+      "multiple currencies/calendar bases",
+      "AWS consumed capacity and latency"
+    ],
+    "categories": {
+      "facts": {
+        "rows": 100000,
+        "estimatedBytes": 94088220
+      },
+      "ordinalCopies": {
+        "rows": 100000,
+        "estimatedBytes": 96988220
+      },
+      "correctedCheckpoints": {
+        "rows": 100000,
+        "estimatedBytes": 53800000
+      },
+      "references": {
+        "rows": 590000,
+        "estimatedBytes": 201846190
+      },
+      "shortPostings": {
+        "rows": 33740,
+        "estimatedBytes": 11881628
+      },
+      "cardinalities": {
+        "rows": 49175,
+        "estimatedBytes": 10191200
+      }
+    },
+    "writeAmplification": {
+      "sampleCount": 100,
+      "createEstimatedWriteUnits": 32738,
+      "correctionEstimatedWriteUnits": 9560,
+      "createEstimatedWriteUnitsPerSource": 327.38,
+      "correctionEstimatedWriteUnitsPerSource": 95.6,
+      "strongGetCalls": 20489,
+      "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+      "excludes": [
+        "canonical writes",
+        "conflict retries",
+        "read/condition-check capacity",
+        "GSI writes"
+      ]
+    },
+    "estimatedBytes": 468795458,
+    "estimatedDecimalGB": 0.468795458,
+    "referencesPerTransaction": 5.9,
+    "shortBitUpdatesPerTransaction": 89.489,
+    "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+  },
+  "canonicalJournalSamples": [
+    {
+      "sourceCount": 1,
+      "scopeCount": 1,
+      "recordCount": 2,
+      "estimatedBytes": 1112,
+      "estimatedTransactionalWriteUnits": 4
+    },
+    {
+      "sourceCount": 10,
+      "scopeCount": 1,
+      "recordCount": 2,
+      "estimatedBytes": 3578,
+      "estimatedTransactionalWriteUnits": 10
+    },
+    {
+      "sourceCount": 40,
+      "scopeCount": 1,
+      "recordCount": 2,
+      "estimatedBytes": 11798,
+      "estimatedTransactionalWriteUnits": 26
+    }
+  ],
+  "sourceDependencyIndex": {
+    "evidence": "offline synthetic representation estimate; no AWS calls",
+    "accountCount": 50,
+    "transactionCount": 100000,
+    "calendarMonths": 1,
+    "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+    "excludes": [
+      "TTL receipts/query jobs",
+      "canonical Finance 015 rows",
+      "receipt/security/upcoming metadata",
+      "GSI overhead",
+      "multiple currencies/calendar bases",
+      "AWS consumed capacity and latency"
+    ],
+    "categories": {
+      "facts": {
+        "rows": 100000,
+        "estimatedBytes": 98268220
+      },
+      "ordinalCopies": {
+        "rows": 100000,
+        "estimatedBytes": 101168220
+      },
+      "correctedCheckpoints": {
+        "rows": 100000,
+        "estimatedBytes": 56500000
+      },
+      "references": {
+        "rows": 785000,
+        "estimatedBytes": 267361190
+      },
+      "shortPostings": {
+        "rows": 33740,
+        "estimatedBytes": 11881628
+      },
+      "cardinalities": {
+        "rows": 49175,
+        "estimatedBytes": 10191200
+      }
+    },
+    "writeAmplification": {
+      "sampleCount": 100,
+      "createEstimatedWriteUnits": 33130,
+      "correctionEstimatedWriteUnits": 9750,
+      "createEstimatedWriteUnitsPerSource": 331.3,
+      "correctionEstimatedWriteUnitsPerSource": 97.5,
+      "strongGetCalls": 20684,
+      "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+      "excludes": [
+        "canonical writes",
+        "conflict retries",
+        "read/condition-check capacity",
+        "GSI writes"
+      ]
+    },
+    "canonicalJournalSamples": [
+      {
+        "sourceCount": 1,
+        "scopeCount": 1,
+        "recordCount": 2,
+        "estimatedBytes": 1112,
+        "estimatedTransactionalWriteUnits": 4
+      },
+      {
+        "sourceCount": 10,
+        "scopeCount": 1,
+        "recordCount": 2,
+        "estimatedBytes": 3578,
+        "estimatedTransactionalWriteUnits": 10
+      },
+      {
+        "sourceCount": 40,
+        "scopeCount": 1,
+        "recordCount": 2,
+        "estimatedBytes": 11798,
+        "estimatedTransactionalWriteUnits": 26
+      }
+    ],
+    "estimatedBytes": 545370458,
+    "estimatedDecimalGB": 0.545370458,
+    "referencesPerTransaction": 7.85,
+    "shortBitUpdatesPerTransaction": 89.489,
+    "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+  },
+  "retainedHistoryScenarios": {
+    "date": "2026-11-06",
+    "purpose": "Same 100000 retained transactions distributed across months; history horizon pending user answer; not a deletion policy.",
+    "supersedes": "One-month representation now includes previously omitted monthly summaries and ordinal counters. Ongoing write samples stay in the current month for comparability.",
+    "results": [
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 1,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98268220
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 101168220
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 56500000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 50,
+            "estimatedBytes": 9900
+          },
+          "monthlySummaries": {
+            "rows": 50,
+            "estimatedBytes": 12798
+          },
+          "shortPostings": {
+            "rows": 33740,
+            "estimatedBytes": 11881628
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10191200
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33130,
+          "correctionEstimatedWriteUnits": 9750,
+          "createEstimatedWriteUnitsPerSource": 331.3,
+          "correctionEstimatedWriteUnitsPerSource": 97.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 545393156,
+        "estimatedDecimalGB": 0.545393156,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      },
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 12,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98157720
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 101057720
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 56500000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 600,
+            "estimatedBytes": 118200
+          },
+          "monthlySummaries": {
+            "rows": 570,
+            "estimatedBytes": 144780
+          },
+          "shortPostings": {
+            "rows": 73566,
+            "estimatedBytes": 25750242
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10195691
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33130,
+          "correctionEstimatedWriteUnits": 9750,
+          "createEstimatedWriteUnitsPerSource": 331.3,
+          "correctionEstimatedWriteUnitsPerSource": 97.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 559285543,
+        "estimatedDecimalGB": 0.559285543,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      },
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 60,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98093720
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 100993720
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 56500000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 3000,
+            "estimatedBytes": 588000
+          },
+          "monthlySummaries": {
+            "rows": 2850,
+            "estimatedBytes": 718200
+          },
+          "shortPostings": {
+            "rows": 268467,
+            "estimatedBytes": 93919356
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10195989
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33130,
+          "correctionEstimatedWriteUnits": 9750,
+          "createEstimatedWriteUnitsPerSource": 331.3,
+          "correctionEstimatedWriteUnitsPerSource": 97.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 628370175,
+        "estimatedDecimalGB": 0.628370175,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      },
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 120,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98063720
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 100963720
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 56500000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 6000,
+            "estimatedBytes": 1176000
+          },
+          "monthlySummaries": {
+            "rows": 5700,
+            "estimatedBytes": 1436400
+          },
+          "shortPostings": {
+            "rows": 536934,
+            "estimatedBytes": 187838712
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10202044
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33130,
+          "correctionEstimatedWriteUnits": 9750,
+          "createEstimatedWriteUnitsPerSource": 331.3,
+          "correctionEstimatedWriteUnitsPerSource": 97.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 723541786,
+        "estimatedDecimalGB": 0.723541786,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      }
+    ]
+  },
+  "incrementalCoverageBaselineScenarios": {
+    "date": "2026-11-06",
+    "purpose": "100000-source stress cases, not expected one-couple usage or a retention limit; includes source applications and account baselines; excludes unfinished consumer/finalizer and receipts.",
+    "results": [
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 1,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "accountCoverageBaselines": {
+            "rows": 50,
+            "estimatedBytes": 44300
+          },
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98268220
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 101168220
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 88000000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 50,
+            "estimatedBytes": 9900
+          },
+          "monthlySummaries": {
+            "rows": 50,
+            "estimatedBytes": 12798
+          },
+          "shortPostings": {
+            "rows": 33740,
+            "estimatedBytes": 11881628
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10191200
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33530,
+          "correctionEstimatedWriteUnits": 10150,
+          "createEstimatedWriteUnitsPerSource": 335.3,
+          "correctionEstimatedWriteUnitsPerSource": 101.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes",
+            "incremental coverage application and finalization writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 576937456,
+        "estimatedDecimalGB": 0.576937456,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      },
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 12,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "accountCoverageBaselines": {
+            "rows": 50,
+            "estimatedBytes": 44300
+          },
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98157720
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 101057720
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 88000000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 600,
+            "estimatedBytes": 118200
+          },
+          "monthlySummaries": {
+            "rows": 570,
+            "estimatedBytes": 144780
+          },
+          "shortPostings": {
+            "rows": 73566,
+            "estimatedBytes": 25750242
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10195691
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33530,
+          "correctionEstimatedWriteUnits": 10150,
+          "createEstimatedWriteUnitsPerSource": 335.3,
+          "correctionEstimatedWriteUnitsPerSource": 101.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes",
+            "incremental coverage application and finalization writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 590829843,
+        "estimatedDecimalGB": 0.590829843,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      },
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 60,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "accountCoverageBaselines": {
+            "rows": 50,
+            "estimatedBytes": 44300
+          },
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98093720
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 100993720
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 88000000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 3000,
+            "estimatedBytes": 588000
+          },
+          "monthlySummaries": {
+            "rows": 2850,
+            "estimatedBytes": 718200
+          },
+          "shortPostings": {
+            "rows": 268467,
+            "estimatedBytes": 93919356
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10195989
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33530,
+          "correctionEstimatedWriteUnits": 10150,
+          "createEstimatedWriteUnitsPerSource": 335.3,
+          "correctionEstimatedWriteUnitsPerSource": 101.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes",
+            "incremental coverage application and finalization writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 659914475,
+        "estimatedDecimalGB": 0.659914475,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      },
+      {
+        "evidence": "offline synthetic representation estimate; no AWS calls",
+        "accountCount": 50,
+        "transactionCount": 100000,
+        "calendarMonths": 120,
+        "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+        "excludes": [
+          "TTL receipts/query jobs",
+          "canonical Finance 015 rows",
+          "receipt/security/upcoming metadata",
+          "GSI overhead",
+          "multiple currencies/calendar bases",
+          "AWS consumed capacity and latency"
+        ],
+        "categories": {
+          "accountCoverageBaselines": {
+            "rows": 50,
+            "estimatedBytes": 44300
+          },
+          "facts": {
+            "rows": 100000,
+            "estimatedBytes": 98063720
+          },
+          "ordinalCopies": {
+            "rows": 100000,
+            "estimatedBytes": 100963720
+          },
+          "correctedCheckpoints": {
+            "rows": 100000,
+            "estimatedBytes": 88000000
+          },
+          "references": {
+            "rows": 785000,
+            "estimatedBytes": 267361190
+          },
+          "ordinalCounters": {
+            "rows": 6000,
+            "estimatedBytes": 1176000
+          },
+          "monthlySummaries": {
+            "rows": 5700,
+            "estimatedBytes": 1436400
+          },
+          "shortPostings": {
+            "rows": 536934,
+            "estimatedBytes": 187838712
+          },
+          "cardinalities": {
+            "rows": 49175,
+            "estimatedBytes": 10202044
+          }
+        },
+        "writeAmplification": {
+          "sampleCount": 100,
+          "createEstimatedWriteUnits": 33530,
+          "correctionEstimatedWriteUnits": 10150,
+          "createEstimatedWriteUnitsPerSource": 335.3,
+          "correctionEstimatedWriteUnitsPerSource": 101.5,
+          "strongGetCalls": 20684,
+          "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+          "excludes": [
+            "canonical writes",
+            "conflict retries",
+            "read/condition-check capacity",
+            "GSI writes",
+            "incremental coverage application and finalization writes"
+          ]
+        },
+        "canonicalJournalSamples": [
+          {
+            "sourceCount": 1,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 1112,
+            "estimatedTransactionalWriteUnits": 4
+          },
+          {
+            "sourceCount": 10,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 3578,
+            "estimatedTransactionalWriteUnits": 10
+          },
+          {
+            "sourceCount": 40,
+            "scopeCount": 1,
+            "recordCount": 2,
+            "estimatedBytes": 11798,
+            "estimatedTransactionalWriteUnits": 26
+          }
+        ],
+        "estimatedBytes": 755086086,
+        "estimatedDecimalGB": 0.755086086,
+        "referencesPerTransaction": 7.85,
+        "shortBitUpdatesPerTransaction": 89.489,
+        "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+      }
+    ]
+  },
+  "physicalDeletionCalibration": {
+    "measuredDate": "2026-11-06",
+    "result": {
+      "sampleCount": 100,
+      "createEstimatedWriteUnits": 33530,
+      "correctionEstimatedWriteUnits": 10150,
+      "createEstimatedWriteUnitsPerSource": 335.3,
+      "correctionEstimatedWriteUnitsPerSource": 101.5,
+      "deletionEstimatedWriteUnits": 39718,
+      "deletionEstimatedWriteUnitsPerSource": 397.18,
+      "createAndCorrectionStrongGetCalls": 20684,
+      "deletionStrongGetCalls": 22389,
+      "strongGetCalls": 43073,
+      "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+      "excludes": [
+        "canonical writes",
+        "conflict retries",
+        "read/condition-check capacity",
+        "GSI writes",
+        "create/correction coverage application/finalization writes (deletion subtraction is included)"
+      ]
+    },
+    "note": "Same representative 100-source sample, actual bounded removal service; private canonical proof seeded before counters. Generated estimates only, no AWS calls; source deletion includes coverage subtraction while create/correction exclude coverage application."
+  },
+  "householdFiveYearScenario": {
+    "recordedLocalDate": "2026-11-06",
+    "accountCountSource": "User supplied 8 accounts, 250 new transactions/month, 100 corrections/month, zero deletions/month and five years initial history. 15,000 initial transactions is an extrapolation, not an inspected file count.",
+    "result": {
+      "evidence": "offline synthetic representation estimate; no AWS calls",
+      "accountCount": 8,
+      "transactionCount": 15000,
+      "calendarMonths": 60,
+      "bytesMethod": "UTF-8 JSON plus 100 bytes per retained item; binary represented as base64",
+      "excludes": [
+        "TTL receipts/query jobs",
+        "canonical Finance 015 rows",
+        "receipt/security/upcoming metadata",
+        "GSI overhead",
+        "multiple currencies/calendar bases",
+        "AWS consumed capacity and latency"
+      ],
+      "categories": {
+        "accountCoverageBaselines": {
+          "rows": 8,
+          "estimatedBytes": 7088
+        },
+        "facts": {
+          "rows": 15000,
+          "estimatedBytes": 14708344
+        },
+        "ordinalCopies": {
+          "rows": 15000,
+          "estimatedBytes": 15143344
+        },
+        "correctedCheckpoints": {
+          "rows": 15000,
+          "estimatedBytes": 13200000
+        },
+        "references": {
+          "rows": 117750,
+          "estimatedBytes": 40095988
+        },
+        "ordinalCounters": {
+          "rows": 480,
+          "estimatedBytes": 94080
+        },
+        "monthlySummaries": {
+          "rows": 456,
+          "estimatedBytes": 114912
+        },
+        "shortPostings": {
+          "rows": 105756,
+          "estimatedBytes": 37038732
+        },
+        "cardinalities": {
+          "rows": 35035,
+          "estimatedBytes": 7213898
+        }
+      },
+      "writeAmplification": {
+        "sampleCount": 100,
+        "createEstimatedWriteUnits": 26924,
+        "correctionEstimatedWriteUnits": 8598,
+        "createEstimatedWriteUnitsPerSource": 269.24,
+        "correctionEstimatedWriteUnitsPerSource": 85.98,
+        "deletionEstimatedWriteUnits": 31600,
+        "deletionEstimatedWriteUnitsPerSource": 316,
+        "createAndCorrectionStrongGetCalls": 16605,
+        "deletionStrongGetCalls": 18330,
+        "strongGetCalls": 34935,
+        "method": "Generated transactional puts/deletes, 2 * ceil(max(old,new) JSON-estimated item bytes/1024); no AWS consumed capacity",
+        "excludes": [
+          "canonical writes",
+          "conflict retries",
+          "read/condition-check capacity",
+          "GSI writes",
+          "create/correction coverage application/finalization writes (deletion subtraction is included)"
+        ]
+      },
+      "canonicalJournalSamples": [
+        {
+          "sourceCount": 1,
+          "scopeCount": 1,
+          "recordCount": 2,
+          "estimatedBytes": 1112,
+          "estimatedTransactionalWriteUnits": 4
+        },
+        {
+          "sourceCount": 10,
+          "scopeCount": 1,
+          "recordCount": 2,
+          "estimatedBytes": 3578,
+          "estimatedTransactionalWriteUnits": 10
+        },
+        {
+          "sourceCount": 40,
+          "scopeCount": 1,
+          "recordCount": 2,
+          "estimatedBytes": 11798,
+          "estimatedTransactionalWriteUnits": 26
+        }
+      ],
+      "estimatedBytes": 127616386,
+      "estimatedDecimalGB": 0.127616386,
+      "referencesPerTransaction": 7.85,
+      "shortBitUpdatesPerTransaction": 89.489,
+      "caveat": "Month distribution, text length, unique grams and updates change these estimates; this is not a cost acceptance PASS."
+    },
+    "note": "Offline logical row estimate and current-month 100-source calibration; excludes canonical/security/receipt rows, GSI bytes, jobs/TTL receipts, billing and live p95. No migration run."
+  }
 }

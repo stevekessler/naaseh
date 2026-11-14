@@ -1,10 +1,16 @@
 import {
   calculateBudgetTotals,
+  closeBudget,
   createBudget,
   createBudgetAccountLink,
   createBudgetItem,
+  createFinanceClassificationSnapshot,
+  deactivateBudget,
+  effectiveBudgetActivity,
   financeAudience,
   markBudgetChangedSinceReconciliation,
+  reactivateBudget,
+  reopenBudget,
   type Budget,
   type BudgetItem,
   type CreateBudgetInput,
@@ -61,13 +67,24 @@ export async function createFinanceBudget(
   input: CreateBudgetInput,
   mutationId: string,
 ) {
-  const replay = repository.mutation<Budget>(actor.id, mutationId);
-  if (replay) return replay;
   if (!authorizeFinanceScope(actor, { type: 'group', groupId: input.groupId }, 'edit').allowed) {
     throw new Error('Finance record not found.');
   }
+  const replay = repository.mutation<Budget>(actor.id, mutationId);
+  if (replay) {
+    const current = authorizedBudget(repository, actor, replay.id, 'edit');
+    if (current.groupId !== input.groupId || replay.groupId !== current.groupId)
+      throw new Error('Budget version conflict.');
+    return replay;
+  }
   if (repository.budgets.has(input.id)) throw new Error('Budget already exists.');
-  const budget = createBudget(input);
+  const timestamp = new Date().toISOString();
+  const budget = createBudget({
+    ...input,
+    status: input.status ?? 'active',
+    activityChangedAt: timestamp,
+    activityChangedBy: actor.id,
+  });
   repository.budgets.set(budget.id, budget);
   recordBudgetFeed(repository, budget);
   return repository.remember(actor.id, mutationId, budget);
@@ -87,14 +104,22 @@ export async function updateFinanceBudget(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<Budget>(actor.id, mutationId);
-  if (replay) return replay;
   const current = authorizedBudget(
     repository,
     actor,
     budgetId,
     input.status === 'archived' ? 'delete' : 'edit',
   );
+  const replay = repository.mutation<Budget>(actor.id, mutationId);
+  if (replay) {
+    if (
+      replay.id !== current.id ||
+      replay.groupId !== current.groupId ||
+      replay.version !== input.expectedVersion + 1
+    )
+      throw new Error('Budget version conflict.');
+    return replay;
+  }
   if (current.version !== input.expectedVersion) throw new Error('Budget version conflict.');
   const validated = createBudget({
     id: current.id,
@@ -120,12 +145,118 @@ export async function updateFinanceBudget(
       current.status === 'active'
         ? 'changed-since-reconciliation'
         : current.status),
+    ...(input.status === 'active' && effectiveBudgetActivity(current) === 'inactive'
+      ? {
+          activity: 'active' as const,
+          activityChangedAt: new Date().toISOString(),
+          activityChangedBy: actor.id,
+        }
+      : {}),
     version: current.version + 1,
   };
   repository.budgets.set(updated.id, updated);
   recordBudgetFeed(repository, updated);
   return repository.remember(actor.id, mutationId, updated);
 }
+
+type BudgetVersionInput = { expectedVersion: number };
+
+const changeFinanceBudgetState = async (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  budgetId: string,
+  input: BudgetVersionInput,
+  mutationId: string,
+  change: (budget: Budget) => Budget,
+  expected: (budget: Budget) => boolean,
+) => {
+  const current = authorizedBudget(repository, actor, budgetId, 'edit');
+  const replay = repository.mutation<Budget>(actor.id, mutationId);
+  if (replay) {
+    if (replay.id !== current.id || replay.groupId !== current.groupId || !expected(replay)) {
+      throw new Error('Budget version conflict.');
+    }
+    return replay;
+  }
+  if (current.version !== input.expectedVersion) throw new Error('Budget version conflict.');
+  const updated = change(current);
+  if (updated !== current) {
+    repository.budgets.set(updated.id, updated);
+    recordBudgetFeed(repository, updated);
+  }
+  return repository.remember(actor.id, mutationId, updated);
+};
+
+export const deactivateFinanceBudget = (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  budgetId: string,
+  input: BudgetVersionInput,
+  mutationId: string,
+  now = new Date(),
+) =>
+  changeFinanceBudgetState(
+    repository,
+    actor,
+    budgetId,
+    input,
+    mutationId,
+    (budget) => deactivateBudget(budget, actor.id, now),
+    (budget) => effectiveBudgetActivity(budget) === 'inactive',
+  );
+
+export const reactivateFinanceBudget = (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  budgetId: string,
+  input: BudgetVersionInput,
+  mutationId: string,
+  now = new Date(),
+) =>
+  changeFinanceBudgetState(
+    repository,
+    actor,
+    budgetId,
+    input,
+    mutationId,
+    (budget) => reactivateBudget(budget, actor.id, now),
+    (budget) => effectiveBudgetActivity(budget) === 'active',
+  );
+
+export const closeFinanceBudget = (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  budgetId: string,
+  input: BudgetVersionInput,
+  mutationId: string,
+  now = new Date(),
+) =>
+  changeFinanceBudgetState(
+    repository,
+    actor,
+    budgetId,
+    input,
+    mutationId,
+    (budget) => closeBudget(budget, actor.id, now),
+    (budget) => Boolean(budget.closedAt),
+  );
+
+export const reopenFinanceBudget = (
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  budgetId: string,
+  input: BudgetVersionInput,
+  mutationId: string,
+) =>
+  changeFinanceBudgetState(
+    repository,
+    actor,
+    budgetId,
+    input,
+    mutationId,
+    reopenBudget,
+    (budget) => !budget.closedAt,
+  );
 
 export async function linkFinanceBudgetAccount(
   repository: FinanceMemoryRepository,
@@ -134,11 +265,6 @@ export async function linkFinanceBudgetAccount(
   input: { id: string; accountId: string; expectedBudgetVersion: number },
   mutationId: string,
 ) {
-  const replay = repository.mutation<ReturnType<typeof createBudgetAccountLink>>(
-    actor.id,
-    mutationId,
-  );
-  if (replay) return replay;
   const budget = authorizedBudget(repository, actor, budgetId, 'edit');
   const account = repository.accounts.get(input.accountId);
   if (
@@ -148,6 +274,20 @@ export async function linkFinanceBudgetAccount(
     (account.scope.type === 'group' && account.scope.groupId !== budget.groupId)
   ) {
     throw new Error('Finance record not found.');
+  }
+  const replay = repository.mutation<ReturnType<typeof createBudgetAccountLink>>(
+    actor.id,
+    mutationId,
+  );
+  if (replay) {
+    if (
+      replay.budgetId !== budget.id ||
+      replay.accountId !== account.id ||
+      !replay.audience ||
+      financeAudience(replay.audience) !== financeAudience(account.scope)
+    )
+      throw new Error('Budget version conflict.');
+    return replay;
   }
   if (budget.version !== input.expectedBudgetVersion) throw new Error('Budget version conflict.');
   if (
@@ -188,10 +328,18 @@ export async function addFinanceBudgetItem(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<BudgetItem>(actor.id, mutationId);
-  if (replay) return replay;
   const budget = authorizedBudget(repository, actor, budgetId, 'edit');
-  if (budget.version !== input.expectedBudgetVersion) throw new Error('Budget version conflict.');
+  const replay = repository.mutation<BudgetItem>(actor.id, mutationId);
+  if (
+    replay &&
+    (replay.budgetId !== budget.id ||
+      replay.currency !== input.currency ||
+      replay.relatedAccountIds?.length !== input.relatedAccountIds.length ||
+      replay.relatedAccountIds.some((id, index) => id !== input.relatedAccountIds[index]))
+  )
+    throw new Error('Budget version conflict.');
+  if (!replay && budget.version !== input.expectedBudgetVersion)
+    throw new Error('Budget version conflict.');
   const activeLinks = [...repository.budgetAccountLinks.values()].filter(
     (link) => link.budgetId === budget.id && link.status === 'active',
   );
@@ -206,11 +354,23 @@ export async function addFinanceBudgetItem(
       throw new Error('Finance record not found.');
     }
   }
+  if (replay) return replay;
+  const category = repository.categories.get(input.financeCategoryId);
+  const subcategory = input.subcategoryId
+    ? repository.categories.get(input.subcategoryId)
+    : undefined;
+  if (input.subcategoryId && (!category || !subcategory))
+    throw new Error('Finance record not found.');
+  const classification = category
+    ? createFinanceClassificationSnapshot(category, subcategory)
+    : undefined;
   const item = createBudgetItem({
     id: input.id,
     budgetId,
     description: input.description,
     financeCategoryId: input.financeCategoryId,
+    ...(input.subcategoryId ? { subcategoryId: input.subcategoryId } : {}),
+    ...(classification ? { classification } : {}),
     plannedAmountMinor: input.plannedAmountMinor,
     currency: input.currency,
     relatedAccountIds: input.relatedAccountIds,
@@ -289,12 +449,14 @@ export function getFinanceBudget(
       .reduce((sum, allocation) => sum + allocation.amountMinor, 0);
     return {
       ...item,
+      relatedAccountIds: item.relatedAccountIds.filter((id) => visible.has(id)),
       actualAmountMinor: actualMinor,
       varianceMinor: actualMinor - item.plannedAmountMinor,
     };
   });
   return {
     ...budget,
+    activity: effectiveBudgetActivity(budget),
     accountLinks,
     items: itemViews,
     totals: totals.byCurrency,
@@ -304,10 +466,7 @@ export function getFinanceBudget(
       budget.status === 'active' || budget.status === 'changed-since-reconciliation'
         ? financeBudgetReconciliationReadiness(repository, actor, budget.id)
         : { canReconcile: false, reasons: ['Only an active budget can be reconciled.'] },
-    reconciliations:
-      budget.status === 'archived'
-        ? repository.budgetReconciliations.filter((record) => record.budgetId === budget.id)
-        : listBudgetReconciliationHistory(repository, actor, budget.id),
+    reconciliations: listBudgetReconciliationHistory(repository, actor, budget.id),
   };
 }
 

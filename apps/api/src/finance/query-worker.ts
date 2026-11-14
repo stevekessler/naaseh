@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { ulidSchema } from '@naaseh/domain';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import {
+  financePublicationWorkerEnvelopeSchema,
+  financePublicationRecoveryEnvelopeSchema,
+  financePublicationSignalEnvelopeSchema,
+} from './publication-invocation.js';
 
 export const financeQueryWorkerEnvelopeSchema = z
   .object({
@@ -32,11 +37,35 @@ export async function dispatchFinanceInvocation<T>(
   dependencies: {
     http: (event: unknown) => Promise<T>;
     worker: (input: { userId: string; queryId: string }) => Promise<void>;
+    publication?: (input: { publicationId: string }) => Promise<void>;
+    recovery?: () => Promise<void>;
   },
 ): Promise<T | undefined> {
   if (event && typeof event === 'object' && 'requestContext' in event && 'version' in event)
     return dependencies.http(event);
+  const signal = financePublicationSignalEnvelopeSchema.safeParse(event);
+  if (signal.success) {
+    if (signal.data.source === 'aws.events') {
+      if (!dependencies.recovery) throw new Error('Finance publication recovery is unavailable.');
+      await dependencies.recovery();
+    } else {
+      if (!dependencies.publication) throw new Error('Finance publication worker is unavailable.');
+      await dependencies.publication({ publicationId: signal.data.detail.publicationId });
+    }
+    return undefined;
+  }
+  const publication = financePublicationWorkerEnvelopeSchema.safeParse(event);
+  if (publication.success) {
+    if (!dependencies.publication) throw new Error('Finance publication worker is unavailable.');
+    await dependencies.publication({ publicationId: publication.data.publicationId });
+    return undefined;
+  }
   const envelope = financeQueryWorkerEnvelopeSchema.safeParse(event);
+  if (financePublicationRecoveryEnvelopeSchema.safeParse(event).success) {
+    if (!dependencies.recovery) throw new Error('Finance publication recovery is unavailable.');
+    await dependencies.recovery();
+    return undefined;
+  }
   if (!envelope.success) throw new Error('Invalid Finance invocation envelope.');
   await dependencies.worker({ userId: envelope.data.userId, queryId: envelope.data.queryId });
   return undefined;

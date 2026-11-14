@@ -6,6 +6,79 @@ import {
 } from './allocation.js';
 
 export type FinancialTransactionOrigin = 'simplefin' | 'manual' | 'csv';
+export const financePaymentTypes = ['cash', 'check', 'card', 'ach', 'digital-other'] as const;
+export type FinancePaymentType = (typeof financePaymentTypes)[number];
+
+export interface TransactionPaymentMetadata {
+  /** User-owned value. Unknown legacy/source values remain round-trippable. */
+  paymentType?: string;
+  /** Text by design: leading zeros are meaningful. */
+  checkNumber?: string;
+}
+
+const paymentTypeAliases: Readonly<Record<string, FinancePaymentType>> = {
+  cash: 'cash',
+  check: 'check',
+  cheque: 'check',
+  card: 'card',
+  ach: 'ach',
+  digital: 'digital-other',
+  'digital-other': 'digital-other',
+  'digital (other)': 'digital-other',
+};
+
+export function normalizePaymentType(value: string | undefined): string | undefined {
+  const normalized = value?.normalize('NFC').trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 64) throw new Error('Payment type exceeds 64 characters.');
+  return paymentTypeAliases[normalized.toLocaleLowerCase('und')] ?? normalized;
+}
+
+export function normalizeCheckNumber(value: string | undefined): string | undefined {
+  const normalized = value?.normalize('NFC').trim();
+  if (!normalized) return undefined;
+  if (normalized.length > 64) throw new Error('Check number exceeds 64 characters.');
+  return normalized;
+}
+
+export function displayPaymentType(value: string | undefined) {
+  const normalized = normalizePaymentType(value);
+  switch (normalized) {
+    case 'cash':
+      return 'Cash';
+    case 'check':
+      return 'Check';
+    case 'card':
+      return 'Card';
+    case 'ach':
+      return 'ACH';
+    case 'digital-other':
+      return 'Digital (Other)';
+    default:
+      return 'Unspecified';
+  }
+}
+
+export function applyTransactionPaymentMetadata(
+  existing: Readonly<TransactionPaymentMetadata>,
+  correction: { paymentType?: string | null; checkNumber?: string | null },
+): TransactionPaymentMetadata {
+  const result: TransactionPaymentMetadata = { ...existing };
+  if (correction.paymentType !== undefined) {
+    const paymentType =
+      correction.paymentType === null ? undefined : normalizePaymentType(correction.paymentType);
+    if (paymentType === undefined) delete result.paymentType;
+    else result.paymentType = paymentType;
+  }
+  if (correction.checkNumber !== undefined) {
+    const checkNumber =
+      correction.checkNumber === null ? undefined : normalizeCheckNumber(correction.checkNumber);
+    if (checkNumber === undefined) delete result.checkNumber;
+    else result.checkNumber = checkNumber;
+  }
+  return result;
+}
+
 export interface TransactionSnapshot {
   postedAt?: string;
   transactedAt?: string;
@@ -16,6 +89,8 @@ export interface TransactionSnapshot {
   memo?: string;
   pending: boolean;
   merchantCategoryCode?: string;
+  paymentType?: string;
+  checkNumber?: string;
 }
 
 export interface FinancialTransaction {
@@ -35,6 +110,8 @@ export interface FinancialTransaction {
   memo?: string;
   pending: boolean;
   merchantCategoryCode?: string;
+  paymentType?: string;
+  checkNumber?: string;
   merchantId?: string;
   providerConnectionId?: string;
   providerAccountId?: string;
@@ -80,6 +157,8 @@ export interface CreateFinancialTransactionInput {
   csvImportBatchId?: string;
   csvRowOrdinal?: number;
   merchantId?: string;
+  paymentType?: string;
+  checkNumber?: string;
 }
 
 const instant = (value: string | undefined) =>
@@ -96,6 +175,8 @@ export function createFinancialTransaction(
   if (!input.postedAt && !input.transactedAt) throw new Error('A transaction date is required.');
   const postedAt = instant(input.postedAt);
   const transactedAt = instant(input.transactedAt);
+  const paymentType = normalizePaymentType(input.paymentType);
+  const checkNumber = normalizeCheckNumber(input.checkNumber);
   const snapshot: TransactionSnapshot = {
     amountMinor: input.amountMinor,
     currency: input.currency,
@@ -105,6 +186,8 @@ export function createFinancialTransaction(
     ...(transactedAt ? { transactedAt } : {}),
     ...(input.payee ? { payee: input.payee } : {}),
     ...(input.memo ? { memo: input.memo } : {}),
+    ...(paymentType ? { paymentType } : {}),
+    ...(checkNumber ? { checkNumber } : {}),
   };
   const provider = input.origin === 'simplefin';
   if (
@@ -133,6 +216,8 @@ export function createFinancialTransaction(
     ...(input.providerAccountId ? { providerAccountId: input.providerAccountId } : {}),
     ...(input.sourceTransactionId ? { sourceTransactionId: input.sourceTransactionId } : {}),
     ...(input.merchantId ? { merchantId: input.merchantId } : {}),
+    ...(!provider && snapshot.paymentType ? { paymentType: snapshot.paymentType } : {}),
+    ...(!provider && snapshot.checkNumber ? { checkNumber: snapshot.checkNumber } : {}),
     ...(provider ? { providerSnapshot: snapshot } : { entrySnapshot: snapshot }),
     allocations: [],
     reconciliationState:
@@ -166,6 +251,8 @@ export interface TransactionCorrection {
   memo?: string;
   pending?: boolean;
   source?: 'entry' | 'provider';
+  paymentType?: string | null;
+  checkNumber?: string | null;
 }
 
 export function correctFinancialTransaction(
@@ -207,8 +294,16 @@ export function correctFinancialTransaction(
     0,
   );
   const allocationsInvalid = transaction.allocations.length > 0 && allocationTotal !== amountMinor;
+  const paymentMetadata = applyTransactionPaymentMetadata(
+    {
+      ...(transaction.paymentType ? { paymentType: transaction.paymentType } : {}),
+      ...(transaction.checkNumber ? { checkNumber: transaction.checkNumber } : {}),
+    },
+    correction,
+  );
   const corrected: FinancialTransaction = {
     ...transaction,
+    ...paymentMetadata,
     ...(source === 'provider' ? { providerSnapshot: snapshot } : { entrySnapshot: snapshot }),
     ...(projected
       ? {
@@ -226,6 +321,8 @@ export function correctFinancialTransaction(
     version: transaction.version + 1,
   };
   if (projected && !postedAt) delete corrected.postedAt;
+  if (!paymentMetadata.paymentType) delete corrected.paymentType;
+  if (!paymentMetadata.checkNumber) delete corrected.checkNumber;
   return corrected;
 }
 
@@ -264,6 +361,8 @@ export function tombstoneFinancialTransaction(
   delete tombstone.payee;
   delete tombstone.memo;
   delete tombstone.merchantId;
+  delete tombstone.paymentType;
+  delete tombstone.checkNumber;
   delete tombstone.transferId;
   return tombstone;
 }

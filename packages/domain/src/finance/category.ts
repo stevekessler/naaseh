@@ -11,6 +11,7 @@ export interface FinanceCategory {
   origin: 'bank' | 'user';
   merchantCategoryCode?: string;
   creatorId?: string;
+  parentId?: string;
   status: 'active' | 'archived';
   version: number;
 }
@@ -30,6 +31,7 @@ export function createUserFinanceCategory(input: {
   id: string;
   name: string;
   creatorId: string;
+  parentId?: string;
 }): FinanceCategory {
   const name = categoryName(input.name);
   if (!input.creatorId) throw new Error('A user category requires its creator.');
@@ -39,6 +41,7 @@ export function createUserFinanceCategory(input: {
     canonicalName: canonicalFinanceCategoryName(name),
     origin: 'user',
     creatorId: input.creatorId,
+    ...(input.parentId ? { parentId: input.parentId } : {}),
     status: 'active',
     version: 1,
   };
@@ -65,6 +68,7 @@ export function assertUniqueActiveCategoryName(
   categories: readonly FinanceCategory[],
   name: string,
   excludingId?: string,
+  parentId?: string,
 ) {
   const canonicalName = canonicalFinanceCategoryName(name);
   if (
@@ -72,12 +76,69 @@ export function assertUniqueActiveCategoryName(
       (category) =>
         category.status === 'active' &&
         category.id !== excludingId &&
+        category.parentId === parentId &&
         category.canonicalName === canonicalName,
     )
   ) {
     throw new Error('An active Finance category already uses this name.');
   }
   return canonicalName;
+}
+
+export function assertCategoryParentChange(
+  categories: readonly FinanceCategory[],
+  category: FinanceCategory,
+  parentId: string | undefined,
+  impact: { hasReferences: boolean } = { hasReferences: false },
+) {
+  if (parentId === undefined) {
+    if (category.parentId && impact.hasReferences)
+      throw new Error('A referenced subcategory cannot be reparented without history review.');
+    return;
+  }
+  if (parentId === category.id) throw new Error('A category cannot be its own parent.');
+  const parent = categories.find((candidate) => candidate.id === parentId);
+  if (!parent) throw new Error('The parent Finance category does not exist.');
+  if (parent.status !== 'active') throw new Error('The parent Finance category must be active.');
+  if (categories.some((candidate) => candidate.parentId === category.id))
+    throw new Error('The category parent change would create a cycle.');
+  if (parent.parentId) throw new Error('Finance categories support only one child level.');
+  if (category.parentId !== parentId && impact.hasReferences)
+    throw new Error('A referenced subcategory cannot be reparented without history review.');
+}
+
+export interface FinanceClassificationSnapshot {
+  categoryId: string;
+  categoryLabel: string;
+  categoryVersion: number;
+  subcategoryId?: string;
+  subcategoryLabel?: string;
+  subcategoryVersion?: number;
+}
+
+/** Immutable assignment-time identity; later catalog edits never rewrite this value. */
+export function createFinanceClassificationSnapshot(
+  category: FinanceCategory,
+  subcategory?: FinanceCategory,
+): FinanceClassificationSnapshot {
+  if (category.status !== 'active' || category.parentId)
+    throw new Error('The selected parent Finance category must be an active root.');
+  if (subcategory && subcategory.status !== 'active')
+    throw new Error('The selected Finance subcategory must be active.');
+  if (subcategory && subcategory.parentId !== category.id)
+    throw new Error('The selected subcategory does not belong to the parent category.');
+  return {
+    categoryId: category.id,
+    categoryLabel: category.name,
+    categoryVersion: category.version,
+    ...(subcategory
+      ? {
+          subcategoryId: subcategory.id,
+          subcategoryLabel: subcategory.name,
+          subcategoryVersion: subcategory.version,
+        }
+      : {}),
+  };
 }
 
 function assertCategoryEditor(category: FinanceCategory, actor: FinanceCatalogActor) {
@@ -100,6 +161,21 @@ export function renameFinanceCategory(
     canonicalName: canonicalFinanceCategoryName(name),
     version: category.version + 1,
   };
+}
+
+export function reparentFinanceCategory(
+  category: FinanceCategory,
+  parentId: string | undefined,
+  categories: readonly FinanceCategory[],
+  actor: FinanceCatalogActor,
+  impact: { hasReferences: boolean },
+) {
+  assertCategoryEditor(category, actor);
+  assertCategoryParentChange(categories, category, parentId, impact);
+  const updated: FinanceCategory = { ...category, version: category.version + 1 };
+  if (parentId) updated.parentId = parentId;
+  else delete updated.parentId;
+  return updated;
 }
 
 export function archiveFinanceCategory(category: FinanceCategory, actor: FinanceCatalogActor) {

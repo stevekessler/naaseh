@@ -1,0 +1,81 @@
+{
+  "recorded_on": "2026-11-09",
+  "status": "Code-derived request-count bounds and injected SDK evidence; no live capacity, latency, billing or combined-cost acceptance.",
+  "operation": "v8 protected financeReusableItem create replay",
+  "source_files": [
+    "apps/api/src/finance/sync-replay.ts",
+    "apps/api/src/finance/dynamo-repository.ts",
+    "apps/api/src/finance/handler.ts",
+    "apps/web/src/db/finance-repository.ts"
+  ],
+  "source_graph": {
+    "related_accounts_max": 50,
+    "catalog_references_min": 1,
+    "catalog_references_max": 2,
+    "point_get_formula": "6 + 2*A + 2*R, for A related accounts and R category/optional-merchant references.",
+    "formula_components": {
+      "initial_and_final_group_catalog_meta_reads": 4,
+      "target_reusable_locator_and_canonical_negative_or_existing_read": 2,
+      "per_account_locator_and_canonical_reads": 2,
+      "per_catalog_reference_source_and_counter_reads": 2
+    },
+    "examples": [
+      {
+        "related_accounts": 0,
+        "catalog_references": 1,
+        "source_graph_gets": 8
+      },
+      {
+        "related_accounts": 1,
+        "catalog_references": 1,
+        "source_graph_gets": 10
+      },
+      {
+        "related_accounts": 8,
+        "catalog_references": 1,
+        "source_graph_gets": 24
+      },
+      {
+        "related_accounts": 50,
+        "catalog_references": 2,
+        "source_graph_gets": 110
+      }
+    ],
+    "additional_work": [
+      "Mutation receipt Get and existing receipt authorization checks.",
+      "Existing user/session/PIN validation and current membership discovery/rechecks.",
+      "At this checkpoint, 13 transactional negative checks on the other supported source-locator namespaces for a new client-selected ID; exact saved retries do not create again.",
+      "Existing conditional canonical/locator/counter/feed/receipt transaction and final consistency checks.",
+      "Subsequent protected feed delivery and proof renewal.",
+      "Existing publication journal/outbox/dispatch work for the canonical commit remains separately accounted; no new dispatcher/resource is added."
+    ],
+    "not_a_billed_unit_bound": "Item bytes, transactional multiplication, lookup retries, membership discovery and other request work must be measured separately.",
+    "no_history_fallback": true,
+    "conditional_empty_scope_probe": {
+      "when": "Scope metadata is absent and no named canonical row has already proved existing state. A known row with absent metadata stays retryable without probing.",
+      "maximum_queries": 1,
+      "limit": 1,
+      "projection": "PK, SK",
+      "key_condition": "PK = :pk",
+      "strongly_consistent": true,
+      "purpose": "Only an empty namespace may initialize metadata. Existing canonical rows, surviving publication state or continuation hold replay pending for trusted repair. No history hydration or migration."
+    }
+  },
+  "integrity": {
+    "stable_entity_id": true,
+    "exact_intent_receipt": true,
+    "catalogue_target_counters_preserved": true,
+    "unrelated_catalogue_counts_unchanged": true,
+    "foreign_scope_body_reads_denied": true,
+    "acknowledgement": "Only an applied/already-applied reusable creation may retire its unverified version-1 local projection, atomically with queue acknowledgement, if no sibling edit exists. Conflicts, verified projections, newer drafts, unrelated bytes and interrupted commits remain intact.",
+    "client_selected_id_admission": "A new reusable canonical creation conditionally checks the other supported source-locator namespaces in the same transaction. Existing cross-type IDs cause a conflict without reading their bodies."
+  },
+  "usage": "No new household reusable-creation frequency is inferred; previous user workload assumptions remain unchanged.",
+  "cost_gate": "No new resource, scheduler, IAM permission or price assumption. Existing function/table/proxy and sync route reused. $6.50 monthly combined ceiling including 30% contingency remains; extra source/proof/compute work is not yet accepted as covered by an old allowance.",
+  "deferred": [
+    "Initial history bootstrap",
+    "Reusable updates and other unsupported semantic replay families",
+    "Real DynamoDB and hosted acceptance",
+    "Migration"
+  ]
+}

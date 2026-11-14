@@ -66,28 +66,61 @@ const setup = () => {
 describe('Finance transaction services', () => {
   it('preserves source history, invalidates allocations, and makes mutation replay stable', async () => {
     const repository = setup();
-    await createManualTransaction(
+    const inactive = { ...actor, active: false };
+    const createInput = {
+      id: ids.transaction,
+      amountMinor: -1_000,
+      transactedAt: '2026-01-02T12:00:00.000Z',
+      description: 'Fixture Cafe',
+    };
+    const created = await createManualTransaction(
       repository,
       actor,
       ids.account,
-      {
-        id: ids.transaction,
-        amountMinor: -1_000,
-        transactedAt: '2026-01-02T12:00:00.000Z',
-        description: 'Fixture Cafe',
-      },
+      createInput,
       'create-transaction',
     );
-    await replaceTransactionAllocationsForActor(
+    await expect(
+      createManualTransaction(
+        repository,
+        actor,
+        ids.account,
+        { ...createInput, id: ids.hiddenTransaction },
+        'create-transaction',
+      ),
+    ).resolves.toEqual(created);
+    await expect(
+      createManualTransaction(repository, inactive, ids.account, createInput, 'create-transaction'),
+    ).rejects.toThrow('Finance record not found.');
+    const allocationInput = {
+      expectedVersion: 1,
+      allocations: [{ id: ids.allocation, amountMinor: -1_000, financeCategoryId: ids.category }],
+    };
+    const allocated = await replaceTransactionAllocationsForActor(
       repository,
       actor,
       ids.transaction,
-      {
-        expectedVersion: 1,
-        allocations: [{ id: ids.allocation, amountMinor: -1_000, financeCategoryId: ids.category }],
-      },
+      allocationInput,
       'allocate-transaction',
     );
+    await expect(
+      replaceTransactionAllocationsForActor(
+        repository,
+        actor,
+        ids.transaction,
+        allocationInput,
+        'allocate-transaction',
+      ),
+    ).resolves.toEqual(allocated);
+    await expect(
+      replaceTransactionAllocationsForActor(
+        repository,
+        inactive,
+        ids.transaction,
+        allocationInput,
+        'allocate-transaction',
+      ),
+    ).rejects.toThrow('Finance record not found.');
 
     const corrected = await updateManualTransaction(
       repository,
@@ -110,6 +143,15 @@ describe('Finance transaction services', () => {
       'correct-transaction',
     );
     expect(replay).toEqual(corrected);
+    await expect(
+      updateManualTransaction(
+        repository,
+        inactive,
+        ids.transaction,
+        { expectedVersion: 2, amountMinor: -1_200 },
+        'correct-transaction',
+      ),
+    ).rejects.toThrow('Finance record not found.');
     expect(corrected).toMatchObject({
       entrySnapshot: { amountMinor: -1_200, description: 'Fixture Cafe' },
       reviewState: 'allocation-review',
@@ -165,6 +207,16 @@ describe('Finance transaction services', () => {
       1,
       'link-merchant',
     );
+    await expect(
+      associateTransactionMerchant(
+        repository,
+        { ...actor, active: false },
+        ids.transaction,
+        ids.merchant,
+        1,
+        'link-merchant',
+      ),
+    ).rejects.toThrow('Finance record not found.');
 
     const search = searchAuthorizedTransactions(repository, actor, { query: 'fixture cafe' });
     const scoped = searchAuthorizedTransactions(repository, actor, {

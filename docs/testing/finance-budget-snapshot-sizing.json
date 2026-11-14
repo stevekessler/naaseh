@@ -1,0 +1,65 @@
+{
+  "date": "2026-11-09",
+  "evidence": "Source-path request accounting, local component/SDK/browser tests; no AWS consumed capacity or hosted timing.",
+  "requiredTests": {
+    "before": 1704,
+    "administratorParity": 1711,
+    "budgetSnapshots": 1714,
+    "files": 456
+  },
+  "browserSelection": {
+    "quick": 31,
+    "full": 556,
+    "existingFullSkips": 20,
+    "addedCases": 0
+  },
+  "budgetFinanceHttpCalls": {
+    "directoryRefresh": {
+      "get": 3,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 6
+    },
+    "selectedDetailRefresh": {
+      "get": 4,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 7
+    },
+    "openFromRetainedDirectory": {
+      "priorReadChecks": 2,
+      "selectedDetailRefresh": 7,
+      "total": 9
+    },
+    "create": {
+      "preSaveChecks": 2,
+      "create": 1,
+      "accountLinks": "N successful link writes",
+      "selectedDetailRefresh": 7,
+      "total": "10 + N"
+    },
+    "itemChangeCallbacks": {
+      "possibleRefreshes": 2,
+      "callsPerRefresh": 7,
+      "maximumRefreshCalls": 14
+    }
+  },
+  "exclusions": [
+    "Authentication freshness traffic, other synchronization, failed/racing/retried requests.",
+    "Coalesced read leases can reduce request counts.",
+    "DynamoDB reads behind proofs and legacy hydrated directories are not zero cost.",
+    "No complete reusable-item, reconciliation, receipt or offline budget-item story acceptance."
+  ],
+  "ceiling": {
+    "combinedMonthlyUsd": 6.5,
+    "includesContingencyPercent": 30,
+    "currentCostAccepted": false
+  },
+  "dailyUsage": {
+    "overallHours": 10,
+    "financeHoursIncluded": 2,
+    "simultaneouslyVisibleDevices": 2,
+    "interpretation": "Confirmed November 9: usually two visible devices simultaneously in the existing ten-hour daily window."
+  },
+  "migrationRun": false
+}

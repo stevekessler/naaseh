@@ -1,9 +1,20 @@
 import {
+  financeAuthorizationPartitions,
+  nextFinanceAuthorizationRevision,
+} from './authorization-revision.js';
+import {
   GetCommand,
   TransactWriteCommand,
   type TransactWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
+import { isDeepStrictEqual } from 'node:util';
+import { requestFinancePublication } from './publication-dispatch.js';
+import {
+  describeFinanceCanonicalChange,
+  financePublicationJournalRecords,
+  isFinanceScopePartition,
+} from './publication-change-journal.js';
 
 export interface FinanceRecordKey {
   PK: string;
@@ -119,6 +130,92 @@ export class FinanceUnitOfWork {
       this.committed = true;
       return existing.result as T;
     }
+    const canonical = [...this.changes].flatMap(([id, next]) => {
+      const previous = this.loaded.get(id)!;
+      if (isDeepStrictEqual(previous.item, next ?? undefined)) return [];
+      const change = describeFinanceCanonicalChange(previous.key, previous.item, next ?? undefined);
+      return change ? [change] : [];
+    });
+    const authorizationPartitions = financeAuthorizationPartitions(
+      [...this.changes].map(([id, next]) => ({
+        ...(this.loaded.get(id)!.item ? { before: this.loaded.get(id)!.item! } : {}),
+        ...(next ? { after: next } : {}),
+      })),
+    );
+    for (const [id, updated] of this.changes) {
+      const previous = this.loaded.get(id)!;
+      if (!updated || previous.key.SK !== 'META' || !isFinanceScopePartition(previous.key.PK))
+        continue;
+      const authorizationRevision = nextFinanceAuthorizationRevision(
+        previous.item?.financeAuthorizationRevision,
+        authorizationPartitions.has(previous.key.PK),
+      );
+      if (authorizationRevision !== undefined)
+        this.changes.set(id, { ...updated, financeAuthorizationRevision: authorizationRevision });
+      else if (updated.financeAuthorizationRevision !== undefined)
+        throw new Error('Finance authorization revision requires canonical evidence.');
+    }
+    const partitions = new Set([
+      ...canonical.map((change) => change.scopePK),
+      ...authorizationPartitions,
+    ]);
+    for (const [id, next] of this.changes) {
+      const before = this.loaded.get(id)!;
+      if (
+        before.key.SK === 'META' &&
+        isFinanceScopePartition(before.key.PK) &&
+        ((!next && before.item !== undefined) ||
+          (next && Number(next.revision) !== Number(before.item?.revision ?? 0)))
+      )
+        partitions.add(before.key.PK);
+    }
+    const scopes = [];
+    for (const PK of partitions) {
+      const key = { PK, SK: 'META' };
+      await this.get(key);
+      const id = identity(key);
+      const next = this.changes.get(id);
+      // A brand-new scope has no pre-016 relationship rows. Do not infer this
+      // negative coverage for an existing scope or a first write containing relationships.
+      if (
+        !this.loaded.get(id)!.item &&
+        next?.revision === 1 &&
+        PK !== 'FINANCE#CATALOG' &&
+        next.refundRelationshipIndexVersion === undefined &&
+        !canonical.some(
+          (change) => change.scopePK === PK && change.collection === 'refundRelationships',
+        )
+      )
+        this.changes.set(id, { ...next, refundRelationshipIndexVersion: 1 });
+      scopes.push({
+        PK,
+        beforeRevision: Number(this.loaded.get(id)!.item?.revision ?? 0),
+        afterRevision: Number(this.changes.get(id)?.revision),
+      });
+    }
+    const publicationRecords = financePublicationJournalRecords(canonical, scopes);
+    const publicationIds = publicationRecords.flatMap((row) =>
+      typeof row.id === 'string' ? [row.id] : [],
+    );
+    for (const row of publicationRecords) {
+      const present = await this.get(row);
+      if (!present) await this.put(row);
+      else if (
+        [
+          'finance-publication-deletion-v1',
+          'finance-publication-account-deletion-v1',
+          'finance-publication-account-birth-v1',
+        ].includes(String(row.format)) &&
+        present.format === row.format &&
+        (present.transactionId ?? present.accountId) === (row.transactionId ?? row.accountId)
+      )
+        await this.put(row);
+      else if (
+        present.format !== row.format ||
+        (present.id ?? present.publicationId) !== (row.id ?? row.publicationId)
+      )
+        throw new Error('Finance publication revision conflict.');
+    }
     if (this.loaded.size > 100)
       throw new Error('Finance atomic write exceeds 100 touched records.');
     const writes: Write[] = [];
@@ -146,6 +243,8 @@ export class FinanceUnitOfWork {
         );
       } else writes.push({ ConditionCheck: { TableName: this.table, Key: key, ...condition } });
     }
+    if (Buffer.byteLength(JSON.stringify(writes)) > 3_500_000)
+      throw new Error('Finance atomic write exceeds the request byte budget.');
     try {
       await this.persistence.write(writes);
     } catch (error) {
@@ -153,9 +252,11 @@ export class FinanceUnitOfWork {
       const winner = await this.persistence.get(receipt.key);
       if (!winner || winner.fingerprint !== receipt.fingerprint) throw error;
       this.committed = true;
+      await requestFinancePublication(publicationIds);
       return winner.result as T;
     }
     this.committed = true;
+    await requestFinancePublication(publicationIds);
     return receipt.result;
   }
 }

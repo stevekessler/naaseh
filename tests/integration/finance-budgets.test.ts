@@ -113,49 +113,74 @@ describe('Finance budget service', () => {
       endDate: '2026-04-30',
     };
     const created = await createFinanceBudget(repository, actor, input, 'budget-create');
-    expect(await createFinanceBudget(repository, actor, input, 'budget-create')).toEqual(created);
-    await linkFinanceBudgetAccount(
+    expect(
+      await createFinanceBudget(repository, actor, { ...input, id: ids.item }, 'budget-create'),
+    ).toEqual(created);
+    const linkInput = { id: ids.link, accountId: ids.account, expectedBudgetVersion: 1 };
+    const link = await linkFinanceBudgetAccount(
       repository,
       actor,
       ids.budget,
-      {
-        id: ids.link,
-        accountId: ids.account,
-        expectedBudgetVersion: 1,
-      },
+      linkInput,
       'budget-link',
     );
-    await addFinanceBudgetItem(
+    const itemInput = {
+      id: ids.item,
+      expectedBudgetVersion: 2,
+      description: 'Groceries',
+      financeCategoryId: ids.category,
+      plannedAmountMinor: -10_000,
+      currency: 'USD',
+      currencyExponent: 2,
+      relatedAccountIds: [ids.account],
+    };
+    const item = await addFinanceBudgetItem(
       repository,
       actor,
       ids.budget,
-      {
-        id: ids.item,
-        expectedBudgetVersion: 2,
-        description: 'Groceries',
-        financeCategoryId: ids.category,
-        plannedAmountMinor: -10_000,
-        currency: 'USD',
-        currencyExponent: 2,
-        relatedAccountIds: [ids.account],
-      },
+      itemInput,
       'budget-item',
     );
 
+    const updateInput = { expectedVersion: 3, name: 'April household plan' };
     const updated = await updateFinanceBudget(
       repository,
       actor,
       ids.budget,
-      {
-        expectedVersion: 3,
-        name: 'April household plan',
-      },
+      updateInput,
       'budget-update',
     );
     const detail = getFinanceBudget(repository, actor, ids.budget);
     expect(updated).toMatchObject({ name: 'April household plan', version: 4 });
     expect(detail.accountLinks).toHaveLength(1);
     expect(detail.items).toHaveLength(1);
+    await expect(
+      linkFinanceBudgetAccount(repository, actor, ids.budget, linkInput, 'budget-link'),
+    ).resolves.toEqual(link);
+    await expect(
+      addFinanceBudgetItem(repository, actor, ids.budget, itemInput, 'budget-item'),
+    ).resolves.toEqual(item);
+    await expect(
+      updateFinanceBudget(repository, actor, ids.budget, updateInput, 'budget-update'),
+    ).resolves.toEqual(updated);
+
+    const formerMember = { ...actor, groupMemberships: [] };
+    await expect(
+      createFinanceBudget(repository, formerMember, input, 'budget-create'),
+    ).rejects.toThrow('Finance record not found.');
+    await expect(
+      updateFinanceBudget(repository, formerMember, ids.budget, updateInput, 'budget-update'),
+    ).rejects.toThrow('Finance record not found.');
+    repository.accounts.set(ids.account, {
+      ...repository.accounts.get(ids.account)!,
+      scope: { type: 'owner', ownerId: 'another-user' },
+    });
+    await expect(
+      linkFinanceBudgetAccount(repository, actor, ids.budget, linkInput, 'budget-link'),
+    ).rejects.toThrow('Finance record not found.');
+    await expect(
+      addFinanceBudgetItem(repository, actor, ids.budget, itemInput, 'budget-item'),
+    ).rejects.toThrow('Finance record not found.');
   });
 
   it('enforces active group membership and optimistic concurrency with generic failures', async () => {

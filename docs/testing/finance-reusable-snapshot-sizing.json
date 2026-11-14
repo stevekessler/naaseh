@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-09",
+  "evidence": "Source-path accounting and local tests; no live AWS consumed capacity, billing or hosted timing.",
+  "requiredDiscovery": {
+    "before": 1718,
+    "after": 1722,
+    "files": 458
+  },
+  "financeHttpCallsOnline": {
+    "loadReusableItems": {
+      "get": 1,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 4
+    },
+    "openCreateForm": {
+      "priorReadChecks": 2,
+      "total": 2
+    },
+    "createAndCanonicalReload": {
+      "priorReadChecks": 2,
+      "createPost": 1,
+      "canonicalReload": 4,
+      "total": 7
+    },
+    "loadOffers": {
+      "priorReadChecks": 2,
+      "canonicalBudgetGet": 1,
+      "offersGet": 1,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 7
+    },
+    "copyAndCanonicalReload": {
+      "priorOfferChecks": 2,
+      "copyPost": 1,
+      "loadOffers": 7,
+      "total": 10
+    },
+    "removalPreview": {
+      "priorItemChecks": 2,
+      "previewGet": 1,
+      "proofMerge": 1,
+      "retainedReadChecks": 2,
+      "total": 6
+    },
+    "returnToBudgets": {
+      "parentReadChecks": 2,
+      "total": 2
+    }
+  },
+  "offline": "Existing valid offline source leases add no online proof traffic; supported reusable creates remain in the existing encrypted queue. Never acknowledge a queue before its durable write succeeds.",
+  "exclusions": [
+    "Authentication freshness, unrelated synchronization, failures/retries, racing requests and lease coalescing.",
+    "Current group/source authority reads and legacy hydration behind GETs still cost capacity.",
+    "No full T027/T029/T032 or accepted combined-cost claim."
+  ],
+  "forecastScope": {
+    "methods": [
+      "known-plan",
+      "history-based"
+    ],
+    "detail": "per-budget",
+    "overview": "Finance dashboard under current viewer permissions",
+    "historySource": "Pending choice: authorized linked-account history versus only budget-assigned transactions."
+  },
+  "constraints": {
+    "monthlyCombinedFinanceUsd": 6.5,
+    "includesContingencyPercent": 30,
+    "migrationRun": false,
+    "nativeAppleChanged": false
+  }
+}

@@ -14,8 +14,18 @@ import { loadCanonicalFinanceFact } from './canonical-spend-source.js';
 import { SpendProjectionService } from './spend-projection-service.js';
 import type { FinanceFact } from './query-contract.js';
 import { FinanceExperienceFailure } from './telemetry.js';
+import {
+  FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION,
+  FinanceBudgetAccountLinkIndexVerifier,
+} from './budget-account-link-index.js';
 
-type Phase = 'locators' | 'refund-index' | 'publish' | 'coverage' | 'complete';
+type Phase =
+  | 'locators'
+  | 'budget-account-links'
+  | 'refund-index'
+  | 'publish'
+  | 'coverage'
+  | 'complete';
 type State = {
   operation: string;
   phase: Phase;
@@ -50,6 +60,10 @@ export class FinanceBackfillDriver {
         cursor?: FinanceRecordKey,
       ) => Promise<{ nextCursor: FinanceRecordKey | null; examined: number }>;
       refundIndex?: (
+        scope: string,
+        options: { restart?: boolean },
+      ) => Promise<{ complete: boolean }>;
+      budgetAccountLinks?: (
         scope: string,
         options: { restart?: boolean },
       ) => Promise<{ complete: boolean }>;
@@ -108,13 +122,27 @@ export class FinanceBackfillDriver {
             calendarBasis,
           };
     state.operation ??= createUlid();
-    if (!['locators', 'refund-index', 'publish', 'coverage', 'complete'].includes(state.phase))
+    if (
+      ![
+        'locators',
+        'budget-account-links',
+        'refund-index',
+        'publish',
+        'coverage',
+        'complete',
+      ].includes(state.phase)
+    )
       throw new FinanceExperienceFailure('invariant', 'Finance migration checkpoint is invalid.');
     let examined = 0;
     if (state.phase === 'locators') {
       const meta = await this.work().get(account.scopeKey);
       if (meta?.revision !== state.scopeRevision) return stale();
-      if (meta.locatorIndexVersion === 1) state.phase = 'refund-index';
+      if (meta.locatorIndexVersion === 1)
+        state.phase =
+          state.scopePK.startsWith('FINANCE#SCOPE#GROUP#') &&
+          meta.budgetAccountLinkIndexVersion !== FINANCE_BUDGET_ACCOUNT_LINK_INDEX_VERSION
+            ? 'budget-account-links'
+            : 'refund-index';
       else {
         const result = await (this.options.locators ?? DynamoFinanceRepository.backfillLocatorPage)(
           state.scopePK,
@@ -124,8 +152,27 @@ export class FinanceBackfillDriver {
         if (result.nextCursor) state.locatorCursor = result.nextCursor;
         else {
           delete state.locatorCursor;
-          state.phase = 'refund-index';
+          state.phase = state.scopePK.startsWith('FINANCE#SCOPE#GROUP#')
+            ? 'budget-account-links'
+            : 'refund-index';
         }
+      }
+    } else if (state.phase === 'budget-account-links') {
+      if (!state.scopePK.startsWith('FINANCE#SCOPE#GROUP#'))
+        throw new FinanceExperienceFailure(
+          'invariant',
+          'Finance budget/account link coverage requires a group scope.',
+        );
+      const result = await (
+        this.options.budgetAccountLinks ??
+        ((scope, opts) =>
+          new FinanceBudgetAccountLinkIndexVerifier({ work: this.work }).step(scope, opts))
+      )(state.scopePK, { restart: options.restart === true });
+      if (result.complete) {
+        const fresh = await this.account(accountId);
+        if (fresh.storageKey.PK !== state.scopePK) return stale();
+        state.scopeRevision = fresh.scopeRevision;
+        state.phase = 'refund-index';
       }
     } else if (state.phase === 'refund-index') {
       const result = await (

@@ -1,3 +1,10 @@
+import { UpdateCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
+import { createPasswordResetService } from '../../apps/api/src/auth/password-reset-service.js';
+import { commitPasswordReset, type StoredUser } from '../../apps/api/src/auth/user-repository.js';
+import {
+  createUserAdminService,
+  dynamoUserAdminRepository,
+} from '../../apps/api/src/admin/user-admin-service.js';
 import { createHash } from 'node:crypto';
 import { dynamodb } from '../../apps/api/src/shared/dynamodb.js';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,6 +15,7 @@ import { createFinanceHandler } from '../../apps/api/src/finance/handler.js';
 import { FinanceRouteRegistry } from '../../apps/api/src/finance/handlers.js';
 import { json } from '../../apps/api/src/shared/http.js';
 import { FinanceUnitOfWork } from '../../apps/api/src/finance/unit-of-work.js';
+import { createFinanceSyncHandler } from '../../apps/api/src/sync/handlers.js';
 import { financePersistenceFixture } from '../fixtures/finance/persistence.js';
 
 function setup() {
@@ -246,6 +254,9 @@ describe('Finance PIN server privacy and durable verification', () => {
       securityRevision: 0,
       sessionEpoch: 1,
     });
+    await expect(
+      guard({ ...f.context, expectedUserId: 'a-different-browser-account' }),
+    ).rejects.toMatchObject({ status: 401 });
     (f.rows.get(f.key(f.userKey))!.data as any).active = false;
     await expect(guard(f.context)).rejects.toMatchObject({ status: 401 });
   });
@@ -261,6 +272,14 @@ describe('Finance PIN server privacy and durable verification', () => {
       now: f.now,
     });
     await expect(guard(f.context)).rejects.toMatchObject({ status: 403, code: 'finance_locked' });
+    const dispatch = vi.fn();
+    const replay = createFinanceSyncHandler(dispatch, async () => {
+      await guard(f.context);
+    });
+    await expect(
+      replay(f.context.userId, { entityType: 'financeTransaction' } as never),
+    ).rejects.toMatchObject({ status: 403, code: 'finance_locked' });
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('rejects mismatched owner, tab, session, revision or excessive/expired grant lifetimes', async () => {
@@ -293,21 +312,175 @@ describe('Finance PIN server privacy and durable verification', () => {
     }
   });
 
-  it('invalidates a grant on password-reset epoch change without altering Finance protection', async () => {
-    const f = setup();
-    await f.service.update(f.context, f.enrollment);
-    const unlocked = await f.service.unlock(f.context, { pin: '001234', tabNonce: 't'.repeat(32) });
-    const preference = structuredClone(f.rows.get(f.key(f.preferenceKey)));
-    (f.rows.get(f.key(f.userKey))!.data as any).sessionEpoch = 2;
-    const guard = createFinanceUnlockGuard({
-      read: async (key) => f.rows.get(f.key(key)),
-      now: f.now,
-    });
-    await expect(
-      guard({ ...f.context, grant: unlocked.grant, tabNonce: 't'.repeat(32) }),
-    ).rejects.toMatchObject({ status: 401 });
-    expect(f.rows.get(f.key(f.preferenceKey))).toEqual(preference);
-  });
+  it.each(['self', 'admin'] as const)(
+    'preserves the Finance PIN and invalidates old grants through the %s password-reset path',
+    async (kind) => {
+      const f = setup();
+      await f.service.update(f.context, f.enrollment);
+      const unlocked = await f.service.unlock(f.context, {
+        pin: '001234',
+        tabNonce: 't'.repeat(32),
+      });
+      const preference = structuredClone(f.rows.get(f.key(f.preferenceKey)));
+      const original = f.rows.get(f.key(f.userKey))!.data as StoredUser;
+      const send = vi.spyOn(dynamodb, 'send').mockResolvedValue({} as never);
+      const applyReset = async (change: Parameters<typeof commitPasswordReset>[0]) => {
+        await commitPasswordReset(change);
+        const command = send.mock.calls.at(-1)![0] as UpdateCommand;
+        expect(command).toBeInstanceOf(UpdateCommand);
+        expect(command.input.Key).toEqual(f.userKey);
+        const values = command.input.ExpressionAttributeValues!;
+        expect(command.input.UpdateExpression).toContain('#data.pepperVersion=:pepperVersion');
+        expect(command.input.UpdateExpression).not.toMatch(/pinHash|FINANCE_SECURITY/);
+        expect(values[':expectedVersion']).toBe(
+          (f.rows.get(f.key(f.userKey))!.data as StoredUser).version,
+        );
+        f.rows.set(f.key(f.userKey), {
+          ...f.rows.get(f.key(f.userKey))!,
+          data: {
+            ...(f.rows.get(f.key(f.userKey))!.data as StoredUser),
+            passwordHash: values[':passwordHash'],
+            sessionEpoch: values[':sessionEpoch'],
+            credentialVersion: values[':credentialVersion'],
+            pepperVersion: values[':pepperVersion'],
+            version: values[':nextVersion'],
+          },
+        });
+      };
+      try {
+        if (kind === 'self') {
+          const reset = createPasswordResetService({
+            findUser: async () => original,
+            consumeAttempt: async () => true,
+            verifyOrDummyPin: async (hash, pin, version?: string) => {
+              expect(hash).toBe('independent-recovery-pin');
+              expect(version).toBe('old-version');
+              return pin === 'recovery-only';
+            },
+            hashNewPassword: async (password, version?: string) => {
+              expect(version).toBe('old-version');
+              return { passwordHash: `test:${password}:pepper-old`, pepperVersion: version! };
+            },
+            commitPasswordReset: applyReset,
+          });
+          const request = {
+            username: original.username,
+            pin: '001234',
+            newPassword: 'new-password',
+            sourceKey: 'synthetic-source',
+          };
+          await expect(reset.reset(request)).resolves.toEqual({ accepted: true });
+          expect(send).not.toHaveBeenCalled();
+          await reset.reset({ ...request, pin: 'recovery-only' });
+          expect(send).toHaveBeenCalledOnce();
+        } else {
+          const service = createUserAdminService({
+            get: async () => original,
+            list: async () => [original],
+            setStatus: async () => {
+              throw new Error('Unexpected status change');
+            },
+            update: async (current, change, version) => {
+              const result = await dynamoUserAdminRepository.update!(current, change, version);
+              const command = send.mock.calls.at(-1)![0] as TransactWriteCommand;
+              expect(command).toBeInstanceOf(TransactWriteCommand);
+              expect(command.input.TransactItems).toHaveLength(2);
+              const update = command.input.TransactItems!.find((item) => item.Update)!.Update!;
+              expect(update.Key).toEqual(f.userKey);
+              expect(JSON.stringify(command.input.TransactItems)).not.toContain('FINANCE_SECURITY');
+              expect(update.ExpressionAttributeValues?.[':passwordHash']).toBe(
+                'new-admin-password-digest',
+              );
+              expect(update.ExpressionAttributeValues?.[':pepperVersion']).toBe('new-version');
+              expect(update.ExpressionAttributeValues?.[':pinPepperVersion']).toBe('old-version');
+              f.rows.set(f.key(f.userKey), { ...f.rows.get(f.key(f.userKey))!, data: result });
+              return result;
+            },
+          });
+          const adminView = await service.updateUser(
+            'authorized-admin',
+            original.id,
+            {
+              username: original.username,
+              displayName: original.displayName,
+              role: original.role,
+              passwordHash: 'new-admin-password-digest',
+              pepperVersion: 'new-version',
+            },
+            original.version,
+          );
+          expect(send).toHaveBeenCalledOnce();
+          expect(JSON.stringify(adminView)).not.toMatch(
+            /passwordHash|pinHash|pepperVersion|pinPepperVersion/,
+          );
+          const updated = f.rows.get(f.key(f.userKey))!.data as StoredUser;
+          expect(updated).toMatchObject({
+            pepperVersion: 'new-version',
+            pinPepperVersion: 'old-version',
+            pinHash: original.pinHash,
+          });
+          const recovery = createPasswordResetService({
+            findUser: async () => updated,
+            consumeAttempt: async () => true,
+            verifyOrDummyPin: async (hash, pin, version) => {
+              expect(hash).toBe(original.pinHash);
+              expect(version).toBe('old-version');
+              return pin === 'recovery-only';
+            },
+            hashNewPassword: async (password, version) => {
+              expect(version).toBe('new-version');
+              return { passwordHash: `test:${password}:pepper-new`, pepperVersion: version! };
+            },
+            commitPasswordReset: applyReset,
+          });
+          await recovery.reset({
+            username: updated.username,
+            pin: 'recovery-only',
+            newPassword: 'recovered-after-admin',
+            sourceKey: 'synthetic-source',
+          });
+          expect(send).toHaveBeenCalledTimes(2);
+          const recovered = send.mock.calls.at(-1)![0] as UpdateCommand;
+          expect(recovered.input.Key).toEqual(f.userKey);
+          expect(recovered.input.ExpressionAttributeValues?.[':pepperVersion']).toBe('new-version');
+        }
+        expect(f.rows.get(f.key(f.preferenceKey))).toEqual(preference);
+        expect((f.rows.get(f.key(f.userKey))!.data as StoredUser).pinHash).toBe(original.pinHash);
+        const guard = createFinanceUnlockGuard({
+          read: async (key) => f.rows.get(f.key(key)),
+          now: f.now,
+        });
+        await expect(
+          guard({ ...f.context, grant: unlocked.grant, tabNonce: 't'.repeat(32) }),
+        ).rejects.toMatchObject({ status: 401 });
+        const dispatch = vi.fn();
+        const replay = createFinanceSyncHandler(dispatch, async () => {
+          await guard({ ...f.context, grant: unlocked.grant, tabNonce: 't'.repeat(32) });
+        });
+        await expect(
+          replay(f.context.userId, { entityType: 'financeTransaction' } as never),
+        ).rejects.toMatchObject({ status: 401 });
+        expect(dispatch).not.toHaveBeenCalled();
+        const profile = f.rows.get(f.key(f.userKey))!.data as StoredUser;
+        const freshContext = { ...f.context, sessionHash: 'b'.repeat(64) };
+        const freshKey = { PK: `SESSION#${freshContext.sessionHash}`, SK: 'SESSION' };
+        const oldSession = f.rows.get(f.key(f.sessionKey))!.data as Record<string, unknown>;
+        f.rows.set(f.key(freshKey), {
+          ...freshKey,
+          data: { ...oldSession, id: 'fresh-session', sessionEpoch: profile.sessionEpoch },
+        });
+        const freshGrant = await f.service.unlock(freshContext, {
+          pin: '001234',
+          tabNonce: 'n'.repeat(32),
+        });
+        expect(
+          await guard({ ...freshContext, grant: freshGrant.grant, tabNonce: 'n'.repeat(32) }),
+        ).toMatchObject({ requirePin: true, securityRevision: 1 });
+      } finally {
+        send.mockRestore();
+      }
+    },
+  );
 
   it('loads only safe canonical profile fields across the Finance boundary', async () => {
     const f = setup();

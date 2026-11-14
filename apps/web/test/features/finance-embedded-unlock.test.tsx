@@ -15,6 +15,15 @@ vi.mock('../../src/features/finance/security/finance-access.js', () => ({
     return () => f.listeners.delete(callback);
   },
 }));
+// This component fixture supplies an authorized batch; the real cache protocol is covered in DB/security tests.
+vi.mock('../../src/sync/finance-cache-access.js', () => ({
+  readFinanceCachedData: async (operation: (lease: object) => Promise<unknown>) => {
+    const controller = f.controller as {
+      read: (operation: () => Promise<unknown>) => Promise<unknown>;
+    };
+    return controller.read(() => operation({}));
+  },
+}));
 vi.mock('../../src/db/database.js', () => ({
   db: { secureFinanceRecords: { where: () => ({ equals: () => ({ toArray: f.rows }) }) } },
 }));

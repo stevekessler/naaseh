@@ -164,6 +164,19 @@ describe('Finance budget reconciliation', () => {
       ),
     ).toBe(record);
     expect(listBudgetReconciliationHistory(repository, actor, ids.budget)).toEqual([record]);
+    const account = repository.accounts.get(ids.account)!;
+    repository.accounts.set(ids.account, {
+      ...account,
+      scope: { type: 'owner', ownerId: 'other' },
+    });
+    expect(listBudgetReconciliationHistory(repository, actor, ids.budget)).toEqual([]);
+    repository.budgets.set(ids.budget, {
+      ...repository.budgets.get(ids.budget)!,
+      status: 'archived',
+    });
+    expect(getFinanceBudget(repository, actor, ids.budget).reconciliations).toEqual([]);
+    repository.accounts.set(ids.account, account);
+    expect(getFinanceBudget(repository, actor, ids.budget).reconciliations).toEqual([record]);
   });
 
   it('rejects incomplete, invalid, refreshing, and concurrently changed sources without partial history', async () => {

@@ -1,4 +1,5 @@
-vi.mock('../../apps/api/src/finance/finance-unlock-guard.js', () => ({
+vi.mock('../../apps/api/src/finance/finance-unlock-guard.js', async (original) => ({
+  ...(await original<object>()),
   createFinanceUnlockGuard: () => async () => ({
     requirePin: false,
     securityRevision: 0,

@@ -5,19 +5,25 @@ import {
   financeBudgetAccountLinkInputSchema,
   financeBudgetInputSchema,
   financeBudgetItemInputSchema,
+  financeBudgetLifecycleInputSchema,
   financeBudgetPatchSchema,
   financeBudgetReconciliationInputSchema,
   financeCategoryInputSchema,
   financeCategoryPatchSchema,
   financeDeletionConfirmationSchema,
   financeMerchantInputSchema,
+  financeMerchantPatchSchema,
   financeReusableCopyInputSchema,
+  financeRefundRelationshipDeleteSchema,
+  financeRefundRelationshipPutSchema,
   financeReusableItemInputSchema,
   financeTaskCreateInputSchema,
   financeTransactionMatchDecisionSchema,
+  financeTransactionMetadataPatchSchema,
   manualFinanceAccountInputSchema,
   manualFinanceBalanceInputSchema,
   manualFinanceTransactionInputSchema,
+  manualFinanceTransactionReplayInputSchema,
   providerReconciliationDecisionInputSchema,
   simplefinClaimInputSchema,
   transactionAllocationReplacementSchema,
@@ -38,6 +44,7 @@ import {
   createMerchant,
   createUlid,
   createUserFinanceCategory,
+  reparentFinanceCategory,
   renameFinanceCategory,
   tombstoneTransactionMatch,
 } from '@naaseh/domain';
@@ -50,10 +57,14 @@ import {
 } from './account-service.js';
 import {
   addFinanceBudgetItem,
+  closeFinanceBudget,
   createFinanceBudget,
+  deactivateFinanceBudget,
   getFinanceBudget,
   linkFinanceBudgetAccount,
   listFinanceBudgets,
+  reactivateFinanceBudget,
+  reopenFinanceBudget,
   updateFinanceBudget,
 } from './budget-service.js';
 import { claimSimplefinConnection, dispatchSimplefinRefresh } from './connection-service.js';
@@ -66,12 +77,18 @@ import {
 } from './deletion-service.js';
 import { decideProviderReconciliation } from './provider-reconciliation-service.js';
 import {
+  deleteExpenseRefundRelationship,
+  getExpenseRefundRelationship,
+  putExpenseRefundRelationship,
+} from './refund-service.js';
+import {
   acceptFinanceTransactionMatch,
   copyReusableItemToBudget,
   createFinanceReusableItem,
   evaluateFinanceTransactionMatches,
   listFinanceReusableItems,
   listFinanceTransactionMatches,
+  canReadFinanceMatchBudget,
   listReusableOffers,
   rejectFinanceTransactionMatch,
   undoFinanceTransactionMatch,
@@ -88,6 +105,7 @@ import {
 import {
   claimFinanceCategoryName,
   claimFinanceMerchantKey,
+  financeCategoryNameLockKey,
   FinanceMemoryRepository,
 } from './repository.js';
 import {
@@ -97,6 +115,8 @@ import {
   readAuthorizedMerchantActivity,
   replaceTransactionAllocationsForActor,
   searchAuthorizedTransactions,
+  updateFinanceMerchant,
+  updateTransactionPaymentMetadata,
 } from './transaction-service.js';
 
 export type FinanceRouteHandler = (
@@ -172,6 +192,27 @@ const visible = (
   action: 'read' | 'edit' | 'connect' | 'delete' = 'read',
 ) => authorizeFinanceScope(actor, scope, action).allowed;
 
+const simplefinConnectionView = (
+  connection: Record<string, unknown>,
+  importStatus?: import('@naaseh/domain').ImportJob['status'],
+) => ({
+  id: connection.id,
+  scope: connection.scope,
+  provider: connection.provider,
+  status: connection.status,
+  version: connection.version,
+  ...(typeof connection.lastAttemptAt === 'string'
+    ? { lastAttemptAt: connection.lastAttemptAt }
+    : {}),
+  ...(typeof connection.lastSuccessfulAt === 'string'
+    ? { lastSuccessfulAt: connection.lastSuccessfulAt }
+    : {}),
+  ...(typeof connection.lastErrorClass === 'string'
+    ? { lastErrorClass: connection.lastErrorClass }
+    : {}),
+  ...(importStatus ? { importStatus } : {}),
+});
+
 export function registerUserStory1FinanceRoutes(
   registry: FinanceRouteRegistry,
   dependencies: UserStory1RouteDependencies,
@@ -182,6 +223,24 @@ export function registerUserStory1FinanceRoutes(
     const items = [...repository.accounts.values()].filter((account) =>
       visible(actor, account.scope),
     );
+    return json(200, { items, nextCursor: null });
+  });
+  registry.register('GET', '/api/v1/finance/connections', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const latestJobs = new Map<string, import('@naaseh/domain').ImportJob['status']>();
+    for (const job of repository.importJobs.values()) latestJobs.set(job.connectionId, job.status);
+    const items = [...repository.connections.values()]
+      .filter(
+        (connection) =>
+          connection.scope &&
+          visible(actor, connection.scope as import('@naaseh/domain').FinanceScope),
+      )
+      .map((connection) =>
+        simplefinConnectionView(
+          connection,
+          typeof connection.id === 'string' ? latestJobs.get(connection.id) : undefined,
+        ),
+      );
     return json(200, { items, nextCursor: null });
   });
   registry.register('POST', '/api/v1/finance/accounts', async (event) => {
@@ -288,19 +347,29 @@ export function registerUserStory1FinanceRoutes(
   registry.register('POST', '/api/v1/finance/accounts/{accountId}/transactions', async (event) => {
     const actor = await dependencies.actorFor(event);
     const accountId = parameter(event, 'accountId');
-    const input = manualFinanceTransactionInputSchema.parse(bodyOf(event));
+    const replay = event.headers['x-finance-sync-replay'] === 'manual-transaction-create-v1';
+    const body = bodyOf(event);
+    const replayInput = replay ? manualFinanceTransactionReplayInputSchema.parse(body) : undefined;
+    const input = replayInput ?? manualFinanceTransactionInputSchema.parse(body);
     const transaction = await createManualTransaction(
       repository,
       actor,
       accountId,
       {
-        id: createUlid(),
+        id: replayInput?.id ?? createUlid(),
+        ...(input.expectedAccountVersion === undefined
+          ? {}
+          : { expectedAccountVersion: input.expectedAccountVersion }),
         amountMinor: input.amountMinor,
         transactedAt: input.transactedAt,
         description: input.description,
         ...(input.postedAt === undefined ? {} : { postedAt: input.postedAt }),
         ...(input.payee === undefined ? {} : { payee: input.payee }),
         ...(input.memo === undefined ? {} : { memo: input.memo }),
+        ...(input.merchantId === undefined ? {} : { merchantId: input.merchantId }),
+        ...(input.paymentType === undefined ? {} : { paymentType: input.paymentType }),
+        ...(input.checkNumber === undefined ? {} : { checkNumber: input.checkNumber }),
+        ...(input.allocations === undefined ? {} : { allocations: input.allocations }),
       },
       mutationId(event),
     );
@@ -317,6 +386,88 @@ export function registerUserStory1FinanceRoutes(
         ...(accountId ? { accountId } : {}),
         ...(limit ? { limit: Number(limit) } : {}),
       }),
+    );
+  });
+  registry.register(
+    'GET',
+    '/api/v1/finance/transactions/{transactionId}/refund-relationship',
+    async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const relationship = getExpenseRefundRelationship(
+        repository,
+        actor,
+        parameter(event, 'transactionId'),
+      );
+      if (!relationship) throw new Error('Finance record not found.');
+      return json(200, relationship);
+    },
+  );
+  registry.register(
+    'PUT',
+    '/api/v1/finance/transactions/{transactionId}/refund-relationship',
+    async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const input = financeRefundRelationshipPutSchema.parse(bodyOf(event));
+      return json(
+        200,
+        putExpenseRefundRelationship(
+          repository,
+          actor,
+          parameter(event, 'transactionId'),
+          {
+            originalExpenseTransactionId: input.originalExpenseTransactionId,
+            linkedAmountMinor: input.linkedAmountMinor,
+            ...(input.refundedAllocations
+              ? { refundedAllocations: input.refundedAllocations }
+              : {}),
+            confirmedPartialAllocations: input.confirmedPartialAllocations,
+            expectedRefundVersion: input.expectedRefundVersion,
+            expectedOriginalVersion: input.expectedOriginalVersion,
+            ...(input.expectedRelationshipVersion
+              ? { expectedRelationshipVersion: input.expectedRelationshipVersion }
+              : {}),
+            expectedCreditCapacityVersion: input.expectedCreditCapacityVersion,
+            expectedAllocationCapacityVersions: input.expectedAllocationCapacityVersions,
+          },
+          mutationId(event),
+        ),
+      );
+    },
+  );
+  registry.register(
+    'DELETE',
+    '/api/v1/finance/transactions/{transactionId}/refund-relationship',
+    async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const input = financeRefundRelationshipDeleteSchema.parse(bodyOf(event));
+      return json(
+        200,
+        deleteExpenseRefundRelationship(
+          repository,
+          actor,
+          parameter(event, 'transactionId'),
+          input,
+          mutationId(event),
+        ),
+      );
+    },
+  );
+  registry.register('PATCH', '/api/v1/finance/transactions/{transactionId}', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const input = financeTransactionMetadataPatchSchema.parse(bodyOf(event));
+    return json(
+      200,
+      await updateTransactionPaymentMetadata(
+        repository,
+        actor,
+        parameter(event, 'transactionId'),
+        {
+          expectedVersion: input.expectedVersion,
+          ...(input.paymentType !== undefined ? { paymentType: input.paymentType } : {}),
+          ...(input.checkNumber !== undefined ? { checkNumber: input.checkNumber } : {}),
+        },
+        mutationId(event),
+      ),
     );
   });
   registry.register(
@@ -337,6 +488,7 @@ export function registerUserStory1FinanceRoutes(
               id: allocation.id,
               amountMinor: allocation.amountMinor,
               financeCategoryId: allocation.financeCategoryId,
+              ...(allocation.subcategoryId ? { subcategoryId: allocation.subcategoryId } : {}),
               ...(allocation.budgetItemId ? { budgetItemId: allocation.budgetItemId } : {}),
               ...(allocation.note ? { note: allocation.note } : {}),
             })),
@@ -370,13 +522,22 @@ export function registerUserStory1FinanceRoutes(
   );
   registry.register('POST', '/api/v1/finance/transfers', async (event) => {
     const actor = await dependencies.actorFor(event);
-    const input = bodyOf(event) as { id?: unknown; scope?: unknown; transactionIds?: unknown };
+    const input = bodyOf(event) as {
+      id?: unknown;
+      scope?: unknown;
+      transactionIds?: unknown;
+      expectedVersions?: unknown;
+    };
     if (
       typeof input.id !== 'string' ||
       !input.scope ||
       !Array.isArray(input.transactionIds) ||
       input.transactionIds.length < 2 ||
-      input.transactionIds.some((id) => typeof id !== 'string')
+      input.transactionIds.some((id) => typeof id !== 'string') ||
+      (input.expectedVersions !== undefined &&
+        (!Array.isArray(input.expectedVersions) ||
+          input.expectedVersions.length !== input.transactionIds.length ||
+          input.expectedVersions.some((version) => !Number.isSafeInteger(version) || version < 1)))
     ) {
       throw new Error('Invalid transfer confirmation.');
     }
@@ -389,6 +550,9 @@ export function registerUserStory1FinanceRoutes(
           id: input.id,
           scope: input.scope as import('@naaseh/domain').FinanceScope,
           transactionIds: input.transactionIds as string[],
+          ...(input.expectedVersions === undefined
+            ? {}
+            : { expectedVersions: input.expectedVersions as number[] }),
         },
         mutationId(event),
       ),
@@ -440,9 +604,17 @@ export function registerUserStory1FinanceRoutes(
       id: createUlid(),
       name: input.name,
       creatorId: actor.id,
+      ...(input.parentId ? { parentId: input.parentId } : {}),
     });
-    assertUniqueActiveCategoryName([...repository.categories.values()], category.name);
-    claimFinanceCategoryName(repository, category.canonicalName, category.id);
+    const categories = [...repository.categories.values()];
+    if (category.parentId) {
+      const parent = repository.categories.get(category.parentId);
+      if (!parent) throw new Error('Finance record not found.');
+      if (parent.parentId || parent.status !== 'active')
+        throw new Error('Finance categories support only one active child level.');
+    }
+    assertUniqueActiveCategoryName(categories, category.name, undefined, category.parentId);
+    claimFinanceCategoryName(repository, category.canonicalName, category.id, category.parentId);
     repository.categories.set(category.id, category);
     return json(201, repository.remember(actor.id, mutationId(event), category));
   });
@@ -453,16 +625,23 @@ export function registerUserStory1FinanceRoutes(
     if (!category) throw new Error('Finance record not found.');
     if (category.version !== input.expectedVersion)
       throw new Error('Finance category version conflict.');
+    const categories = [...repository.categories.values()];
+    const targetParentId =
+      input.parentId === undefined ? category.parentId : (input.parentId ?? undefined);
     let updated = category;
-    if (input.name && input.name !== category.name) {
-      assertUniqueActiveCategoryName([...repository.categories.values()], input.name, category.id);
-      const renamed = renameFinanceCategory(updated, input.name, actor);
-      if (repository.categoryNameLocks.get(category.canonicalName) === category.id) {
-        repository.categoryNameLocks.delete(category.canonicalName);
-      }
-      claimFinanceCategoryName(repository, renamed.canonicalName, renamed.id);
-      updated = renamed;
+    if (targetParentId !== category.parentId) {
+      updated = reparentFinanceCategory(category, targetParentId, categories, actor, {
+        hasReferences: repository.catalogReferenced('category', category.id),
+      });
     }
+    if (input.name && input.name !== updated.name)
+      updated = renameFinanceCategory(updated, input.name, actor);
+    assertUniqueActiveCategoryName(categories, updated.name, updated.id, updated.parentId);
+    const priorLock = financeCategoryNameLockKey(category.canonicalName, category.parentId);
+    const nextLock = financeCategoryNameLockKey(updated.canonicalName, updated.parentId);
+    claimFinanceCategoryName(repository, updated.canonicalName, updated.id, updated.parentId);
+    if (priorLock !== nextLock && repository.categoryNameLocks.get(priorLock) === category.id)
+      repository.categoryNameLocks.delete(priorLock);
     if (input.status === 'archived' && updated.status !== 'archived')
       updated = archiveFinanceCategory(updated, actor);
     repository.categories.set(updated.id, updated);
@@ -511,6 +690,28 @@ export function registerUserStory1FinanceRoutes(
       readAuthorizedMerchantActivity(repository, actor, parameter(event, 'merchantId')),
     );
   });
+  registry.register('PATCH', '/api/v1/finance/merchants/{merchantId}', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const input = financeMerchantPatchSchema.parse(bodyOf(event));
+    return json(
+      200,
+      updateFinanceMerchant(
+        repository,
+        actor,
+        parameter(event, 'merchantId'),
+        {
+          expectedVersion: input.expectedVersion,
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.city !== undefined ? { city: input.city } : {}),
+          ...(input.region !== undefined ? { region: input.region } : {}),
+          ...(input.financeCategoryId !== undefined
+            ? { financeCategoryId: input.financeCategoryId }
+            : {}),
+        },
+        mutationId(event),
+      ),
+    );
+  });
   registry.register('POST', '/api/v1/finance/accounts/{accountId}/csv-imports', async (event) => {
     const actor = await dependencies.actorFor(event);
     const accountId = parameter(event, 'accountId');
@@ -532,6 +733,27 @@ export function registerUserStory1FinanceRoutes(
       actor,
       {
         id: createUlid(),
+        groupId: input.groupId,
+        name: input.name,
+        budgetDate: input.budgetDate,
+        startDate: input.startDate,
+        ...(input.endDate === undefined ? {} : { endDate: input.endDate }),
+        status: 'active',
+      },
+      mutationId(event),
+    );
+    return json(201, getFinanceBudget(repository, actor, budget.id));
+  });
+  registry.register('POST', '/api/v1/finance/budgets/{budgetId}', async (event) => {
+    if (event.headers['x-finance-sync-replay'] !== 'budget-create-v1')
+      throw new Error('This Finance replay request is not supported.');
+    const actor = await dependencies.actorFor(event);
+    const input = financeBudgetInputSchema.parse(bodyOf(event));
+    const budget = await createFinanceBudget(
+      repository,
+      actor,
+      {
+        id: parameter(event, 'budgetId'),
         groupId: input.groupId,
         name: input.name,
         budgetDate: input.budgetDate,
@@ -567,6 +789,22 @@ export function registerUserStory1FinanceRoutes(
     );
     return json(200, getFinanceBudget(repository, actor, budgetId));
   });
+  const registerBudgetLifecycle = (
+    action: 'deactivate' | 'reactivate' | 'close' | 'reopen',
+    change: typeof deactivateFinanceBudget,
+  ) => {
+    registry.register('POST', `/api/v1/finance/budgets/{budgetId}/${action}`, async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const input = financeBudgetLifecycleInputSchema.parse(bodyOf(event));
+      const budgetId = parameter(event, 'budgetId');
+      await change(repository, actor, budgetId, input, mutationId(event));
+      return json(200, getFinanceBudget(repository, actor, budgetId));
+    });
+  };
+  registerBudgetLifecycle('deactivate', deactivateFinanceBudget);
+  registerBudgetLifecycle('reactivate', reactivateFinanceBudget);
+  registerBudgetLifecycle('close', closeFinanceBudget);
+  registerBudgetLifecycle('reopen', reopenFinanceBudget);
   registry.register('POST', '/api/v1/finance/budgets/{budgetId}/accounts', async (event) => {
     const actor = await dependencies.actorFor(event);
     const input = financeBudgetAccountLinkInputSchema.parse(bodyOf(event));
@@ -596,6 +834,7 @@ export function registerUserStory1FinanceRoutes(
         expectedBudgetVersion: input.expectedBudgetVersion,
         description: input.description,
         financeCategoryId: input.financeCategoryId,
+        ...(input.subcategoryId ? { subcategoryId: input.subcategoryId } : {}),
         plannedAmountMinor: input.plannedAmountMinor,
         currency: input.currency,
         currencyExponent: input.currencyExponent,
@@ -659,38 +898,46 @@ export function registerUserStory1FinanceRoutes(
     const actor = await dependencies.actorFor(event);
     return json(200, listFinanceReusableItems(repository, actor, query(event, 'groupId')));
   });
-  registry.register('POST', '/api/v1/finance/reusable-items', async (event) => {
-    const actor = await dependencies.actorFor(event);
-    const input = financeReusableItemInputSchema.parse(bodyOf(event));
-    const item = await createFinanceReusableItem(
-      repository,
-      actor,
-      {
-        id: createUlid(),
-        groupId: input.groupId,
-        description: input.description,
-        ...(input.merchantId ? { merchantId: input.merchantId } : {}),
-        financeCategoryId: input.financeCategoryId,
-        plannedAmountMinor: input.plannedAmountMinor,
-        currency: input.currency,
-        currencyExponent: input.currencyExponent,
-        relatedAccountIds: input.relatedAccountIds,
-        ...(input.applicableDate ? { applicableDate: input.applicableDate } : {}),
-        ...(input.recurrence
-          ? {
-              recurrence: {
-                interval: input.recurrence.interval,
-                unit: input.recurrence.unit,
-                startDate: input.recurrence.startDate,
-                ...(input.recurrence.endDate ? { endDate: input.recurrence.endDate } : {}),
-              },
-            }
-          : {}),
-      },
-      mutationId(event),
-    );
-    return json(201, item);
-  });
+  const createReusable =
+    (stableId: boolean): FinanceRouteHandler =>
+    async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const input = financeReusableItemInputSchema.parse(bodyOf(event));
+      const item = await createFinanceReusableItem(
+        repository,
+        actor,
+        {
+          id: stableId ? parameter(event, 'reusableItemId') : createUlid(),
+          groupId: input.groupId,
+          description: input.description,
+          ...(input.merchantId ? { merchantId: input.merchantId } : {}),
+          financeCategoryId: input.financeCategoryId,
+          plannedAmountMinor: input.plannedAmountMinor,
+          currency: input.currency,
+          currencyExponent: input.currencyExponent,
+          relatedAccountIds: input.relatedAccountIds,
+          ...(input.applicableDate ? { applicableDate: input.applicableDate } : {}),
+          ...(input.recurrence
+            ? {
+                recurrence: {
+                  interval: input.recurrence.interval,
+                  unit: input.recurrence.unit,
+                  startDate: input.recurrence.startDate,
+                  ...(input.recurrence.endDate ? { endDate: input.recurrence.endDate } : {}),
+                },
+              }
+            : {}),
+        },
+        mutationId(event),
+      );
+      return json(201, item);
+    };
+  registry.register('POST', '/api/v1/finance/reusable-items', createReusable(false));
+  registry.register(
+    'POST',
+    '/api/v1/finance/reusable-items/{reusableItemId}',
+    createReusable(true),
+  );
   registry.register('GET', '/api/v1/finance/budgets/{budgetId}/reusable-offers', async (event) => {
     const actor = await dependencies.actorFor(event);
     return json(200, {
@@ -926,7 +1173,12 @@ export function registerUserStory1FinanceRoutes(
           ? repository.transactions.find(({ id }) => id === match.transactionId)
           : undefined;
         const account = transaction ? repository.accounts.get(transaction.accountId) : undefined;
-        if (!match || !account || !visible(actor, account.scope, 'delete')) {
+        if (
+          !match ||
+          !account ||
+          !visible(actor, account.scope, 'delete') ||
+          !canReadFinanceMatchBudget(repository, actor, match)
+        ) {
           throw new Error('Finance record not found.');
         }
         preview = createAuthorizedDeletionPreview(actor, account.scope, {
@@ -1074,8 +1326,9 @@ export function registerUserStory1FinanceRoutes(
           if (repository.catalogReferenced('category', category.id))
             throw new Error('Deletion preview is stale.');
           repository.categories.delete(category.id);
-          if (repository.categoryNameLocks.get(category.canonicalName) === category.id) {
-            repository.categoryNameLocks.delete(category.canonicalName);
+          const lockKey = financeCategoryNameLockKey(category.canonicalName, category.parentId);
+          if (repository.categoryNameLocks.get(lockKey) === category.id) {
+            repository.categoryNameLocks.delete(lockKey);
           }
         } else repository.categories.set(category.id, archiveFinanceCategory(category, actor));
       } else if (preview.recordType === 'merchant') {

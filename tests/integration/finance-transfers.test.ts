@@ -55,6 +55,20 @@ describe('Finance transfer services', () => {
       'create-credit',
     );
 
+    await expect(
+      confirmTransactionTransfer(
+        repository,
+        actor,
+        {
+          id: transferId,
+          scope: { type: 'owner', ownerId: actor.id },
+          transactionIds,
+          expectedVersions: [1, 2],
+        },
+        'stale-transfer',
+      ),
+    ).rejects.toThrow('Transfer version conflict.');
+    expect(repository.transfers.size).toBe(0);
     const transfer = await confirmTransactionTransfer(
       repository,
       actor,
@@ -62,6 +76,7 @@ describe('Finance transfer services', () => {
         id: transferId,
         scope: { type: 'owner', ownerId: actor.id },
         transactionIds,
+        expectedVersions: [1, 1],
       },
       'confirm-transfer',
     );
@@ -77,6 +92,18 @@ describe('Finance transfer services', () => {
         'confirm-transfer',
       ),
     ).toEqual(transfer);
+    await expect(
+      confirmTransactionTransfer(
+        repository,
+        { ...actor, active: false },
+        {
+          id: transferId,
+          scope: { type: 'owner', ownerId: actor.id },
+          transactionIds,
+        },
+        'confirm-transfer',
+      ),
+    ).rejects.toThrow('Finance record not found.');
     expect(repository.transactions.filter(({ transferId: id }) => id === transferId)).toHaveLength(
       2,
     );

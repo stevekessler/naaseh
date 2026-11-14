@@ -114,7 +114,8 @@ export function authorizedFinancialTaskLinkForTask(
   if (!task || !link || !budget) return undefined;
   const canReadTask = canReadTaskAs(task, {
     id: actor.id,
-    role: actor.role,
+    // Finance task relationships never use the application administrator read override.
+    role: 'user',
     active: actor.active,
     groupIds: actor.groupMemberships.map(({ groupId }) => groupId),
   }).allowed;

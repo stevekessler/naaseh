@@ -274,6 +274,12 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
   },
   async update(current, change, expectedVersion) {
     const usernameChanged = current.username !== change.username;
+    const credentials = current as UserRecord & {
+      pinHash?: string;
+      pepperVersion?: string;
+      pinPepperVersion?: string;
+    };
+    const pinPepperVersion = credentials.pinPepperVersion ?? credentials.pepperVersion;
     const names: Record<string, string> = {
       '#data': 'data',
       '#username': 'username',
@@ -311,6 +317,14 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
       values[':pepperVersion'] = change.pepperVersion;
       updateExpression +=
         ', #data.#passwordHash=:passwordHash, #data.#pepperVersion=:pepperVersion, #data.#credentialVersion=if_not_exists(#data.#credentialVersion,:zero)+:one';
+      // Recovery PIN hashes remain unchanged during an administrator password reset.
+      // Pin their original pepper before the password's version can advance.
+      if (credentials.pinHash && pinPepperVersion) {
+        names['#pinPepperVersion'] = 'pinPepperVersion';
+        values[':pinPepperVersion'] = pinPepperVersion;
+        updateExpression +=
+          ', #data.#pinPepperVersion=if_not_exists(#data.#pinPepperVersion,:pinPepperVersion)';
+      }
     }
     const update = {
       TableName: tableName,
@@ -368,6 +382,13 @@ export const dynamoUserAdminRepository: UserAdminRepository = {
     }
     return {
       ...current,
+      ...(change.passwordHash && change.pepperVersion
+        ? {
+            passwordHash: change.passwordHash,
+            pepperVersion: change.pepperVersion,
+            ...(credentials.pinHash && pinPepperVersion ? { pinPepperVersion } : {}),
+          }
+        : {}),
       username: change.username,
       displayName: change.displayName,
       role: change.role,

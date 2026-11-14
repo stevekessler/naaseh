@@ -1,6 +1,13 @@
+import { createHash } from 'node:crypto';
 import { FinanceMemoryRepository } from './repository.js';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
-import { createFinancialTransaction, deriveCurrentBalance, financeAudience } from '@naaseh/domain';
+import {
+  createFinancialTransaction,
+  createUlid,
+  deriveCurrentBalance,
+  financeAudience,
+  type FinancialTransaction,
+} from '@naaseh/domain';
 
 export interface CsvCommitChunk {
   accountId: string;
@@ -20,8 +27,46 @@ export interface CsvCommitChunk {
     amountMinor: number;
     transactedAt: string;
     description: string;
+    payee?: string | undefined;
+    memo?: string | undefined;
     duplicateDisposition?: 'not-suspected' | 'included-after-review';
   }>;
+}
+
+type CsvDuplicateComparison = Pick<CsvCommitChunk, 'accountId' | 'rows'> & {
+  batchId?: string;
+};
+
+export function identifyCsvDuplicateOrdinals(
+  transactions: readonly (Pick<
+    FinancialTransaction,
+    'id' | 'accountId' | 'amountMinor' | 'effectiveAt' | 'description'
+  > &
+    Partial<Pick<FinancialTransaction, 'origin' | 'csvImportBatchId'>>)[],
+  input: CsvDuplicateComparison,
+): number[] {
+  const key = (amount: number, date: string, description: string) =>
+    JSON.stringify([amount, date, description]);
+  const remaining = new Set(
+    input.rows.map((row) => key(row.amountMinor, row.transactedAt, row.description)),
+  );
+  const matched = new Set<string>();
+  for (const transaction of transactions) {
+    if (!remaining.size) break;
+    if (transaction.accountId !== input.accountId) continue;
+    if (
+      input.batchId &&
+      transaction.origin === 'csv' &&
+      (transaction.csvImportBatchId === input.batchId ||
+        transaction.id.startsWith(`${input.batchId}:`))
+    )
+      continue;
+    const identity = key(transaction.amountMinor, transaction.effectiveAt, transaction.description);
+    if (remaining.delete(identity)) matched.add(identity);
+  }
+  return input.rows
+    .filter((row) => matched.has(key(row.amountMinor, row.transactedAt, row.description)))
+    .map(({ ordinal }) => ordinal);
 }
 
 interface MemoryCsvBatch {
@@ -31,6 +76,7 @@ interface MemoryCsvBatch {
   duplicateDecisionDigest: string;
   status: 'staged' | 'committing' | 'partial' | 'succeeded';
   chunks: Set<number>;
+  chunkDigests?: Record<number, string>;
   counts: {
     accepted: number;
     committed: number;
@@ -73,23 +119,27 @@ export async function commitCsvImportChunk(
     if (prior) return responseFor(prior);
     throw new Error('CSV file replay receipt is inconsistent.');
   }
-  repository.csvFileReceipts.set(fileKey, input.batchId);
-
   const batchKey = `${input.accountId}:${input.batchId}`;
   const existing = repository.csvBatches.get(batchKey) as MemoryCsvBatch | undefined;
+  const chunkDigest = createHash('sha256')
+    .update(JSON.stringify([input.finalChunk, input.rows]))
+    .digest('hex');
+  const priorChunkDigest = existing?.chunkDigests?.[input.chunkIndex];
+  if (
+    existing &&
+    (existing.fileDigest !== input.fileDigest ||
+      existing.duplicateDecisionDigest !== input.duplicateDecisionDigest ||
+      (priorChunkDigest !== undefined && priorChunkDigest !== chunkDigest))
+  )
+    throw new Error('CSV import version conflict.');
   if (existing?.chunks.has(input.chunkIndex)) return responseFor(existing);
-  for (const row of input.rows) {
-    const suspected = repository.transactions.some(
-      (item) =>
-        item.accountId === input.accountId &&
-        item.id !== `${input.batchId}:${row.ordinal}` &&
-        item.amountMinor === row.amountMinor &&
-        item.effectiveAt === row.transactedAt &&
-        item.description === row.description,
-    );
-    if (suspected && row.duplicateDisposition !== 'included-after-review') {
-      throw new Error(`Duplicate review is required for CSV row ${row.ordinal}.`);
-    }
+  const unreviewed = identifyCsvDuplicateOrdinals(repository.transactions, {
+    accountId: input.accountId,
+    batchId: input.batchId,
+    rows: input.rows.filter((row) => row.duplicateDisposition !== 'included-after-review'),
+  })[0];
+  if (unreviewed !== undefined) {
+    throw new Error(`Duplicate review is required for CSV row ${unreviewed}.`);
   }
 
   const batch: MemoryCsvBatch = existing ?? {
@@ -109,9 +159,8 @@ export async function commitCsvImportChunk(
     },
     failedOrdinals: [],
   };
-  if (batch.duplicateDecisionDigest !== input.duplicateDecisionDigest) {
-    throw new Error('CSV duplicate decisions changed during commit.');
-  }
+  (batch.chunkDigests ??= {})[input.chunkIndex] = chunkDigest;
+  repository.csvFileReceipts.set(fileKey, input.batchId);
   let processed = 0;
   for (const row of input.rows) {
     const identity = `${input.batchId}:${row.ordinal}`;
@@ -123,13 +172,15 @@ export async function commitCsvImportChunk(
       const account = repository.accounts.get(input.accountId);
       repository.transactions.push(
         createFinancialTransaction({
-          id: identity,
+          id: createUlid(),
           accountId: input.accountId,
           origin: 'csv',
           amountMinor: row.amountMinor,
           currency: account?.currency ?? 'USD',
           transactedAt: row.transactedAt,
           description: row.description,
+          ...(row.payee === undefined ? {} : { payee: row.payee }),
+          ...(row.memo === undefined ? {} : { memo: row.memo }),
           pending: false,
           connectedAccount: false,
           csvImportBatchId: input.batchId,

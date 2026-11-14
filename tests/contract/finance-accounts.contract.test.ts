@@ -65,6 +65,25 @@ describe('Finance account contracts', () => {
       }).success,
     ).toBe(true);
     expect(
+      manualFinanceTransactionInputSchema.safeParse({
+        amountMinor: 0,
+        transactedAt: '2026-01-01T00:00:00.000Z',
+        description: 'Zero is not a direction',
+      }).success,
+    ).toBe(false);
+    expect(
+      manualFinanceTransactionInputSchema.safeParse({
+        amountMinor: -100,
+        transactedAt: '2026-01-01T00:00:00.000Z',
+        description: 'Classified fixture',
+        merchantId: id,
+        paymentType: 'check',
+        checkNumber: '000123',
+        memo: 'Retained metadata',
+        allocations: [{ id, amountMinor: -100, financeCategoryId: id, note: 'Full allocation' }],
+      }).success,
+    ).toBe(true);
+    expect(
       csvImportChunkInputSchema.safeParse({
         batchId: id,
         fileDigest: 'a'.repeat(64),

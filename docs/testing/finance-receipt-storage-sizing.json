@@ -1,0 +1,265 @@
+{
+  "date": "2026-11-07",
+  "region": "us-west-2",
+  "evidence": "Offline quantity sensitivity at publicly verified regional paid rates; no AWS calls, bills or acceptance.",
+  "household": {
+    "receiptUploadsPerMonth": 50,
+    "averageBytes": 2000000,
+    "receiptViewsPerMonth": 2,
+    "receiptViewInterpretation": "Two total monthly views; alternate twice per receipt/100 monthly views remains a sensitivity.",
+    "storageClass": "STANDARD",
+    "automaticTiering": false,
+    "initialReceiptFiles": 0,
+    "newOriginalBytesPerMonth": 100000000
+  },
+  "rateUSD": {
+    "standardGBMonth": 0.023,
+    "warmBackupGBMonth": 0.05,
+    "guardDutyGB": 0.09,
+    "guardDutyObject": 0.000215,
+    "internetGB": 0.09,
+    "tagMonth": 6.5e-7
+  },
+  "previousConditionalScenario": {
+    "combined": 6.468801,
+    "originalAndVersionGB": 2,
+    "backupGB": 1,
+    "scannedGB": 0.1,
+    "scannedObjects": 200,
+    "tags": 2000,
+    "tagMonthlyUSD": 0.002,
+    "internetGB": 1
+  },
+  "contingencyPercent": 30,
+  "ceilingUSD": 6.5,
+  "method": "End-of-month retained bytes (a conservative run-rate, not first-month average billing); S3 billing GB=2^30 bytes. One full original set reserved for versions plus warm backups; no current-original expiration or cold-tier saving.",
+  "sources": [
+    {
+      "service": "AmazonS3",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonS3/current/us-west-2/index.json",
+      "publicationDate": "2026-11-04T17:44:45Z",
+      "sku": "Z3FQZG73HYSPVABR",
+      "usage": "USW2-TimedStorage-ByteHrs",
+      "rangeGB": "0-51200",
+      "tagSKU": "F7Q89DC8BTTRFSXU"
+    },
+    {
+      "service": "AWSBackup",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSBackup/current/us-west-2/index.json",
+      "publicationDate": "2026-10-14T00:18:56Z",
+      "sku": "TTFHUXMUM62ZHDFZ",
+      "usage": "USW2-WarmStorage-ByteHrs-S3"
+    },
+    {
+      "service": "AmazonGuardDuty",
+      "url": "https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonGuardDuty/current/us-west-2/index.json",
+      "publicationDate": "2026-10-30T00:56:14Z",
+      "paidRequestSKU": "5QSHK3K93E8KUCHE",
+      "paidScanSKU": "FAFFFT3JK4H4RANT"
+    }
+  ],
+  "caveats": [
+    "Not a new accepted household total. Original stress compute/read/write/log/KMS/request reserves remain unchanged; latest source-proof overhead is not fully allocated.",
+    "User monthly views interpreted as 2 total; 100/month retains the ambiguous twice-per-receipt reading. 1000/month remains inherited stress, not household fact. Non-receipt transfer reserve of 0.5 GB is unchanged.",
+    "Full extra version/backup sets are conservative reserves, not observed version churn or a claim that 35 daily backups duplicate every object 35 times.",
+    "Originals start empty, remain Standard and retained; month60/month120 are forecast horizons, never deletion deadlines. No provider/raw-import or transaction costs removed.",
+    "No free tier/credits/backup-tier discount used. Initial five-year transaction ingestion, retry/replacement bursts, restores, actual backup growth and billed capacity remain unaccepted."
+  ],
+  "results": [
+    {
+      "month": 1,
+      "retainedOriginalObjects": 50,
+      "retainedOriginalBytes": 100000000,
+      "originalsBillingGiB": 0.093132257,
+      "originalStorageUSD": 0.002142042,
+      "versionStorageReserveUSD": 0.002142042,
+      "warmBackupReserveUSD": 0.004656613,
+      "receiptStorageDirectUSD": 0.008940697,
+      "scanDirectUSD": 0.01975,
+      "tagReserveDirectUSD": 0.0013,
+      "conditionalCombinedStorageScanOnlyUSD": 6.312788906,
+      "conditionalCombinedIncludingDownloadSensitivityUSD": 6.488288906,
+      "remainingUnderCeilingIncludingDownloadSensitivityUSD": 0.011711094,
+      "conditionalCombinedUsingHouseholdViewsUSD": 6.254756906,
+      "downloadSensitivities": [
+        {
+          "viewsPerMonth": 2,
+          "receiptBytesPerMonth": 4000000,
+          "transferReserveGB": 0.504,
+          "conditionalCombinedUSD": 6.254756906,
+          "remainingUnderCeilingUSD": 0.245243094
+        },
+        {
+          "viewsPerMonth": 100,
+          "receiptBytesPerMonth": 200000000,
+          "transferReserveGB": 0.7,
+          "conditionalCombinedUSD": 6.277688906,
+          "remainingUnderCeilingUSD": 0.222311094
+        },
+        {
+          "viewsPerMonth": 1000,
+          "receiptBytesPerMonth": 2000000000,
+          "transferReserveGB": 2.5,
+          "conditionalCombinedUSD": 6.488288906,
+          "remainingUnderCeilingUSD": 0.011711094
+        }
+      ]
+    },
+    {
+      "month": 12,
+      "retainedOriginalObjects": 600,
+      "retainedOriginalBytes": 1200000000,
+      "originalsBillingGiB": 1.11758709,
+      "originalStorageUSD": 0.025704503,
+      "versionStorageReserveUSD": 0.025704503,
+      "warmBackupReserveUSD": 0.055879354,
+      "receiptStorageDirectUSD": 0.107288361,
+      "scanDirectUSD": 0.01975,
+      "tagReserveDirectUSD": 0.0013,
+      "conditionalCombinedStorageScanOnlyUSD": 6.440640869,
+      "conditionalCombinedIncludingDownloadSensitivityUSD": 6.616140869,
+      "remainingUnderCeilingIncludingDownloadSensitivityUSD": -0.116140869,
+      "conditionalCombinedUsingHouseholdViewsUSD": 6.382608869,
+      "downloadSensitivities": [
+        {
+          "viewsPerMonth": 2,
+          "receiptBytesPerMonth": 4000000,
+          "transferReserveGB": 0.504,
+          "conditionalCombinedUSD": 6.382608869,
+          "remainingUnderCeilingUSD": 0.117391131
+        },
+        {
+          "viewsPerMonth": 100,
+          "receiptBytesPerMonth": 200000000,
+          "transferReserveGB": 0.7,
+          "conditionalCombinedUSD": 6.405540869,
+          "remainingUnderCeilingUSD": 0.094459131
+        },
+        {
+          "viewsPerMonth": 1000,
+          "receiptBytesPerMonth": 2000000000,
+          "transferReserveGB": 2.5,
+          "conditionalCombinedUSD": 6.616140869,
+          "remainingUnderCeilingUSD": -0.116140869
+        }
+      ]
+    },
+    {
+      "month": 24,
+      "retainedOriginalObjects": 1200,
+      "retainedOriginalBytes": 2400000000,
+      "originalsBillingGiB": 2.235174179,
+      "originalStorageUSD": 0.051409006,
+      "versionStorageReserveUSD": 0.051409006,
+      "warmBackupReserveUSD": 0.111758709,
+      "receiptStorageDirectUSD": 0.214576721,
+      "scanDirectUSD": 0.01975,
+      "tagReserveDirectUSD": 0.0013,
+      "conditionalCombinedStorageScanOnlyUSD": 6.580115738,
+      "conditionalCombinedIncludingDownloadSensitivityUSD": 6.755615738,
+      "remainingUnderCeilingIncludingDownloadSensitivityUSD": -0.255615738,
+      "conditionalCombinedUsingHouseholdViewsUSD": 6.522083738,
+      "downloadSensitivities": [
+        {
+          "viewsPerMonth": 2,
+          "receiptBytesPerMonth": 4000000,
+          "transferReserveGB": 0.504,
+          "conditionalCombinedUSD": 6.522083738,
+          "remainingUnderCeilingUSD": -0.022083738
+        },
+        {
+          "viewsPerMonth": 100,
+          "receiptBytesPerMonth": 200000000,
+          "transferReserveGB": 0.7,
+          "conditionalCombinedUSD": 6.545015738,
+          "remainingUnderCeilingUSD": -0.045015738
+        },
+        {
+          "viewsPerMonth": 1000,
+          "receiptBytesPerMonth": 2000000000,
+          "transferReserveGB": 2.5,
+          "conditionalCombinedUSD": 6.755615738,
+          "remainingUnderCeilingUSD": -0.255615738
+        }
+      ]
+    },
+    {
+      "month": 60,
+      "retainedOriginalObjects": 3000,
+      "retainedOriginalBytes": 6000000000,
+      "originalsBillingGiB": 5.587935448,
+      "originalStorageUSD": 0.128522515,
+      "versionStorageReserveUSD": 0.128522515,
+      "warmBackupReserveUSD": 0.279396772,
+      "receiptStorageDirectUSD": 0.536441803,
+      "scanDirectUSD": 0.01975,
+      "tagReserveDirectUSD": 0.00195,
+      "conditionalCombinedStorageScanOnlyUSD": 6.999385344,
+      "conditionalCombinedIncludingDownloadSensitivityUSD": 7.174885344,
+      "remainingUnderCeilingIncludingDownloadSensitivityUSD": -0.674885344,
+      "conditionalCombinedUsingHouseholdViewsUSD": 6.941353344,
+      "downloadSensitivities": [
+        {
+          "viewsPerMonth": 2,
+          "receiptBytesPerMonth": 4000000,
+          "transferReserveGB": 0.504,
+          "conditionalCombinedUSD": 6.941353344,
+          "remainingUnderCeilingUSD": -0.441353344
+        },
+        {
+          "viewsPerMonth": 100,
+          "receiptBytesPerMonth": 200000000,
+          "transferReserveGB": 0.7,
+          "conditionalCombinedUSD": 6.964285344,
+          "remainingUnderCeilingUSD": -0.464285344
+        },
+        {
+          "viewsPerMonth": 1000,
+          "receiptBytesPerMonth": 2000000000,
+          "transferReserveGB": 2.5,
+          "conditionalCombinedUSD": 7.174885344,
+          "remainingUnderCeilingUSD": -0.674885344
+        }
+      ]
+    },
+    {
+      "month": 120,
+      "retainedOriginalObjects": 6000,
+      "retainedOriginalBytes": 12000000000,
+      "originalsBillingGiB": 11.175870895,
+      "originalStorageUSD": 0.257045031,
+      "versionStorageReserveUSD": 0.257045031,
+      "warmBackupReserveUSD": 0.558793545,
+      "receiptStorageDirectUSD": 1.072883606,
+      "scanDirectUSD": 0.01975,
+      "tagReserveDirectUSD": 0.0039,
+      "conditionalCombinedStorageScanOnlyUSD": 7.699294688,
+      "conditionalCombinedIncludingDownloadSensitivityUSD": 7.874794688,
+      "remainingUnderCeilingIncludingDownloadSensitivityUSD": -1.374794688,
+      "conditionalCombinedUsingHouseholdViewsUSD": 7.641262688,
+      "downloadSensitivities": [
+        {
+          "viewsPerMonth": 2,
+          "receiptBytesPerMonth": 4000000,
+          "transferReserveGB": 0.504,
+          "conditionalCombinedUSD": 7.641262688,
+          "remainingUnderCeilingUSD": -1.141262688
+        },
+        {
+          "viewsPerMonth": 100,
+          "receiptBytesPerMonth": 200000000,
+          "transferReserveGB": 0.7,
+          "conditionalCombinedUSD": 7.664194688,
+          "remainingUnderCeilingUSD": -1.164194688
+        },
+        {
+          "viewsPerMonth": 1000,
+          "receiptBytesPerMonth": 2000000000,
+          "transferReserveGB": 2.5,
+          "conditionalCombinedUSD": 7.874794688,
+          "remainingUnderCeilingUSD": -1.374794688
+        }
+      ]
+    }
+  ]
+}

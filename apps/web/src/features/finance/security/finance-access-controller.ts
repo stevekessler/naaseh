@@ -164,8 +164,10 @@ export class FinanceAccessController {
       if (this.known) this.known = { ...this.known, knownStale: true };
       this.lock(true, true);
     }
+    const generation = this.generation;
     try {
-      this.known = await this.options.store.update(this.options.ownerId, (current) => {
+      const next = await this.options.store.update(this.options.ownerId, (current) => {
+        this.fresh(generation);
         if (olderThan(current)) {
           obsoleteResponse = true;
           throw connect();
@@ -184,7 +186,12 @@ export class FinanceAccessController {
           knownStale: false,
         };
       });
+      this.fresh(generation);
+      this.known = next;
     } catch {
+      // A lock/new visit owns the current memory state. Preserve its durable
+      // verifier and throttling rather than deleting them for a cancelled refresh.
+      this.fresh(generation);
       this.known = undefined;
       // Keep the newer tab's durable verifier/throttle state when an old response arrives.
       if (!obsoleteResponse) await this.options.store.remove(this.options.ownerId);
@@ -192,9 +199,9 @@ export class FinanceAccessController {
     }
     for (const listener of this.changes) listener();
   }
-  async markStale() {
-    this.lock();
+  async markStale({ notifySecurityChange = false } = {}) {
     if (this.known) this.known = { ...this.known, knownStale: true };
+    this.lock(true, notifySecurityChange);
     try {
       await this.options.store.update(this.options.ownerId, (current) => ({
         ...this.validate(current),
@@ -256,12 +263,14 @@ export class FinanceAccessController {
       const salt = randomHex();
       const hash = await this.derive(pin, salt, request.signal);
       this.fresh(generation);
-      this.known = await this.options.store.update(this.options.ownerId, (current) => {
+      const next = await this.options.store.update(this.options.ownerId, (current) => {
+        this.fresh(generation);
         if (current?.revision !== known.revision || current.sessionEpoch !== known.sessionEpoch)
           throw connect();
         return { ...current, knownStale: false, verifier: { salt, hash }, failures: 0, retryAt: 0 };
       });
       this.fresh(generation);
+      this.known = next;
       this.open(
         Math.min(Date.parse(response.expiresAt), this.now() + 30 * 60_000),
         false,
@@ -277,6 +286,7 @@ export class FinanceAccessController {
     const generation = this.generation;
     const leaseId = randomHex();
     const material = await this.options.store.update(this.options.ownerId, (current) => {
+      this.fresh(generation);
       const state = this.validate(current);
       if (
         state.knownStale ||
@@ -294,13 +304,15 @@ export class FinanceAccessController {
       if (Math.max(state.retryAt, state.leaseUntil ?? 0) > this.now()) throw wait();
       return { ...state, leaseId, leaseUntil: this.now() + 60_000 };
     });
+    this.fresh(generation);
     const request = new AbortController();
     this.requests.add(request);
     try {
       const hash = await this.derive(pin, material.verifier!.salt, request.signal);
       this.fresh(generation);
       const valid = equalHash(hash, material.verifier!.hash);
-      this.known = await this.options.store.update(this.options.ownerId, (current) => {
+      const nextState = await this.options.store.update(this.options.ownerId, (current) => {
+        this.fresh(generation);
         const state = this.validate(current);
         if (
           state.leaseId !== leaseId ||
@@ -319,8 +331,9 @@ export class FinanceAccessController {
         return next;
       });
       this.fresh(generation);
+      this.known = nextState;
       if (!valid)
-        throw this.known.retryAt > this.now() ? wait() : new Error('The Finance PIN is incorrect.');
+        throw nextState.retryAt > this.now() ? wait() : new Error('The Finance PIN is incorrect.');
       this.open(this.now() + 30 * 60_000, true);
     } finally {
       request.abort();
@@ -370,6 +383,9 @@ export class FinanceAccessController {
   }
   get securityReady() {
     return Boolean(this.known && !this.known.knownStale);
+  }
+  get ownerId() {
+    return this.options.ownerId;
   }
   get requiresPin() {
     return this.known?.requirePin === true;

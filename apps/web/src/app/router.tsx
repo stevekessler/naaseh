@@ -6,8 +6,23 @@ export type AppRoute =
   | {
       section: 'finance';
       accountId?: string;
+      transactionId?: string;
+      upcomingExpenseId?: string;
       budgetId?: string;
-      view?: 'accounts' | 'transactions' | 'merchants' | 'budgets';
+      merchantId?: string;
+      view:
+        | 'dashboard'
+        | 'accounts'
+        | 'account-new'
+        | 'transactions'
+        | 'upcoming-expenses'
+        | 'upcoming-expense-new'
+        | 'budgets'
+        | 'categories'
+        | 'merchants'
+        | 'receipts'
+        | 'reports'
+        | 'spend-report';
     }
   | { section: 'lists'; listId?: string }
   | { section: 'directory' }
@@ -27,6 +42,19 @@ export type AppRoute =
       create?: boolean;
       view?: 'settings' | 'dashboard' | 'crisis-plans';
     };
+
+export type FinanceRoute = Extract<AppRoute, { section: 'finance' }>;
+
+export interface FinanceModalBackground {
+  pathname: string;
+  search: string;
+  scrollY: number;
+  focusId?: string;
+}
+
+export interface AppHistoryState {
+  financeBackground?: FinanceModalBackground;
+}
 
 export function parseAppRoute(pathname: string): AppRoute {
   if (/^\/journal\/new\/?$/.test(pathname)) return { section: 'journal', create: true };
@@ -54,6 +82,10 @@ export function parseAppRoute(pathname: string): AppRoute {
   if (task)
     return { section: 'tasks', ...(task[1] ? { taskId: decodeURIComponent(task[1]) } : {}) };
   if (/^\/search\/?$/.test(pathname)) return { section: 'search' };
+  if (/^\/finance\/accounts\/new\/?$/u.test(pathname))
+    return { section: 'finance', view: 'account-new' };
+  if (/^\/finance\/upcoming-expenses\/new\/?$/u.test(pathname))
+    return { section: 'finance', view: 'upcoming-expense-new' };
   const financeBudget = pathname.match(/^\/finance\/budgets(?:\/([^/]+))?\/?$/u);
   if (financeBudget)
     return {
@@ -68,11 +100,42 @@ export function parseAppRoute(pathname: string): AppRoute {
       view: 'accounts',
       ...(financeAccount[1] ? { accountId: decodeURIComponent(financeAccount[1]) } : {}),
     };
-  if (/^\/finance\/transactions\/?$/u.test(pathname))
-    return { section: 'finance', view: 'transactions' };
-  if (/^\/finance\/merchants(?:\/[^/]+)?\/?$/u.test(pathname))
-    return { section: 'finance', view: 'merchants' };
-  if (/^\/finance\/?$/u.test(pathname)) return { section: 'finance' };
+  const financeTransaction = pathname.match(/^\/finance\/transactions(?:\/([^/]+))?\/?$/u);
+  if (financeTransaction)
+    return {
+      section: 'finance',
+      view: 'transactions',
+      ...(financeTransaction[1]
+        ? { transactionId: decodeURIComponent(financeTransaction[1]) }
+        : {}),
+    };
+  const financeUpcomingExpense = pathname.match(
+    /^\/finance\/upcoming-expenses(?:\/([^/]+))?\/?$/u,
+  );
+  if (financeUpcomingExpense)
+    return {
+      section: 'finance',
+      view: 'upcoming-expenses',
+      ...(financeUpcomingExpense[1]
+        ? { upcomingExpenseId: decodeURIComponent(financeUpcomingExpense[1]) }
+        : {}),
+    };
+  if (/^\/finance\/categories\/?$/u.test(pathname))
+    return { section: 'finance', view: 'categories' };
+  const financeMerchant = pathname.match(/^\/finance\/merchants(?:\/([^/]+))?\/?$/u);
+  if (financeMerchant)
+    return {
+      section: 'finance',
+      view: 'merchants',
+      ...(financeMerchant[1] ? { merchantId: decodeURIComponent(financeMerchant[1]) } : {}),
+    };
+  if (/^\/finance\/receipts\/?$/u.test(pathname))
+    return { section: 'finance', view: 'receipts' };
+  if (/^\/finance\/reports\/spend\/?$/u.test(pathname))
+    return { section: 'finance', view: 'spend-report' };
+  if (/^\/finance\/reports\/?$/u.test(pathname))
+    return { section: 'finance', view: 'reports' };
+  if (/^\/finance\/?$/u.test(pathname)) return { section: 'finance', view: 'dashboard' };
   if (/^\/groups\/?$/.test(pathname)) return { section: 'groups' };
   if (/^\/directory\/?$/.test(pathname)) return { section: 'directory' };
   if (/^\/archive\/?$/.test(pathname)) return { section: 'archive' };
@@ -95,9 +158,21 @@ export function routePath(route: AppRoute): string {
       ? `/finance/budgets/${encodeURIComponent(route.budgetId)}`
       : route.accountId
         ? `/finance/accounts/${encodeURIComponent(route.accountId)}`
-        : route.view
-          ? `/finance/${route.view}`
-          : '/finance';
+        : route.transactionId
+          ? `/finance/transactions/${encodeURIComponent(route.transactionId)}`
+          : route.upcomingExpenseId
+            ? `/finance/upcoming-expenses/${encodeURIComponent(route.upcomingExpenseId)}`
+            : route.merchantId
+              ? `/finance/merchants/${encodeURIComponent(route.merchantId)}`
+              : !route.view || route.view === 'dashboard'
+                ? '/finance'
+                : route.view === 'account-new'
+                  ? '/finance/accounts/new'
+                  : route.view === 'upcoming-expense-new'
+                    ? '/finance/upcoming-expenses/new'
+                    : route.view === 'spend-report'
+                      ? '/finance/reports/spend'
+                      : `/finance/${route.view}`;
   if (route.section === 'journal')
     return route.sharedPlanId
       ? `/journal/crisis-plans/shared/${encodeURIComponent(route.sharedPlanId)}`
@@ -113,10 +188,11 @@ export function routePath(route: AppRoute): string {
   return `/${route.section}`;
 }
 
-export function navigate(route: AppRoute, replace = false) {
+export function navigate(route: AppRoute, replace = false, state: AppHistoryState = {}) {
   const previousSection = parseAppRoute(location.pathname).section;
   const method = replace ? 'replaceState' : 'pushState';
-  history[method]({}, '', `${routePath(route)}${location.search}`);
+  const search = previousSection === route.section ? location.search : '';
+  history[method](state, '', `${routePath(route)}${search}`);
   window.dispatchEvent(new PopStateEvent('popstate'));
   if (previousSection !== route.section) window.scrollTo({ top: 0, left: 0 });
 }

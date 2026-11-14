@@ -1,6 +1,8 @@
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
-import { FinanceMemoryRepository } from './repository.js';
+import { claimFinanceMerchantKey, FinanceMemoryRepository } from './repository.js';
+import { isDeepStrictEqual } from 'node:util';
 import { markFinanceBudgetsChangedByTransaction } from './reconciliation-service.js';
+import { reviewRefundRelationshipsForTransaction } from './refund-service.js';
 import {
   correctFinancialTransaction,
   createConfirmedTransfer,
@@ -10,6 +12,8 @@ import {
   financeAudience,
   invalidateTransfer,
   replaceTransactionAllocations,
+  updateMerchant,
+  withAllocationClassification,
   type FinanceScope,
   type FinancialAccount,
   type FinancialTransaction,
@@ -56,6 +60,51 @@ const recordTransactionFeed = (
     payload: transaction,
   });
 
+const assertTransactionReplay = (
+  replay: FinancialTransaction,
+  id: string,
+  accountId: string,
+  version: number,
+) => {
+  if (replay.id !== id || replay.accountId !== accountId || replay.version !== version)
+    throw new Error('Transaction version conflict.');
+};
+
+export function updateFinanceMerchant(
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  merchantId: string,
+  input: {
+    expectedVersion: number;
+    name?: string;
+    city?: string | null;
+    region?: string | null;
+    financeCategoryId?: string | null;
+  },
+  mutationId: string,
+) {
+  const current = repository.merchants.get(merchantId);
+  if (!current) throw new Error('Finance record not found.');
+  const replay = repository.mutation<ReturnType<typeof updateMerchant>>(actor.id, mutationId);
+  if (replay) {
+    if (replay.id !== merchantId || replay.version !== input.expectedVersion + 1)
+      throw new Error('Finance merchant version conflict.');
+    return replay;
+  }
+  if (current.version !== input.expectedVersion)
+    throw new Error('Finance merchant version conflict.');
+  const updated = updateMerchant(current, input, actor);
+  claimFinanceMerchantKey(repository, updated.canonicalKey, updated.id);
+  if (
+    current.canonicalKey !== updated.canonicalKey &&
+    repository.merchantKeyLocks.get(current.canonicalKey) === current.id
+  ) {
+    repository.merchantKeyLocks.delete(current.canonicalKey);
+  }
+  repository.merchants.set(updated.id, updated);
+  return repository.remember(actor.id, mutationId, updated);
+}
+
 export async function createManualTransaction(
   repository: FinanceMemoryRepository,
   actor: FinanceActor,
@@ -69,21 +118,50 @@ export async function createManualTransaction(
     description: string;
     payee?: string;
     memo?: string;
+    merchantId?: string;
+    paymentType?: string;
+    checkNumber?: string;
+    allocations?: readonly {
+      id: string;
+      amountMinor: number;
+      financeCategoryId: string;
+      subcategoryId?: string | undefined;
+      budgetItemId?: string | undefined;
+      note?: string | undefined;
+    }[];
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<Record<string, unknown>>(actor.id, mutationId);
-  if (replay) return replay;
   const account = repository.accounts.get(accountId);
-  if (!account || !authorizeFinanceScope(actor, account.scope, 'edit').allowed)
-    throw new Error('Finance record not found.');
   if (
-    input.expectedAccountVersion !== undefined &&
-    input.expectedAccountVersion !== account.version
-  ) {
-    throw new Error('Account version conflict.');
+    !account ||
+    !['active', 'attention'].includes(account.status) ||
+    !authorizeFinanceScope(actor, account.scope, 'edit').allowed
+  )
+    throw new Error('Finance record not found.');
+  if (input.amountMinor === 0) throw new Error('Transaction amount must be non-zero.');
+  if (input.merchantId) {
+    const merchant = repository.merchants.get(input.merchantId);
+    if (!merchant || merchant.status !== 'active') throw new Error('Finance record not found.');
   }
-  const transaction = createFinancialTransaction({
+  const allocations = (input.allocations ?? []).map((allocation) => {
+    const category = repository.categories.get(allocation.financeCategoryId);
+    const subcategory = allocation.subcategoryId
+      ? repository.categories.get(allocation.subcategoryId)
+      : undefined;
+    if (!category || (allocation.subcategoryId && !subcategory))
+      throw new Error('Finance record not found.');
+    const normalized: TransactionAllocationInput = {
+      id: allocation.id,
+      amountMinor: allocation.amountMinor,
+      financeCategoryId: allocation.financeCategoryId,
+      ...(allocation.subcategoryId ? { subcategoryId: allocation.subcategoryId } : {}),
+      ...(allocation.budgetItemId ? { budgetItemId: allocation.budgetItemId } : {}),
+      ...(allocation.note ? { note: allocation.note } : {}),
+    };
+    return withAllocationClassification(normalized, category, subcategory);
+  });
+  const baseCandidate = createFinancialTransaction({
     id: input.id,
     accountId,
     origin: 'manual',
@@ -94,11 +172,70 @@ export async function createManualTransaction(
     description: input.description,
     ...(input.payee ? { payee: input.payee } : {}),
     ...(input.memo ? { memo: input.memo } : {}),
+    ...(input.merchantId ? { merchantId: input.merchantId } : {}),
+    ...(input.paymentType ? { paymentType: input.paymentType } : {}),
+    ...(input.checkNumber ? { checkNumber: input.checkNumber } : {}),
     pending: false,
     connectedAccount: Boolean(account.connectionId),
   });
+  const candidate = allocations.length
+    ? { ...replaceTransactionAllocations(baseCandidate, allocations, actor.id), version: 1 }
+    : baseCandidate;
+  const allocationIntent = (transaction: FinancialTransaction) =>
+    transaction.allocations.map(
+      ({
+        id,
+        amountMinor,
+        financeCategoryId,
+        subcategoryId,
+        classification,
+        budgetItemId,
+        note,
+        createdBy,
+      }) => ({
+        id,
+        amountMinor,
+        financeCategoryId,
+        subcategoryId,
+        classification,
+        budgetItemId,
+        note,
+        createdBy,
+      }),
+    );
+  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  if (replay) {
+    const sameIntent =
+      replay.accountId === accountId &&
+      replay.origin === 'manual' &&
+      replay.version === 1 &&
+      replay.amountMinor === candidate.amountMinor &&
+      replay.currency === candidate.currency &&
+      replay.postedAt === candidate.postedAt &&
+      replay.transactedAt === candidate.transactedAt &&
+      replay.description === candidate.description &&
+      replay.payee === candidate.payee &&
+      replay.memo === candidate.memo &&
+      replay.paymentType === candidate.paymentType &&
+      replay.checkNumber === candidate.checkNumber &&
+      replay.merchantId === candidate.merchantId &&
+      isDeepStrictEqual(allocationIntent(replay), allocationIntent(candidate)) &&
+      replay.pending === candidate.pending &&
+      replay.reconciliationState === candidate.reconciliationState;
+    if (!sameIntent) throw new Error('Transaction version conflict.');
+    return replay;
+  }
+  if (
+    input.expectedAccountVersion !== undefined &&
+    input.expectedAccountVersion !== account.version
+  ) {
+    throw new Error('Account version conflict.');
+  }
+  if (repository.transactions.some(({ id }) => id === candidate.id))
+    throw new Error('Transaction version conflict.');
+  const transaction = candidate;
   repository.transactions.push(transaction);
-  if (transaction.effectiveAt > account.balanceAt) {
+  if (!account.connectionId && transaction.effectiveAt > account.balanceAt) {
     repository.accounts.set(accountId, {
       ...account,
       currentBalanceMinor: account.currentBalanceMinor + input.amountMinor,
@@ -124,17 +261,21 @@ export async function updateManualTransaction(
   },
   mutationId: string,
 ) {
-  const replay = repository.mutation<Record<string, unknown>>(actor.id, mutationId);
-  if (replay) return replay;
   const {
     index,
     transaction: current,
     account,
   } = authorizeTransaction(repository, actor, transactionId);
   if (current.origin !== 'manual') throw new Error('Finance record not found.');
+  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  if (replay) {
+    assertTransactionReplay(replay, current.id, account.id, input.expectedVersion + 1);
+    return replay;
+  }
   if (current.version !== input.expectedVersion) throw new Error('Transaction version conflict.');
   const updated = correctFinancialTransaction(current, input);
   repository.transactions[index] = updated;
+  reviewRefundRelationshipsForTransaction(repository, updated.id);
   markFinanceBudgetsChangedByTransaction(repository, current);
   if (updated.reviewState === 'allocation-review' && current.reviewState !== 'allocation-review') {
     const issue = createImportReviewIssue({
@@ -160,6 +301,32 @@ export async function updateManualTransaction(
   return repository.remember(actor.id, mutationId, updated);
 }
 
+export async function updateTransactionPaymentMetadata(
+  repository: FinanceMemoryRepository,
+  actor: FinanceActor,
+  transactionId: string,
+  input: {
+    expectedVersion: number;
+    paymentType?: string | null;
+    checkNumber?: string | null;
+  },
+  mutationId: string,
+) {
+  const { index, transaction, account } = authorizeTransaction(repository, actor, transactionId);
+  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  if (replay) {
+    assertTransactionReplay(replay, transaction.id, account.id, input.expectedVersion + 1);
+    return replay;
+  }
+  if (transaction.version !== input.expectedVersion)
+    throw new Error('Transaction version conflict.');
+  const updated = correctFinancialTransaction(transaction, input);
+  repository.transactions[index] = updated;
+  reviewRefundRelationshipsForTransaction(repository, updated.id);
+  recordTransactionFeed(repository, account, updated);
+  return repository.remember(actor.id, mutationId, updated);
+}
+
 export async function replaceTransactionAllocationsForActor(
   repository: FinanceMemoryRepository,
   actor: FinanceActor,
@@ -167,16 +334,26 @@ export async function replaceTransactionAllocationsForActor(
   input: { expectedVersion: number; allocations: readonly TransactionAllocationInput[] },
   mutationId: string,
 ) {
-  const replay = repository.mutation<ReturnType<typeof replaceTransactionAllocations>>(
-    actor.id,
-    mutationId,
-  );
-  if (replay) return replay;
   const { index, transaction, account } = authorizeTransaction(repository, actor, transactionId);
+  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  if (replay) {
+    assertTransactionReplay(replay, transaction.id, account.id, input.expectedVersion + 1);
+    return replay;
+  }
   if (transaction.version !== input.expectedVersion)
     throw new Error('Transaction version conflict.');
-  const updated = replaceTransactionAllocations(transaction, input.allocations, actor.id);
+  const allocations = input.allocations.map((allocation) => {
+    const category = repository.categories.get(allocation.financeCategoryId);
+    const subcategory = allocation.subcategoryId
+      ? repository.categories.get(allocation.subcategoryId)
+      : undefined;
+    if (allocation.subcategoryId && (!category || !subcategory))
+      throw new Error('Finance record not found.');
+    return category ? withAllocationClassification(allocation, category, subcategory) : allocation;
+  });
+  const updated = replaceTransactionAllocations(transaction, allocations, actor.id);
   repository.transactions[index] = updated;
+  reviewRefundRelationshipsForTransaction(repository, updated.id);
   markFinanceBudgetsChangedByTransaction(repository, transaction);
   markFinanceBudgetsChangedByTransaction(repository, updated);
   recordTransactionFeed(repository, account, updated);
@@ -191,13 +368,14 @@ export async function associateTransactionMerchant(
   expectedVersion: number,
   mutationId: string,
 ) {
-  const replay = repository.mutation<(typeof repository.transactions)[number]>(
-    actor.id,
-    mutationId,
-  );
-  if (replay) return replay;
-  const merchant = repository.merchants.get(merchantId);
   const { index, transaction, account } = authorizeTransaction(repository, actor, transactionId);
+  const replay = repository.mutation<FinancialTransaction>(actor.id, mutationId);
+  if (replay) {
+    assertTransactionReplay(replay, transaction.id, account.id, expectedVersion + 1);
+    if (replay.merchantId !== merchantId) throw new Error('Transaction version conflict.');
+    return replay;
+  }
+  const merchant = repository.merchants.get(merchantId);
   if (!merchant || merchant.status !== 'active' || transaction.version !== expectedVersion) {
     throw new Error(merchant ? 'Transaction version conflict.' : 'Finance record not found.');
   }
@@ -210,18 +388,40 @@ export async function associateTransactionMerchant(
 export async function confirmTransactionTransfer(
   repository: FinanceMemoryRepository,
   actor: FinanceActor,
-  input: { id: string; scope: FinanceScope; transactionIds: readonly string[] },
+  input: {
+    id: string;
+    scope: FinanceScope;
+    transactionIds: readonly string[];
+    expectedVersions?: readonly number[];
+  },
   mutationId: string,
 ) {
-  const replay = repository.mutation<ReturnType<typeof createConfirmedTransfer>>(
-    actor.id,
-    mutationId,
-  );
-  if (replay) return replay;
   if (!authorizeFinanceScope(actor, input.scope, 'edit').allowed)
     throw new Error('Finance record not found.');
   const authorized = input.transactionIds.map((id) => authorizeTransaction(repository, actor, id));
   const legs = authorized.map(({ transaction }) => transaction);
+  const replay = repository.mutation<ReturnType<typeof createConfirmedTransfer>>(
+    actor.id,
+    mutationId,
+  );
+  if (replay) {
+    if (
+      replay.id !== input.id ||
+      !replay.scope ||
+      financeAudience(replay.scope) !== financeAudience(input.scope) ||
+      replay.legTransactionIds?.length !== legs.length ||
+      legs.some((leg, index) => replay.legTransactionIds[index] !== leg.id)
+    )
+      throw new Error('Transfer version conflict.');
+    return replay;
+  }
+  const expected = input.expectedVersions;
+  if (
+    expected &&
+    (expected.length !== legs.length ||
+      legs.some(({ version }, index) => version !== expected[index]))
+  )
+    throw new Error('Transfer version conflict.');
   if (legs.some(({ transferId }) => transferId && transferId !== input.id))
     throw new Error('Transaction already belongs to a transfer.');
   const transfer = createConfirmedTransfer(

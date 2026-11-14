@@ -19,7 +19,7 @@ export function authorizeFinanceScope(
   scope: FinanceScope,
   action: FinanceAction,
 ): FinanceAuthorizationDecision {
-  if (!actor.active || actor.role === 'admin') return { allowed: false };
+  if (!actor.active) return { allowed: false };
   if (scope.type === 'owner') {
     return actor.id === scope.ownerId
       ? { allowed: true, audience: `OWNER#${scope.ownerId}` }

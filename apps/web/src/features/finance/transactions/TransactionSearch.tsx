@@ -10,10 +10,14 @@ export function TransactionSearch({
   accounts,
   documents,
   onMatches,
+  authorizeSearch,
+  onState,
 }: {
   accounts: ReadonlyArray<{ id: string; friendlyName: string }>;
   documents: readonly FinanceSearchDocument[];
   onMatches: (ids: string[]) => void;
+  authorizeSearch: (search: () => string[]) => Promise<string[]>;
+  onState: (state: 'checking' | 'ready' | 'failed') => void;
 }) {
   const index = useRef(new FinanceTransactionIndex());
   const [scope, setScope] = useState('all');
@@ -24,6 +28,9 @@ export function TransactionSearch({
     complete: false,
   });
   useEffect(() => registerFinanceSearchIndex(index.current), []);
+  useEffect(() => {
+    if (scope !== 'all' && !accounts.some(({ id }) => id === scope)) setScope('all');
+  }, [accounts, scope]);
   useEffect(() => {
     let active = true;
     void index.current.replaceProgressively(documents, {
@@ -37,8 +44,31 @@ export function TransactionSearch({
     };
   }, [documents]);
   useEffect(() => {
-    onMatches(index.current.search(query, { ...(scope === 'all' ? {} : { accountId: scope }) }));
-  }, [onMatches, progress.indexed, query, scope]);
+    let active = true;
+    onMatches([]);
+    onState('checking');
+    const timer = setTimeout(() => {
+      void authorizeSearch(() =>
+        index.current.search(query, { ...(scope === 'all' ? {} : { accountId: scope }) }),
+      )
+        .then((ids) => {
+          if (active) {
+            onMatches(ids);
+            onState('ready');
+          }
+        })
+        .catch(() => {
+          if (active) {
+            onMatches([]);
+            onState('failed');
+          }
+        });
+    }, 150);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [authorizeSearch, onMatches, onState, progress.indexed, query, scope]);
   return (
     <div className="finance-transaction-filters">
       <label>

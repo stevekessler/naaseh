@@ -13,6 +13,7 @@ export interface StoredUser extends UserRecord {
   passwordHash?: string;
   pinHash?: string;
   pepperVersion?: string;
+  pinPepperVersion?: string;
 }
 export const storedUserSchema = userSchema
   .extend({
@@ -22,6 +23,7 @@ export const storedUserSchema = userSchema
     passwordHash: z.string().min(1).optional(),
     pinHash: z.string().min(1).optional(),
     pepperVersion: z.string().min(1).optional(),
+    pinPepperVersion: z.string().min(1).optional(),
   })
   .passthrough();
 const storedUser = (value: unknown): StoredUser => storedUserSchema.parse(value) as StoredUser;
@@ -179,6 +181,7 @@ export async function changeUserSecurity(
 export async function commitPasswordReset(change: {
   userId: string;
   passwordHash: string;
+  pepperVersion?: string;
   expectedVersion: number;
   nextCredentialVersion: number;
   nextSessionEpoch: number;
@@ -189,12 +192,14 @@ export async function commitPasswordReset(change: {
       TableName: tableName,
       Key: keys.user(change.userId),
       UpdateExpression:
-        'SET #data.passwordHash=:passwordHash, #data.credentialVersion=:credentialVersion, #data.sessionEpoch=:sessionEpoch, #data.tfaStatus=:tfaStatus, #data.securityUpdatedAt=:now, #data.#version=:nextVersion',
+        'SET #data.passwordHash=:passwordHash, #data.credentialVersion=:credentialVersion, #data.sessionEpoch=:sessionEpoch, #data.tfaStatus=:tfaStatus, #data.securityUpdatedAt=:now, #data.#version=:nextVersion' +
+        (change.pepperVersion ? ', #data.pepperVersion=:pepperVersion' : ''),
       ConditionExpression:
         '(attribute_not_exists(#data.#version) AND :expectedVersion = :legacyVersion) OR #data.#version=:expectedVersion',
       ExpressionAttributeNames: { '#data': 'data', '#version': 'version' },
       ExpressionAttributeValues: {
         ':passwordHash': change.passwordHash,
+        ...(change.pepperVersion ? { ':pepperVersion': change.pepperVersion } : {}),
         ':credentialVersion': change.nextCredentialVersion,
         ':sessionEpoch': change.nextSessionEpoch,
         ':tfaStatus': change.retainedTfaStatus,

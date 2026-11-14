@@ -1,0 +1,196 @@
+{
+  "date": "2026-11-07",
+  "evidence": "Offline canonical-row/publication generated commands for new ingestion; no AWS calls.",
+  "method": "Transactional puts/deletes: 2 * ceil(max(old,new) UTF-8 JSON bytes + 100/item /1024). Conditions/get/query calls are not consumed read units.",
+  "excludes": [
+    "Initial empty-account creation/trusted baseline setup",
+    "CSV/provider validation, feeds, receipts, authentication and canonical source resolution reads",
+    "Real consumed capacity, retries, compute, p95, storage billing and actual 15,000-row import"
+  ],
+  "caveat": "80 synthetic new rows over ten months/account; five-year/15,000-row totals remain extrapolations. Existing monthly/stress evidence is retained.",
+  "results": [
+    {
+      "commitSize": 1,
+      "sourceCount": 80,
+      "accounts": 8,
+      "sampledMonthsPerAccount": 10,
+      "canonicalCommits": 80,
+      "outboxSteps": 2188,
+      "strongGetCalls": 38859,
+      "indexedQueries": 1132,
+      "groups": {
+        "canonical-and-journal": {
+          "transactions": 80,
+          "writeUnits": 800,
+          "conditions": 0
+        },
+        "routing": {
+          "transactions": 1200,
+          "writeUnits": 5440,
+          "conditions": 1120
+        },
+        "window": {
+          "transactions": 596,
+          "writeUnits": 2432,
+          "conditions": 2953
+        },
+        "source": {
+          "transactions": 400,
+          "writeUnits": 32012,
+          "conditions": 480
+        },
+        "coverage": {
+          "transactions": 80,
+          "writeUnits": 480,
+          "conditions": 560
+        }
+      },
+      "estimatedWriteUnits": 41164
+    },
+    {
+      "commitSize": 20,
+      "sourceCount": 80,
+      "accounts": 8,
+      "sampledMonthsPerAccount": 10,
+      "canonicalCommits": 4,
+      "outboxSteps": 1460,
+      "strongGetCalls": 33635,
+      "indexedQueries": 1360,
+      "groups": {
+        "canonical-and-journal": {
+          "transactions": 4,
+          "writeUnits": 336,
+          "conditions": 0
+        },
+        "routing": {
+          "transactions": 92,
+          "writeUnits": 472,
+          "conditions": 88
+        },
+        "window": {
+          "transactions": 976,
+          "writeUnits": 3952,
+          "conditions": 4809
+        },
+        "source": {
+          "transactions": 400,
+          "writeUnits": 32012,
+          "conditions": 480
+        },
+        "coverage": {
+          "transactions": 80,
+          "writeUnits": 480,
+          "conditions": 560
+        }
+      },
+      "estimatedWriteUnits": 37252
+    }
+  ],
+  "batchWriteReductionPercent": 9.503449616169469,
+  "planningSensitivity": {
+    "sources": 15000,
+    "basis": "Linear scaling of the 80-row, ten-sampled-month/account batched fixture. Not an executed five-year import or additive final monthly forecast.",
+    "estimatedTransactionalWriteUnits": 6984750.0,
+    "directDynamoWriteUsd": 4.36546875,
+    "withThirtyPercentContingencyUsd": 5.675109375,
+    "rateSource": "https://aws.amazon.com/dynamodb/pricing/",
+    "rateRecheckedDate": "2026-11-07",
+    "status": "Not accepted. Source/calendar/text distribution, canonical CSV/provider overhead, compute/read/storage, ordinary-month allocation and actual capacity remain unresolved."
+  },
+  "denseCohort": {
+    "date": "2026-11-07",
+    "evidence": "Offline canonical-row/publication generated commands for new ingestion; no AWS calls.",
+    "method": "Transactional puts/deletes: 2 * ceil(max(old,new) UTF-8 JSON bytes + 100/item /1024). Conditions/get/query calls are not consumed read units.",
+    "excludes": [
+      "Initial empty-account creation/trusted baseline setup",
+      "CSV/provider validation, feeds, receipts, authentication and canonical source resolution reads",
+      "Real consumed capacity, retries, compute, p95, storage billing and actual 15,000-row import"
+    ],
+    "caveat": "Synthetic new-row cohort only; five-year/15,000-row totals remain extrapolations. Existing monthly/stress evidence is retained.",
+    "results": [
+      {
+        "commitSize": 1,
+        "sourceCount": 480,
+        "accounts": 8,
+        "sampledMonthsPerAccount": 2,
+        "canonicalCommits": 480,
+        "outboxSteps": 12988,
+        "strongGetCalls": 196110,
+        "indexedQueries": 6732,
+        "groups": {
+          "canonical-and-journal": {
+            "transactions": 480,
+            "writeUnits": 4800,
+            "conditions": 0
+          },
+          "routing": {
+            "transactions": 7200,
+            "writeUnits": 32640,
+            "conditions": 6720
+          },
+          "window": {
+            "transactions": 3396,
+            "writeUnits": 13632,
+            "conditions": 16953
+          },
+          "source": {
+            "transactions": 2400,
+            "writeUnits": 120914,
+            "conditions": 2880
+          },
+          "coverage": {
+            "transactions": 480,
+            "writeUnits": 2880,
+            "conditions": 3360
+          }
+        },
+        "estimatedWriteUnits": 174866
+      },
+      {
+        "commitSize": 20,
+        "sourceCount": 480,
+        "accounts": 8,
+        "sampledMonthsPerAccount": 2,
+        "canonicalCommits": 24,
+        "outboxSteps": 8640,
+        "strongGetCalls": 165186,
+        "indexedQueries": 8120,
+        "groups": {
+          "canonical-and-journal": {
+            "transactions": 24,
+            "writeUnits": 2016,
+            "conditions": 0
+          },
+          "routing": {
+            "transactions": 552,
+            "writeUnits": 2832,
+            "conditions": 528
+          },
+          "window": {
+            "transactions": 5696,
+            "writeUnits": 22832,
+            "conditions": 28409
+          },
+          "source": {
+            "transactions": 2400,
+            "writeUnits": 120914,
+            "conditions": 2880
+          },
+          "coverage": {
+            "transactions": 480,
+            "writeUnits": 2880,
+            "conditions": 3360
+          }
+        },
+        "estimatedWriteUnits": 151474
+      }
+    ],
+    "planningSensitivity": {
+      "basis": "480 rows / eight accounts / two months, 30 sources/account/month, linearly extrapolated to 15,000. Not an executed five-year import.",
+      "estimatedTransactionalWriteUnits": 4733562.5,
+      "directDynamoWriteUsd": 2.9584765625,
+      "withThirtyPercentContingencyUsd": 3.84601953125,
+      "status": "Unaccepted setup sensitivity with the same exclusions. Cannot be substituted for billed capacity or an approved increased ceiling."
+    }
+  }
+}

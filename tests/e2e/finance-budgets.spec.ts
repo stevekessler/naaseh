@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
+import {
+  signIn,
+  mockUnprotectedFinanceSecurity,
+  mockFinanceSnapshotEvidence,
+  financeSnapshotFixtureHeaders,
+} from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -56,9 +61,29 @@ const budgetDetail = {
 };
 
 async function routeBudgetData(page: Page) {
+  await page.route('**/api/v1/groups', (route) =>
+    route.fulfill({
+      status: 200,
+      json: {
+        items: [
+          {
+            id: ids.group,
+            name: 'Household',
+            ownerId: 'local-steve',
+            status: 'active',
+            hasJoinPin: false,
+            joined: true,
+            role: 'member',
+            version: 1,
+          },
+        ],
+      },
+    }),
+  );
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({
         items: [
@@ -82,6 +107,7 @@ async function routeBudgetData(page: Page) {
   await page.route('**/api/v1/finance/categories**', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({
         items: [
@@ -102,6 +128,7 @@ async function routeBudgetData(page: Page) {
     }
     await route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [budgetDetail], cursor: null }),
     });
@@ -109,6 +136,7 @@ async function routeBudgetData(page: Page) {
   await page.route(`**/api/v1/finance/budgets/${ids.budget}`, (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify(budgetDetail),
     }),
@@ -120,6 +148,7 @@ test('creates a bounded budget and manages group/private accounts and signed ite
 }) => {
   await routeBudgetData(page);
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Budgets' }).click();
@@ -151,6 +180,7 @@ test('shows exact item/category variance and separate currency totals without a 
 }) => {
   await routeBudgetData(page);
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByRole('region', { name: 'USD budget totals' })).toContainText(
@@ -176,6 +206,7 @@ test('warns about incomplete totals without identifying a hidden account or amou
   await page.route(`**/api/v1/finance/budgets/${ids.budget}`, (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({
         ...budgetDetail,
@@ -187,6 +218,7 @@ test('warns about incomplete totals without identifying a hidden account or amou
     }),
   );
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto(`/finance/budgets/${ids.budget}`);
   await expect(page.getByRole('alert').filter({ hasText: /totals are incomplete/i })).toContainText(
@@ -199,6 +231,7 @@ test('keeps budget creation usable on a narrow touch layout', async ({ page }) =
   await page.setViewportSize({ width: 390, height: 844 });
   await routeBudgetData(page);
   await mockUnprotectedFinanceSecurity(page);
+  const evidence = await mockFinanceSnapshotEvidence(page);
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Budgets' }).click();
@@ -210,4 +243,18 @@ test('keeps budget creation usable on a narrow touch layout', async ({ page }) =
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );
   expect(overflow).toBe(false);
+  await page.getByLabel('Group').selectOption(ids.group);
+  await page.getByLabel('Budget date').fill('2026-04-01');
+  await page.getByLabel('Start date').fill('2026-04-01');
+  let creates = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/finance/budgets')) creates++;
+  });
+  evidence.revoke();
+  await page.getByRole('button', { name: 'Save budget' }).click();
+  await expect(page.getByText('Checking Finance security…', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Create budget' })).toHaveCount(0);
+  await expect(page.getByText('Mobile open-ended plan')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'April household plan' })).toHaveCount(0);
+  expect(creates).toBe(0);
 });

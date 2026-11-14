@@ -1,4 +1,5 @@
-vi.mock('../../apps/api/src/finance/finance-unlock-guard.js', () => ({
+vi.mock('../../apps/api/src/finance/finance-unlock-guard.js', async (original) => ({
+  ...(await original<object>()),
   createFinanceUnlockGuard: () => async () => ({
     requirePin: false,
     securityRevision: 0,
@@ -211,6 +212,30 @@ describe('Finance US1 HTTP routes', () => {
     expect(claimResponse.statusCode).toBe(201);
     expect(claimResponse.body).not.toContain('AQID');
     const connectionId = String(parsed(claimResponse).id);
+    repository.connections.set('hidden-connection', {
+      id: 'hidden-connection',
+      scope: { type: 'group', groupId: 'hidden-group' },
+      provider: 'simplefin-bridge',
+      status: 'active',
+      encryptedAccessUrl: 'must-not-be-returned',
+      credentialKeyId: 'must-not-be-returned',
+      credentialContextVersion: 1,
+      version: 1,
+    });
+    const connectionsResponse = await handler(request('GET', '/api/v1/finance/connections'));
+    expect(connectionsResponse.statusCode).toBe(200);
+    expect(parsed(connectionsResponse).items).toMatchObject([
+      {
+        id: connectionId,
+        scope: { type: 'owner', ownerId: actor.id },
+        provider: 'simplefin-bridge',
+        status: 'active',
+        version: 1,
+      },
+    ]);
+    expect(connectionsResponse.body).not.toContain('encryptedAccessUrl');
+    expect(connectionsResponse.body).not.toContain('credentialKeyId');
+    expect(connectionsResponse.body).not.toContain('hidden-connection');
     const refreshResponse = await handler(
       request('POST', '/api/v1/finance/connections/{connectionId}/refresh', undefined, {
         connectionId,
@@ -218,6 +243,14 @@ describe('Finance US1 HTTP routes', () => {
     );
     expect(refreshResponse.statusCode).toBe(202);
     expect(invocations).toHaveLength(1);
+    const refreshedConnections = parsed(
+      await handler(request('GET', '/api/v1/finance/connections')),
+    ).items as Array<Record<string, unknown>>;
+    expect(refreshedConnections[0]).toMatchObject({
+      id: connectionId,
+      importStatus: 'queued',
+      lastAttemptAt: '2026-01-01T00:00:00.000Z',
+    });
     const jobId = String(parsed(refreshResponse).id);
     expect(
       (await handler(request('GET', '/api/v1/finance/import-jobs/{jobId}', undefined, { jobId })))
@@ -380,6 +413,40 @@ describe('Finance US1 HTTP routes', () => {
       version: 4,
     });
     expect(detail.items).toHaveLength(1);
+
+    const inactive = parsed(
+      await handler(
+        request(
+          'POST',
+          '/api/v1/finance/budgets/{budgetId}/deactivate',
+          { expectedVersion: 4 },
+          { budgetId },
+        ),
+      ),
+    );
+    expect(inactive).toMatchObject({ activity: 'inactive', version: 5 });
+    const closed = parsed(
+      await handler(
+        request(
+          'POST',
+          '/api/v1/finance/budgets/{budgetId}/close',
+          { expectedVersion: 5 },
+          { budgetId },
+        ),
+      ),
+    );
+    expect(closed).toMatchObject({ activity: 'inactive', closedBy: manager.id, version: 6 });
+    const reactivated = parsed(
+      await handler(
+        request(
+          'POST',
+          '/api/v1/finance/budgets/{budgetId}/reactivate',
+          { expectedVersion: 6 },
+          { budgetId },
+        ),
+      ),
+    );
+    expect(reactivated).toMatchObject({ activity: 'active', closedBy: manager.id, version: 7 });
 
     const previewResponse = await handler(
       request(

@@ -72,6 +72,10 @@ const setup = () => {
 describe('SimpleFIN provider reconciliation service', () => {
   it('atomically attaches a unique exact import and keeps replay on one canonical transaction', () => {
     const { repository, candidate } = setup();
+    const referenceTransfers: Array<{ fromTransactionId: string; toTransactionId: string }> = [];
+    repository.registerCanonicalTransactionReferenceHook((transfer) =>
+      referenceTransfers.push(transfer),
+    );
     const reconciled = reconcileProviderImport(repository, candidate, 'system');
     expect(reconciled).toMatchObject({
       id: ids.provisional,
@@ -84,7 +88,11 @@ describe('SimpleFIN provider reconciliation service', () => {
       ),
     ).toBe(ids.provisional);
     expect(repository.transactionAliases.get(ids.candidate)).toBe(ids.provisional);
+    expect(referenceTransfers).toEqual([
+      { fromTransactionId: ids.candidate, toTransactionId: ids.provisional },
+    ]);
     expect(reconcileProviderImport(repository, candidate, 'system').id).toBe(ids.provisional);
+    expect(referenceTransfers).toHaveLength(1);
   });
 
   it('checks every version before explicit reconciliation and leaves no partial changes on conflict', () => {

@@ -4,19 +4,51 @@ import { FinanceAccessController } from './finance-access-controller.js';
 import { installFinanceAccess } from './finance-access.js';
 
 export async function refreshFinanceSecurity(controller: FinanceAccessController, ownerId: string) {
-  const [preferenceResponse, sessionResponse] = await Promise.all([
-    fetch('/api/v1/auth/finance-security', { credentials: 'include', cache: 'no-store' }),
-    fetch('/api/v1/auth/session', { credentials: 'include', cache: 'no-store' }),
-  ]);
-  if (!preferenceResponse.ok || !sessionResponse.ok)
-    throw new Error('Connect to refresh Finance security.');
-  const preference = financeSecurityResponseSchema.parse(await preferenceResponse.json());
-  const session = (await sessionResponse.json()) as {
-    user?: { id?: string; sessionEpoch?: number };
-  };
-  if (session.user?.id !== ownerId)
+  if (controller.ownerId !== ownerId)
     throw new Error('Sign in to the same account to unlock Finance.');
-  await controller.synchronize({ ...preference, sessionEpoch: session.user.sessionEpoch ?? 0 });
+  const request = new AbortController();
+  const release = controller.onLock(() => request.abort());
+  try {
+    const [preferenceResponse, sessionResponse] = await Promise.all([
+      fetch('/api/v1/auth/finance-security', {
+        credentials: 'include',
+        signal: request.signal,
+        cache: 'no-store',
+        headers: { 'x-finance-owner': ownerId },
+      }),
+      fetch('/api/v1/auth/session', {
+        credentials: 'include',
+        signal: request.signal,
+        cache: 'no-store',
+        headers: { 'x-finance-owner': ownerId },
+      }),
+    ]);
+    request.signal.throwIfAborted();
+    if (
+      [preferenceResponse.status, sessionResponse.status].some(
+        (status) => status === 401 || status === 403,
+      )
+    )
+      await controller.markStale();
+    if (!preferenceResponse.ok || !sessionResponse.ok)
+      throw new Error('Connect to refresh Finance security.');
+    const preference = financeSecurityResponseSchema.parse(await preferenceResponse.json());
+    const session = (await sessionResponse.json()) as {
+      user?: { id?: string; sessionEpoch?: number };
+    };
+    request.signal.throwIfAborted();
+    if (session.user?.id !== ownerId) {
+      await controller.markStale();
+      throw new Error('Sign in to the same account to unlock Finance.');
+    }
+    // synchronize owns its intentional security-change lock and checks its own
+    // generation around the asynchronous store update.
+    release();
+    await controller.synchronize({ ...preference, sessionEpoch: session.user.sessionEpoch ?? 0 });
+  } finally {
+    release();
+    request.abort();
+  }
 }
 
 /** A channel carries lock notices only. Grants and verification material are never broadcast. */
@@ -30,7 +62,11 @@ export function createBrowserFinanceAccess(ownerId: string, csrfToken: string) {
         method: 'DELETE',
         credentials: 'include',
         cache: 'no-store',
-        headers: { 'x-csrf-token': csrfToken, 'x-finance-unlock': grant },
+        headers: {
+          'x-csrf-token': csrfToken,
+          'x-finance-unlock': grant,
+          'x-finance-owner': ownerId,
+        },
       });
     },
     store: createFinanceOfflineSecurityStore(),
@@ -40,7 +76,11 @@ export function createBrowserFinanceAccess(ownerId: string, csrfToken: string) {
         credentials: 'include',
         cache: 'no-store',
         signal,
-        headers: { 'content-type': 'application/json', 'x-csrf-token': csrfToken },
+        headers: {
+          'content-type': 'application/json',
+          'x-csrf-token': csrfToken,
+          'x-finance-owner': ownerId,
+        },
         body: JSON.stringify({ pin, tabNonce }),
       });
       if (!response.ok)

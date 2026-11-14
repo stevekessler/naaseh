@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
-import { signIn, mockUnprotectedFinanceSecurity } from './enhanced-helpers.js';
+import {
+  signIn,
+  mockUnprotectedFinanceSecurity,
+  mockFinanceSnapshotEvidence,
+  financeSnapshotFixtureHeaders,
+} from './enhanced-helpers.js';
 
 async function emptyFinanceRoutes(page: Page) {
   await page.route('**/api/v1/finance/**', (route) => {
@@ -16,6 +21,7 @@ async function emptyFinanceRoutes(page: Page) {
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
+      headers: financeSnapshotFixtureHeaders,
       contentType: 'application/json',
       body: JSON.stringify({ items: [], cursor: null }),
     }),
@@ -32,11 +38,13 @@ test('Finance v1 exposes no export action, request, route, or download', async (
   page.on('download', (download) => downloads.push(download.suggestedFilename()));
   await emptyFinanceRoutes(page);
   await mockUnprotectedFinanceSecurity(page);
+  await mockFinanceSnapshotEvidence(page);
   await signIn(page);
-  await page.getByRole('button', { name: 'Finance' }).click();
+  await page.getByRole('button', { name: 'Finance', exact: true }).click();
 
+  const financeSections = page.getByRole('navigation', { name: 'Finance sections' });
   for (const section of ['Accounts', 'Transactions', 'Categories', 'Merchants', 'Budgets']) {
-    await page.getByRole('button', { name: section, exact: true }).click();
+    await financeSections.getByRole('button', { name: section, exact: true }).click();
     await expect(page.getByRole('heading', { name: section, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /export|download/iu })).toHaveCount(0);
     await expect(page.getByRole('link', { name: /export|download/iu })).toHaveCount(0);

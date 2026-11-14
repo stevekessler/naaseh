@@ -316,7 +316,7 @@
 .due-date-field > div {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--button-gap);
 }
 .due-date-trigger {
   display: flex;
@@ -1127,6 +1127,7 @@ form > label {
 }
 .topbar nav > button,
 .topbar nav > .admin-navigation,
+.topbar nav > .finance-navigation,
 .topbar nav > .lists-navigation,
 .topbar nav > .tasks-navigation {
   flex: 0 0 auto;
@@ -1186,33 +1187,40 @@ form > label {
   min-height: var(--control-min-size);
 }
 .admin-navigation,
+.finance-navigation,
 .lists-navigation,
 .tasks-navigation {
   position: relative;
 }
+.finance-navigation,
 .lists-navigation,
 .tasks-navigation {
   display: inline-flex;
   align-items: stretch;
+  gap: var(--button-gap);
 }
+.finance-navigation .navigation-primary,
 .lists-navigation .navigation-primary,
 .tasks-navigation .navigation-primary {
-  border-radius: 10px 0 0 10px;
+  border-radius: 10px;
   padding-right: 0.45rem;
 }
+.finance-navigation .navigation-disclosure,
 .lists-navigation .navigation-disclosure,
 .tasks-navigation .navigation-disclosure {
   min-width: var(--control-min-size);
   padding-inline: 0.45rem;
-  border-radius: 0 10px 10px 0;
+  border-radius: 10px;
 }
 .tasks-navigation > [data-active],
+.finance-navigation > [data-active],
 .lists-navigation > [data-active],
 .admin-navigation > [data-active] {
   text-decoration: underline;
   text-underline-offset: 0.3rem;
 }
 .admin-navigation-links,
+.finance-navigation-links,
 .lists-navigation-links {
   position: fixed;
   overflow-y: auto;
@@ -1240,12 +1248,66 @@ form > label {
   box-shadow: 0 12px 36px rgb(16 43 73 / 18%);
 }
 .tasks-navigation-links button,
+.finance-navigation-links button,
 .lists-navigation-links button {
   text-align: left;
 }
 .admin-navigation-links button {
   text-align: left;
 }
+.finance-account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
+}
+.finance-account-detail {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+.finance-account-detail > section {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.finance-account-detail dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, auto) minmax(0, 1fr);
+  gap: 0.45rem 1rem;
+  margin-block: 0.75rem 0;
+}
+.finance-account-detail dt {
+  font-weight: 700;
+}
+.finance-account-detail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.finance-account-detail form,
+.finance-account-detail form label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: max(5px, var(--button-gap));
+}
+.finance-account-transactions {
+  overflow-x: auto;
+}
+.finance-account-destructive {
+  border-color: var(--danger, #a72d2d) !important;
+}
+@media (max-width: 480px) {
+  .finance-account-detail dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+  .finance-account-detail dd + dt {
+    margin-top: 0.6rem;
+  }
+}
+
 .admin-tabs {
   display: flex;
   gap: var(--button-gap);

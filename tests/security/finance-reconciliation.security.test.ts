@@ -140,6 +140,10 @@ describe('Finance reconciliation privacy boundaries', () => {
     expect(() => decide(repository, member, otherCandidateId)).toThrow('Finance record not found.');
     expect(repository.transactions).toEqual(before);
     expect(repository.transactionAliases.size).toBe(0);
+    expect(decide(repository, member)).toMatchObject({ id: provisionalId });
+    expect(() => decide(repository, { ...member, groupMemberships: [] })).toThrow(
+      'Finance record not found.',
+    );
   });
 
   it('uses the same generic response for an inaccessible candidate and a missing candidate', () => {
