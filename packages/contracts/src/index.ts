@@ -25,3 +25,4 @@ export * from './finance.js';
 export * from './finance-receipts.js';
 
 export * from './finance-spend-report.js';
+export * from './finance-forecast.js';

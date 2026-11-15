@@ -88,6 +88,9 @@ describe('budget reporting and optional forecast history boundaries', () => {
     expect(result.budgetRows).toEqual([assigned]);
     expect(result.nonBudgetedRows).toEqual([outside]);
     expect(result.budgetRows[0]).toBe(assigned);
+    const reportAfterForecast = selectBudgetHistoryRows(rows, scope);
+    expect(reportAfterForecast.budgetRows).toEqual([assigned]);
+    expect(reportAfterForecast.nonBudgetedRows).toEqual([]);
     expect(result.inputsComplete).toBe(true);
   });
   it('fails closed after either budget or account access is withdrawn even with history requested', () => {

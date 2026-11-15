@@ -1,5 +1,60 @@
 # Finance Experience Expansion Implementation Validation
 
+## US13 per-budget forecast models — 2026-11-15
+
+This local Phase 14a checkpoint implements the independent calculations and
+their contracts on a separate branch from the Spend Report. Phase 9's
+canonical Upcoming Expenses and Phase 12's dashboard composition are
+required for the protected route, budget and dashboard views, and end-to-end
+acceptance. The current branch has the navigation and sync foundations for
+Upcoming Expenses. It has no canonical Phase 9 service or Phase 12 dashboard
+composition. T161 and T163–T166 remain open.
+
+The known-plan model starts with budget-only posted actuals and adds canonical
+remaining income and expenses. A linked Upcoming Expense supersedes its
+matching plan, including a zero remaining balance after payment or cancellation.
+An overdue remainder is counted at the reference date when that date is in
+the selected forecast period. This calculation leaves its original due date
+intact. Transactions use the existing posting, transfer and refund eligibility.
+Positive credits count as income only with explicit classified portions that
+conserve the posted credit.
+
+The independent historical model uses the six closed calendar months before
+the reference month. Rates use only months with explicit coverage, including
+covered months with zero activity. A currency needs at least three covered
+months with eligible activity to produce a forward projection. The remaining
+period starts after the reference date, with partial months prorated by
+calendar days and rounded to the nearest minor unit, half away from zero.
+The result shows observed dates, covered months, partial coverage and
+insufficient history explicitly. Historical estimates and planned remainders
+are separate scenarios.
+
+The default historical scope is budget-only. An explicit historical opt-in
+may add proven non-budgeted portions from currently authorized linked
+accounts. Actuals never include these portions, and strict budget report
+inputs remain unchanged. The contracts reject inconsistent periods, unsupported
+time zones, understated coverage, method/opt-in mismatches, duplicate
+currency rows, and invalid totals.
+
+| Local gate | Result | Real time |
+| --- | --- | --- |
+| Forecast domain and contract checks | 19 passed in 4 files | 0.35 s |
+| Required validation | 1,950 passed in 495 files, runtime check, typecheck, lint and builds | 67.41 s |
+| Quick Playwright | 31 passed | 30.10 s |
+| Apple contract interoperability | 11 closed fields and 7 crypto vectors | — |
+
+Node 24.22.2 and Playwright 1.64.1 were used. Earlier focused validation found
+a refund reference fixture missing the required original allocation revision.
+The fixture now passes with canonical refund eligibility. A separate contract
+probe revealed that malformed currency could throw. The corrected parser
+returns a validation issue for that input. Phase 14a adds no
+external forecasting service or AWS resources. Live DynamoDB, hosted
+acceptance and combined-cost evidence remain under T018. The combined
+ceiling is $6.50 per month including contingency. The migration remains unrun.
+
+
+T160 and T162 are checked, bringing Finance 016 to **104 of 166** tasks on this branch.
+
 ## US9 Spend Report — 2026-11-15
 
 The Spend Report was implemented on a separate local branch based on

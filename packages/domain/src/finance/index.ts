@@ -25,3 +25,4 @@ export * from './refund.js';
 export * from './spend.js';
 export * from './forecast-history-scope.js';
 export * from './forecast-window.js';
+export * from './forecast.js';
