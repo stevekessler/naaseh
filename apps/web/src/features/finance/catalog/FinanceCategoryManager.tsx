@@ -1,3 +1,8 @@
+import {
+  DashboardFlagControl,
+  DashboardFlagStatus,
+  useDashboardFlags,
+} from '../dashboard/DashboardFlagControl.js';
 import { FormEvent, useEffect, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { useCatalogRemovalPreview } from './use-catalog-removal-preview.js';
@@ -20,6 +25,7 @@ export function FinanceCategoryManager({
   isAdmin: boolean;
   csrfToken: string;
 }) {
+  const dashboardFlags = useDashboardFlags(csrfToken);
   const [categories, setCategories] = useState<CategoryView[]>([]);
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState('');
@@ -100,6 +106,7 @@ export function FinanceCategoryManager({
   return (
     <section>
       <h2>Categories</h2>
+      <DashboardFlagStatus preferences={dashboardFlags} />
       <p>
         Category names are visible to every active user. Do not include private financial details.
       </p>
@@ -135,6 +142,12 @@ export function FinanceCategoryManager({
                   : category.name}
                 {category.status === 'archived' ? ' (archived)' : ''}
               </span>
+              <DashboardFlagControl
+                preferences={dashboardFlags}
+                kind="category"
+                id={category.id}
+                name={category.name}
+              />
               {canManage && category.status === 'active' ? (
                 <>
                   <label>

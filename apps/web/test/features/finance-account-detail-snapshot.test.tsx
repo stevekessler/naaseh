@@ -6,6 +6,7 @@ const f = vi.hoisted(() => {
   const access = {
     read: vi.fn(),
     canRead: vi.fn(() => true),
+    onLock: () => () => undefined,
   };
   return {
     access,
@@ -20,6 +21,7 @@ vi.mock('@naaseh/domain', () => ({
   digestDuplicateDecisions: vi.fn(async () => 'decision-digest'),
 }));
 vi.mock('../../src/features/finance/security/finance-access.js', () => ({
+  subscribeFinanceAccess: () => () => undefined,
   currentFinanceAccess: () => f.access,
   peekFinanceAccess: () => f.access,
 }));
@@ -119,7 +121,9 @@ describe('retained account proof for CSV commits', () => {
     fireEvent.click(view.getByRole('button', { name: 'Commit synthetic CSV' }));
 
     await waitFor(() => expect(authorizeEdit).toHaveBeenCalledTimes(1));
-    expect(f.request).not.toHaveBeenCalled();
+    expect(
+      f.request.mock.calls.filter(([path]) => path !== '/finance/dashboard-preferences'),
+    ).toEqual([]);
     expect(f.queue).not.toHaveBeenCalled();
   });
 
@@ -162,7 +166,9 @@ describe('retained account proof for CSV commits', () => {
 
     await waitFor(() => expect(authorizeEdit).toHaveBeenCalledTimes(2));
     expect(f.queue).toHaveBeenCalledTimes(1);
-    expect(f.request).not.toHaveBeenCalled();
+    expect(
+      f.request.mock.calls.filter(([path]) => path !== '/finance/dashboard-preferences'),
+    ).toEqual([]);
     expect(view.queryByText('CSV import queued securely for synchronization.')).toBeNull();
   });
 

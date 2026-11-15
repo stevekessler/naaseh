@@ -13,7 +13,8 @@ const f = vi.hoisted(() => ({
 vi.mock('../../src/features/finance/finance-client.js', () => ({ financeRequest: f.request }));
 vi.mock('../../src/db/group-repository.js', () => ({ listLocalGroups: f.groups }));
 vi.mock('../../src/features/finance/security/finance-access.js', () => ({
-  peekFinanceAccess: () => ({ onLock: () => () => undefined }),
+  subscribeFinanceAccess: () => () => undefined,
+  peekFinanceAccess: () => ({ canRead: () => false, onLock: () => () => undefined }),
 }));
 vi.mock('../../src/db/finance-repository.js', () => ({
   queueEncryptedBudgetCreationPlan: vi.fn(),

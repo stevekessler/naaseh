@@ -1,5 +1,14 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 15 dashboard inclusion controls checkpoint: **97/166 tasks checked**.
+> T130 is complete. Account, budget, category and merchant views expose personal
+> dashboard inclusion flags. The controls use the protected API, send the displayed
+> version, confirm changes through a fresh read, and clear their values on lock.
+> Focused web tests passed **44/44**. Full local validation passed **1,943 tests /
+> 498 files / 67.97 s**. The quick browser command could not bind
+> `127.0.0.1:4173` in the agent session. T126 browser journeys, widget queries,
+> dashboard widget composition and preference sync remain open.
+
 > November 15 dashboard preference API checkpoint: **96/166 tasks checked**.
 > T128 is complete on `codex/finance-016-dashboard-preferences`. The protected
 > GET, PUT and PATCH routes use caller-owned storage and point-read account,

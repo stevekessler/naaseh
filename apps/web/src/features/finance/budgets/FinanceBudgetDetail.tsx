@@ -1,3 +1,8 @@
+import {
+  DashboardFlagControl,
+  DashboardFlagStatus,
+  useDashboardFlags,
+} from '../dashboard/DashboardFlagControl.js';
 import { FormEvent, useMemo, useState } from 'react';
 import { createUlid } from '@naaseh/domain';
 import { queueEncryptedBudgetMutation } from '../../../db/finance-repository.js';
@@ -98,6 +103,7 @@ export function FinanceBudgetDetail({
   verifyAccess: () => Promise<boolean>;
   onChange: (budget: BudgetDetailView) => void;
 }) {
+  const dashboardFlags = useDashboardFlags(csrfToken);
   const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');
@@ -259,6 +265,13 @@ export function FinanceBudgetDetail({
       <header>
         <div>
           <h2>{budget.name}</h2>
+          <DashboardFlagStatus preferences={dashboardFlags} />
+          <DashboardFlagControl
+            preferences={dashboardFlags}
+            kind="budget"
+            id={budget.id}
+            name={budget.name}
+          />
           <p>
             {budget.startDate} – {budget.endDate ?? 'Open-ended'}
           </p>

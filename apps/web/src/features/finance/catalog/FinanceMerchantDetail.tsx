@@ -1,3 +1,8 @@
+import {
+  DashboardFlagControl,
+  DashboardFlagStatus,
+  useDashboardFlags,
+} from '../dashboard/DashboardFlagControl.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCatalogRemovalPreview } from './use-catalog-removal-preview.js';
 import type { TransactionView } from '../transactions/TransactionDetail.js';
@@ -47,6 +52,7 @@ function MerchantDetailContent({
   csrfToken,
   onRemoved,
 }: MerchantDetailProps) {
+  const dashboardFlags = useDashboardFlags(csrfToken);
   const [activity, setActivity] = useState<MerchantActivity>();
   const removal = useCatalogRemovalPreview('merchant', userId, csrfToken);
   const { preview, clear: clearPreview } = removal;
@@ -209,6 +215,13 @@ function MerchantDetailContent({
   return (
     <article>
       <h2>{merchant.name}</h2>
+      <DashboardFlagStatus preferences={dashboardFlags} />
+      <DashboardFlagControl
+        preferences={dashboardFlags}
+        kind="merchant"
+        id={merchant.id}
+        name={merchant.name}
+      />
       <p>{[merchant.city, merchant.region].filter(Boolean).join(', ') || 'No location provided'}</p>
       {canManage && merchant.status === 'active' ? (
         <div>

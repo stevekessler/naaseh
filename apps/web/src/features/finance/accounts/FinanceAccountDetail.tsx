@@ -1,3 +1,8 @@
+import {
+  DashboardFlagControl,
+  DashboardFlagStatus,
+  useDashboardFlags,
+} from '../dashboard/DashboardFlagControl.js';
 import { FormEvent, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
 import { currentFinanceAccess, peekFinanceAccess } from '../security/finance-access.js';
@@ -75,6 +80,7 @@ export function FinanceAccountDetail({
   authorizeEdit: () => Promise<boolean>;
   onChange: () => Promise<boolean>;
 }) {
+  const dashboardFlags = useDashboardFlags(csrfToken);
   const [friendlyName, setFriendlyName] = useState(account.friendlyName);
   const [balance, setBalance] = useState('');
   const [message, setMessage] = useState('');
@@ -210,6 +216,13 @@ export function FinanceAccountDetail({
     <article className="finance-account-detail">
       <section className="finance-account-summary" aria-label="Account summary">
         <h2>{account.friendlyName}</h2>
+        <DashboardFlagStatus preferences={dashboardFlags} />
+        <DashboardFlagControl
+          preferences={dashboardFlags}
+          kind="account"
+          id={account.id}
+          name={account.friendlyName}
+        />
         <dl>
           <dt>Organization</dt>
           <dd>{account.organizationName}</dd>

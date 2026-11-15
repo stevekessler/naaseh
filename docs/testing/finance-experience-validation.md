@@ -1,5 +1,19 @@
 # Finance Experience Expansion Implementation Validation
 
+## Dashboard inclusion controls — 2026-11-15
+
+T130 is complete. The account and budget details, category manager and merchant
+detail use personal versioned checkboxes backed by the protected API. Three new
+component tests cover load sharing, confirmed save, version conflicts, and lock
+during a save. The focused web run passed 44 tests in 10 files. Required local
+validation passed **1,943 tests / 498 files / 67.97 s**, compared with 1,940 tests /
+497 files / 67.98 s at the previous checkpoint. Typecheck, lint and builds passed.
+
+The timed quick Playwright command stopped after 3.29 s before running cases because
+the agent session denied the Vite preview listener on `127.0.0.1:4173`. The workflow,
+quick selection, browser projects and timeouts were unchanged. Dedicated T126
+browser acceptance remains open.
+
 ## Dashboard preference API — 2026-11-15
 
 T128 is complete. Eight focused cases cover defaults, owner isolation, stale

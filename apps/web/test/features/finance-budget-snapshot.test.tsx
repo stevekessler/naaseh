@@ -13,7 +13,9 @@ const f = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 vi.mock('../../src/features/finance/security/finance-access.js', () => ({
+  subscribeFinanceAccess: () => () => undefined,
   peekFinanceAccess: () => ({
+    canRead: () => false,
     onLock: (listener: () => void) => {
       f.listeners.add(listener);
       return () => f.listeners.delete(listener);
