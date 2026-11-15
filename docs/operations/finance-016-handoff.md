@@ -1,5 +1,17 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 15 first-computer dashboard checkpoint: T111 is complete and preserved
+> on `codex/finance-016-dashboard-preferences`. The branch also starts Phase 12
+> dashboard preferences. Strict request/response contracts and an owner-partitioned
+> service implement default-off flags, the default upcoming count of ten, conditional
+> updates, current-source fencing for writes, and dormant flags when access is lost.
+> Six integration cases pass with a simulated DynamoDB client. Required validation
+> passes **1,938 tests / 497 files / 68.67 s** with runtime, typecheck, lint and builds.
+> The 95/166 task count holds until the dashboard adapter and endpoints are wired.
+> Next, bind the service to canonical account/budget/catalog access proof and the
+> protected Finance routes, then wire owner-only sync and dashboard consumers.
+> Phase 8, Phase 10 and T122 remain on the second computer for the combined handoff.
+
 > Current local checkpoint (November 15, Phase 11 task/expense relationships in
 > progress): 95/166 tasks checked. T109–T121 are complete. Canonical
 > budget-item/transaction/upcoming-expense links now support multi-link task create and

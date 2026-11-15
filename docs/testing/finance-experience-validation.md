@@ -1,5 +1,19 @@
 # Finance Experience Expansion Implementation Validation
 
+## Dashboard preference foundation — 2026-11-15
+
+Six integration tests cover the default count and empty flags, per-owner isolation
+including administrators, competing revisions, revoked and restored access,
+authorization evidence checked at transaction commit, and malformed input. The
+DynamoDB client is simulated. No route, sync, browser configuration, required command
+or quick selection changed. The unchanged required validation command moved from
+1,932 tests / 496 files / 73.47 s at the T111 checkpoint to 1,938 tests /
+497 files / 68.67 s, including typecheck, lint and builds. T124 and T128 remain
+open for widget reference cases and protected route integration, respectively.
+A dedicated T111 browser rerun could not start because the execution environment
+denied the Vite preview listener on 127.0.0.1:4173. The earlier 12/12 Chromium/WebKit
+execution remains the recorded T111 evidence.
+
 > Current local checkpoint (November 15, Phase 11 task/expense relationships in
 > progress): 95/166 tasks checked. T109–T121 are complete. Tasks can
 > relate independently to budget items, transactions and upcoming expenses, including

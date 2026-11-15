@@ -1291,3 +1291,11 @@ export const financeSyncEntitySchema = z.discriminatedUnion('entityType', [
     .extend({ entityType: z.literal('financeRefundRelationship') })
     .passthrough(),
 ]);
+
+export {
+  financeDashboardTargetSchema,
+  financeDashboardTargetKindSchema,
+  financeDashboardSettingsSchema,
+  financeDashboardFlagSchema,
+} from '@naaseh/domain';
+export * from './finance-dashboard.js';
