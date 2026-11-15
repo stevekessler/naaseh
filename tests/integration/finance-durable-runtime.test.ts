@@ -205,6 +205,13 @@ beforeEach(() => {
               current.storageKey,
               operation.ExpressionAttributeValues?.[':storageKey'],
             ));
+      else if (condition === '#version = :expected')
+        passes = current?.version === operation.ExpressionAttributeValues?.[':expected'];
+      else if (condition === '#data = :membership')
+        passes = isDeepStrictEqual(
+          current?.data,
+          operation.ExpressionAttributeValues?.[':membership'],
+        );
       else if (condition === '#revision = :expected')
         passes = current?.revision === operation.ExpressionAttributeValues?.[':expected'];
       else if (condition === '#publicationId = :publicationId AND #format = :format')
@@ -2613,4 +2620,94 @@ it('rejects client-selected reusable IDs already claimed by another Finance enti
   expect(
     vi.mocked(dynamodb.send).mock.calls.some(([command]) => command instanceof QueryCommand),
   ).toBe(false);
+});
+
+describe('Finance dashboard preference endpoints', () => {
+  const path = '/api/v1/finance/dashboard-preferences';
+
+  it('uses protected point reads and atomically saves and replays an owner flag and count', async () => {
+    const repository = await DynamoFinanceRepository.forActor(actor);
+    createManualAccount(repository, actor, accountInput, 'dashboard-account');
+    await repository.commit();
+    const handler = createFinanceHandler();
+    expect(bodyOf(await handler(event('GET', path)))).toEqual({
+      flags: [],
+      settings: { upcomingCount: 10, version: 0 },
+    });
+    const url = `${path}/account/${accountInput.id}`;
+    const write = event('PUT', url, { included: true }, 'dashboard-flag');
+    const first = await handler(write);
+    expect(first).toMatchObject({ statusCode: 200 });
+    expect(bodyOf(first)).toEqual({
+      targetKind: 'account',
+      targetId: accountInput.id,
+      included: true,
+      version: 1,
+    });
+    expect(transactions.at(-1)?.input.TransactItems?.[0]).toMatchObject({
+      ConditionCheck: { Key: { PK: 'FINANCE#SCOPE#OWNER#owner-1', SK: 'META' } },
+    });
+    const writes = transactions.length;
+    expect(bodyOf(await handler(write))).toEqual(bodyOf(first));
+    expect(transactions).toHaveLength(writes);
+    expect(await handler(event('PUT', url, { included: false }, 'dashboard-flag'))).toMatchObject({
+      statusCode: 409,
+    });
+    expect(
+      await handler(
+        event('PATCH', path, { upcomingCount: 20, expectedVersion: 0 }, 'dashboard-count'),
+      ),
+    ).toMatchObject({ statusCode: 200 });
+    expect(bodyOf(await handler(event('GET', path)))).toEqual({
+      flags: [bodyOf(first)],
+      settings: { upcomingCount: 20, version: 1 },
+    });
+  });
+
+  it('uses current group membership for reads, writes and exact write retries', async () => {
+    const groupId = '01J00000000000000000000291';
+    const budgetId = '01J00000000000000000000292';
+    const member = {
+      groupId,
+      userId: actor.id,
+      role: 'member' as const,
+      status: 'active' as const,
+    };
+    accessState.memberships = [member];
+    const memberKey = { PK: `GROUP#${groupId}`, SK: `MEMBER#${actor.id}` };
+    store.set(keyOf(memberKey), { ...memberKey, data: member });
+    const grouped = { ...actor, groupMemberships: [{ groupId, role: 'member' as const }] };
+    const repo = await DynamoFinanceRepository.forActor(grouped);
+    await createFinanceBudget(
+      repo,
+      grouped,
+      {
+        id: budgetId,
+        groupId,
+        name: 'Dashboard budget',
+        budgetDate: '2026-01-01',
+        startDate: '2026-01-01',
+        status: 'active',
+      },
+      'dashboard-budget',
+    );
+    await repo.commit();
+    const handler = createFinanceHandler();
+    const request = event(
+      'PUT',
+      `${path}/budget/${budgetId}`,
+      { included: true },
+      'dashboard-budget-flag',
+    );
+    expect(await handler(request)).toMatchObject({ statusCode: 200 });
+    expect(transactions.at(-1)?.input.TransactItems).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ ConditionCheck: expect.objectContaining({ Key: memberKey }) }),
+      ]),
+    );
+    store.delete(keyOf(memberKey));
+    accessState.memberships = [];
+    expect(bodyOf(await handler(event('GET', path))).flags).toEqual([]);
+    expect(await handler(request)).toMatchObject({ statusCode: 404 });
+  });
 });

@@ -355,6 +355,34 @@ export class FinanceSyncSourceGuard {
     if (!Number.isSafeInteger(version) || Number(version) < 1) throw changed();
     return structuredClone(source.value);
   }
+  /** Fence a targeted write against the canonical source and membership reads. */
+  sourceWriteConditions() {
+    return [
+      ...[...this.scopes].map(([PK, revision]) => ({
+        ConditionCheck: {
+          TableName: tableName,
+          Key: { PK, SK: 'META' },
+          ConditionExpression: '#revision = :expected',
+          ExpressionAttributeNames: { '#revision': 'revision' },
+          ExpressionAttributeValues: { ':expected': revision },
+        },
+      })),
+      ...[...this.members.values()].flatMap((member) => {
+        if (!member || member.status !== 'active') return [];
+        return [
+          {
+            ConditionCheck: {
+              TableName: tableName,
+              Key: { PK: `GROUP#${member.groupId}`, SK: `MEMBER#${member.userId}` },
+              ConditionExpression: '#data = :membership',
+              ExpressionAttributeNames: { '#data': 'data' },
+              ExpressionAttributeValues: { ':membership': member },
+            },
+          },
+        ];
+      }),
+    ];
+  }
   /** Private evidence for sources checked in this delivery; never a public Finance DTO. */
   async cacheAuthorizationSnapshot(): Promise<FinanceCacheAuthorizationSnapshot> {
     if (!this.options.userId) throw changed();

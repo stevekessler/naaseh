@@ -1,5 +1,17 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 15 dashboard preference API checkpoint: **96/166 tasks checked**.
+> T128 is complete on `codex/finance-016-dashboard-preferences`. The protected
+> GET, PUT and PATCH routes use caller-owned storage and point-read account,
+> budget and catalog authority. Runtime checks cover current group membership on
+> writes and retries. Writes save a conditional version, immutable revision and
+> exact-intent retry receipt together. Full local validation passed **1,940 tests
+> in 497 files in 67.98 s**. Steve confirmed **12/12** T111 Chromium/WebKit cases
+> in **10.4 s** from macOS Terminal. Widget queries, preference controls and
+> cross-device sync remain open. Phase 8, Phase 10 and T122 are on the second
+> computer for the combined handoff. Leave the migration unrun and preserve the
+> approved $6.50 combined cost ceiling.
+
 > November 15 first-computer dashboard checkpoint: T111 is complete and preserved
 > on `codex/finance-016-dashboard-preferences`. The branch also starts Phase 12
 > dashboard preferences. Strict request/response contracts and an owner-partitioned

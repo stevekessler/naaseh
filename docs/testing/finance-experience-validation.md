@@ -1,5 +1,19 @@
 # Finance Experience Expansion Implementation Validation
 
+## Dashboard preference API — 2026-11-15
+
+T128 is complete. Eight focused cases cover defaults, owner isolation, stale
+versions, source revocation and recovery, conditional DynamoDB writes, canonical
+HTTP point reads, and owner-scoped retry receipts. The new HTTP cases validate the
+protected production entry point with a simulated DynamoDB client. Required local
+validation passed **1,940 tests / 497 files / 67.98 s**, compared with 1,938
+tests / 497 files / 68.67 s at the previous checkpoint. Typecheck, lint, builds
+and the existing test configuration passed. T124–T127 and T129–T133 remain open.
+
+Steve reran the dedicated T111 spec from macOS Terminal with **12/12
+Chromium/WebKit cases passing in 10.4 s**. Background requests to the local API at
+port 3000 logged connection refusals and did not fail the focused run.
+
 ## Dashboard preference foundation — 2026-11-15
 
 Six integration tests cover the default count and empty flags, per-owner isolation

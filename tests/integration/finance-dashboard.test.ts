@@ -25,8 +25,13 @@ function fixture() {
   let sourceVersion = 4;
   const send = vi.fn(async (command: GetCommand | QueryCommand | TransactWriteCommand) => {
     if (command instanceof QueryCommand) {
-      const pk = command.input.ExpressionAttributeValues?.[':owner'];
-      return { Items: [...rows.values()].filter((row) => row.PK === pk) };
+      const pk = command.input.ExpressionAttributeValues?.[':pk'];
+      const prefix = String(command.input.ExpressionAttributeValues?.[':prefix']);
+      return {
+        Items: [...rows.values()].filter(
+          (row) => row.PK === pk && String(row.SK).startsWith(prefix),
+        ),
+      };
     }
     if (command instanceof GetCommand) {
       const key = command.input.Key;

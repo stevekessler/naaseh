@@ -35,6 +35,7 @@ import {
   financeReusableItemInputSchema,
   manualFinanceTransactionReplayInputSchema,
 } from '@naaseh/contracts';
+import { dashboardPreferenceResponse } from './dashboard-preference-handler.js';
 import { FinanceExperienceFailure } from './telemetry.js';
 import type { z } from 'zod';
 import { createFinanceUnlockGuard, assertFinanceClientUser } from './finance-unlock-guard.js';
@@ -340,6 +341,10 @@ export function createFinanceHandler(
         expectedUserId: event.headers['x-finance-owner'],
       };
       const visit = await authorize(gate);
+      const preferences = await dashboardPreferenceResponse(event, auth.userId, () =>
+        authorize(gate),
+      );
+      if (preferences) return preferences;
       const csvDuplicatePath = /^\/api\/v1\/finance\/accounts\/([^/]+)\/csv-duplicates$/u.exec(
         event.rawPath,
       );
