@@ -89,6 +89,8 @@ describe('Finance infrastructure boundaries', () => {
       'FinanceImportFailures',
       'FinanceDataIntegrityFailures',
       'FinanceAuthorizationDenials',
+      'AttachmentScanFailures',
+      'AttachmentStalledScans',
     ]) {
       expect(rendered).toContain(metric);
     }

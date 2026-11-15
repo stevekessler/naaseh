@@ -1,3 +1,5 @@
+import { FinanceReceiptsPage } from './receipts/FinanceReceiptsPage.js';
+import { resumeReceiptUploads } from './receipts/receipt-client.js';
 import { FinanceAccountsPage } from './accounts/FinanceAccountsPage.js';
 import { FinanceAccountCreatePage } from './accounts/FinanceAccountCreatePage.js';
 import {
@@ -38,6 +40,18 @@ export function FinanceLandingPage({
   route?: FinanceRoute;
   navigate?: (route: AppRoute, state?: AppHistoryState) => void;
 }) {
+  useEffect(() => {
+    const request = new AbortController();
+    const resume = () => void resumeReceiptUploads(csrfToken, request.signal).catch(() => {});
+    const unsubscribe = peekFinanceAccess()?.onLock(() => request.abort());
+    window.addEventListener('online', resume);
+    resume();
+    return () => {
+      request.abort();
+      unsubscribe?.();
+      window.removeEventListener('online', resume);
+    };
+  }, [csrfToken, ownerId]);
   const [connection, setConnection] = useState<SimplefinConnectionView>();
   const [connectionState, setConnectionState] = useState<'checking' | 'ready' | 'unavailable'>(
     'checking',
@@ -272,6 +286,8 @@ export function FinanceLandingPage({
             navigate({ section: 'finance', view: 'merchants', merchantId })
           }
         />
+      ) : view === 'receipts' ? (
+        <FinanceReceiptsPage />
       ) : view === 'categories' ? (
         <FinanceCategoriesPage userId={ownerId} isAdmin={role === 'admin'} csrfToken={csrfToken} />
       ) : view === 'merchants' ? (

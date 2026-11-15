@@ -1,3 +1,4 @@
+import { dispatchFinanceReceipt } from './receipt-handler.js';
 import { FinanceCacheProofService, type FinanceCacheAuthorizationSnapshot } from './cache-proof.js';
 import { financeReplayFingerprint } from './mutation-intent.js';
 import { assertFinanceTaskResultAccess, FinanceSyncSourceGuard } from './sync-source-guard.js';
@@ -238,9 +239,13 @@ export function createFinanceHandler(
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
     const correlationId = event.requestContext.requestId;
     const auth = (event.requestContext as { authorizer?: { lambda?: unknown } }).authorizer
-      ?.lambda as { userId?: string; csrfToken?: string; sessionHash?: string } | undefined;
+      ?.lambda as
+      | { userId?: string; role?: string; csrfToken?: string; sessionHash?: string }
+      | undefined;
     if (!auth?.userId)
       return problem(401, 'unauthorized', 'Authentication required.', correlationId);
+    const receiptResponse = await dispatchFinanceReceipt(event, { ...auth, userId: auth.userId });
+    if (receiptResponse) return receiptResponse;
     try {
       assertFinanceClientUser(auth.userId, event.headers['x-finance-owner']);
       const snapshotProtocol = event.headers['x-finance-cache-protocol'];

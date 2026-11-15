@@ -146,6 +146,8 @@ export function createOperationalVisibility(
     [
       { metricName: 'FinanceImportFailures', threshold: 1 },
       { metricName: 'FinanceDataIntegrityFailures', threshold: 1 },
+      { metricName: 'AttachmentStalledScans', threshold: 1 },
+      { metricName: 'AttachmentScanFailures', threshold: 1 },
       { metricName: 'FinanceAuthorizationDenials', threshold: 10 },
     ],
     1,

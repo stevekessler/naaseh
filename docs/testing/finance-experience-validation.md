@@ -1,5 +1,97 @@
 # Finance Experience Expansion Implementation Validation
 
+## US6 private transaction receipts — 2026-11-14
+
+Phase 10 is based on the completed Phase 8 commit
+`a73dcf91198684bb1760384537a663dd987dd959` on a separate receipt branch.
+The receipt story depends on US1, US2, US3 and US4. Its code and fixtures can be
+validated locally while Phase 9 proceeds independently.
+
+The eight supported extensions use an inclusive declaration limit of 1 to
+10,000,000 bytes. Local tests use generated PDF, JPEG, PNG, Word and Excel
+documents to verify actual signatures and structures, claimed-type mismatch,
+blocked active content and encrypted Office formats, and expansion limits.
+A separate local boundary probe accepted actual 10,000,000-byte PDF, JPG, JPEG,
+PNG, DOCX and XLSX fixtures and 9,999,872-byte DOC and XLS fixtures (the largest
+multiple of their 512-byte sectors below the limit). All eight paths rejected a
+10,000,001-byte input. Single-sample policy time for those fixtures ranged from
+38.2 to 44.2 ms, including worker startup.
+The checker runs in a terminable worker with a five-second deadline. Some safe
+files can fall outside the inspectable subset, including PDFs with cross-reference
+streams and interlaced PNGs. Office receipts have an original-download fallback.
+Verified PDFs render page by page into a bounded canvas using same-origin PDF.js
+6.5.438 (Apache-2.0), with XFA and annotations disabled. The browser tests
+verify actual pixels in Chromium, WebKit, iPhone and iPad. Image previews use a
+local verified Blob. [PDF.js API](https://mozilla.github.io/pdf.js/api/index.html)
+
+Local lifecycle fixtures cover a lost PUT response, stable identity across
+retries, immutable version and checksum, cancelled and expired uploads,
+transient scan retry, exact-version recovery and duplicate suppression.
+Availability requires both scan verdicts on the pinned version. Current
+Finance unlock and canonical source authorization are rechecked on each range
+response. Generic attachment metadata and signed-download routes deny receipt
+access. Browser tests cover original SHA-256 verification, combined filters
+and lock during a second chunk. The query fixture verifies local transaction
+date, authorization before matching merchant filters, and deduplication on
+canonical aliases. Restore fixtures cover 30-day deletion retention, orphan
+cleanup and matching verdicts for a retained object version.
+
+The dedicated encrypted local table commits pending bytes before an upload
+can be queued. The quota fixture verifies that a failed write leaves no new
+pending receipt or ordinary outbox record. A failed transfer keeps the encrypted
+draft for retry or cancellation. Opening a previously saved server receipt in
+a new visit requires connectivity.
+
+On this Mac, 20 launches each of the packaged policy worker on small fixtures
+measured PDF 35.4 ms median and 38.5 ms p95 (322 bytes), and DOCX 40.1 ms
+median and 41.8 ms p95 (570 bytes). These samples measure worker startup and
+policy inspection. Managed malware scan turnaround, DynamoDB, backup restore
+in AWS, and the 5,000-receipt browser performance target remain unmeasured.
+
+The deployment template reuses the Finance routing, existing private versioned
+media and backup, and Finance and security alarms. The Finance function's
+receipt KMS grant is limited to S3 and the media bucket encryption context.
+[Amazon S3 encryption context](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingKMSEncryption.html)
+
+Cost inputs retain zero imported receipts, 50 new 2,000,000-byte receipts per
+month (100 MB of new S3 Standard originals), two total views per month with a
+100-view sensitivity, existing backups and 30% contingency. A typical view
+issues two protected ranges, each checking current source and receipt state.
+A new original adds one object upload, managed scan, and a full-object policy
+read. A cold PDF preview also fetches the browser worker (about 1.2 MiB
+uncompressed). Failed checks can emit a low-cardinality CloudWatch metric. The prior conditional model is $6.382609/month at month 12 and
+$6.941353/month at month 60 before measuring the current implementation.
+The combined ceiling remains **$6.50/month including contingency**. Real
+DynamoDB and hosted acceptance, production scan and cost evidence remain under
+T018. The migration remains unrun.
+
+| Local gate | Result | Real time |
+| --- | --- | --- |
+| Receipt contracts, policy, security, lifecycle, encrypted storage and restore | 49 passed in 6 files | 0.65 s |
+| Receipt and transaction-dialog Playwright journeys | 20 passed in 4 projects, including 8 receipt cases | 22.51 s |
+| Required validation | 1,935 passed in 491 files, runtime check, typecheck, lint and builds | 66.42 s |
+| Standalone tests | 1,935 passed in 491 files | 56.71 s |
+| Apple contract interoperability | 11 closed fields and 7 crypto vectors | 0.11 s |
+| Quick Playwright | 31 passed | 29.73 s |
+| Full Playwright | 580 passed, 28 existing skips, 608 selected | 441.82 s |
+
+Node 24.22.2 and Playwright 1.64.1 were used with existing projects, retries,
+timeouts and required selection. Earlier diagnostics corrected two browser
+fixture issues, a DynamoDB command double, excess route resources, the
+receipt-specific KMS policy and its synthesized assertion, and a blank native
+PDF frame. The first full browser run was stopped after an older transaction
+fixture returned transaction detail to the receipt list. The response is now
+checked against the receipt contract and the fixture uses separate routes.
+The final run results are recorded above.
+
+On the Phase 8 base, required validation passed 1,886 tests in 485 files in
+69.67 s and quick Playwright passed 31 in 28.65 s. The quick and CI selection
+stayed the same. The full local matrix added eight receipt cases. Hosted
+required-check timing remains unmeasured under T018.
+
+
+Phase 10 completes T094–T108 locally, bringing the checked task count to **95 of 166**.
+
 ## US3 account and multi-account transaction browsing — 2026-11-14
 
 The web transaction table uses the existing owner-bound query jobs, bounded

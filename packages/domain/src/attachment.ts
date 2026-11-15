@@ -1,5 +1,29 @@
 import { z } from 'zod';
 import { ulidSchema } from './primitives.js';
+export const MAX_FINANCE_RECEIPT_BYTES = 10_000_000;
+export const MAX_FINANCE_RECEIPT_RANGE_BYTES = 1_048_576;
+export const financeReceiptMediaTypes = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+} as const;
+
+const parentSchema = z.discriminatedUnion('parentType', [
+  z.object({ parentType: z.enum(['task', 'listItem']), parentId: ulidSchema }),
+  z.object({
+    parentType: z.literal('financeTransaction'),
+    parentId: z.string().refine((id) => {
+      if (ulidSchema.safeParse(id).success) return true;
+      const match = /^([0-9A-HJKMNP-TV-Z]{26}):([1-9][0-9]{0,4})$/u.exec(id);
+      return Boolean(match && ulidSchema.safeParse(match[1]).success && Number(match[2]) <= 50_000);
+    }),
+  }),
+]);
 export const attachmentStatusSchema = z.enum([
   'pending_upload',
   'scanning',
@@ -13,8 +37,8 @@ export const attachmentStatusSchema = z.enum([
 export const attachmentSchema = z
   .object({
     id: ulidSchema,
-    parentType: z.enum(['task', 'listItem']),
-    parentId: ulidSchema,
+    parentType: z.enum(['task', 'listItem', 'financeTransaction']),
+    parentId: z.string(),
     blobId: ulidSchema,
     originalFilename: z.string().trim().min(1).max(255),
     mediaType: z.string().min(1).max(255),
@@ -35,7 +59,12 @@ export const attachmentSchema = z
     updatedAt: z.string().datetime(),
     version: z.number().int().positive(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      parentSchema.safeParse({ parentType: value.parentType, parentId: value.parentId }).success &&
+      (value.parentType !== 'financeTransaction' || value.sizeBytes <= MAX_FINANCE_RECEIPT_BYTES),
+  );
 export type Attachment = z.infer<typeof attachmentSchema>;
 const allowed: Record<Attachment['status'], Attachment['status'][]> = {
   pending_upload: ['scanning', 'expired', 'cancelled', 'deleted'],
@@ -68,6 +97,14 @@ export const attachmentBlobSchema = z
     attachmentId: ulidSchema,
     objectKey: z.string().min(1),
     objectVersionId: z.string().min(1).optional(),
+    receiptChecks: z
+      .object({
+        objectETag: z.string().regex(/^"[^"\r\n]+"$/u),
+        policyCleanVersion: z.string().min(1).optional(),
+        malwareCleanVersion: z.string().min(1).optional(),
+      })
+      .strict()
+      .optional(),
     sizeBytes: z.number().int().positive(),
     checksumSha256: z.string().min(32),
     encryptionKeyArn: z.string().min(1),
@@ -88,13 +125,19 @@ export const uploadSessionSchema = z
     attachmentId: ulidSchema,
     blobId: ulidSchema,
     actorId: z.string().min(1),
-    parentType: z.enum(['task', 'listItem']),
-    parentId: ulidSchema,
+    parentType: z.enum(['task', 'listItem', 'financeTransaction']),
+    parentId: z.string(),
     expectedSizeBytes: z.number().int().positive(),
     expectedMediaType: z.string().min(1),
     expectedChecksumSha256: z.string().min(32),
     expiresAt: z.string().datetime(),
     status: z.enum(['initiated', 'uploaded', 'completed', 'expired', 'cancelled']),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) =>
+      parentSchema.safeParse({ parentType: value.parentType, parentId: value.parentId }).success &&
+      (value.parentType !== 'financeTransaction' ||
+        value.expectedSizeBytes <= MAX_FINANCE_RECEIPT_BYTES),
+  );
 export type AttachmentUploadSession = z.infer<typeof uploadSessionSchema>;

@@ -1,3 +1,4 @@
+import { TransactionReceipts } from '../receipts/TransactionReceipts.js';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createUlid } from '@naaseh/domain';
@@ -441,6 +442,11 @@ export function TransactionDetail({
           onResolved={onReconciled}
         />
       ) : null}
+      <TransactionReceipts
+        transactionId={transaction.id}
+        csrfToken={csrfToken}
+        editable={Boolean(scope)}
+      />
       <button onClick={() => void onPreviewRemoval()}>Preview transaction removal</button>
       {removalImpact ? (
         <section aria-label="Transaction removal impact">

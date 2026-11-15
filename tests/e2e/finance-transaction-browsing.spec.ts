@@ -74,8 +74,12 @@ test.beforeEach(async ({ page }) => {
       },
     });
   });
-  await page.route('**/api/v1/finance/transactions/' + transactionId + '**', (route) =>
+  const transactionPath = '/api/v1/finance/transactions/' + transactionId;
+  await page.route(new RegExp(transactionPath + '(?:[?].*)?$'), (route) =>
     route.fulfill({ headers: financeSnapshotFixtureHeaders, json: transaction }),
+  );
+  await page.route(new RegExp(transactionPath + '/receipts(?:[?].*)?$'), (route) =>
+    route.fulfill({ json: { items: [] } }),
   );
   await page.route(
     /\/api\/v1\/finance\/(categories|merchants|review-issues|connections)(\?|$)/,

@@ -5012,3 +5012,22 @@ html:has(.task-undo-notices) {
 .finance-transaction-modal::backdrop {
   background: rgb(0 0 0 / 55%);
 }
+
+.finance-receipt-preview {
+  display: block;
+  max-width: 100%;
+  width: min(100%, 36rem);
+  max-height: 65vh;
+  object-fit: contain;
+}
+
+canvas.finance-receipt-preview[hidden] {
+  display: none;
+}
+
+.finance-receipt-results {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 1rem;
+}
