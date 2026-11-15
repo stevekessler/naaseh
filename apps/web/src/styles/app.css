@@ -2263,6 +2263,7 @@ main {
 .task-list.hide-due :is(.task-due-column, .task-due-cell),
 .task-list.hide-priority :is(.task-priority-column, .task-priority-cell),
 .task-list.hide-assignee :is(.task-assignee-column, .task-assignee-cell),
+.task-list.hide-upcomingExpenses :is(.task-upcoming-expenses-column, .task-upcoming-expenses-cell),
 .task-list.hide-actions :is(.task-actions-column, .task-actions-heading, .task-actions-cell) {
   display: none;
 }
@@ -2290,6 +2291,9 @@ main {
   width: 8%;
 }
 .task-list .task-assignee-column {
+  width: 10%;
+}
+.task-list .task-upcoming-expenses-column {
   width: 10%;
 }
 .task-list .task-actions-column {

@@ -9,6 +9,7 @@ export const taskColumns = [
   { id: 'due', label: 'Due date' },
   { id: 'priority', label: 'Priority' },
   { id: 'assignee', label: 'Assignee' },
+  { id: 'upcomingExpenses', label: 'Upcoming Expenses' },
   { id: 'actions', label: 'Actions' },
 ] as const;
 
@@ -16,10 +17,11 @@ export type TaskColumnId = (typeof taskColumns)[number]['id'];
 type Breakpoint = 'phone' | 'tablet' | 'desktop';
 
 const allColumns = taskColumns.map(({ id }) => id);
+const defaultColumns = allColumns.filter((id) => id !== 'upcomingExpenses');
 const defaults: Record<Breakpoint, TaskColumnId[]> = {
-  phone: allColumns,
-  tablet: allColumns,
-  desktop: allColumns,
+  phone: defaultColumns,
+  tablet: defaultColumns,
+  desktop: defaultColumns,
 };
 
 const currentBreakpoint = (): Breakpoint => {

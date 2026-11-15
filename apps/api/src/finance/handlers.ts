@@ -18,6 +18,11 @@ import {
   financeRefundRelationshipPutSchema,
   financeReusableItemInputSchema,
   financeTaskCreateInputSchema,
+  financeLinkedTaskCreateSchema,
+  financeTaskLinkBatchQuerySchema,
+  financeTaskLinkCreateSchema,
+  financeTaskLinkDeleteSchema,
+  financeTaskLinksReplaceSchema,
   financeTransactionMatchDecisionSchema,
   financeTransactionMetadataPatchSchema,
   manualFinanceAccountInputSchema,
@@ -98,9 +103,16 @@ import {
   reconcileFinanceBudget,
 } from './reconciliation-service.js';
 import {
+  authorizedFinancialTaskLinksForTask,
+  authorizedFinancialTaskLinksForTasks,
+  authorizedTasksForFinancialTarget,
+  createAuthorizedFinancialTaskLink,
   authorizedFinancialTaskLinkForTask,
   createTaskFromFinanceBudgetItem,
+  createTaskFromFinanceTarget,
+  createTaskWithFinanceLinks,
   removeAuthorizedFinancialTaskLink,
+  replaceAuthorizedFinancialTaskLinks,
 } from './task-link-service.js';
 import {
   claimFinanceCategoryName,
@@ -869,9 +881,14 @@ export function registerUserStory1FinanceRoutes(
   registry.register('GET', '/api/v1/finance/tasks/{taskId}/link', async (event) => {
     const actor = await dependencies.actorFor(event);
     const link = authorizedFinancialTaskLinkForTask(repository, actor, parameter(event, 'taskId'));
-    if (!link) return json(200, {});
-    const budget = getFinanceBudget(repository, actor, link.budgetId);
-    return json(200, budget.items.some((item) => item.id === link.budgetItemId) ? { link } : {});
+    if (!link || link.targetType !== 'budgetItem') return json(200, {});
+    const budget = getFinanceBudget(repository, actor, link.budgetId!);
+    return json(
+      200,
+      budget.items.some((item) => item.id === link.targetId)
+        ? { link: { ...link, budgetItemId: link.targetId } }
+        : {},
+    );
   });
   registry.register('POST', '/api/v1/finance/budget-items/{budgetItemId}/tasks', async (event) => {
     const actor = await dependencies.actorFor(event);
@@ -897,6 +914,166 @@ export function registerUserStory1FinanceRoutes(
       financialTaskLinkId: result.financialTaskLinkId,
     });
   });
+  registry.register('GET', '/api/v1/finance/tasks/{taskId}/finance-links', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    return json(200, {
+      links: authorizedFinancialTaskLinksForTask(
+        repository,
+        actor,
+        parameter(event, 'taskId'),
+      ),
+    });
+  });
+  registry.register('POST', '/api/v1/finance/tasks', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const input = financeLinkedTaskCreateSchema.parse(bodyOf(event));
+    const requestMutationId = mutationId(event);
+    const replay = repository.mutation(actor.id, requestMutationId);
+    const result = createTaskWithFinanceLinks(
+      repository,
+      actor,
+      {
+        taskId: createUlid(),
+        linkIds: input.financeLinkSelections.map(() => createUlid()),
+        task: input.task,
+        selections: input.financeLinkSelections,
+      },
+      requestMutationId,
+      dependencies.now?.() ?? new Date(),
+    );
+    return json(replay ? 200 : 201, {
+      taskId: result.taskId,
+      linkStatus: result.linkStatus,
+      financialTaskLinkIds: result.financialTaskLinkIds,
+    });
+  });
+  registry.register('POST', '/api/v1/finance/tasks/{taskId}/finance-links', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const input = financeTaskLinkCreateSchema.parse(bodyOf(event));
+    const { expectedTaskVersion, linkId, ...target } = input;
+    const requestMutationId = mutationId(event);
+    const replay = repository.mutation<{ link: import('@naaseh/domain').FinancialTaskLink }>(
+      actor.id,
+      requestMutationId,
+    );
+    if (replay) {
+      const current = authorizedFinancialTaskLinksForTask(
+        repository,
+        actor,
+        parameter(event, 'taskId'),
+      ).find(({ id }) => id === replay.link.id);
+      if (!current) throw new Error('Finance record not found.');
+      return json(200, replay);
+    }
+    const replaying = event.headers['x-finance-sync-replay'] === 'task-link-create-v1';
+    if (linkId && !replaying) throw new Error('Finance task link identity is server managed.');
+    const link = createAuthorizedFinancialTaskLink(
+      repository,
+      actor,
+      parameter(event, 'taskId'),
+      target,
+      replaying && linkId ? linkId : createUlid(),
+      expectedTaskVersion,
+      dependencies.now?.() ?? new Date(),
+    );
+    return json(201, repository.remember(actor.id, requestMutationId, { link }));
+  });
+  registry.register('PUT', '/api/v1/finance/tasks/{taskId}/finance-links', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const input = financeTaskLinksReplaceSchema.parse(bodyOf(event));
+    const result = replaceAuthorizedFinancialTaskLinks(
+      repository,
+      actor,
+      {
+        taskId: parameter(event, 'taskId'),
+        expectedTaskVersion: input.expectedTaskVersion,
+        selections: input.financeLinkSelections,
+        linkIds: input.financeLinkSelections.map(() => createUlid()),
+      },
+      mutationId(event),
+      dependencies.now?.() ?? new Date(),
+    );
+    return json(200, result);
+  });
+  registry.register(
+    'DELETE',
+    '/api/v1/finance/tasks/{taskId}/finance-links/{linkId}',
+    async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const input = financeTaskLinkDeleteSchema.parse(bodyOf(event));
+      const link = repository.financialTaskLinks.get(parameter(event, 'linkId'));
+      if (!link || link.taskId !== parameter(event, 'taskId'))
+        throw new Error('Finance record not found.');
+      return json(
+        200,
+        removeAuthorizedFinancialTaskLink(
+          repository,
+          actor,
+          link.id,
+          input.expectedVersion,
+          dependencies.now?.() ?? new Date(),
+        ),
+      );
+    },
+  );
+  registry.register('POST', '/api/v1/finance/task-links/query', async (event) => {
+    const actor = await dependencies.actorFor(event);
+    const input = financeTaskLinkBatchQuerySchema.parse(bodyOf(event));
+    return json(200, {
+      items: Object.fromEntries(
+        authorizedFinancialTaskLinksForTasks(repository, actor, input.taskIds),
+      ),
+    });
+  });
+  const registerExpenseTaskRoutes = (
+    targetType: 'transaction' | 'upcomingExpense',
+    path: string,
+    parameterName: string,
+  ) => {
+    registry.register('GET', path, async (event) => {
+      const actor = await dependencies.actorFor(event);
+      return json(200, {
+        tasks: authorizedTasksForFinancialTarget(repository, actor, {
+          targetType,
+          targetId: parameter(event, parameterName),
+        }),
+      });
+    });
+    registry.register('POST', path, async (event) => {
+      const actor = await dependencies.actorFor(event);
+      const input = financeTaskCreateInputSchema.parse(bodyOf(event));
+      const requestMutationId = mutationId(event);
+      const replay = repository.mutation(actor.id, requestMutationId);
+      const result = createTaskFromFinanceTarget(
+        repository,
+        actor,
+        { targetType, targetId: parameter(event, parameterName) },
+        {
+          taskId: createUlid(),
+          linkId: createUlid(),
+          label: input.label,
+          assigneeId: input.assigneeId,
+          ...(input.dueDate ? { dueDate: input.dueDate } : {}),
+        },
+        requestMutationId,
+        dependencies.now?.() ?? new Date(),
+      );
+      return json(replay ? 200 : 201, {
+        taskId: result.taskId,
+        financialTaskLinkId: result.financialTaskLinkId,
+      });
+    });
+  };
+  registerExpenseTaskRoutes(
+    'transaction',
+    '/api/v1/finance/transactions/{transactionId}/tasks',
+    'transactionId',
+  );
+  registerExpenseTaskRoutes(
+    'upcomingExpense',
+    '/api/v1/finance/upcoming-expenses/{expenseId}/tasks',
+    'expenseId',
+  );
   registry.register('GET', '/api/v1/finance/reusable-items', async (event) => {
     const actor = await dependencies.actorFor(event);
     return json(200, listFinanceReusableItems(repository, actor, query(event, 'groupId')));
@@ -1196,7 +1373,8 @@ export function registerUserStory1FinanceRoutes(
         });
       } else if (recordType === 'task-link') {
         const link = repository.financialTaskLinks.get(recordId);
-        const budget = link ? repository.budgets.get(link.budgetId) : undefined;
+        const budget =
+          link?.targetType === 'budgetItem' ? repository.budgets.get(link.budgetId!) : undefined;
         if (!link || !budget) throw new Error('Finance record not found.');
         preview = createFinancialTaskLinkDeletionPreview({
           actor,
@@ -1278,7 +1456,10 @@ export function registerUserStory1FinanceRoutes(
         }
       }
       if (preview.recordType === 'task-link') {
-        const linkBudget = taskLink ? repository.budgets.get(taskLink.budgetId) : undefined;
+        const linkBudget =
+          taskLink?.targetType === 'budgetItem'
+            ? repository.budgets.get(taskLink.budgetId!)
+            : undefined;
         if (
           !taskLink ||
           !linkBudget ||

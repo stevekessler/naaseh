@@ -20,6 +20,7 @@ import {
   workReferenceIdentity,
   type ListItem,
   type Task,
+  type TaskInput,
   type WorkReference,
 } from '@naaseh/domain';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -37,6 +38,12 @@ import {
 import { taskDueDateKey } from '../search/task-filters.js';
 import { Login } from '../features/auth/Login.js';
 import { TaskForm } from '../features/tasks/TaskForm.js';
+import {
+  useFinanceItemOptions,
+  type FinanceLinkSelection,
+} from '../features/tasks/FinanceItemPicker.js';
+import { financeRequest } from '../features/finance/finance-client.js';
+import { queueEncryptedTaskLinks } from '../db/finance-repository.js';
 import { PostItBoard } from '../features/postit/PostItBoard.js';
 import { ConflictReview } from '../features/sync/ConflictReview.js';
 import { SyncStatus } from '../features/sync/SyncStatus.js';
@@ -290,6 +297,7 @@ export function App() {
     'valid' | 'locked' | 'retry' | 'wrong_account'
   >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
   useFinanceSession(session?.userId, session?.csrfToken, sessionValidation === 'valid');
+  const financeOptions = useFinanceItemOptions();
   const initialRoute = parseAppRoute(location.pathname);
   const [section, setSection] = useState<
     | 'tasks'
@@ -1136,8 +1144,49 @@ export function App() {
       </main>
     );
 
-  async function addTask(input: import('@naaseh/domain').TaskInput) {
-    return saveNewTask(input, session!.userId);
+  async function addTask(input: TaskInput & { financeLinkSelections?: FinanceLinkSelection[] }) {
+    const { financeLinkSelections, ...task } = input;
+    if (!financeLinkSelections?.length) return saveNewTask(task, session!.userId);
+    if (!navigator.onLine) {
+      const saved = await saveNewTask(task, session!.userId);
+      const taskMutation = await db.outbox
+        .where('entityId')
+        .equals(saved.id)
+        .filter((mutation) => mutation.entityType === 'task' && mutation.operation === 'create')
+        .first();
+      if (!taskMutation)
+        throw new Error('Task saved, but its Finance relationships could not be queued.');
+      try {
+        await queueEncryptedTaskLinks({
+          taskId: saved.id,
+          taskMutationId: taskMutation.id,
+          taskVersion: saved.version,
+          actorId: session!.userId,
+          selections: financeLinkSelections,
+        });
+      } catch (error) {
+        throw new Error(
+          `Task saved, but its Finance relationships still need attention. ${error instanceof Error ? error.message : ''}`.trim(),
+        );
+      }
+      return saved;
+    }
+    const created = await financeRequest<{
+      taskId: string;
+      linkStatus: 'applied' | 'pending';
+      financialTaskLinkIds: string[];
+    }>('/finance/tasks', {
+      method: 'POST',
+      csrfToken: session!.csrfToken,
+      idempotencyKey: crypto.randomUUID(),
+      body: JSON.stringify({ task, financeLinkSelections }),
+    });
+    await resyncFromServer(session!.csrfToken);
+    const saved = (await readLocalTaskSnapshot()).tasks.find(({ id }) => id === created.taskId);
+    if (!saved) throw new Error('Task saved. Refresh to finish loading it.');
+    if (created.linkStatus === 'pending')
+      throw new Error('Task saved. Retry its pending Finance links from the task details.');
+    return saved;
   }
   async function toggle(task: Task) {
     await completionUndo.save(
@@ -1145,6 +1194,27 @@ export function App() {
       { status: task.status === 'completed' ? 'open' : 'completed' },
       session!.userId,
     );
+  }
+  async function updateTaskAndFinanceLinks(
+    task: Task,
+    patch: Partial<Task>,
+    financeLinkSelections?: FinanceLinkSelection[],
+  ) {
+    const saved = await completionUndo.save(task, patch, session!.userId);
+    if (financeLinkSelections === undefined) return;
+    if (!navigator.onLine)
+      throw new Error('Task changes are saved. Reconnect to update its Finance relationships.');
+    await drainSequentially(session!.csrfToken);
+    await financeRequest(`/finance/tasks/${encodeURIComponent(task.id)}/finance-links`, {
+      method: 'PUT',
+      csrfToken: session!.csrfToken,
+      idempotencyKey: crypto.randomUUID(),
+      body: JSON.stringify({
+        expectedTaskVersion: saved.version,
+        financeLinkSelections,
+      }),
+    });
+    await resyncFromServer(session!.csrfToken);
   }
   async function moveProjectWork(work: WorkReference, destinationPosition: number) {
     const scope: LocalStackScope =
@@ -1800,6 +1870,7 @@ export function App() {
                 parentTasks={tasks}
                 groupOptions={joinedGroupOptions}
                 defaultAssigneeId={session.userId}
+                financeOptions={financeOptions}
               />
               <div className="view-toggle" role="group" aria-label="Task browsing">
                 <button aria-pressed={taskTab === 'all'} onClick={() => setTaskTab('all')}>
@@ -1869,6 +1940,7 @@ export function App() {
                   groups={groups.map((group) => ({ id: group.id, name: group.name }))}
                   defaultAssigneeId={session.userId}
                   currentUserId={session.userId}
+                  financeOptions={financeOptions}
                   tasks={visible}
                   collapseFutureTasks={taskTab === 'all'}
                   loading={taskResult === undefined}
@@ -1890,9 +1962,7 @@ export function App() {
                     history.pushState({}, '', `/${location.search}`);
                     setSelectedId(undefined);
                   }}
-                  onUpdate={async (task, patch) => {
-                    await completionUndo.save(task, patch, session.userId);
-                  }}
+                  onUpdate={updateTaskAndFinanceLinks}
                 />
               ) : (
                 <PostItBoard

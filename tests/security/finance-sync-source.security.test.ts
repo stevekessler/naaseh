@@ -167,6 +167,27 @@ describe('canonical Finance synchronization source boundary', () => {
     await expect(guard.assertCurrent()).rejects.toThrow(/changed/i);
     expect(await f.guard().canDeliver(change)).toBe(false);
   });
+  it('authorizes transaction and upcoming-expense task links through their current target graphs', async () => {
+    const f = setup();
+    const transactionLink = f.add('financialTaskLinks', 'transaction-link', {
+      targetType: 'transaction', targetId: 'transaction', taskId: 'task',
+      financeAudience: 'OWNER#owner', status: 'active',
+    });
+    expect(await f.guard().canDeliver(f.feed('financeTaskLink', transactionLink))).toBe(true);
+    f.add('budgets', 'budget', { groupId: 'shared', status: 'active' }, f.group);
+    const upcoming = f.add('upcomingExpenses', 'upcoming', {
+      accountId: 'account', budgetId: 'budget', groupId: 'shared', lifecycle: 'active',
+      status: 'active',
+    });
+    const upcomingLink = f.add('financialTaskLinks', 'upcoming-link', {
+      targetType: 'upcomingExpense', targetId: upcoming.id, taskId: 'task',
+      financeAudience: 'OWNER#owner', status: 'active',
+    });
+    const change = f.feed('financeTaskLink', upcomingLink);
+    expect(await f.guard().canDeliver(change)).toBe(true);
+    f.revoke();
+    expect(await f.guard().canDeliver(change)).toBe(false);
+  });
   it('withholds reconciliation aggregates without private complete source evidence and strips that evidence from wire output', async () => {
     const f = setup();
     f.add('budgets', 'budget', { groupId: 'shared', status: 'active' }, f.group);

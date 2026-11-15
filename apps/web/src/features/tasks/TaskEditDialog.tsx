@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CategoryRecord, Project, Task, TaskInput } from '@naaseh/domain';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskForm } from './TaskForm.js';
+import type { FinanceItemOption, FinanceLinkSelection } from './FinanceItemPicker.js';
 
 export function taskEditPatch(input: TaskInput, task: Task): Partial<Task> {
   const patch: Record<string, unknown> = { ...input };
@@ -34,6 +35,8 @@ export function TaskEditDialog({
   close,
   primaryContent,
   secondaryContent,
+  financeOptions = [],
+  initialFinanceLinkSelections = [],
 }: {
   task: Task;
   categories: readonly CategoryRecord[];
@@ -41,10 +44,12 @@ export function TaskEditDialog({
   assignees: readonly AssigneeOption[];
   parentTasks: readonly Task[];
   groupOptions?: readonly { id: string; label: string; context?: string }[];
-  save: (patch: Partial<Task>) => Promise<void>;
+  save: (patch: Partial<Task>, financeLinkSelections?: FinanceLinkSelection[]) => Promise<void>;
   close: () => void;
   primaryContent?: ReactNode;
   secondaryContent?: ReactNode;
+  financeOptions?: readonly FinanceItemOption[];
+  initialFinanceLinkSelections?: readonly FinanceLinkSelection[];
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -109,17 +114,27 @@ export function TaskEditDialog({
             assignees={assignees}
             parentTasks={parentTasks}
             groupOptions={groupOptions}
+            financeOptions={financeOptions}
+            initialFinanceLinkSelections={initialFinanceLinkSelections}
             submitLabel={busy ? 'Saving…' : 'Save changes'}
             cancel={requestClose}
-            save={async (input: TaskInput) => {
+            save={async (
+              input: TaskInput & { financeLinkSelections?: FinanceLinkSelection[] },
+            ) => {
               setBusy(true);
               setError('');
               try {
-                const patch = taskEditPatch(input, task) as Record<string, unknown>;
+                const { financeLinkSelections, ...taskInput } = input;
+                const patch = taskEditPatch(taskInput, task) as Record<string, unknown>;
                 if (!input.parentId && task.parentId) patch.parentId = null;
                 if (!input.groupId && task.groupId) patch.groupId = null;
                 if (!input.postItColor && task.postItColor) patch.postItColor = null;
-                await save(patch as Partial<Task>);
+                await save(
+                  patch as Partial<Task>,
+                  financeOptions.length || initialFinanceLinkSelections.length
+                    ? (financeLinkSelections ?? [])
+                    : undefined,
+                );
                 setDirty(false);
                 finishClose();
               } catch {

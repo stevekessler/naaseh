@@ -293,6 +293,22 @@ export function financeRevocationTombstone(input: {
   return { ...input, operation: 'tombstone' };
 }
 
+/** A revoked task or source removes only the opaque relationship projection. */
+export function financialTaskLinkRevocationTombstone(input: {
+  audience: string;
+  linkId: string;
+  version: number;
+  changedAt: string;
+}): Omit<SyncChange, 'sequence'> {
+  return financeRevocationTombstone({
+    audience: input.audience,
+    entityType: 'financeTaskLink',
+    entityId: input.linkId,
+    version: input.version,
+    changedAt: input.changedAt,
+  });
+}
+
 /** Owner projection revocation never leaks the protected expense or account in its payload. */
 export function upcomingExpenseRevocationTombstones(input: {
   ownerId: string;

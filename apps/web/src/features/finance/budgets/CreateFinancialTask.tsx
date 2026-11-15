@@ -1,5 +1,7 @@
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
+import type { TaskInput } from '@naaseh/domain';
 import { financeRequest } from '../finance-client.js';
+import { TaskForm } from '../../tasks/TaskForm.js';
 
 export function CreateFinancialTask({
   budgetItemId,
@@ -8,8 +10,10 @@ export function CreateFinancialTask({
   currentUserId,
   csrfToken,
   verifyAccess,
+  target,
 }: {
-  budgetItemId: string;
+  budgetItemId?: string;
+  target?: { type: 'transaction' | 'upcomingExpense'; id: string };
   description: string;
   applicableDate?: string;
   currentUserId: string;
@@ -17,28 +21,32 @@ export function CreateFinancialTask({
   verifyAccess: () => Promise<boolean>;
 }) {
   const [open, setOpen] = useState(false);
-  const [label, setLabel] = useState(description);
-  const [dueDate, setDueDate] = useState(applicableDate ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [taskId, setTaskId] = useState<string>();
+  const endpoint = budgetItemId
+    ? `/finance/budget-items/${encodeURIComponent(budgetItemId)}/tasks`
+    : target?.type === 'transaction'
+      ? `/finance/transactions/${encodeURIComponent(target.id)}/tasks`
+      : target
+        ? `/finance/upcoming-expenses/${encodeURIComponent(target.id)}/tasks`
+        : '';
 
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
+  const submit = async (value: TaskInput) => {
     setBusy(true);
     setError('');
     try {
       if (!(await verifyAccess())) return;
       const created = await financeRequest<{ taskId: string; financialTaskLinkId: string }>(
-        `/finance/budget-items/${budgetItemId}/tasks`,
+        endpoint,
         {
           method: 'POST',
           csrfToken,
           idempotencyKey: crypto.randomUUID(),
           body: JSON.stringify({
-            label,
+            label: value.label,
             assigneeId: currentUserId,
-            ...(dueDate ? { dueDate } : {}),
+            ...(value.dueDate ? { dueDate: value.dueDate } : {}),
           }),
         },
       );
@@ -64,30 +72,16 @@ export function CreateFinancialTask({
       {error ? <p role="alert">{error}</p> : null}
       {open ? (
         <dialog open aria-label={`Create task from ${description}`}>
-          <form onSubmit={(event) => void submit(event)}>
-            <h2>Create task</h2>
-            <label>
-              Task label
-              <input value={label} onChange={(event) => setLabel(event.target.value)} required />
-            </label>
-            <label>
-              Due date
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(event) => setDueDate(event.target.value)}
-              />
-            </label>
-            <p role="note">Task sharing stays separate from Finance access.</p>
-            <div>
-              <button type="button" disabled={busy} onClick={() => setOpen(false)}>
-                Cancel
-              </button>
-              <button type="submit" disabled={busy}>
-                {busy ? 'Creating…' : 'Create task'}
-              </button>
-            </div>
-          </form>
+          <h2>Create task</h2>
+          <p role="note">Task sharing stays separate from Finance access.</p>
+          <TaskForm
+            save={submit}
+            initialLabel={description}
+            {...(applicableDate ? { initialDueDate: applicableDate } : {})}
+            defaultAssigneeId={currentUserId}
+            cancel={() => setOpen(false)}
+            submitLabel={busy ? 'Creating…' : 'Create task'}
+          />
         </dialog>
       ) : null}
     </div>

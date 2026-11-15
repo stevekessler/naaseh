@@ -36,6 +36,11 @@ import { attachmentAccept, uploadAttachment } from '../attachments/attachment-cl
 import { drainSequentially } from '../../sync/sync-engine.js';
 import { db } from '../../db/database.js';
 import { DueDateField } from './DueDateField.js';
+import {
+  FinanceItemPicker,
+  type FinanceItemOption,
+  type FinanceLinkSelection,
+} from './FinanceItemPicker.js';
 
 const MemoEditor = lazy(() =>
   import('../memos/MemoEditor.js').then(({ MemoEditor }) => ({ default: MemoEditor })),
@@ -96,8 +101,14 @@ export function TaskForm({
   cancel,
   nestedDialogs = false,
   attachments,
+  financeOptions = [],
+  initialFinanceLinkSelections = [],
+  financeLocked = false,
+  onUnlockFinance,
+  initialLabel,
+  initialDueDate,
 }: {
-  save: (task: TaskInput) => Promise<Task | void>;
+  save: (task: TaskInput & { financeLinkSelections?: FinanceLinkSelection[] }) => Promise<Task | void>;
   csrfToken?: string;
   task?: Task;
   categories?: readonly CategoryRecord[];
@@ -111,6 +122,12 @@ export function TaskForm({
   cancel?: () => void;
   nestedDialogs?: boolean;
   attachments?: ReactNode;
+  financeOptions?: readonly FinanceItemOption[];
+  initialFinanceLinkSelections?: readonly FinanceLinkSelection[];
+  financeLocked?: boolean;
+  onUnlockFinance?: () => void;
+  initialLabel?: string;
+  initialDueDate?: string;
 }) {
   const [urgency, setUrgency] = useState<Urgency>(task?.urgency ?? defaultUrgency);
   const initialCategoryId =
@@ -131,9 +148,9 @@ export function TaskForm({
   );
   const initialTimed = task?.dueAt ? instantToLocalDue(task.dueAt) : undefined;
   const [dueKind, setDueKind] = useState<'none' | 'date' | 'timed'>(
-    task?.dueKind ?? (task?.dueDate ? 'date' : task?.dueAt ? 'timed' : 'none'),
+    task?.dueKind ?? (task?.dueDate || initialDueDate ? 'date' : task?.dueAt ? 'timed' : 'none'),
   );
-  const [dueDate, setDueDate] = useState(task?.dueDate ?? initialTimed?.localDate ?? '');
+  const [dueDate, setDueDate] = useState(task?.dueDate ?? initialDueDate ?? initialTimed?.localDate ?? '');
   const [dueTime, setDueTime] = useState(initialTimed?.localTime ?? '10:00');
   const [repeatInterval, setRepeatInterval] = useState(task?.repeatInterval ?? 1);
   const [repeatUnit, setRepeatUnit] = useState<TaskRepeatUnit | ''>(task?.repeatUnit ?? '');
@@ -145,6 +162,9 @@ export function TaskForm({
   const [createdTask, setCreatedTask] = useState<Task>();
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [financeLinkSelections, setFinanceLinkSelections] = useState<FinanceLinkSelection[]>([
+    ...initialFinanceLinkSelections,
+  ]);
   const progressId = useId();
   const openParentTasks = eligibleParentTasks(task, parentTasks);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -186,6 +206,7 @@ export function TaskForm({
           urgency,
           ...(postItColor ? { postItColor } : {}),
           percentComplete,
+          ...(financeLinkSelections.length ? { financeLinkSelections } : {}),
         }));
       if (saved && files.length && csrfToken) {
         setCreatedTask(saved);
@@ -227,6 +248,7 @@ export function TaskForm({
       setGroupId('');
       setPostItColor('');
       setPercentComplete(0);
+      setFinanceLinkSelections([]);
       form.querySelector<HTMLDetailsElement>('.task-form-details')?.removeAttribute('open');
       if (document.activeElement === document.body || form.contains(document.activeElement))
         form.querySelector<HTMLInputElement>('input[name="label"]')?.focus();
@@ -236,8 +258,17 @@ export function TaskForm({
     <form className="task-form" onSubmit={submit}>
       <label>
         Task label
-        <input name="label" required maxLength={300} defaultValue={task?.label} />
+        <input name="label" required maxLength={300} defaultValue={task?.label ?? initialLabel} />
       </label>
+      {financeOptions.length || initialFinanceLinkSelections.length || financeLocked ? (
+        <FinanceItemPicker
+          options={financeOptions}
+          value={financeLinkSelections}
+          onChange={setFinanceLinkSelections}
+          locked={financeLocked}
+          {...(onUnlockFinance ? { onUnlock: onUnlockFinance } : {})}
+        />
+      ) : null}
       <div className="task-quick-fields">
         <label>
           Priority

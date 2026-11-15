@@ -42,11 +42,12 @@ import { createFinanceUnlockGuard, assertFinanceClientUser } from './finance-unl
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 const financeSnapshotPaths = [
-  /^\/api\/v1\/finance\/(?:accounts(?:\/[0-9A-HJKMNP-TV-Z]{26}\/transactions)?|connections|categories|merchants(?:\/[0-9A-HJKMNP-TV-Z]{26})?|tasks\/[0-9A-HJKMNP-TV-Z]{26}\/link|review-issues)$/u,
+  /^\/api\/v1\/finance\/(?:accounts(?:\/[0-9A-HJKMNP-TV-Z]{26}\/transactions)?|connections|categories|merchants(?:\/[0-9A-HJKMNP-TV-Z]{26})?|tasks\/[0-9A-HJKMNP-TV-Z]{26}\/(?:link|finance-links)|review-issues)$/u,
   /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?::[1-9][0-9]{0,4})?$/u,
   /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?\/matches$/u,
   /^\/api\/v1\/finance\/(?:budgets(?:\/[0-9A-HJKMNP-TV-Z]{26}(?:\/reusable-offers)?)?|reusable-items)$/u,
   /^\/api\/v1\/finance\/upcoming-expenses(?:\/[0-9A-HJKMNP-TV-Z]{26})?$/u,
+  /^\/api\/v1\/finance\/(?:transactions\/[0-9A-HJKMNP-TV-Z]{26}|upcoming-expenses\/[0-9A-HJKMNP-TV-Z]{26})\/tasks$/u,
   /^\/api\/v1\/finance\/records\/(?:transaction\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?|(?:account|reusable-item|match|category|merchant)\/[0-9A-HJKMNP-TV-Z]{26})\/deletion-preview$/u,
 ];
 
@@ -93,6 +94,7 @@ export async function createDefaultFinanceRegistry(event: APIGatewayProxyEventV2
             | 'manual-transaction-create-v1'
             | 'upcoming-expense-create-v1'
             | 'expense-fulfillment-create-v1'
+            | 'task-link-create-v1'
             | 'reusable-create-v1',
         )
       : undefined,
@@ -147,6 +149,10 @@ export async function createDefaultFinanceRegistry(event: APIGatewayProxyEventV2
         })()
       : undefined,
   );
+  const taskLinkRoute = event.rawPath.match(
+    /^\/api\/v1\/finance\/tasks\/([0-9A-HJKMNP-TV-Z]{26})\/finance-links(?:\/[^/]+)?$/u,
+  );
+  if (taskLinkRoute?.[1]) await repository.loadTaskForFinanceLink(taskLinkRoute[1]);
   const registry = registerUserStory1FinanceRoutes(new FinanceRouteRegistry(), {
     repository,
     actorFor: () => actor,
@@ -274,6 +280,10 @@ export function createFinanceHandler(
         /^\/api\/v1\/finance\/upcoming-expenses\/[0-9A-HJKMNP-TV-Z]{26}\/fulfillments$/u.test(
           event.rawPath,
         );
+      const taskLinkCreatePath =
+        /^\/api\/v1\/finance\/tasks\/[0-9A-HJKMNP-TV-Z]{26}\/finance-links$/u.test(
+          event.rawPath,
+        );
       const validReplay =
         replayKind === 'budget-edit-v1'
           ? event.requestContext.http.method === 'PATCH' &&
@@ -290,6 +300,8 @@ export function createFinanceHandler(
                     ? event.requestContext.http.method === 'POST' && upcomingExpenseCreatePath
                     : replayKind === 'expense-fulfillment-create-v1'
                       ? event.requestContext.http.method === 'POST' && expenseFulfillmentCreatePath
+                      : replayKind === 'task-link-create-v1'
+                        ? event.requestContext.http.method === 'POST' && taskLinkCreatePath
                       : replayKind === 'reusable-create-v1' &&
                         event.requestContext.http.method === 'POST' &&
                         reusableCreatePath;

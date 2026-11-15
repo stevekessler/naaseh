@@ -113,6 +113,18 @@ export const financeKeys = {
     PK: `FINANCE#BUDGET#${budgetId}`,
     SK: `TASK_LINK#${linkId}`,
   }),
+  financialTaskTargetLink: (targetType: string, targetId: string, linkId: string) => ({
+    PK: `FINANCE#TASK_TARGET#${targetType}#${targetId}`,
+    SK: `TASK_LINK#${linkId}`,
+  }),
+  financialTaskReverseLink: (taskId: string, linkId: string) => ({
+    PK: `FINANCE#TASK#${taskId}`,
+    SK: `TARGET_LINK#${linkId}`,
+  }),
+  financialTaskPair: (taskId: string, targetType: string, targetId: string) => ({
+    PK: `FINANCE#TASK#${taskId}`,
+    SK: `TARGET_PAIR#${targetType}#${targetId}`,
+  }),
   reusableItem: (reusableItemId: string) => ({
     PK: `FINANCE#REUSABLE_ITEM#${reusableItemId}`,
     SK: 'CURRENT' as const,
@@ -364,10 +376,17 @@ export function buildFinancePersistenceItems(input: FinancePersistenceInput) {
     });
   if (input.financialTaskLink)
     records.push({
-      key: financeKeys.financialTaskLink(
-        input.financialTaskLink.budgetId,
-        input.financialTaskLink.id,
-      ),
+      key:
+        input.financialTaskLink.targetType === 'budgetItem'
+          ? financeKeys.financialTaskLink(
+              input.financialTaskLink.budgetId!,
+              input.financialTaskLink.id,
+            )
+          : financeKeys.financialTaskTargetLink(
+              input.financialTaskLink.targetType,
+              input.financialTaskLink.targetId,
+              input.financialTaskLink.id,
+            ),
       data: input.financialTaskLink,
     });
   if (input.reusableItem)
@@ -449,17 +468,47 @@ export function buildBudgetReconciliationTransaction(input: {
 export function buildFinancialTaskLinkWrite(
   link: import('@naaseh/domain').FinancialTaskLink,
 ): NonNullable<TransactWriteCommandInput['TransactItems']>[number] {
+  const key =
+    link.targetType === 'budgetItem'
+      ? financeKeys.financialTaskLink(link.budgetId!, link.id)
+      : financeKeys.financialTaskTargetLink(link.targetType, link.targetId, link.id);
   return {
     Put: {
       TableName: tableName,
       Item: {
-        ...financeKeys.financialTaskLink(link.budgetId, link.id),
+        ...key,
         data: link,
         version: link.version,
       },
       ConditionExpression: 'attribute_not_exists(PK)',
     },
   };
+}
+
+/** Primary, task-reverse and unique task/target references written in one transaction. */
+export function buildFinancialTaskLinkWrites(
+  link: import('@naaseh/domain').FinancialTaskLink,
+): NonNullable<TransactWriteCommandInput['TransactItems']> {
+  return [
+    buildFinancialTaskLinkWrite(link),
+    {
+      Put: {
+        TableName: tableName,
+        Item: { ...financeKeys.financialTaskReverseLink(link.taskId, link.id), data: link },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      },
+    },
+    {
+      Put: {
+        TableName: tableName,
+        Item: {
+          ...financeKeys.financialTaskPair(link.taskId, link.targetType, link.targetId),
+          linkId: link.id,
+        },
+        ConditionExpression: 'attribute_not_exists(PK)',
+      },
+    },
+  ];
 }
 
 /** One DynamoDB transaction creates the ordinary task and the Finance-only relationship. */
@@ -474,7 +523,7 @@ export function buildFinancialTaskCreationTransaction(input: {
   const financeFeed = input.feedChanges.find(
     ({ change }) => change.entityType === 'financeTaskLink',
   );
-  if (taskFeed && JSON.stringify(taskFeed.change.payload).includes(input.link.budgetItemId)) {
+  if (taskFeed && JSON.stringify(taskFeed.change.payload).includes(input.link.targetId)) {
     throw new Error('Task feeds cannot contain Finance relationship metadata.');
   }
   if (financeFeed && financeFeed.change.audience !== input.link.financeAudience) {
@@ -485,7 +534,7 @@ export function buildFinancialTaskCreationTransaction(input: {
     input.revision,
     input.mutationId,
     input.feedChanges,
-    [buildFinancialTaskLinkWrite(input.link)],
+    buildFinancialTaskLinkWrites(input.link),
   );
   transaction.TransactItems?.push({
     Put: {
@@ -606,6 +655,7 @@ export class FinanceMemoryRepository {
   readonly budgetItems = new Map<string, import('@naaseh/domain').BudgetItem>();
   readonly budgetReconciliations: import('@naaseh/domain').ReconciliationRecord[] = [];
   readonly financialTaskLinks = new Map<string, import('@naaseh/domain').FinancialTaskLink>();
+  readonly financialTaskLinkPairs = new Map<string, string>();
   readonly reusableItems = new Map<string, import('@naaseh/domain').ReusableBudgetItem>();
   readonly reusableOccurrenceLocks = new Map<string, string>();
   readonly transactionMatches = new Map<string, import('@naaseh/domain').TransactionMatch>();

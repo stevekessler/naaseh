@@ -1,5 +1,51 @@
 # Finance Experience Expansion Implementation Validation
 
+> Current local checkpoint (November 15, Phase 11 task/expense relationships in
+> progress): 94/166 tasks checked. T109, T110 and T112–T121 are complete. Tasks can
+> relate independently to budget items, transactions and upcoming expenses, including
+> multi-select create/edit, two-way navigation, bounded 50-task reads, encrypted
+> offline relationship replay and default-off task/post-it expense projections.
+> Access is the intersection of current task and Finance authority; ordinary task,
+> search, export and notification data contains no protected relationship metadata.
+> Completing or deleting a task never mutates its Finance source. Required validation
+> passes **1,932 tests / 496 files / 64.33 s real**, and the dedicated Chromium/WebKit
+> file passes **4/4 / 6.10 s**. T111 remains open for additional browser journeys.
+> T122 remains assigned to Phase 10 on the second computer; T123 follows after merge.
+
+## US12 task/expense relationship gate — 2026-11-15
+
+The canonical relationship is a protected target union with a lossless adapter for
+legacy budget-item links. Pair fences prevent duplicates. Task and target reverse
+references support bounded navigation without scans, while every read, create,
+replacement, removal and idempotent retry rechecks both sides of the access
+intersection. Hidden links disclose neither existence, identifiers nor count and are
+not removed by an editor who cannot currently access them.
+
+Normal task creation retains sharing choices and commits the task plus all selected
+Finance links as one receipt. Editing replaces only currently editable relationships.
+Offline task creation durably queues the ordinary task and then atomically encrypts
+relationship records and replay intents behind that task mutation. Replay uses stable
+link identities and never copies protected descriptions or amounts into task payloads.
+Source Add Task actions use the normal task form with generic labels; cancelling creates
+neither object.
+
+The default-off task-table and post-it preferences retain their existing per-user
+storage behavior. When unlocked and authorized, one bounded projection load shows
+upcoming description, date, formatted amount/currency and account with navigation.
+Locked viewers receive the same neutral unlock control independent of link existence;
+unauthorized viewers receive no count or metadata.
+
+The focused contract, integration, security, durable-runtime, sync, component and
+offline-write selection passed **112 tests / 8 files**. The dedicated browser file
+passed **4/4** across Chromium and WebKit in **6.10 seconds**. Required validation
+passed **1,932 tests in 496 files**, plus Node 24 runtime enforcement, typecheck, lint
+and production builds, in **64.33 / 258.41 / 51.92 seconds real/user/sys**. The first
+required run found two legacy fixtures whose reverse-task mock omitted `tasks`; the
+component now treats malformed or legacy responses as empty, the focused retry passed,
+and the complete rerun passed. No required browser selection, timeout, retry or project
+changed. Real DynamoDB/hosted acceptance remains deferred under T018, the migration
+remains unrun, and no AWS, deployment, production or Apple operation ran.
+
 > Current local checkpoint (November 14, Phase 9 upcoming expenses complete):
 > 82/166 tasks checked. T082–T093 are complete. The protected shared Finance workspace
 > now provides canonical create/list/detail/reschedule/cancel/payment-reference flows,

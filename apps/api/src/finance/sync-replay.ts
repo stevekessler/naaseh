@@ -8,6 +8,7 @@ import {
   financeReusableItemInputSchema,
   financeUpcomingExpenseCreateSchema,
   financeExpenseFulfillmentCreateSchema,
+  financeTaskLinkCreateSchema,
   manualFinanceTransactionReplayInputSchema,
 } from '@naaseh/contracts';
 import { ulidSchema, type Mutation, type StableMutationResult } from '@naaseh/domain';
@@ -54,6 +55,7 @@ export async function dispatchFinanceReplay(
     mutation.entityType === 'financeUpcomingExpense' && mutation.operation === 'create';
   const expenseFulfillment =
     mutation.entityType === 'financeFulfillment' && mutation.operation === 'create';
+  const taskLink = mutation.entityType === 'financeTaskLink' && mutation.operation === 'create';
   if (
     !budgetEdit &&
     !budgetCreate &&
@@ -62,7 +64,8 @@ export async function dispatchFinanceReplay(
     !reusable &&
     !manualTransaction &&
     !upcomingExpense &&
-    !expenseFulfillment
+    !expenseFulfillment &&
+    !taskLink
   )
     return outcome(event, mutation.id, 'retry', 'finance_replay_pending');
   const payload = mutation.payload;
@@ -147,7 +150,7 @@ export async function dispatchFinanceReplay(
     if (object.id !== undefined && object.id !== mutation.entityId)
       return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
     input = { ...object, id: mutation.entityId };
-  } else {
+  } else if (expenseFulfillment) {
     const { upcomingExpenseId, proposalStatus, ...business } = object;
     if (
       !ulidSchema.safeParse(upcomingExpenseId).success ||
@@ -156,6 +159,14 @@ export async function dispatchFinanceReplay(
     )
       return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
     input = { ...business, id: mutation.entityId };
+  } else {
+    const { taskId, linkId, ...business } = object;
+    if (
+      !ulidSchema.safeParse(taskId).success ||
+      (linkId !== undefined && linkId !== mutation.entityId)
+    )
+      return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
+    input = { ...business, linkId: mutation.entityId };
   }
   const schema = budgetEdit
     ? budgetActivity
@@ -173,7 +184,9 @@ export async function dispatchFinanceReplay(
               ? financeUpcomingExpenseCreateSchema
               : expenseFulfillment
                 ? financeExpenseFulfillmentCreateSchema
-                : financeReusableItemInputSchema;
+                : taskLink
+                  ? financeTaskLinkCreateSchema
+                  : financeReusableItemInputSchema;
   const parsed = schema.safeParse(input);
   if (!parsed.success)
     return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
@@ -195,7 +208,9 @@ export async function dispatchFinanceReplay(
                 ? '/api/v1/finance/upcoming-expenses'
                 : expenseFulfillment
                   ? `/api/v1/finance/upcoming-expenses/${String(object.upcomingExpenseId)}/fulfillments`
-                  : `/api/v1/finance/reusable-items/${mutation.entityId}`,
+                  : taskLink
+                    ? `/api/v1/finance/tasks/${String(object.taskId)}/finance-links`
+                    : `/api/v1/finance/reusable-items/${mutation.entityId}`,
     body: JSON.stringify(forwardedInput),
     isBase64Encoded: false,
     requestContext: {
@@ -207,7 +222,7 @@ export async function dispatchFinanceReplay(
     },
     headers: {
       ...event.headers,
-      'idempotency-key': `${budgetEdit ? 'finance-sync-budget-edit' : budgetCreate ? 'finance-sync-budget-create' : budgetAccountLinkCreate ? 'finance-sync-budget-account-link-create' : budgetItemCreate ? 'finance-sync-budget-item-create' : manualTransaction ? 'finance-sync-manual-transaction-create' : 'finance-sync-reusable-create'}:${mutation.id}`,
+      'idempotency-key': `${budgetEdit ? 'finance-sync-budget-edit' : budgetCreate ? 'finance-sync-budget-create' : budgetAccountLinkCreate ? 'finance-sync-budget-account-link-create' : budgetItemCreate ? 'finance-sync-budget-item-create' : manualTransaction ? 'finance-sync-manual-transaction-create' : taskLink ? 'finance-sync-task-link-create' : 'finance-sync-reusable-create'}:${mutation.id}`,
       'x-finance-sync-replay': budgetEdit
         ? budgetActivity
           ? 'budget-activity-v1'
@@ -224,7 +239,9 @@ export async function dispatchFinanceReplay(
                   ? 'upcoming-expense-create-v1'
                   : expenseFulfillment
                     ? 'expense-fulfillment-create-v1'
-                    : 'reusable-create-v1',
+                    : taskLink
+                      ? 'task-link-create-v1'
+                      : 'reusable-create-v1',
     },
   });
   if (!response || typeof response !== 'object')
@@ -235,6 +252,7 @@ export async function dispatchFinanceReplay(
       const body = JSON.parse(response.body ?? '{}') as {
         id?: unknown;
         version?: unknown;
+        link?: { id?: unknown; version?: unknown };
         expense?: { id?: unknown; version?: unknown };
         fulfillments?: Array<{ id?: unknown; version?: unknown }>;
       };
@@ -242,7 +260,9 @@ export async function dispatchFinanceReplay(
         ? body.expense
         : expenseFulfillment
           ? body.fulfillments?.find(({ id }) => id === mutation.entityId)
-          : body;
+          : taskLink
+            ? body.link
+            : body;
       if (
         acknowledged?.id !== mutation.entityId ||
         typeof acknowledged.version !== 'number' ||
@@ -254,7 +274,8 @@ export async function dispatchFinanceReplay(
           budgetAccountLinkCreate ||
           budgetItemCreate ||
           upcomingExpense ||
-          expenseFulfillment) &&
+          expenseFulfillment ||
+          taskLink) &&
           acknowledged.version !== 1)
       )
         throw new Error('Invalid Finance replay acknowledgement');

@@ -12,10 +12,12 @@ import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dyn
 import type { TransactWriteCommandInput } from '@aws-sdk/lib-dynamodb';
 import {
   createUlid,
+  adaptLegacyFinancialTaskLink,
   financeAudience,
   ulidSchema,
   type FinanceScope,
   type SyncChange,
+  type Task,
 } from '@naaseh/domain';
 import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceMemoryRepository, financeKeys } from './repository.js';
@@ -1191,6 +1193,21 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     return Number(result.Item?.revision ?? 0);
   }
 
+  /** Point-loads the ordinary task named by an explicit task-link route. */
+  async loadTaskForFinanceLink(taskId: string) {
+    ulidSchema.parse(taskId);
+    if (this.loadedTaskIds.has(taskId)) return;
+    const task = await dynamodb.send(
+      new GetCommand({
+        TableName: tableName,
+        Key: { PK: `TASK#${taskId}`, SK: 'CURRENT' },
+        ConsistentRead: true,
+      }),
+    );
+    if (task.Item?.data) this.tasks.set(taskId, task.Item.data as Task);
+    this.loadedTaskIds.add(taskId);
+  }
+
   /** Private dependency evidence for the explicitly supported REST snapshot routes. */
   cacheAuthorizationScopes() {
     return [...this.versions.keys()].flatMap((PK) => {
@@ -1256,7 +1273,11 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
             this.reconciliationAccountSources.set(row.entryKey, [...row.financeSourceAccountIds]);
           }
           const target = this[row.collection] as Map<string, unknown> | unknown[] | Set<string>;
-          const value = decode(row.data);
+          const decoded = decode(row.data);
+          const value =
+            row.collection === 'financialTaskLinks'
+              ? adaptLegacyFinancialTaskLink(decoded as import('@naaseh/domain').FinancialTaskLink)
+              : decoded;
           if (target instanceof Map) target.set(row.entryKey, value);
           else if (target instanceof Set) target.add(row.entryKey);
           else target.push(value);
@@ -1293,6 +1314,12 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     )
       return catalog;
     const data = value as Record<string, unknown> | undefined;
+    if (
+      collection === 'financialTaskLinks' &&
+      typeof data?.financeAudience === 'string' &&
+      /^(?:OWNER|GROUP)#[^#]+$/u.test(data.financeAudience)
+    )
+      return `FINANCE#SCOPE#${data.financeAudience}`;
     if (data?.scope) return partitionFor(data.scope as FinanceScope);
     if (typeof data?.groupId === 'string')
       return partitionFor({ type: 'group', groupId: data.groupId });
@@ -1562,6 +1589,55 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
             },
           },
         });
+    }
+    // Task and target partitions support bounded two-way relationship reads. The pair row is the
+    // uniqueness fence; all three references change in the same transaction as the scoped source.
+    const priorTaskLinks = new Map(
+      [...this.baseline.values()]
+        .filter((row) => row.collection === 'financialTaskLinks')
+        .map((row) => {
+          const link = adaptLegacyFinancialTaskLink(
+            decode(row.data) as import('@naaseh/domain').FinancialTaskLink,
+          );
+          return [link.id, link] as const;
+        }),
+    );
+    const removeTaskReferences = (link: import('@naaseh/domain').FinancialTaskLink) => {
+      for (const key of [
+        financeKeys.financialTaskReverseLink(link.taskId, link.id),
+        financeKeys.financialTaskTargetLink(link.targetType, link.targetId, link.id),
+        financeKeys.financialTaskPair(link.taskId, link.targetType, link.targetId),
+      ]) writes.push({ Delete: { TableName: tableName, Key: key } });
+    };
+    for (const [, row] of changed) {
+      if (row.collection !== 'financialTaskLinks') continue;
+      const link = adaptLegacyFinancialTaskLink(
+        decode(row.data) as import('@naaseh/domain').FinancialTaskLink,
+      );
+      const previous = priorTaskLinks.get(link.id);
+      if (previous &&
+        (previous.taskId !== link.taskId || previous.targetType !== link.targetType ||
+          previous.targetId !== link.targetId))
+        throw new Error('Financial task link identity is immutable.');
+      if (link.status !== 'active') {
+        if (previous?.status === 'active') removeTaskReferences(previous);
+        continue;
+      }
+      for (const key of [
+        financeKeys.financialTaskReverseLink(link.taskId, link.id),
+        financeKeys.financialTaskTargetLink(link.targetType, link.targetId, link.id),
+      ]) writes.push({ Put: { TableName: tableName, Item: { ...key, linkId: link.id, data: encode(link) },
+        ConditionExpression: 'attribute_not_exists(PK)' } });
+      writes.push({ Put: { TableName: tableName,
+        Item: { ...financeKeys.financialTaskPair(link.taskId, link.targetType, link.targetId), linkId: link.id },
+        ConditionExpression: 'attribute_not_exists(PK)' } });
+    }
+    for (const [, row] of removed) {
+      if (row.collection !== 'financialTaskLinks') continue;
+      const link = adaptLegacyFinancialTaskLink(
+        decode(row.data) as import('@naaseh/domain').FinancialTaskLink,
+      );
+      if (link.status === 'active') removeTaskReferences(link);
     }
     const creation = this.creationIdentity;
     if (

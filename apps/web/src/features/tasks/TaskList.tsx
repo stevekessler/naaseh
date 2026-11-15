@@ -11,6 +11,7 @@ import {
   type TaskListSortKey,
 } from './task-list-sort.js';
 import { taskDueDateKey } from '../../search/task-filters.js';
+import type { LocalFinancialTaskLink } from './FinancialTaskLink.js';
 const configurableColumns: TaskColumnId[] = [
   'category',
   'project',
@@ -20,6 +21,7 @@ const configurableColumns: TaskColumnId[] = [
   'due',
   'priority',
   'assignee',
+  'upcomingExpenses',
   'actions',
 ];
 const sortLabels: Record<TaskListSortKey, string> = {
@@ -71,6 +73,7 @@ export function TaskList({
   relationshipTasks = tasks,
   visibleColumns,
   collapseFutureTasks = false,
+  financialLinksByTask = new Map(),
 }: {
   tasks: Task[];
   onToggle: (task: Task) => void;
@@ -84,6 +87,7 @@ export function TaskList({
   relationshipTasks?: readonly Task[];
   visibleColumns: ReadonlySet<TaskColumnId>;
   collapseFutureTasks?: boolean;
+  financialLinksByTask?: ReadonlyMap<string, readonly LocalFinancialTaskLink[]>;
 }) {
   const [sort, setSort] = useState<TaskListSort>();
   const [showAllFutureTasks, setShowAllFutureTasks] = useState(false);
@@ -171,6 +175,7 @@ export function TaskList({
           <col className="task-due-column" />
           <col className="task-priority-column" />
           <col className="task-assignee-column" />
+          <col className="task-upcoming-expenses-column" />
           <col className="task-actions-column" />
         </colgroup>
         <thead>
@@ -215,6 +220,9 @@ export function TaskList({
             <th className="task-assignee-cell" scope="col">
               Assignee
             </th>
+            <th className="task-upcoming-expenses-cell" scope="col">
+              Upcoming Expenses
+            </th>
             <th className="task-actions-heading" scope="col">
               Actions
             </th>
@@ -237,6 +245,7 @@ export function TaskList({
                 projectName={project?.name}
                 groupName={groups.find((group) => group.id === task.groupId)?.name}
                 parentTask={relationshipTasks.find((candidate) => candidate.id === task.parentId)}
+                financialLinks={financialLinksByTask.get(task.id)}
                 {...(currentUserId ? { currentUserId } : {})}
               />
             );

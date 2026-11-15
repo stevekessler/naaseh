@@ -9,6 +9,8 @@ import {
   upcomingExpensePlannedSourceSchema,
   upcomingExpenseSchema,
   expenseFulfillmentSchema,
+  financialTaskLinkSchema as domainFinancialTaskLinkSchema,
+  taskInputSchema,
 } from '@naaseh/domain';
 
 export const financeContractVersion = 2 as const;
@@ -1118,35 +1120,101 @@ export const financeTransactionMatchDecisionSchema = z
   })
   .strict();
 
+export const financeTaskLinkSelectionSchema = financeTaskTargetSchema.refine(
+  (value) => value.targetType !== 'budgetItem' || Boolean(value.budgetId),
+  { message: 'Budget-item selections require their budget identity.', path: ['budgetId'] },
+);
+
+export const financeTaskLinkSelectionsSchema = z
+  .array(financeTaskLinkSelectionSchema)
+  .max(50)
+  .refine(
+    (selections) =>
+      new Set(selections.map(({ targetType, targetId }) => `${targetType}#${targetId}`)).size ===
+      selections.length,
+    'Finance link selections must be unique.',
+  );
+
+export const financeTaskLinkCreateSchema = financeTaskLinkSelectionSchema.and(
+  z
+    .object({
+      expectedTaskVersion: z.number().int().positive(),
+      /** Accepted only by encrypted replay; interactive clients cannot choose link IDs. */
+      linkId: ulidSchema.optional(),
+    })
+    .strict(),
+);
+
+export const financeTaskLinkDeleteSchema = z
+  .object({ expectedVersion: z.number().int().positive() })
+  .strict();
+
+export const financeTaskLinksReplaceSchema = z
+  .object({
+    expectedTaskVersion: z.number().int().positive(),
+    financeLinkSelections: financeTaskLinkSelectionsSchema,
+  })
+  .strict();
+
+export const financeTaskLinkBatchQuerySchema = z
+  .object({ taskIds: z.array(ulidSchema).min(1).max(50) })
+  .strict()
+  .refine(({ taskIds }) => new Set(taskIds).size === taskIds.length, {
+    message: 'Task ids must be unique.',
+    path: ['taskIds'],
+  });
+
 export const financeTaskCreateInputSchema = z
   .object({
     label: z.string().trim().min(1).max(300),
     assigneeId: z.string().min(1).max(200),
     dueDate: financeDateSchema.optional(),
+    financeLinkSelections: financeTaskLinkSelectionsSchema.optional(),
   })
   .strict();
 
-export const financialTaskLinkSchema = z
+export const financeLinkedTaskCreateSchema = z
   .object({
-    id: ulidSchema,
-    budgetId: ulidSchema,
-    budgetItemId: ulidSchema,
-    taskId: ulidSchema,
-    financeAudience: z.string().regex(/^GROUP#[^#]+$/u),
-    createdBy: z.string().min(1).max(200),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
-    status: z.enum(['active', 'removed']),
-    version: z.number().int().positive(),
+    task: taskInputSchema,
+    financeLinkSelections: financeTaskLinkSelectionsSchema.min(1),
   })
   .strict();
+
+export const financialTaskLinkSchema = domainFinancialTaskLinkSchema;
 
 export const financeTaskCreateResponseSchema = z
   .object({
     taskId: ulidSchema,
-    financialTaskLinkId: ulidSchema,
+    financialTaskLinkId: ulidSchema.optional(),
+    linkStatus: z.enum(['applied', 'pending']).optional(),
+    financialTaskLinkIds: z.array(ulidSchema).max(50).optional(),
+    pendingSelections: financeTaskLinkSelectionsSchema.optional(),
+    retryToken: z.string().min(1).max(2048).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (!value.linkStatus && !value.financialTaskLinkId)
+      context.addIssue({
+        code: 'custom',
+        path: ['financialTaskLinkId'],
+        message: 'Legacy task creation requires a financial link id.',
+      });
+    if (value.linkStatus === 'applied' && !value.financialTaskLinkIds?.length)
+      context.addIssue({
+        code: 'custom',
+        path: ['financialTaskLinkIds'],
+        message: 'Applied task creation requires at least one financial link id.',
+      });
+    if (
+      value.linkStatus === 'pending' &&
+      (!value.pendingSelections?.length || !value.retryToken)
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['retryToken'],
+        message: 'Pending task creation requires selections and an idempotent retry token.',
+      });
+  });
 
 const deletionRecordTypeSchema = z.enum([
   'account',

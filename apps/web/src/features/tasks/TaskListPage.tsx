@@ -7,7 +7,8 @@ import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParen
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { TaskEditDialog } from './TaskEditDialog.js';
 import { TaskColumnSettings, useTaskColumns } from './TaskColumnSettings.js';
-import { FinancialTaskLink } from './FinancialTaskLink.js';
+import { FinancialTaskLink, useVisibleFinancialTaskLinks } from './FinancialTaskLink.js';
+import type { FinanceItemOption } from './FinanceItemPicker.js';
 export function TaskListPage({
   tasks,
   loading = false,
@@ -27,6 +28,7 @@ export function TaskListPage({
   groups = [],
   currentUserId,
   collapseFutureTasks = false,
+  financeOptions = [],
 }: {
   tasks: Task[];
   loading?: boolean;
@@ -36,7 +38,11 @@ export function TaskListPage({
   onToggle: (task: Task) => void;
   onSelect: (task: Task) => void;
   onClose: () => void;
-  onUpdate: (task: Task, patch: Partial<Task>) => Promise<void>;
+  onUpdate: (
+    task: Task,
+    patch: Partial<Task>,
+    financeLinkSelections?: import('./FinanceItemPicker.js').FinanceLinkSelection[],
+  ) => Promise<void>;
   csrfToken: string;
   categories?: CategoryRecord[];
   projects?: Project[];
@@ -47,8 +53,14 @@ export function TaskListPage({
   defaultAssigneeId?: string;
   currentUserId?: string;
   collapseFutureTasks?: boolean;
+  financeOptions?: readonly FinanceItemOption[];
 }) {
   const columns = useTaskColumns();
+  const financialLinksByTask = useVisibleFinancialTaskLinks(
+    tasks.map(({ id }) => id),
+    columns.visible.has('upcomingExpenses'),
+  );
+  const selectedLinks = useVisibleFinancialTaskLinks(selected ? [selected.id] : [], Boolean(selected));
   if (loading) return <p role="status">Loading tasks…</p>;
   if (error)
     return (
@@ -76,6 +88,7 @@ export function TaskListPage({
         groups={groups}
         relationshipTasks={parentTasks}
         visibleColumns={columns.visible}
+        financialLinksByTask={financialLinksByTask}
         collapseFutureTasks={collapseFutureTasks}
         {...(currentUserId ? { currentUserId } : {})}
       />
@@ -88,7 +101,13 @@ export function TaskListPage({
             assignees={assignees}
             parentTasks={parentTasks}
             groupOptions={groupOptions}
-            save={(patch) => onUpdate(selected, patch)}
+            financeOptions={financeOptions}
+            initialFinanceLinkSelections={(selectedLinks.get(selected.id) ?? []).map((link) =>
+              link.targetType === 'budgetItem'
+                ? { targetType: 'budgetItem', targetId: link.targetId, budgetId: link.budgetId! }
+                : { targetType: link.targetType, targetId: link.targetId },
+            )}
+            save={(patch, selections) => onUpdate(selected, patch, selections)}
             close={onClose}
             primaryContent={
               <AttachmentPanelForParent

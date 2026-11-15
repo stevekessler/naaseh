@@ -1911,6 +1911,17 @@ describe('Finance deployed storage and routing', () => {
     ).toMatchObject({
       storageKey: { PK: `FINANCE#SCOPE#GROUP#${groupId}` },
     });
+    expect(
+      store.get(`FINANCE#TASK#${taskId}/TARGET_LINK#01J00000000000000000000825`),
+    ).toMatchObject({ linkId: '01J00000000000000000000825', data: { targetId: itemId } });
+    expect(
+      store.get(
+        `FINANCE#TASK_TARGET#budgetItem#${itemId}/TASK_LINK#01J00000000000000000000825`,
+      ),
+    ).toMatchObject({ linkId: '01J00000000000000000000825', data: { taskId } });
+    expect(store.get(`FINANCE#TASK#${taskId}/TARGET_PAIR#budgetItem#${itemId}`)).toMatchObject({
+      linkId: '01J00000000000000000000825',
+    });
     accessState.memberships = [{ groupId, role: 'member', status: 'active' }];
     vi.stubEnv('CURSOR_SIGNING_SECRET', 'task-snapshot-fixture-secret-'.repeat(4));
     const linkSnapshotRequest = event('GET', `/api/v1/finance/tasks/${taskId}/link`);

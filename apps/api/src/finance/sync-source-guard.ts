@@ -274,13 +274,32 @@ export class FinanceSyncSourceGuard {
         : undefined;
     if (collection === 'budgetReconciliations')
       return (await parent('budgets', data.budgetId)) ? source : undefined;
+    if (collection === 'upcomingExpenses') {
+      const account = await parent('accounts', data.accountId);
+      const budget = await parent('budgets', data.budgetId);
+      return account?.storageKey.PK === source.storageKey.PK &&
+        budget?.value.groupId === data.groupId
+        ? source
+        : undefined;
+    }
+    if (collection === 'expenseFulfillments')
+      return (await parent('upcomingExpenses', data.expenseId)) &&
+        (await parent('transactions', data.transactionId))
+        ? source
+        : undefined;
     if (collection === 'financialTaskLinks') {
-      if (
-        !(await parent('budgetItems', data.budgetItemId)) ||
-        !(await parent('budgets', data.budgetId)) ||
-        typeof data.taskId !== 'string'
-      )
-        return undefined;
+      const targetType = data.targetType ?? (data.budgetItemId ? 'budgetItem' : undefined);
+      const targetId = data.targetId ?? data.budgetItemId;
+      if (typeof data.taskId !== 'string' || typeof targetId !== 'string') return undefined;
+      if (targetType === 'budgetItem') {
+        const item = await parent('budgetItems', targetId);
+        if (!item || !(await parent('budgets', data.budgetId ?? item.value.budgetId)))
+          return undefined;
+      } else if (targetType === 'transaction') {
+        if (!(await parent('transactions', targetId))) return undefined;
+      } else if (targetType === 'upcomingExpense') {
+        if (!(await parent('upcomingExpenses', targetId))) return undefined;
+      } else return undefined;
       const task = await (this.options.task ?? loadCurrentFinanceTaskAccess)(data.taskId);
       if (
         !task ||

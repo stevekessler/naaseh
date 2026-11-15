@@ -24,6 +24,7 @@ import {
   queueEncryptedBudgetCreationPlan,
   queueEncryptedBudgetMutation,
   queueEncryptedFulfillmentProposal,
+  queueEncryptedTaskLinks,
   queueEncryptedUpcomingExpenseMutation,
   queueFinanceReceiptBytes,
 } from '../../src/db/finance-repository.js';
@@ -233,6 +234,63 @@ const lockAndReopen = async () => {
 };
 
 describe('Finance writes stay within their original unlocked visit', () => {
+  it('queues task relationships behind the ordinary task without copying protected labels', async () => {
+    await controller.unlockOnline('001234');
+    const taskId = '01J00000000000000000000751';
+    const taskMutationId = '01J00000000000000000000752';
+    const targetId = '01J00000000000000000000753';
+    state.outbox.set(taskMutationId, {
+      id: taskMutationId,
+      entityId: taskId,
+      entityType: 'task',
+      operation: 'create',
+      baseVersion: 0,
+      payload: { iv: 'synthetic', ciphertext: '{}' },
+      createdAt: '2026-11-15T16:00:00.000Z',
+      attempts: 0,
+    });
+    state.rows.set(targetId, {
+      id: targetId,
+      entityType: 'financeUpcomingExpense',
+      scopeKey: 'OWNER#u1',
+      version: 1,
+      updatedAt: '2026-11-15T16:00:00.000Z',
+      value: { iv: 'synthetic', ciphertext: '{"description":"Private rent"}' },
+    });
+
+    const queued = await queueEncryptedTaskLinks({
+      taskId,
+      taskMutationId,
+      taskVersion: 1,
+      actorId: 'u1',
+      selections: [{ targetType: 'upcomingExpense', targetId }],
+      createdAt: '2026-11-15T16:00:00.000Z',
+    });
+
+    expect(queued.records[0]).toMatchObject({
+      entityType: 'financeTaskLink',
+      scopeKey: 'OWNER#u1',
+      version: 1,
+    });
+    expect(queued.mutations[0]).toMatchObject({
+      entityType: 'financeTaskLink',
+      operation: 'create',
+      baseVersion: 0,
+      financeDependencyId: taskMutationId,
+    });
+    const payload = JSON.parse(
+      (queued.mutations[0]!.payload as { ciphertext: string }).ciphertext,
+    );
+    expect(payload).toEqual({
+      taskId,
+      linkId: queued.records[0]!.id,
+      targetType: 'upcomingExpense',
+      targetId,
+      expectedTaskVersion: 1,
+    });
+    expect(JSON.stringify(payload)).not.toContain('Private rent');
+  });
+
   it('atomically encrypts a stable-ID budget draft with its matching create intent', async () => {
     await controller.unlockOnline('001234');
     const budgetId = '01J00000000000000000000701';

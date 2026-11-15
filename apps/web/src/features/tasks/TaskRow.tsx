@@ -11,6 +11,10 @@ import { ProgressIndicator } from '../../components/ProgressIndicator.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { categoryForeground } from '../../styles/category-color.js';
 import { DueDateDialog, type DueDateValue } from './DueDateField.js';
+import {
+  UpcomingExpenseTaskLinks,
+  type LocalFinancialTaskLink,
+} from './FinancialTaskLink.js';
 
 export function taskDueDatePatch(task: Task, value: DueDateValue): Partial<Task> {
   let patch: Record<string, unknown>;
@@ -50,6 +54,7 @@ export function TaskRow({
   projectName,
   groupName,
   parentTask,
+  financialLinks,
 }: {
   task: Task;
   onToggle: (task: Task) => void;
@@ -62,6 +67,7 @@ export function TaskRow({
   projectName?: string | undefined;
   groupName?: string | undefined;
   parentTask?: Task | undefined;
+  financialLinks?: readonly LocalFinancialTaskLink[] | undefined;
 }) {
   const feedback = useCompletionFeedback();
   useBrowserTimeZone();
@@ -203,6 +209,9 @@ export function TaskRow({
       </td>
       <td className="task-assignee-cell">
         <UserAvatar userId={task.assigneeId ?? task.ownerId} showName nameFormat="first" />
+      </td>
+      <td className="task-upcoming-expenses-cell">
+        <UpcomingExpenseTaskLinks links={financialLinks} />
       </td>
       <td className="task-actions-cell">
         <details

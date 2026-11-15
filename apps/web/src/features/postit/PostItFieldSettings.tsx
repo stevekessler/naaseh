@@ -10,12 +10,14 @@ export const postItFields = [
   { id: 'timer', label: 'Timer' },
   { id: 'link', label: 'Link' },
   { id: 'memo', label: 'Memo' },
+  { id: 'upcomingExpenses', label: 'Upcoming Expenses' },
 ] as const;
 
 export type PostItFieldId = (typeof postItFields)[number]['id'];
 type Breakpoint = 'phone' | 'tablet' | 'desktop';
 
 const allFields = postItFields.map(({ id }) => id);
+const defaultFields = allFields.filter((id) => id !== 'upcomingExpenses');
 const currentBreakpoint = (): Breakpoint => {
   const width = globalThis.window?.innerWidth ?? 1441;
   if (width <= 640) return 'phone';
@@ -37,7 +39,7 @@ function readFields(breakpoint: Breakpoint): PostItFieldId[] {
   } catch {
     // Ignore unavailable or malformed device-local preferences.
   }
-  return allFields;
+  return defaultFields;
 }
 
 export function usePostItFields() {
@@ -69,7 +71,7 @@ export function usePostItFields() {
       );
     },
     reset() {
-      update(allFields);
+      update(defaultFields);
     },
   };
 }

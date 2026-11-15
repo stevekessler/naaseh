@@ -1,6 +1,11 @@
 import { identifyCsvDuplicateOrdinals } from './csv-import-service.js';
 import { BatchGetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { sumSpendByCurrency, filterSpendSlices } from '@naaseh/domain';
+import {
+  financialTaskLinkSchema,
+  sumSpendByCurrency,
+  filterSpendSlices,
+  type FinancialTaskLink,
+} from '@naaseh/domain';
 import {
   FINANCE_MAX_EXAMINED,
   decodeFinanceCursor,
@@ -68,6 +73,10 @@ export const financeReadKeys = {
   date: (fact: Pick<FinanceFact, 'effectiveAt' | 'id'>) => `DATE#${fact.effectiveAt}#${fact.id}`,
 };
 
+const taskLinkPartition = (taskId: string) => `FINANCE#TASK#${taskId}`;
+const targetLinkPartition = (targetType: string, targetId: string) =>
+  `FINANCE#TASK_TARGET#${targetType}#${targetId}`;
+
 /** Bounded read primitive. Query coordination handles OR partitions and automatic completion. */
 export class FinanceReadRepository {
   constructor(private readonly options: FinanceReadOptions) {
@@ -77,6 +86,70 @@ export class FinanceReadRepository {
 
   async read(input: FinanceReadRequest): Promise<FinanceReadResult> {
     return (await this.scan(input)).page;
+  }
+
+  /** Bounded reverse-partition reads; callers still authorize each task and target independently. */
+  async financialTaskLinksForTasks(taskIds: readonly string[]) {
+    if (!taskIds.length || taskIds.length > 50 || new Set(taskIds).size !== taskIds.length)
+      throw new Error('Finance task batch must contain 1 to 50 unique task ids.');
+    const pages = await Promise.all(
+      taskIds.map((taskId) =>
+        this.options.client.send(
+          new QueryCommand({
+            TableName: this.options.tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+            ExpressionAttributeValues: {
+              ':pk': taskLinkPartition(taskId),
+              ':prefix': 'TARGET_LINK#',
+            },
+            ConsistentRead: true,
+            Limit: 51,
+          }),
+        ),
+      ),
+    );
+    const result = new Map<string, FinancialTaskLink[]>();
+    pages.forEach((page, index) => {
+      const taskId = taskIds[index]!;
+      if (page.LastEvaluatedKey || (page.Items?.length ?? 0) > 50)
+        throw new Error('Finance task relationship projection exceeds its bounded size.');
+      result.set(
+        taskId,
+        (page.Items ?? []).map((row) => {
+          const link = financialTaskLinkSchema.parse(row.data);
+          if (
+            link.taskId !== taskId ||
+            row.PK !== taskLinkPartition(taskId) ||
+            row.SK !== `TARGET_LINK#${link.id}`
+          )
+            throw new Error('Finance task relationship projection is incomplete.');
+          return link;
+        }),
+      );
+    });
+    return result;
+  }
+
+  async financialTaskLinksForTarget(targetType: string, targetId: string) {
+    if (!['budgetItem', 'transaction', 'upcomingExpense'].includes(targetType) || !targetId)
+      throw new Error('Invalid Finance task target.');
+    const PK = targetLinkPartition(targetType, targetId);
+    const page = await this.options.client.send(new QueryCommand({
+      TableName: this.options.tableName,
+      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+      ExpressionAttributeValues: { ':pk': PK, ':prefix': 'TASK_LINK#' },
+      ConsistentRead: true,
+      Limit: 51,
+    }));
+    if (page.LastEvaluatedKey || (page.Items?.length ?? 0) > 50)
+      throw new Error('Finance target relationship projection exceeds its bounded size.');
+    return (page.Items ?? []).map((row) => {
+      const link = financialTaskLinkSchema.parse(row.data);
+      if (link.targetType !== targetType || link.targetId !== targetId ||
+        row.PK !== PK || row.SK !== `TASK_LINK#${link.id}`)
+        throw new Error('Finance target relationship projection is incomplete.');
+      return link;
+    });
   }
 
   /** Caller establishes the canonical account revision before and after this bounded read. */

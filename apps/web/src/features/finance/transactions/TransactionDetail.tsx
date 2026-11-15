@@ -4,6 +4,8 @@ import { createUlid } from '@naaseh/domain';
 import { financeRequest } from '../finance-client.js';
 import { ReconciliationReview, type ReconciliationIssueView } from './ReconciliationReview.js';
 import { RefundRelationshipEditor } from './RefundRelationshipEditor.js';
+import { CreateFinancialTask } from '../budgets/CreateFinancialTask.js';
+import { RelatedFinanceTasks } from '../RelatedFinanceTasks.js';
 
 export type TransactionView = {
   id: string;
@@ -58,6 +60,7 @@ export function TransactionDetail({
   authorizeTransactionEdit,
   onReconciled,
   onChange,
+  currentUserId,
 }: {
   transaction: TransactionView;
   allTransactions: TransactionView[];
@@ -73,6 +76,7 @@ export function TransactionDetail({
   authorizeReconciliation: ComponentProps<typeof ReconciliationReview>['authorizeDecision'];
   onReconciled: ComponentProps<typeof ReconciliationReview>['onResolved'];
   onChange: (relatedIds?: readonly string[]) => Promise<boolean>;
+  currentUserId?: string;
 }) {
   const [splits, setSplits] = useState(() =>
     transaction.allocations.length
@@ -216,6 +220,16 @@ export function TransactionDetail({
       aria-label={`${transaction.description} details`}
     >
       <h2>{transaction.description}</h2>
+      {currentUserId ? (
+        <CreateFinancialTask
+          target={{ type: 'transaction', id: transaction.id }}
+          description="Review transaction"
+          currentUserId={currentUserId}
+          csrfToken={csrfToken}
+          verifyAccess={() => authorizeTransactionEdit([transaction])}
+        />
+      ) : null}
+      <RelatedFinanceTasks targetType="transaction" targetId={transaction.id} />
       <p>
         Original total:{' '}
         {money(transaction.amountMinor, transaction.currency, transaction.currencyExponent)}

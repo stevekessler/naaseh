@@ -6,6 +6,7 @@ import { TaskEditDialog } from '../tasks/TaskEditDialog.js';
 import type { AssigneeOption } from '../../components/AssigneePicker.js';
 import { AttachmentPanelForParent } from '../attachments/AttachmentPanelForParent.js';
 import { PostItFieldSettings, usePostItFields } from './PostItFieldSettings.js';
+import { useVisibleFinancialTaskLinks } from '../tasks/FinancialTaskLink.js';
 
 export function PostItBoard({
   tasks,
@@ -35,6 +36,10 @@ export function PostItBoard({
   const { completing, announcement, complete } = usePostItCompletion(onToggle);
   const [editingId, setEditingId] = useState<string>();
   const fields = usePostItFields();
+  const financialLinksByTask = useVisibleFinancialTaskLinks(
+    tasks.map(({ id }) => id),
+    fields.visible.has('upcomingExpenses'),
+  );
   const editing = tasks.find((task) => task.id === editingId);
   const colors = new Map(categories.map((category) => [category.id, category.color]));
   return (
@@ -67,6 +72,7 @@ export function PostItBoard({
               categoryName={categories.find((category) => category.id === categoryId)?.name}
               groupName={groups.find((group) => group.id === task.groupId)?.name}
               visibleFields={fields.visible}
+              financialLinks={financialLinksByTask.get(task.id)}
               complete={() => void complete(task)}
               {...(currentUserId ? { currentUserId } : {})}
               {...(onUpdate ? { edit: () => setEditingId(task.id) } : {})}

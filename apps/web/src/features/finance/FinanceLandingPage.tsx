@@ -218,6 +218,7 @@ export function FinanceLandingPage({
       ) : view === 'transactions' ? (
         <FinanceTransactionsPage
           csrfToken={csrfToken}
+          currentUserId={ownerId}
           {...(route.transactionId ? { initialTransactionId: route.transactionId } : {})}
           onOpenTransaction={(transactionId, focusId) =>
             navigate(

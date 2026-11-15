@@ -9,6 +9,10 @@ import { overdue } from '../../notifications/local-reminders.js';
 import { CompactLink } from '../../components/CompactLink.js';
 import { TaskTimerForTask } from '../timers/TaskTimerForTask.js';
 import type { PostItFieldId } from './PostItFieldSettings.js';
+import {
+  UpcomingExpenseTaskLinks,
+  type LocalFinancialTaskLink,
+} from '../tasks/FinancialTaskLink.js';
 
 export function PostItNote({
   task,
@@ -31,6 +35,7 @@ export function PostItNote({
     'link',
     'memo',
   ]),
+  financialLinks,
 }: {
   task: Task;
   color?: string;
@@ -42,6 +47,7 @@ export function PostItNote({
   complete: () => void;
   edit?: () => void;
   visibleFields?: ReadonlySet<PostItFieldId>;
+  financialLinks?: readonly LocalFinancialTaskLink[] | undefined;
 }) {
   const completed = task.status === 'completed';
   useBrowserTimeZone();
@@ -130,6 +136,11 @@ export function PostItNote({
       ) : null}
       {visibleFields.has('link') && task.link ? (
         <CompactLink className="postit-link" href={task.link} />
+      ) : null}
+      {visibleFields.has('upcomingExpenses') ? (
+        <div className="postit-upcoming-expenses">
+          <UpcomingExpenseTaskLinks links={financialLinks} />
+        </div>
       ) : null}
       {visibleFields.has('memo') && task.memoHidden && (
         <span title="Private notes">🔒 Private notes</span>

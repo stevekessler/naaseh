@@ -10,11 +10,13 @@ import {
 import Dexie, { type Table, type Transaction } from 'dexie';
 import {
   createUlid,
+  createFinancialTaskLink,
   digestCsvBytes,
   upcomingExpenseSchema,
   type EntityType,
   type Mutation,
   type MutationOperation,
+  type FinancialTaskTarget,
 } from '@naaseh/domain';
 import { decryptText, encryptText } from '../crypto/vault.js';
 import { financeBootstrapDeviceKey } from './finance-device-key.js';
@@ -684,6 +686,109 @@ export type OfflineBudgetEntityType =
   | 'financeBudget'
   | 'financeBudgetAccountLink'
   | 'financeBudgetItem';
+
+/**
+ * Durably queues protected task relationships after the ordinary task create intent. The source
+ * envelope supplies only its already-authorized audience; protected labels never enter task data.
+ */
+export async function queueEncryptedTaskLinks(input: {
+  taskId: string;
+  taskMutationId: string;
+  taskVersion: number;
+  actorId: string;
+  selections: readonly FinancialTaskTarget[];
+  createdAt?: string;
+  key?: CryptoKey;
+}) {
+  if (
+    !input.selections.length ||
+    input.selections.length > 50 ||
+    new Set(input.selections.map(({ targetType, targetId }) => `${targetType}#${targetId}`)).size !==
+      input.selections.length
+  )
+    throw new Error('Finance link selections must contain 1 to 50 unique records.');
+  return currentFinanceAccess().read(async (signal) => {
+    const dependency = await db.outbox.get(input.taskMutationId);
+    if (
+      !dependency ||
+      dependency.entityType !== 'task' ||
+      dependency.operation !== 'create' ||
+      dependency.entityId !== input.taskId
+    )
+      throw new Error('The task must be durably queued before its Finance relationships.');
+    const sourceRecords = await Promise.all(
+      input.selections.map(({ targetId }) => db.secureFinanceRecords.get(targetId)),
+    );
+    const key = input.key ?? (await financeDeviceKey());
+    const startedAt = new Date(input.createdAt ?? new Date().toISOString()).valueOf();
+    if (!Number.isFinite(startedAt)) throw new Error('Finance relationship time is invalid.');
+    const records: EncryptedFinanceRecord[] = [];
+    const mutations: StoredMutation[] = [];
+    for (const [index, target] of input.selections.entries()) {
+      const source = sourceRecords[index];
+      const expectedType =
+        target.targetType === 'transaction'
+          ? 'financeTransaction'
+          : target.targetType === 'upcomingExpense'
+            ? 'financeUpcomingExpense'
+            : 'financeBudgetItem';
+      if (!source || source.entityType !== expectedType)
+        throw new Error('Refresh Finance before linking this record.');
+      const at = new Date(startedAt + index).toISOString();
+      const linkId = createUlid();
+      const link = createFinancialTaskLink({
+        id: linkId,
+        taskId: input.taskId,
+        target,
+        financeAudience: source.scopeKey as `OWNER#${string}` | `GROUP#${string}`,
+        createdBy: input.actorId,
+        now: new Date(at),
+      });
+      const mutationId = createUlid();
+      records.push(
+        await encryptFinanceRecord({
+          id: link.id,
+          entityType: 'financeTaskLink',
+          scopeKey: source.scopeKey,
+          ...(target.targetType === 'budgetItem' ? { budgetId: target.budgetId } : {}),
+          version: link.version,
+          updatedAt: link.updatedAt,
+          value: link,
+          key,
+        }),
+      );
+      mutations.push({
+        id: mutationId,
+        entityId: link.id,
+        entityType: 'financeTaskLink',
+        operation: 'create',
+        baseVersion: 0,
+        payload: await encryptText(
+          JSON.stringify({
+            taskId: input.taskId,
+            linkId: link.id,
+            ...target,
+            expectedTaskVersion: input.taskVersion,
+          }),
+          key,
+          `mutation:${mutationId}`,
+        ),
+        createdAt: at,
+        attempts: 0,
+        financeDependencyId: input.taskMutationId,
+      });
+    }
+    await commitFinanceWrite(
+      [db.secureFinanceRecords, db.outbox],
+      async () => {
+        for (const record of records) await db.secureFinanceRecords.put(record);
+        for (const mutation of mutations) await db.outbox.add(mutation);
+      },
+      signal,
+    );
+    return { records, mutations };
+  });
+}
 
 /** Atomically preserves an encrypted optimistic budget projection and its encrypted outbox command. */
 export async function queueEncryptedBudgetMutation(input: {

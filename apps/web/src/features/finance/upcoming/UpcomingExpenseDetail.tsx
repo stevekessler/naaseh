@@ -2,6 +2,8 @@ import { FormEvent, useState } from 'react';
 import { localFinanceDate, parseMajorUnits, type ExpenseFulfillment } from '@naaseh/domain';
 import type { UpcomingExpenseView } from './types.js';
 import { formatUpcomingMoney } from './types.js';
+import { CreateFinancialTask } from '../budgets/CreateFinancialTask.js';
+import { RelatedFinanceTasks } from '../RelatedFinanceTasks.js';
 
 export interface EligibleExpenseTransaction {
   id: string;
@@ -20,6 +22,9 @@ export function UpcomingExpenseDetail({
   onLinkPayment,
   onUnlinkPayment,
   onOpenAccount,
+  currentUserId,
+  csrfToken,
+  verifyAccess,
 }: {
   value: UpcomingExpenseView;
   eligibleTransactions: EligibleExpenseTransaction[];
@@ -39,6 +44,9 @@ export function UpcomingExpenseDetail({
   }) => Promise<void>;
   onUnlinkPayment: (fulfillment: ExpenseFulfillment) => Promise<void>;
   onOpenAccount: (accountId: string) => void;
+  currentUserId?: string;
+  csrfToken?: string;
+  verifyAccess?: () => Promise<boolean>;
 }) {
   const { expense } = value;
   const [dueDate, setDueDate] = useState(expense.dueDate);
@@ -127,6 +135,17 @@ export function UpcomingExpenseDetail({
         <button type="button" onClick={() => onOpenAccount(expense.accountId)}>
           Open account
         </button>
+        {currentUserId && csrfToken && verifyAccess ? (
+          <CreateFinancialTask
+            target={{ type: 'upcomingExpense', id: expense.id }}
+            description="Review upcoming expense"
+            applicableDate={expense.dueDate}
+            currentUserId={currentUserId}
+            csrfToken={csrfToken}
+            verifyAccess={verifyAccess}
+          />
+        ) : null}
+        <RelatedFinanceTasks targetType="upcomingExpense" targetId={expense.id} />
       </header>
       <section aria-labelledby="reschedule-upcoming-title">
         <h3 id="reschedule-upcoming-title">Reschedule</h3>

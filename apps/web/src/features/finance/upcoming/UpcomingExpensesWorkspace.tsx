@@ -260,6 +260,17 @@ export function UpcomingExpensesWorkspace({
       <>
         <UpcomingExpenseDetail
           value={selected}
+          currentUserId={ownerId}
+          csrfToken={csrfToken}
+          verifyAccess={async () =>
+            Boolean(
+              peekFinanceAccess()?.canRead() &&
+                state.items.some(
+                  ({ expense }) =>
+                    expense.id === selected.expense.id && expense.version === selected.expense.version,
+                ),
+            )
+          }
           eligibleTransactions={eligibleTransactions}
           onOpenAccount={onOpenAccount}
           onReschedule={(input) =>

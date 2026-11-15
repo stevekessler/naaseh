@@ -64,12 +64,14 @@ async function loadTransactionGraph(request: FinanceSnapshotRequest): Promise<Sn
 
 export function FinanceTransactionsPage({
   csrfToken,
+  currentUserId,
   onOpenMerchant,
   initialTransactionId,
   onOpenTransaction,
   onCloseTransaction,
 }: {
   csrfToken: string;
+  currentUserId?: string;
   onOpenMerchant?: (merchantId: string) => void;
   initialTransactionId?: string;
   onOpenTransaction?: (transactionId: string, focusId?: string) => void;
@@ -474,6 +476,7 @@ export function FinanceTransactionsPage({
                 if (snapshot) await refreshAfterMutation(snapshot, selected.id, [], decision);
               }}
               csrfToken={csrfToken}
+              {...(currentUserId ? { currentUserId } : {})}
               {...(removalImpact ? { removalImpact } : {})}
               onPreviewRemoval={() => previewRemoval(selected.id)}
               onChange={async (relatedIds = []) => {
