@@ -238,3 +238,117 @@ test('Office uses an original download and a Finance lock cancels an incomplete 
     release();
   }
 });
+
+test('removes the verified save link when a replacement receipt read is denied', async ({
+  page,
+}) => {
+  await setup(page);
+  const bytes = Buffer.from('Office receipt test payload');
+  const receipt = fixtureReceipt(receiptId, bytes, 'Receipt.xls', 'application/vnd.ms-excel');
+  let revoked = false;
+  await page.route(/\/api\/v1\/finance\/receipts\?/u, (route) =>
+    new URL(route.request().url()).searchParams.has('cursor')
+      ? route.fulfill({ status: 409, json: { code: 'receipt_source_changed' } })
+      : route.fulfill({ json: { items: [receipt], nextCursor: 'changed-scope' } }),
+  );
+  await page.route('**/api/v1/finance/receipts/' + receiptId + '/content', (route) =>
+    revoked
+      ? route.fulfill({
+          status: 404,
+          json: { code: 'receipt_not_found', message: 'Receipt not found.' },
+        })
+      : route.fulfill({
+          status: 206,
+          body: bytes,
+          headers: {
+            etag: '"receipt"',
+            'content-type': receipt.mediaType,
+            'content-length': String(bytes.length),
+            'content-range': 'bytes 0-' + (bytes.length - 1) + '/' + bytes.length,
+          },
+        }),
+  );
+  await page.goto('/finance/receipts');
+  const open = page.getByRole('button', { name: 'Prepare original download' });
+  await open.click();
+  const save = page.getByRole('link', { name: 'Save original file' });
+  await expect(save).toBeVisible();
+  const blobUrl = (await save.getAttribute('href'))!;
+  revoked = true;
+  await open.click();
+  await expect(
+    page.getByText('The receipt could not be verified. Refresh and try again.'),
+  ).toBeVisible();
+  await expect(save).toHaveCount(0);
+  expect(
+    await page.evaluate(
+      async (url) =>
+        fetch(url)
+          .then(() => true)
+          .catch(() => false),
+      blobUrl,
+    ),
+  ).toBe(false);
+  await page.getByRole('button', { name: 'Load more receipts' }).click();
+  await expect(
+    page.getByText('More receipts could not be loaded. Refresh and try again.'),
+  ).toBeVisible();
+  await expect(page.getByText('Receipt.xls', { exact: true })).toHaveCount(0);
+});
+
+test('keeps an outdated receipt page from restoring a refreshed transaction list', async ({
+  page,
+}) => {
+  await setup(page);
+  const bytes = Buffer.from('Receipt bytes');
+  const pageOne = fixtureReceipt(receiptId, bytes, 'First receipt.pdf', 'application/pdf');
+  const older = {
+    ...pageOne,
+    id: '01J00000000000000000000710',
+    originalFilename: 'Old receipt.pdf',
+  };
+  let refreshed = false;
+  let release!: () => void;
+  const opened = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let settled!: () => void;
+  const handled = new Promise<void>((resolve) => {
+    settled = resolve;
+  });
+  await page.route(
+    new RegExp('/api/v1/finance/transactions/' + transactionId + '/receipts(?:[?].*)?$'),
+    async (route) => {
+      if (new URL(route.request().url()).searchParams.has('cursor')) {
+        try {
+          await opened;
+          await route.fulfill({ json: { items: [older] } });
+        } catch {
+          // Refresh cancels the earlier receipt page.
+        } finally {
+          settled();
+        }
+      } else {
+        await route.fulfill({
+          json: refreshed ? { items: [] } : { items: [pageOne], nextCursor: 'page-two' },
+        });
+      }
+    },
+  );
+  await page.goto('/finance/transactions/' + transactionId);
+  await expect(page.getByText('First receipt.pdf')).toBeVisible();
+  const pageRequest = page.waitForRequest(
+    (request) => new URL(request.url()).searchParams.get('cursor') === 'page-two',
+  );
+  await page.getByRole('button', { name: 'Load more receipts' }).click();
+  await pageRequest;
+  refreshed = true;
+  try {
+    await page.getByRole('button', { name: 'Refresh receipts' }).click();
+    await expect(page.getByText('First receipt.pdf')).toHaveCount(0);
+  } finally {
+    release();
+  }
+  await handled;
+  await expect(page.getByText('Old receipt.pdf')).toHaveCount(0);
+});
