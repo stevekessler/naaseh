@@ -12,7 +12,10 @@ import {
   refreshWindowStart,
 } from '../../apps/api/src/finance/connection-service.js';
 import { FinanceMemoryRepository } from '../../apps/api/src/finance/repository.js';
-import { executeFinanceImport } from '../../apps/api/src/finance/import-handler.js';
+import {
+  createFinanceImportHandler,
+  executeFinanceImport,
+} from '../../apps/api/src/finance/import-handler.js';
 
 describe('SimpleFIN import', () => {
   it('parses v2 payloads and pauses incomplete account identity', () => {
@@ -236,5 +239,38 @@ describe('SimpleFIN import', () => {
     expect(repository.importJobs.get('job-failed')?.errors).toEqual([
       { class: 'provider-authentication', message: 'The provider import could not be completed.' },
     ]);
+
+    repository.importJobs.set('job-transport-failed', {
+      id: 'job-transport-failed',
+      connectionId: connection.id,
+      status: 'queued',
+      counts: { accounts: 0, inserted: 0, updated: 0, duplicateSuppressed: 0, reviewIssues: 0 },
+      errors: [],
+      attempts: 0,
+    });
+    const importHandler = createFinanceImportHandler({
+      repository,
+      allowedHosts: ['bridge.simplefin.org'],
+      kms,
+      fetcher: async () => {
+        throw new Error('transport failed with private provider data');
+      },
+    });
+    const failure = await Promise.resolve()
+      .then(() =>
+        importHandler(
+          { connectionId: connection.id, jobId: 'job-transport-failed' },
+          {} as Parameters<typeof importHandler>[1],
+          () => undefined,
+        ),
+      )
+      .catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).toHaveProperty('message', 'Finance import failed (internal).');
+    expect(failure).not.toHaveProperty('cause');
+    expect(repository.importJobs.get('job-transport-failed')).toMatchObject({
+      status: 'failed',
+      errors: [{ class: 'internal', message: 'The provider import could not be completed.' }],
+    });
   });
 });
