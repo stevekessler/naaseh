@@ -7,9 +7,15 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import type { ScheduledHandler } from 'aws-lambda';
-import { attachmentBlobSchema, attachmentSchema, transitionAttachment } from '@naaseh/domain';
+import {
+  attachmentBlobSchema,
+  attachmentSchema,
+  transitionAttachment,
+  type Attachment,
+} from '@naaseh/domain';
 import { log, metric } from '@naaseh/observability';
 import {
+  findAttachment,
   listAllAttachmentBlobs,
   listAllAttachments,
   listBlobReferences,
@@ -33,6 +39,7 @@ export const handler: ScheduledHandler = async (event) => {
   let stalledScans = 0;
   let missingObjects = 0;
   let orphanBlobs = 0;
+  let protectedReceiptBlobs = 0;
   let retentionScheduled = 0;
   let retentionCleared = 0;
   let purgedAttachments = 0;
@@ -42,7 +49,7 @@ export const handler: ScheduledHandler = async (event) => {
   const blobs = await listAllAttachmentBlobs();
   const blobsByAttachmentId = new Map(blobs.map((blob) => [blob.attachmentId, blob]));
   const tasks = new Map<string, Awaited<ReturnType<typeof findTask>>>();
-  const attachmentsById = new Map();
+  const attachmentsById = new Map<string, Attachment>();
   for (const storedAttachment of attachments) {
     let attachment = storedAttachment;
     if (attachment.status !== 'deleted' && attachment.parentType === 'task') {
@@ -234,6 +241,21 @@ export const handler: ScheduledHandler = async (event) => {
     }
     const references = await listBlobReferences(blob.blobId);
     if (references.length === 0 && blob.objectVersionId) {
+      // A partial restore can omit the reference row while retaining the receipt and blob.
+      if (
+        blob.receiptChecks ||
+        attachmentsById.get(blob.attachmentId)?.parentType === 'financeTransaction'
+      ) {
+        const receipt = await findAttachment(blob.attachmentId);
+        if (
+          receipt?.parentType === 'financeTransaction' &&
+          receipt.status !== 'deleted' &&
+          receipt.blobId === blob.blobId
+        ) {
+          protectedReceiptBlobs += 1;
+          continue;
+        }
+      }
       await s3.send(
         new DeleteObjectCommand({
           Bucket: bucket,
@@ -255,6 +277,7 @@ export const handler: ScheduledHandler = async (event) => {
     stalledScans,
     missingObjects,
     orphanBlobs,
+    protectedReceiptBlobs,
     retentionScheduled,
     retentionCleared,
     purgedAttachments,

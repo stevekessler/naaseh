@@ -1,11 +1,17 @@
 import { createHash } from 'node:crypto';
-import { expect, it } from 'vitest';
+import type { Context, ScheduledEvent } from 'aws-lambda';
+import { DeleteObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { afterEach, expect, it, vi } from 'vitest';
 import { attachmentBlobSchema, attachmentSchema } from '@naaseh/domain';
+import * as attachments from '../../apps/api/src/attachments/attachment-repository.js';
+import { handler } from '../../apps/api/src/attachments/reconciliation-handler.js';
 import { verifiedReceiptVersion } from '../../apps/api/src/attachments/receipt-content-service.js';
 import { receiptRetention } from '../../apps/api/src/attachments/retention-service.js';
-import { resolveReceiptTransaction } from '../../apps/api/src/finance/receipt-transaction-source.js';
+import * as receiptSource from '../../apps/api/src/finance/receipt-transaction-source.js';
 import { FinanceUnitOfWork, financeLocatorKey } from '../../apps/api/src/finance/unit-of-work.js';
 import { financePersistenceFixture } from '../fixtures/finance/persistence.js';
+
+afterEach(() => vi.restoreAllMocks());
 
 it('restores the exact verified receipt version under its reconciled transaction', async () => {
   const id = '01J00000000000000000000691';
@@ -77,6 +83,7 @@ it('restores the exact verified receipt version under its reconciled transaction
   for (const row of snapshot) {
     restored.rows.set(restored.key(row), JSON.parse(JSON.stringify(row)));
   }
+  const resolveReceiptTransaction = receiptSource.resolveReceiptTransaction;
   const resolve = () =>
     resolveReceiptTransaction(
       restoredReceipt.parentId,
@@ -100,6 +107,33 @@ it('restores the exact verified receipt version under its reconciled transaction
     }),
   ).toBeUndefined();
   expect(receiptRetention(restoredReceipt, canonical, now)).toBeUndefined();
+
+  vi.spyOn(receiptSource, 'resolveReceiptTransaction').mockImplementation(resolve);
+  const listAttachments = vi
+    .spyOn(attachments, 'listAllAttachments')
+    .mockResolvedValue([restoredReceipt]);
+  vi.spyOn(attachments, 'listAllAttachmentBlobs').mockResolvedValue([restoredBlob]);
+  vi.spyOn(attachments, 'listBlobReferences').mockResolvedValue([]);
+  const findAttachment = vi.spyOn(attachments, 'findAttachment').mockResolvedValue(restoredReceipt);
+  const saveBlob = vi.spyOn(attachments, 'saveAttachmentBlob').mockResolvedValue(restoredBlob);
+  const s3 = vi.spyOn(S3Client.prototype, 'send').mockResolvedValue({});
+  const reconcile = () =>
+    handler({ id: 'receipt-restore' } as ScheduledEvent, {} as Context, vi.fn());
+  await reconcile();
+  expect(s3.mock.calls.map(([command]) => command)).toEqual([expect.any(HeadObjectCommand)]);
+  expect(saveBlob).not.toHaveBeenCalled();
+
+  const deletedReceipt = attachmentSchema.parse({ ...restoredReceipt, status: 'deleted' });
+  listAttachments.mockResolvedValue([deletedReceipt]);
+  findAttachment.mockResolvedValue(deletedReceipt);
+  s3.mockClear();
+  await reconcile();
+  expect(s3.mock.calls.map(([command]) => command)).toEqual([
+    expect.any(HeadObjectCommand),
+    expect.any(DeleteObjectCommand),
+  ]);
+  expect(s3.mock.calls[1]?.[0]).toHaveProperty('input.VersionId', 'exact');
+
   restored.rows.delete(restored.key(aliasKey));
   const retained = receiptRetention(restoredReceipt, await resolve(), now)!;
   expect(retained).toEqual({ retentionReason: 'deleted', purgeAfter: '2026-12-14T00:00:00.000Z' });
