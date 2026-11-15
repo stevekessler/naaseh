@@ -28,7 +28,9 @@ function setup() {
   const store = financePersistenceFixture();
   const work = () => new FinanceUnitOfWork(store.persistence, 'table');
   const assertCurrent = vi.fn(async () => {});
-  const authorize = vi.fn(async () => Object.assign(assertCurrent, { transaction: { accountId } }));
+  const authorize = vi.fn(async (id: string) =>
+    Object.assign(assertCurrent, { transaction: { id, accountId } }),
+  );
   const presign = vi.fn(async () => 'https://object.fixture.invalid/put');
   let headFields: Record<string, unknown> = {};
   const head = vi.fn(async () => headFields);
@@ -65,6 +67,7 @@ function setup() {
     store,
     assertCurrent,
     authorize,
+    presign,
     head,
     scan,
     inspectBytes,
@@ -121,6 +124,46 @@ describe('Finance receipt lifecycle', () => {
     await expect(
       f.service.initiate(transactionId, { ...input, filename: 'changed.pdf' }),
     ).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('retries the original receipt through the canonical transaction after reconciliation', async () => {
+    const f = setup();
+    const first = await f.start();
+    const canonicalId = '01J00000000000000000000694';
+    const unrelatedId = '01J00000000000000000000695';
+    let originalRevoked = false;
+    f.authorize.mockImplementation(async (id) =>
+      Object.assign(
+        async () => {
+          if (id === transactionId && originalRevoked)
+            throw new SafeApiError(403, 'finance_locked', 'Unlock Finance.', 'authorization');
+        },
+        { transaction: { id: id === transactionId ? canonicalId : id, accountId } },
+      ),
+    );
+    f.moveTime(6);
+    await expect(f.service.initiate(unrelatedId, input)).rejects.toMatchObject({ status: 404 });
+    await expect(
+      f.service.initiate(canonicalId, { ...input, filename: 'Changed.pdf' }),
+    ).rejects.toMatchObject({ status: 409 });
+    originalRevoked = true;
+    await expect(f.service.initiate(canonicalId, input)).rejects.toMatchObject({ status: 403 });
+    expect(f.presign).toHaveBeenCalledOnce();
+    originalRevoked = false;
+    const retried = await f.service.initiate(canonicalId, input);
+    expect(retried.uploadSessionId).toBe(first.uploadSessionId);
+    expect(retried.receipt).toMatchObject({
+      id: first.receipt.id,
+      parentId: transactionId,
+      blobId: first.receipt.blobId,
+    });
+    expect(Date.parse(retried.expiresAt!)).toBeGreaterThan(Date.parse(first.expiresAt!));
+    await f.service.complete(receiptId, f.grant(first.uploadSessionId!));
+    await f.scan(receiptId, 'immutable', 'NO_THREATS_FOUND');
+    await expect(f.service.initiate(canonicalId, input)).resolves.toMatchObject({
+      receipt: { id: first.receipt.id, status: 'available' },
+    });
+    expect(f.presign).toHaveBeenCalledTimes(2);
   });
 
   it('rejects a mismatched version, tags or content without creating a usable blob', async () => {

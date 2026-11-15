@@ -149,8 +149,8 @@ export function createReceiptService({
       rawInput: z.input<typeof financeReceiptUploadSchema>,
     ): Promise<UploadGrant> {
       const input = financeReceiptUploadSchema.parse(rawInput);
-      const assertCurrent = await authorize(transactionId, 'edit');
-      const accountId = assertCurrent.transaction.accountId;
+      const requestedSource = await authorize(transactionId, 'edit');
+      const accountId = requestedSource.transaction.accountId;
       if (typeof accountId !== 'string') throw missing();
       const policy = validateReceiptFilePolicy(input);
       const checksumSha256 = /^[0-9a-f]{64}$/iu.test(input.checksumSha256)
@@ -167,17 +167,27 @@ export function createReceiptService({
       const id = input.clientReceiptId;
       const uow = work();
       const prior = await uow.get<ReceiptRecord>(keys.attachment(id));
-      const intent = digest([actorId, transactionId, policy, checksumSha256]);
+      const priorReceipt = parse(prior);
+      if (prior && (!priorReceipt || priorReceipt.uploaderId !== actorId)) throw missing();
+      // Keep the original parent in the upload session and intent fingerprint.
+      const parentId = priorReceipt?.parentId ?? transactionId;
+      const originalSource =
+        parentId === transactionId ? undefined : await authorize(parentId, 'edit');
+      if (
+        originalSource &&
+        (typeof requestedSource.transaction.id !== 'string' ||
+          originalSource.transaction.id !== requestedSource.transaction.id ||
+          originalSource.transaction.accountId !== accountId)
+      )
+        throw missing();
+      const assertCurrent = async () => {
+        await requestedSource();
+        await originalSource?.();
+      };
+      const intent = digest([actorId, parentId, policy, checksumSha256]);
       let value: Attachment;
       let session: AttachmentUploadSession;
-      if (prior) {
-        const priorReceipt = parse(prior);
-        if (
-          !priorReceipt ||
-          priorReceipt.uploaderId !== actorId ||
-          priorReceipt.parentId !== transactionId
-        )
-          throw missing();
+      if (prior && priorReceipt) {
         if (prior.receiptIntent !== intent) throw conflict();
         if ((prior.receiptCleanupUntil ?? 0) > time.getTime())
           throw new SafeApiError(
@@ -284,7 +294,7 @@ export function createReceiptService({
         session.attachmentId !== id ||
         session.blobId !== value.blobId ||
         session.parentType !== 'financeTransaction' ||
-        session.parentId !== transactionId ||
+        session.parentId !== parentId ||
         session.status !== 'initiated'
       )
         throw conflict();
