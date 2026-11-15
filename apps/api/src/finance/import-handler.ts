@@ -139,18 +139,28 @@ export async function executeFinanceImport(
 }
 
 export function createFinanceImportHandler(
-  dependencies: FinanceImportDependencies,
+  dependencies?: FinanceImportDependencies,
 ): Handler<FinanceImportEvent> {
-  return (event) => executeFinanceImport(event, dependencies);
+  return async (event) => {
+    try {
+      return await executeFinanceImport(
+        event,
+        dependencies ?? {
+          repository: await DynamoFinanceRepository.forConnection(event.connectionId),
+          allowedHosts: (
+            process.env.NAASEH_SIMPLEFIN_ALLOWED_HOSTS ??
+            'bridge.simplefin.org,beta-bridge.simplefin.org'
+          )
+            .split(',')
+            .map((host) => host.trim().toLowerCase())
+            .filter(Boolean),
+        },
+      );
+    } catch (error) {
+      // Keep the invocation failed for retries without returning dependency error details.
+      throw new Error(`Finance import failed (${providerErrorClass(error)}).`);
+    }
+  };
 }
 
-export const handler: Handler<FinanceImportEvent> = async (event) =>
-  executeFinanceImport(event, {
-    repository: await DynamoFinanceRepository.forConnection(event.connectionId),
-    allowedHosts: (
-      process.env.NAASEH_SIMPLEFIN_ALLOWED_HOSTS ?? 'bridge.simplefin.org,beta-bridge.simplefin.org'
-    )
-      .split(',')
-      .map((host) => host.trim().toLowerCase())
-      .filter(Boolean),
-  });
+export const handler = createFinanceImportHandler();
