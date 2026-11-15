@@ -54,3 +54,9 @@ T122 stays open for the fulfillment and task-link reconciliation and combined re
 Commit `19e4c4b9feb8ec6081d8446a05803701f56b2093` expands the receipt restore fixture to round-trip the original and canonical transaction rows, locators, and alias. It verifies exact-version and policy verdict enforcement and retention under the active reconciled transaction. The receipt becomes eligible for deleted-source retention if the restored alias is missing.
 
 Focused validation passed 37 tests in 5 files in 0.47 seconds. Required validation passed 1,937 tests in 491 files in 64.38 seconds, including typecheck, lint, and builds. This change is test-only. The remaining T122 graph checks and T123 integration still need Computer 1's Phase 9 and Phase 11 commits.
+
+## T122 partial receipt restore cleanup
+
+Commit `aae3c287d5846bed888e422284c79739be1b53a7` prevents the scheduled cleanup from deleting a restored receipt's exact object version when its separate blob reference row is missing. Before deleting a possible orphan receipt blob, cleanup point-reads the current receipt and preserves the version if that receipt still names it and is live. The regression exercises the scheduled handler with a restored canonical transaction alias and mocked storage calls. It also verifies that deletion can proceed for the exact version after the receipt is marked deleted.
+
+Focused validation passed 37 tests in 5 files in 0.49 seconds. Required validation on Node 24.22.2 passed 1,937 tests in 491 files in 65.00 seconds, including typecheck, lint, and builds. The required browser selection is unchanged. Live storage verification remains under T018. T122 and T123 remain open for the combined graph and Phase 11 verification.
