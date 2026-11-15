@@ -473,7 +473,8 @@ export function createReceiptService({
       const { uow, row, value, assertCurrent } = await authorized(id, 'edit');
       if (value.uploaderId !== actorId) throw missing();
       if (value.status === 'cancelled') return value;
-      if (!['pending_upload', 'scanning', 'scan_failed'].includes(value.status)) throw conflict();
+      if (!['pending_upload', 'expired', 'scanning', 'scan_failed'].includes(value.status))
+        throw conflict();
       const time = now();
       const next = attachmentSchema.parse({
         ...value,

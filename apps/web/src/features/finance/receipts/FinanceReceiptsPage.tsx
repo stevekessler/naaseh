@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { financeRequest } from '../finance-client.js';
+import { FinanceClientError, financeRequest } from '../finance-client.js';
 import { peekFinanceAccess } from '../security/finance-access.js';
 import { ReceiptContent } from './ReceiptContent.js';
 import { requestReceiptPage, type ReceiptView } from './receipt-client.js';
@@ -124,9 +124,17 @@ export function FinanceReceiptsPage() {
       ]);
       setNext(page.nextCursor);
       setCursor(token);
-    } catch {
-      if (!controller.signal.aborted)
-        setMessage('More receipts could not be loaded. Refresh and try again.');
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      if (
+        error instanceof FinanceClientError &&
+        [401, 403, 404, 409].includes(error.problem.status)
+      ) {
+        setResults([]);
+        setNext(undefined);
+        setLoaded(false);
+      }
+      setMessage('More receipts could not be loaded. Refresh and try again.');
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }

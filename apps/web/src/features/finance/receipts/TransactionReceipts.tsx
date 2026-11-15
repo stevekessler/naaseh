@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { financeReceiptMediaTypes } from '@naaseh/domain';
 import { queueReceiptFile, receiptDraftIds } from '../../../db/finance-receipt-repository.js';
 import { financeRequest } from '../finance-client.js';
@@ -41,16 +41,24 @@ export function TransactionReceipts({
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [paging, setPaging] = useState(false);
+  const listing = useRef<AbortSignal | undefined>(undefined);
   const base = '/finance/transactions/' + encodeURIComponent(transactionId) + '/receipts';
 
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
+    listing.current = signal;
+    setItems([]);
+    setNext(undefined);
+    setDrafts([]);
+    setPaging(false);
     const clear = () => {
       controller.abort();
       setItems([]);
       setDrafts([]);
       setNext(undefined);
+      setPaging(false);
       setMessage('');
     };
     const unsubscribe = peekFinanceAccess()?.onLock(clear);
@@ -90,6 +98,29 @@ export function TransactionReceipts({
       );
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function loadMore(cursor: string) {
+    const signal = listing.current;
+    if (!signal || signal.aborted || paging) return;
+    setPaging(true);
+    try {
+      const result = await requestReceiptPage(base + '?' + new URLSearchParams({ cursor }), {
+        signal,
+      });
+      if (signal.aborted) return;
+      setItems((current) => [
+        ...new Map([...current, ...result.items].map((receipt) => [receipt.id, receipt])).values(),
+      ]);
+      setNext(result.nextCursor);
+    } catch {
+      if (signal.aborted) return;
+      setItems([]);
+      setNext(undefined);
+      setMessage('Receipts could not be rechecked. Refresh to try again.');
+    } finally {
+      if (!signal.aborted) setPaging(false);
     }
   }
 
@@ -199,27 +230,8 @@ export function TransactionReceipts({
           ))}
       </ul>
       {next ? (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => {
-            void (async () => {
-              setBusy(true);
-              try {
-                const result = await requestReceiptPage(
-                  base + '?' + new URLSearchParams({ cursor: next }),
-                );
-                setItems((items) => [...items, ...result.items]);
-                setNext(result.nextCursor);
-              } catch {
-                setMessage('More receipts could not be loaded.');
-              } finally {
-                setBusy(false);
-              }
-            })();
-          }}
-        >
-          Load more receipts
+        <button type="button" disabled={busy || paging} onClick={() => void loadMore(next)}>
+          {paging ? 'Loading receipts…' : 'Load more receipts'}
         </button>
       ) : null}
     </section>

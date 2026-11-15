@@ -145,6 +145,33 @@ describe('Finance receipt lifecycle', () => {
     expect(f.head).not.toHaveBeenCalled();
   });
 
+  it('cancels an expired receipt without reviving the upload or dropping an available original', async () => {
+    const expired = setup();
+    const grant = await expired.start();
+    const key = expired.store.key(keys.attachment(receiptId));
+    const row = expired.store.rows.get(key)!;
+    expired.store.rows.set(key, { ...row, data: { ...grant.receipt, status: 'expired' } });
+    const cancelled = await expired.service.cancel(receiptId);
+    expect(cancelled.status).toBe('cancelled');
+    await expect(expired.service.cancel(receiptId)).resolves.toEqual(cancelled);
+    await expect(expired.service.initiate(transactionId, input)).resolves.toEqual({
+      receipt: cancelled,
+    });
+    await expect(
+      expired.service.complete(receiptId, expired.grant(grant.uploadSessionId!)),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(expired.head).not.toHaveBeenCalled();
+
+    const available = setup();
+    const active = await available.start();
+    await available.service.complete(receiptId, available.grant(active.uploadSessionId!));
+    await available.scan(receiptId, 'immutable', 'NO_THREATS_FOUND');
+    await expect(available.service.cancel(receiptId)).rejects.toMatchObject({ status: 409 });
+    await expect(available.service.metadata(receiptId)).resolves.toMatchObject({
+      status: 'available',
+    });
+  });
+
   it('rejects policy failures and keeps transient scan failures recoverable', async () => {
     const f = setup();
     const grant = await f.start();

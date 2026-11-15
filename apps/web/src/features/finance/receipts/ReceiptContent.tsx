@@ -5,6 +5,16 @@ import { downloadReceipt, type ReceiptView } from './receipt-client.js';
 const PdfReceiptPreview = lazy(() => import('./PdfReceiptPreview.js'));
 
 export function ReceiptContent({ receipt }: { receipt: ReceiptView }) {
+  if (receipt.status !== 'available' || !receipt.etag) return null;
+  return (
+    <AvailableReceiptContent
+      key={JSON.stringify([receipt.id, receipt.version, receipt.etag])}
+      receipt={receipt}
+    />
+  );
+}
+
+function AvailableReceiptContent({ receipt }: { receipt: ReceiptView }) {
   const url = useRef<string | undefined>(undefined);
   const request = useRef<AbortController | undefined>(undefined);
   const [preview, setPreview] = useState<{ url: string; blob: Blob }>();
@@ -28,11 +38,18 @@ export function ReceiptContent({ receipt }: { receipt: ReceiptView }) {
       clear();
     };
   }, []);
-  if (receipt.status !== 'available' || !receipt.etag) return null;
   const canPreview =
     receipt.mediaType === 'application/pdf' || receipt.mediaType.startsWith('image/');
-  const open = async () => {
+  const close = () => {
     request.current?.abort();
+    request.current = undefined;
+    if (url.current) URL.revokeObjectURL(url.current);
+    url.current = undefined;
+    setPreview(undefined);
+    setBusy(false);
+  };
+  const open = async () => {
+    close();
     const controller = new AbortController();
     request.current = controller;
     setBusy(true);
@@ -40,7 +57,6 @@ export function ReceiptContent({ receipt }: { receipt: ReceiptView }) {
     try {
       const blob = await downloadReceipt(receipt, controller.signal);
       if (controller.signal.aborted) return;
-      if (url.current) URL.revokeObjectURL(url.current);
       url.current = URL.createObjectURL(blob);
       setPreview({ url: url.current, blob });
     } catch {
@@ -49,13 +65,6 @@ export function ReceiptContent({ receipt }: { receipt: ReceiptView }) {
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
-  };
-  const close = () => {
-    request.current?.abort();
-    if (url.current) URL.revokeObjectURL(url.current);
-    url.current = undefined;
-    setPreview(undefined);
-    setBusy(false);
   };
   return (
     <div>
