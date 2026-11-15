@@ -40,3 +40,11 @@ Node 24.22.2 and Playwright 1.64.1 were used against the provisional branch.
 | Required quick selection | 31 tests discovered in 20 files. Selection, projects, timeouts, and retries are unchanged. | Discovery only |
 
 This validates the provisional branch. Run these gates again after importing Phase 9 and adding T122.
+
+## T122 receipt retry follow-up
+
+Commit `4c0f835451cad90efe3bd4e898279fc1bd1d9cd3` fixes receipt upload retries through a reconciled transaction's canonical URL. Both transaction references must authorize the same current canonical transaction and account. The receipt keeps its original parent, intent fingerprint, blob, and upload session. The regression covers renewed pending uploads, retries after availability, changed upload intent, unrelated same-account transactions, and revoked original access.
+
+Focused receipt, restore, and SimpleFIN checks passed 37 tests in 5 files in 0.48 seconds. On Node 24.22.2, required validation passed 1,937 tests in 491 files in 63.19 seconds, including typecheck, lint, and builds. The Playwright 1.64.1 Chromium and WebKit rerun stopped after 4.08 seconds when the sandbox denied the preview bind. No browser tests ran. Quick discovery remains 31 tests in 20 files.
+
+T122 stays open for the fulfillment and task-link reconciliation and combined restore checks. Phase 9 import is still blocked by GitHub connectivity. The T109 starting point and T111 ownership above still apply.
