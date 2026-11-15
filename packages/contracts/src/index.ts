@@ -23,3 +23,5 @@ export * from './crisis-plan-openapi.js';
 export * from './apple-native.js';
 export * from './finance.js';
 export * from './finance-receipts.js';
+
+export * from './finance-spend-report.js';

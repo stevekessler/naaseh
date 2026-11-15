@@ -421,14 +421,35 @@ export interface FinanceWorkerRequest {
   filters: import('@naaseh/contracts').FinanceQueryFilters;
 }
 
-/** The worker has one owner and is terminated on cancellation or global Finance lock. */
+export interface FinanceSpendWorkerRequest {
+  spendSlices: import('@naaseh/domain').SpendSlice[];
+  filters: import('@naaseh/contracts').FinanceQueryFilters;
+}
+type SpendTotals = ReturnType<typeof import('@naaseh/domain').sumSpendByCurrency>;
+
 export function filterFinanceDocuments(
   request: FinanceWorkerRequest,
   signal: AbortSignal,
   onProgress?: (progress: FinanceIndexProgress) => void,
 ) {
-  if (signal.aborted) return Promise.reject<string[]>(signal.reason);
-  return new Promise<string[]>((resolve, reject) => {
+  return runFinanceWorker<string[]>(request, signal, onProgress);
+}
+
+export function filterCachedFinanceSpend(request: FinanceSpendWorkerRequest, signal: AbortSignal) {
+  return runFinanceWorker<{ ids: string[]; totals: SpendTotals; amounts: Record<string, number> }>(
+    request,
+    signal,
+  );
+}
+
+/** The worker has one owner and is terminated on cancellation or global Finance lock. */
+function runFinanceWorker<T>(
+  request: FinanceWorkerRequest | FinanceSpendWorkerRequest,
+  signal: AbortSignal,
+  onProgress?: (progress: FinanceIndexProgress) => void,
+) {
+  if (signal.aborted) return Promise.reject<T>(signal.reason);
+  return new Promise<T>((resolve, reject) => {
     const worker = new Worker(new URL('./finance-index.worker.ts', import.meta.url), {
       type: 'module',
     });
@@ -445,16 +466,16 @@ export function filterFinanceDocuments(
     signal.addEventListener('abort', cancel, { once: true });
     worker.onmessage = ({
       data,
-    }: MessageEvent<{ ids?: string[]; progress: FinanceIndexProgress }>) => {
-      onProgress?.(data.progress);
-      if (data.ids) {
+    }: MessageEvent<{ result?: T; progress?: FinanceIndexProgress }>) => {
+      if (data.progress) onProgress?.(data.progress);
+      if (data.result !== undefined) {
         clear();
-        resolve(data.ids);
+        resolve(data.result);
       }
     };
     worker.onerror = () => {
       clear();
-      reject(new Error('Cached transaction filtering failed.'));
+      reject(new Error('Cached Finance filtering failed.'));
     };
     worker.postMessage(request);
   });

@@ -1,3 +1,4 @@
+import { browseFinanceSpendReport, parseSpendReportRequest } from './spend-report-service.js';
 import { dispatchFinanceReceipt } from './receipt-handler.js';
 import { FinanceCacheProofService, type FinanceCacheAuthorizationSnapshot } from './cache-proof.js';
 import { financeReplayFingerprint } from './mutation-intent.js';
@@ -336,9 +337,10 @@ export function createFinanceHandler(
         await authorize(gate);
         return json(200, result);
       }
-      const metadata = /^\/api\/v1\/finance\/(accounts|categories|merchants|review-issues)$/u.exec(
-        event.rawPath,
-      );
+      const metadata =
+        /^\/api\/v1\/finance\/(accounts|budgets|categories|merchants|review-issues)$/u.exec(
+          event.rawPath,
+        );
       if (
         event.requestContext.http.method === 'GET' &&
         metadata &&
@@ -352,11 +354,12 @@ export function createFinanceHandler(
         const source = new FinanceSyncSourceGuard({ userId: auth.userId, role });
         const [collection, entityType] = {
           accounts: ['accounts', 'financeAccount'],
+          budgets: ['budgets', 'financeBudget'],
           categories: ['categories', 'financeCategory'],
           merchants: ['merchants', 'financeMerchant'],
           'review-issues': ['reviewIssues', 'financeReviewIssue'],
-        }[metadata[1] as 'accounts' | 'categories' | 'merchants' | 'review-issues'] as [
-          'accounts' | 'categories' | 'merchants' | 'reviewIssues',
+        }[metadata[1] as 'accounts' | 'budgets' | 'categories' | 'merchants' | 'review-issues'] as [
+          'accounts' | 'budgets' | 'categories' | 'merchants' | 'reviewIssues',
           string,
         ];
         const ids = await listFinanceBrowseKeys(auth.userId, collection);
@@ -439,11 +442,19 @@ export function createFinanceHandler(
         event.requestContext.http.method === 'GET' &&
         browsePath &&
         event.queryStringParameters?.browse === '1';
+      const spendReport =
+        event.requestContext.http.method === 'GET' &&
+        event.rawPath === '/api/v1/finance/reports/spend';
       // Resolve owner-only bounded jobs before the legacy registry hydrates scope data.
       const queryPath = /^\/api\/v1\/finance\/queries\/([^/]+)(\/rows)?$/.exec(event.rawPath);
       const createsQuery =
         event.requestContext.http.method === 'POST' && event.rawPath === '/api/v1/finance/queries';
-      if ((event.requestContext.http.method === 'GET' && queryPath) || createsQuery || browsing) {
+      if (
+        (event.requestContext.http.method === 'GET' && queryPath) ||
+        createsQuery ||
+        browsing ||
+        spendReport
+      ) {
         const request = createsQuery
           ? financeQueryStartSchema.parse(JSON.parse(event.body ?? '{}'))
           : queryPath?.[2]
@@ -461,6 +472,32 @@ export function createFinanceHandler(
             return job.userId === gate.userId && job.securityRevision === current.securityRevision;
           },
         });
+        if (spendReport) {
+          const source = new FinanceSyncSourceGuard({
+            userId: auth.userId,
+            role: auth.role === 'admin' ? 'admin' : 'user',
+          });
+          const ids = await listFinanceBrowseKeys(auth.userId, 'accounts');
+          const accounts: string[] = [];
+          for (let offset = 0; offset < ids.length; offset += 5) {
+            const visible = await Promise.all(
+              ids
+                .slice(offset, offset + 5)
+                .map(async (id) =>
+                  (await source.readCanonicalSource('financeAccount', id)) ? id : undefined,
+                ),
+            );
+            accounts.push(...visible.filter((id) => id !== undefined));
+          }
+          const result = await browseFinanceSpendReport(
+            jobs,
+            { userId: auth.userId, securityRevision: visit.securityRevision },
+            parseSpendReportRequest(event.rawQueryString, accounts),
+          );
+          await source.assertCurrent();
+          await authorize(gate);
+          return json(result.rowsState === 'searching' ? 202 : 200, result);
+        }
         if (browsing) {
           const params = new URLSearchParams(event.rawQueryString);
           const defaultAccounts =

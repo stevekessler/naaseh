@@ -102,7 +102,7 @@ async function currentActor(userId: string) {
 
 export async function listFinanceBrowseKeys(
   userId: string,
-  collection: 'accounts' | 'categories' | 'merchants' | 'reviewIssues',
+  collection: 'accounts' | 'budgets' | 'categories' | 'merchants' | 'reviewIssues',
 ) {
   const current = await currentActor(userId);
   if (!current)
@@ -488,17 +488,19 @@ export function createFinanceQueryRuntime(
     preview: async (job) => {
       const filters = financeQueryFiltersSchema.parse(job.filters);
       const { transactionBrowse, ...summaryFilters } = filters;
-      if (
-        !supportsFinanceAccountSummary(summaryFilters) ||
-        !job.partitions.every((partition) => currentOrderedSources.has(partition.accountId))
-      )
-        return undefined;
+      const compact =
+        supportsFinanceAccountSummary(summaryFilters) &&
+        job.partitions.every((partition) => currentOrderedSources.has(partition.accountId));
+      if (!compact && !filters.postedSpendOnly) return undefined;
+      const readPreview = compact
+        ? repository.preview.bind(repository)
+        : repository.scanForJob.bind(repository);
       const results: Array<Awaited<ReturnType<FinanceReadRepository['preview']>>> = [];
       for (let offset = 0; offset < job.partitions.length; offset += 5) {
         results.push(
           ...(await Promise.all(
             job.partitions.slice(offset, offset + 5).map((partition) =>
-              repository.preview({
+              readPreview({
                 userId: job.userId,
                 accountId: partition.accountId,
                 sourceRevision: job.sourceRevisions[partition.accountId]!,

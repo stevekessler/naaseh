@@ -1,5 +1,84 @@
 # Finance Experience Expansion Implementation Validation
 
+## US9 Spend Report — 2026-11-15
+
+The Spend Report was implemented on a separate local branch based on
+`9eafd458168c709147c9bb3923947101b97bb5e5`. Reports opens Spend with the
+current calendar month in the browser's time zone and all accessible
+accounts. The five catalog dimensions accept multiple values. Selection is
+OR within each dimension and AND across dimensions. Budget, category, and
+subcategory must match the same allocation. A transaction opens the existing
+protected detail dialog and returns focus to its report row on close.
+
+The protected report route uses the existing Finance query job, date and
+dimension indexes, and revision-bound pagination. It can publish a stable
+first page while the worker continues exact aggregation. The browser polls
+for final results without requiring the user to fetch each page. Totals and
+counts are withheld while pending. Confirmed empty scope is distinct from a
+search still in progress. No report export action is exposed.
+
+The integration fixture exercises the actual query job and read repository
+with a local DynamoDB command double. Its split and partial refund produce
+400 USD minor units alongside 700 CAD minor units across three matching
+transactions. A disjoint allocation and an old transaction do not contribute.
+The fixture verifies narrow budget posting selection, owner isolation and
+revocation, and distinct pages under the same revision. Local tests assert
+actual rows or verified empty scope within two seconds and exact completion
+within ten seconds with no paging request to drive completion.
+
+One local 1,250-fact run per case measured these times from the report start.
+
+| Cold fixture | Actual rows or verified empty | Exact count and totals |
+| --- | ---: | ---: |
+| Dense | 7.65 ms | 16.42 ms |
+| Sparse | 0.87 ms | 0.87 ms |
+| Empty | 0.71 ms | 0.71 ms |
+
+A separate command-double benchmark exercised 100,000 facts across 50 accounts,
+with 20 runs per case.
+
+| Cold fixture | Actual rows or verified empty p95 | Exact count and totals p95 |
+| --- | ---: | ---: |
+| Dense | 261.4 ms | 762.0 ms |
+| Sparse | 21.8 ms | 21.8 ms |
+| Empty | 20.4 ms | 20.4 ms |
+
+Each read examined at most 1,000 facts. The larger benchmark used up to 150
+fact queries per run, including first-page probes. These timings exclude
+network latency, DynamoDB, browser rendering, and live source authorization. The 100,000-transaction mobile p95 gate,
+real DynamoDB and hosted acceptance, and combined cost verification remain under
+T018. The combined AWS ceiling remains **$6.50/month including contingency**.
+The migration remains unrun.
+
+Offline reports read the authorized encrypted cache and calculate matching
+spend with a worker that terminates on cancellation or Finance lock. The
+report shows saved-record coverage and last cached change. Empty saved data
+has its own label. Cached totals are visibly partial. Playwright covers
+connected filters, automatic exact results, report-state and focus restoration,
+and offline rows, totals and empty coverage.
+
+| Local gate | Result | Real time |
+| --- | --- | --- |
+| Report contract and integration | 7 passed in 2 files | 0.46 s |
+| Report and transaction-dialog browser regression | 20 passed, including 8 report cases | 20.99 s |
+| Required validation | 1,942 passed in 493 files, runtime check, typecheck, lint and builds | 69.30 s |
+| Standalone tests | 1,942 passed in 493 files | 58.45 s |
+| Quick Playwright | 31 passed | 29.85 s |
+| Full Playwright | 588 passed, 28 existing skips, 616 selected | 451.83 s |
+| Apple contract interoperability | 11 closed fields and 7 crypto vectors | 0.14 s |
+
+Node 24.22.2 and Playwright 1.64.1 were used. Browser projects, retries,
+timeouts, and required selection were retained. The Phase 10 base had 1,935
+tests in 491 files, required validation in 66.42 s, and the 31-case quick
+suite in 29.73 s. The new report browser cases are in the full matrix.
+Initial test-first runs confirmed the report entry points were absent.
+Earlier browser diagnostics corrected a preview service-worker fixture and
+added the required posted-date and review-state fields to the offline
+transaction fixture.
+
+
+Phase 14 completes T141–T147 locally, bringing the checked task count to **102 of 166**.
+
 ## US6 private transaction receipts — 2026-11-14
 
 Phase 10 is based on the completed Phase 8 commit

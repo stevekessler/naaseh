@@ -399,16 +399,16 @@ acceptance. See validation and runtime reports; other US2 tasks remain open.
 
 ### Tests — write first
 
-- [ ] T141 [P] [US9] Add AND/OR filter/same-allocation intersection, default-month, stable cursor/revision, no-result and safe pending/final total contracts in `tests/contract/finance-spend-report.contract.test.ts`.
-- [ ] T142 [P] [US9] Add exact refund-aware same-allocation filtered rows/totals, automatic aggregate completion, source-revision/cursor dedupe, authorization and cold sparse/empty read-budget tests in `tests/integration/finance-spend-report.test.ts`; assert both 2s row readiness and 10s exact count/totals rather than progress.
-- [ ] T143 [P] [US9] Add Chromium/WebKit Reports/Spend entry, combined filters, empty/partial/final totals and modal-close report-state preservation journeys in `tests/e2e/finance-spend-report.spec.ts`.
+- [X] T141 [P] [US9] Add AND/OR filter/same-allocation intersection, default-month, stable cursor/revision, no-result and safe pending/final total contracts in `tests/contract/finance-spend-report.contract.test.ts`.
+- [X] T142 [P] [US9] Add exact refund-aware same-allocation filtered rows/totals, automatic aggregate completion, source-revision/cursor dedupe, authorization and cold sparse/empty read-budget tests in `tests/integration/finance-spend-report.test.ts`; assert both 2s row readiness and 10s exact count/totals rather than progress.
+- [X] T143 [P] [US9] Add Chromium/WebKit Reports/Spend entry, combined filters, empty/partial/final totals and modal-close report-state preservation journeys in `tests/e2e/finance-spend-report.spec.ts`.
 
 ### Implementation and Verification
 
-- [ ] T144 [US9] Implement Spend and automatic query status/completion using shared spend predicates and narrowest authorized fact/posting indexes in `apps/api/src/finance/spend-report-service.ts`, `apps/api/src/finance/query-job-service.ts`, `apps/api/src/finance/read-repository.ts` and `apps/api/src/finance/handlers.ts`; actual matches/definitive empty <=2s and exact connected counts/totals <=10s, with version-vector invalidation and no user paging dependency.
-- [ ] T145 [US9] Build Reports/Spend filters, authorized rows, independent aggregate-pending labels and per-currency totals in `apps/web/src/features/finance/reports/FinanceReportsPage.tsx` and `apps/web/src/features/finance/reports/SpendReportPage.tsx`; auto-poll protected query status as needed, preserve default month/all accessible accounts and expose no export action.
-- [ ] T146 [US9] Share guarded transaction modal navigation and worker-based offline report calculation in `apps/web/src/features/finance/reports/spend-report-query.ts`, `apps/web/src/features/finance/reports/SpendReportPage.tsx` and `apps/web/src/search/finance-index.worker.ts`; label partial scope and restore filters on modal close.
-- [ ] T147 [US9] Run report contract/integration/browser checks and compare full final ledger/allocation totals to independent expected values in `docs/testing/finance-experience-validation.md`; record cold useful-content and full-completion timings separately.
+- [X] T144 [US9] Implement Spend and automatic query status/completion using shared spend predicates and narrowest authorized fact/posting indexes in `apps/api/src/finance/spend-report-service.ts`, `apps/api/src/finance/query-job-service.ts`, `apps/api/src/finance/read-repository.ts` and `apps/api/src/finance/handlers.ts`; actual matches/definitive empty <=2s and exact connected counts/totals <=10s, with version-vector invalidation and no user paging dependency.
+- [X] T145 [US9] Build Reports/Spend filters, authorized rows, independent aggregate-pending labels and per-currency totals in `apps/web/src/features/finance/reports/FinanceReportsPage.tsx` and `apps/web/src/features/finance/reports/SpendReportPage.tsx`; auto-poll protected query status as needed, preserve default month/all accessible accounts and expose no export action.
+- [X] T146 [US9] Share guarded transaction modal navigation and worker-based offline report calculation in `apps/web/src/features/finance/reports/spend-report-query.ts`, `apps/web/src/features/finance/reports/SpendReportPage.tsx` and `apps/web/src/search/finance-index.worker.ts`; label partial scope and restore filters on modal close.
+- [X] T147 [US9] Run report contract/integration/browser checks and compare full final ledger/allocation totals to independent expected values in `docs/testing/finance-experience-validation.md`; record cold useful-content and full-completion timings separately.
 
 **Checkpoint**: Run a Spend Report is complete only after its independent acceptance and relevant failure paths pass; preserve pending evidence as unresolved.
 

@@ -102,15 +102,26 @@ export interface SpendFilters {
   timeZone?: string | undefined;
 }
 
-export function localFinanceDate(instant: string, timeZone: string): string {
-  const date = new Date(instant);
-  if (!Number.isFinite(date.getTime())) throw new Error('Invalid Finance instant.');
-  const parts = new Intl.DateTimeFormat('en-US', {
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function financeDateFormatter(timeZone: string) {
+  const cached = dateFormatters.get(timeZone);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(date);
+  });
+  if (dateFormatters.size === 32) dateFormatters.delete(dateFormatters.keys().next().value!);
+  dateFormatters.set(timeZone, formatter);
+  return formatter;
+}
+
+export function localFinanceDate(instant: string, timeZone: string): string {
+  const date = new Date(instant);
+  if (!Number.isFinite(date.getTime())) throw new Error('Invalid Finance instant.');
+  const parts = financeDateFormatter(timeZone).formatToParts(date);
   const part = (type: string) => parts.find((p) => p.type === type)!.value;
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
@@ -129,7 +140,7 @@ export function filterSpendSlices(
   filters: SpendFilters,
 ): SpendSlice[] {
   const zone = filters.timeZone ?? 'UTC';
-  new Intl.DateTimeFormat('en', { timeZone: zone });
+  financeDateFormatter(zone);
   if (
     (filters.dateFrom && !isFinanceDate(filters.dateFrom)) ||
     (filters.dateTo && !isFinanceDate(filters.dateTo)) ||
