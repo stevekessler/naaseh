@@ -1,10 +1,12 @@
 import type {
+  ExpenseFulfillment,
   EntityType,
   List,
   Mutation,
   StableMutationResult,
   SyncChange,
   Task,
+  UpcomingExpense,
   VectorCursor,
 } from '@naaseh/domain';
 import { listSchema, taskSchema } from '@naaseh/domain';
@@ -259,14 +261,16 @@ const financeBootstrapOrder = new Map<string, number>([
   ['financeBudgetItem', 5],
   ['financeTransaction', 6],
   ['financeAllocation', 7],
-  ['financeRefundRelationship', 8],
-  ['financeTransfer', 9],
-  ['financeReusableItem', 10],
-  ['financeTransactionMatch', 11],
-  ['financeReconciliation', 12],
-  ['financeTaskLink', 13],
-  ['financeReviewIssue', 14],
-  ['financeBalanceSnapshot', 15],
+  ['financeUpcomingExpense', 8],
+  ['financeFulfillment', 9],
+  ['financeRefundRelationship', 10],
+  ['financeTransfer', 11],
+  ['financeReusableItem', 12],
+  ['financeTransactionMatch', 13],
+  ['financeReconciliation', 14],
+  ['financeTaskLink', 15],
+  ['financeReviewIssue', 16],
+  ['financeBalanceSnapshot', 17],
 ]);
 
 /** Parents and global labels hydrate before dependent protected records. */
@@ -287,6 +291,34 @@ export function financeRevocationTombstone(input: {
   changedAt: string;
 }): Omit<SyncChange, 'sequence'> {
   return { ...input, operation: 'tombstone' };
+}
+
+/** Owner projection revocation never leaks the protected expense or account in its payload. */
+export function upcomingExpenseRevocationTombstones(input: {
+  ownerId: string;
+  expense: UpcomingExpense;
+  fulfillments: readonly ExpenseFulfillment[];
+  changedAt: string;
+}): Array<Omit<SyncChange, 'sequence'>> {
+  const audience = `OWNER#${input.ownerId}`;
+  return [
+    ...input.fulfillments.map((fulfillment) =>
+      financeRevocationTombstone({
+        audience,
+        entityType: 'financeFulfillment',
+        entityId: fulfillment.id,
+        version: fulfillment.version + 1,
+        changedAt: input.changedAt,
+      }),
+    ),
+    financeRevocationTombstone({
+      audience,
+      entityType: 'financeUpcomingExpense',
+      entityId: input.expense.id,
+      version: input.expense.version + 1,
+      changedAt: input.changedAt,
+    }),
+  ];
 }
 
 /** Finance conflicts reveal only versions and a stable reason, never protected values. */

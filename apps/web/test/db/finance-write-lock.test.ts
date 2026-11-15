@@ -3,6 +3,7 @@ import {
   maintainFinanceCache,
 } from '../../src/sync/finance-cache-access.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createUpcomingExpense } from '@naaseh/domain';
 import {
   FinanceAccessController,
   type FinanceOfflineState,
@@ -22,6 +23,8 @@ import {
   purgeFinanceScope,
   queueEncryptedBudgetCreationPlan,
   queueEncryptedBudgetMutation,
+  queueEncryptedFulfillmentProposal,
+  queueEncryptedUpcomingExpenseMutation,
   queueFinanceReceiptBytes,
 } from '../../src/db/finance-repository.js';
 import {
@@ -268,6 +271,82 @@ describe('Finance writes stay within their original unlocked visit', () => {
       baseVersion: 0,
     });
     expect(JSON.parse((intent.payload as { ciphertext: string }).ciphertext)).toEqual(value);
+  });
+  it('preserves original upcoming date context and keeps offline payment links provisional', async () => {
+    await controller.unlockOnline('001234');
+    const expense = createUpcomingExpense({
+      id: '01J00000000000000000000731',
+      groupId: '01J00000000000000000000732',
+      accountId: '01J00000000000000000000733',
+      budgetId: '01J00000000000000000000734',
+      description: 'Insurance renewal',
+      expectedAmountMinor: 12_000,
+      currency: 'USD',
+      dueDate: '2026-11-03',
+      entryContext: {
+        enteredAt: '2026-10-31T18:00:00.000Z',
+        localDate: '2026-10-31',
+        timeZone: 'America/Denver',
+      },
+      creatorId: 'u1',
+      acceptedAt: '2026-10-31T18:00:00.000Z',
+    });
+    const createPayload = {
+      id: expense.id,
+      groupId: expense.groupId,
+      accountId: expense.accountId,
+      budgetId: expense.budgetId,
+      description: expense.description,
+      expectedAmountMinor: expense.expectedAmountMinor,
+      dueDate: expense.dueDate,
+      entryContext: expense.entryContext,
+    };
+    const queued = await queueEncryptedUpcomingExpenseMutation({
+      expense,
+      scopeKey: 'OWNER#u1',
+      baseVersion: 0,
+      payloadValue: createPayload,
+      createdAt: '2026-11-05T18:00:00.000Z',
+    });
+    const savedExpense = JSON.parse(
+      (queued.record.value as { ciphertext: string }).ciphertext,
+    ) as typeof expense;
+    expect(savedExpense).toMatchObject({
+      dueDate: '2026-11-03',
+      entryContext: {
+        enteredAt: '2026-10-31T18:00:00.000Z',
+        localDate: '2026-10-31',
+        timeZone: 'America/Denver',
+      },
+    });
+    expect(
+      JSON.parse(
+        (state.outbox.get(queued.mutationId)!.payload as { ciphertext: string }).ciphertext,
+      ),
+    ).toEqual(createPayload);
+
+    const proposal = await queueEncryptedFulfillmentProposal({
+      fulfillmentId: '01J00000000000000000000735',
+      upcomingExpenseId: expense.id,
+      accountId: expense.accountId,
+      scopeKey: 'OWNER#u1',
+      value: {
+        id: '01J00000000000000000000735',
+        transactionId: '01J00000000000000000000736',
+        amountMinor: 2_000,
+        expectedExpenseVersion: 1,
+        expectedTransactionVersion: 1,
+        expectedClaimVersion: 0,
+      },
+      createdAt: '2026-11-05T18:00:01.000Z',
+    });
+    expect(proposal.record).toMatchObject({
+      entityType: 'financeFulfillment',
+      lifecycle: 'proposal',
+    });
+    expect(JSON.parse((proposal.record.value as { ciphertext: string }).ciphertext)).toMatchObject({
+      proposalStatus: 'pending-server-acceptance',
+    });
   });
   it('atomically retains a budget and selected-account links in dependency order', async () => {
     await controller.unlockOnline('001234');

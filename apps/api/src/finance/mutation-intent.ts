@@ -19,6 +19,8 @@ export function financeReplayFingerprint(
     | 'budget-account-link-create-v1'
     | 'budget-item-create-v1'
     | 'manual-transaction-create-v1'
+    | 'upcoming-expense-create-v1'
+    | 'expense-fulfillment-create-v1'
     | 'reusable-create-v1' = 'budget-edit-v1',
 ): string {
   return createHash('sha256')

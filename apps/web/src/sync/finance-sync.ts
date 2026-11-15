@@ -4,12 +4,7 @@ import { queueEncryptedBudgetMutation } from '../db/finance-repository.js';
 
 export async function queueFinanceBudgetActivityChange<
   T extends { id: string; groupId: string; version: number },
->(input: {
-  budget: T;
-  activity: 'active' | 'inactive';
-  actorId: string;
-  now?: Date;
-}) {
+>(input: { budget: T; activity: 'active' | 'inactive'; actorId: string; now?: Date }) {
   const changedAt = (input.now ?? new Date()).toISOString();
   return queueEncryptedBudgetMutation({
     entityId: input.budget.id,
@@ -98,10 +93,12 @@ export function orderFinanceHydration(changes: readonly SyncChange[]) {
     ['financeBudgetItem', 6],
     ['financeTransaction', 7],
     ['financeAllocation', 8],
-    ['financeRefundRelationship', 9],
-    ['financeTransactionMatch', 10],
-    ['financeReconciliation', 11],
-    ['financeTaskLink', 12],
+    ['financeUpcomingExpense', 9],
+    ['financeFulfillment', 10],
+    ['financeRefundRelationship', 11],
+    ['financeTransactionMatch', 12],
+    ['financeReconciliation', 13],
+    ['financeTaskLink', 14],
   ]);
   return [...changes].sort(
     (a, b) =>

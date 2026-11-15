@@ -12,6 +12,8 @@ import { authorizeFinanceScope, type FinanceActor } from './authorization.js';
 import { FinanceMemoryRepository } from './repository.js';
 import { reviewRefundRelationshipsForTransaction } from './refund-service.js';
 import { reconcileRefundTransactionAlias } from './refund-repository.js';
+import { reconcileFulfillmentTransactionAlias } from './upcoming-expense-repository.js';
+import { reviewExpenseFulfillmentsForTransaction } from './upcoming-expense-service.js';
 
 type ReconciliationDecision = {
   decision: 'reconcile' | 'keep-separate';
@@ -62,7 +64,9 @@ function applyReconciliation(
   repository.transactions[provisionalIndex] = transaction;
   repository.transactions[candidateIndex] = tombstoneFinancialTransaction(candidate);
   reconcileRefundTransactionAlias(repository, candidate.id, provisional.id);
+  reconcileFulfillmentTransactionAlias(repository, candidate.id, provisional.id);
   reviewRefundRelationshipsForTransaction(repository, transaction.id);
+  reviewExpenseFulfillmentsForTransaction(repository, transaction.id);
   repository.transactionAliases.set(candidate.id, provisional.id);
   repository.notifyCanonicalTransactionReferenceTransfer({
     fromTransactionId: candidate.id,

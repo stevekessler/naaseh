@@ -4,8 +4,11 @@ import {
   financeScopeSchema,
   ulidSchema,
   isFinanceDate,
-  localFinanceDate,
   expenseRefundRelationshipSchema,
+  upcomingExpenseEntryContextSchema,
+  upcomingExpensePlannedSourceSchema,
+  upcomingExpenseSchema,
+  expenseFulfillmentSchema,
 } from '@naaseh/domain';
 
 export const financeContractVersion = 2 as const;
@@ -104,24 +107,119 @@ export const financeRefundRelationshipResponseSchema = financeRefundCapacitySche
   .extend({ relationship: expenseRefundRelationshipSchema })
   .strict();
 
-export const financeEntryContextSchema = z
+export const financeEntryContextSchema = upcomingExpenseEntryContextSchema;
+
+const upcomingExpenseCreateFields = {
+  id: ulidSchema.optional(),
+  description: z.string().trim().min(1).max(500),
+  expectedAmountMinor: z.number().int().safe().positive(),
+  dueDate: z.string().refine(isFinanceDate),
+  entryContext: financeEntryContextSchema,
+  accountId: ulidSchema,
+  budgetId: ulidSchema,
+  groupId: ulidSchema,
+  plannedSource: upcomingExpensePlannedSourceSchema.optional(),
+};
+
+export const financeUpcomingExpenseCreateSchema = z
+  .object(upcomingExpenseCreateFields)
+  .strict()
+  .superRefine((value, context) => {
+    if (value.dueDate <= value.entryContext.localDate)
+      context.addIssue({
+        code: 'custom',
+        path: ['dueDate'],
+        message: 'Due date must be after the original local date.',
+      });
+  });
+
+export const financeUpcomingExpenseUpdateSchema = z
   .object({
-    enteredAt: z.string().datetime(),
-    localDate: z.string().refine(isFinanceDate),
-    timeZone: z.string().min(1).max(100),
+    description: z.string().trim().min(1).max(500).optional(),
+    expectedAmountMinor: z.number().int().safe().positive().optional(),
+    accountId: ulidSchema.optional(),
+    budgetId: ulidSchema.optional(),
+    groupId: ulidSchema.optional(),
+    dueDate: z.string().refine(isFinanceDate).optional(),
+    dateChangeContext: financeEntryContextSchema.optional(),
+    plannedSource: upcomingExpensePlannedSourceSchema.nullable().optional(),
+    expectedVersion: z.number().int().positive(),
   })
   .strict()
   .superRefine((value, context) => {
-    try {
-      if (localFinanceDate(value.enteredAt, value.timeZone) !== value.localDate)
-        context.addIssue({
-          code: 'custom',
-          message: 'Local date must match entry instant and time zone.',
-        });
-    } catch {
-      context.addIssue({ code: 'custom', message: 'Invalid entry time zone.' });
-    }
+    if (Boolean(value.dueDate) !== Boolean(value.dateChangeContext))
+      context.addIssue({
+        code: 'custom',
+        path: ['dateChangeContext'],
+        message: 'A due-date change requires its own local entry context.',
+      });
+    if (
+      value.dueDate &&
+      value.dateChangeContext &&
+      value.dueDate <= value.dateChangeContext.localDate
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['dueDate'],
+        message: 'Rescheduled due date must be after the date-change local date.',
+      });
   });
+
+export const financeUpcomingExpenseCancelSchema = z
+  .object({ expectedVersion: z.number().int().positive() })
+  .strict();
+
+export const financeUpcomingExpenseReopenSchema = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    dueDate: z.string().refine(isFinanceDate),
+    dateChangeContext: financeEntryContextSchema,
+  })
+  .strict()
+  .refine((value) => value.dueDate > value.dateChangeContext.localDate, {
+    path: ['dueDate'],
+    message: 'Reopened due date must be after the date-change local date.',
+  });
+
+export const financeExpenseFulfillmentCreateSchema = z
+  .object({
+    id: ulidSchema.optional(),
+    transactionId: ulidSchema,
+    amountMinor: z.number().int().safe().positive(),
+    expectedExpenseVersion: z.number().int().positive(),
+    expectedTransactionVersion: z.number().int().positive(),
+    expectedClaimVersion: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const financeExpenseFulfillmentDeleteSchema = z
+  .object({
+    expectedExpenseVersion: z.number().int().positive(),
+    expectedFulfillmentVersion: z.number().int().positive(),
+    expectedTransactionVersion: z.number().int().positive(),
+    expectedClaimVersion: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export const financeUpcomingExpenseResponseSchema = z
+  .object({
+    expense: upcomingExpenseSchema,
+    fulfillments: z.array(expenseFulfillmentSchema),
+    fulfilledAmountMinor: z.number().int().safe().nonnegative(),
+    remainingAmountMinor: z.number().int().safe().nonnegative(),
+    overpaidAmountMinor: z.number().int().safe().nonnegative(),
+    state: z.enum([
+      'upcoming',
+      'due-today',
+      'overdue',
+      'partly-paid',
+      'partly-paid-due-today',
+      'partly-paid-overdue',
+      'paid',
+      'cancelled',
+    ]),
+  })
+  .strict();
 
 export const financeTaskTargetSchema = z.union([
   z

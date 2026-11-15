@@ -1,4 +1,7 @@
-import { csvImportChunkInputSchema } from '@naaseh/contracts';
+import {
+  csvImportChunkInputSchema,
+  financeExpenseFulfillmentCreateSchema,
+} from '@naaseh/contracts';
 import {
   readFinanceCachedData,
   withFinanceCacheLease,
@@ -8,6 +11,7 @@ import Dexie, { type Table, type Transaction } from 'dexie';
 import {
   createUlid,
   digestCsvBytes,
+  upcomingExpenseSchema,
   type EntityType,
   type Mutation,
   type MutationOperation,
@@ -723,6 +727,125 @@ export async function queueEncryptedBudgetMutation(input: {
         operation: input.operation ?? (input.baseVersion === 0 ? 'create' : 'update'),
         baseVersion: input.baseVersion,
         payload,
+        createdAt,
+        attempts: 0,
+      },
+      signal,
+    );
+    return { mutationId, record };
+  });
+}
+
+/**
+ * Preserve the canonical expense and its original browser-local confirmation context together.
+ * Reconnect time is intentionally absent: a late replay cannot move or invalidate the date.
+ */
+export async function queueEncryptedUpcomingExpenseMutation(input: {
+  expense: ReturnType<typeof upcomingExpenseSchema.parse>;
+  scopeKey: `OWNER#${string}`;
+  baseVersion: number;
+  payloadValue: unknown;
+  operation?: Extract<MutationOperation, 'create' | 'update'>;
+  createdAt?: string;
+  key?: CryptoKey;
+}) {
+  const expense = upcomingExpenseSchema.parse(input.expense);
+  if (expense.version !== Math.max(1, input.baseVersion + 1))
+    throw new Error('Upcoming expense projection version does not match its replay intent.');
+  const payload = input.payloadValue as Record<string, unknown>;
+  if (
+    input.baseVersion === 0 &&
+    JSON.stringify(payload?.entryContext) !== JSON.stringify(expense.entryContext)
+  )
+    throw new Error('Upcoming expense replay must preserve its original entry context.');
+  return currentFinanceAccess().read(async (signal) => {
+    const key = input.key ?? (await financeDeviceKey());
+    const mutationId = createUlid();
+    const createdAt = input.createdAt ?? expense.updatedAt;
+    const record = await encryptFinanceRecord({
+      id: expense.id,
+      entityType: 'financeUpcomingExpense',
+      scopeKey: input.scopeKey,
+      accountId: expense.accountId,
+      budgetId: expense.budgetId,
+      occurredAt: expense.dueDate,
+      lifecycle: expense.lifecycle,
+      version: expense.version,
+      updatedAt: expense.updatedAt,
+      value: expense,
+      key,
+    });
+    const encryptedPayload = await encryptText(
+      JSON.stringify(input.payloadValue),
+      key,
+      `mutation:${mutationId}`,
+    );
+    await putFinanceRecordWithMutation(
+      record,
+      {
+        id: mutationId,
+        entityId: expense.id,
+        entityType: 'financeUpcomingExpense',
+        operation: input.operation ?? (input.baseVersion === 0 ? 'create' : 'update'),
+        baseVersion: input.baseVersion,
+        payload: encryptedPayload,
+        createdAt,
+        attempts: 0,
+      },
+      signal,
+    );
+    return { mutationId, record };
+  });
+}
+
+/** Offline links are proposals only; paid state remains derived from a server-accepted claim. */
+export async function queueEncryptedFulfillmentProposal(input: {
+  fulfillmentId: string;
+  upcomingExpenseId: string;
+  accountId: string;
+  scopeKey: `OWNER#${string}`;
+  value: ReturnType<typeof financeExpenseFulfillmentCreateSchema.parse>;
+  createdAt?: string;
+  key?: CryptoKey;
+}) {
+  const value = financeExpenseFulfillmentCreateSchema.parse(input.value);
+  if (value.id !== undefined && value.id !== input.fulfillmentId)
+    throw new Error('Fulfillment proposal identity does not match its replay intent.');
+  return currentFinanceAccess().read(async (signal) => {
+    const key = input.key ?? (await financeDeviceKey());
+    const mutationId = createUlid();
+    const createdAt = input.createdAt ?? new Date().toISOString();
+    const proposal = {
+      ...value,
+      id: input.fulfillmentId,
+      upcomingExpenseId: input.upcomingExpenseId,
+      proposalStatus: 'pending-server-acceptance' as const,
+    };
+    const record = await encryptFinanceRecord({
+      id: input.fulfillmentId,
+      entityType: 'financeFulfillment',
+      scopeKey: input.scopeKey,
+      accountId: input.accountId,
+      lifecycle: 'proposal',
+      version: 1,
+      updatedAt: createdAt,
+      value: proposal,
+      key,
+    });
+    const encryptedPayload = await encryptText(
+      JSON.stringify(proposal),
+      key,
+      `mutation:${mutationId}`,
+    );
+    await putFinanceRecordWithMutation(
+      record,
+      {
+        id: mutationId,
+        entityId: input.fulfillmentId,
+        entityType: 'financeFulfillment',
+        operation: 'create',
+        baseVersion: 0,
+        payload: encryptedPayload,
         createdAt,
         attempts: 0,
       },

@@ -3,6 +3,7 @@ import { claimFinanceMerchantKey, FinanceMemoryRepository } from './repository.j
 import { isDeepStrictEqual } from 'node:util';
 import { markFinanceBudgetsChangedByTransaction } from './reconciliation-service.js';
 import { reviewRefundRelationshipsForTransaction } from './refund-service.js';
+import { reviewExpenseFulfillmentsForTransaction } from './upcoming-expense-service.js';
 import {
   correctFinancialTransaction,
   createConfirmedTransfer,
@@ -276,6 +277,7 @@ export async function updateManualTransaction(
   const updated = correctFinancialTransaction(current, input);
   repository.transactions[index] = updated;
   reviewRefundRelationshipsForTransaction(repository, updated.id);
+  reviewExpenseFulfillmentsForTransaction(repository, updated.id);
   markFinanceBudgetsChangedByTransaction(repository, current);
   if (updated.reviewState === 'allocation-review' && current.reviewState !== 'allocation-review') {
     const issue = createImportReviewIssue({
@@ -323,6 +325,7 @@ export async function updateTransactionPaymentMetadata(
   const updated = correctFinancialTransaction(transaction, input);
   repository.transactions[index] = updated;
   reviewRefundRelationshipsForTransaction(repository, updated.id);
+  reviewExpenseFulfillmentsForTransaction(repository, updated.id);
   recordTransactionFeed(repository, account, updated);
   return repository.remember(actor.id, mutationId, updated);
 }
@@ -354,6 +357,7 @@ export async function replaceTransactionAllocationsForActor(
   const updated = replaceTransactionAllocations(transaction, allocations, actor.id);
   repository.transactions[index] = updated;
   reviewRefundRelationshipsForTransaction(repository, updated.id);
+  reviewExpenseFulfillmentsForTransaction(repository, updated.id);
   markFinanceBudgetsChangedByTransaction(repository, transaction);
   markFinanceBudgetsChangedByTransaction(repository, updated);
   recordTransactionFeed(repository, account, updated);
@@ -432,6 +436,7 @@ export async function confirmTransactionTransfer(
   for (const { index, transaction, account } of authorized) {
     const updated = { ...transaction, transferId: transfer.id, version: transaction.version + 1 };
     repository.transactions[index] = updated;
+    reviewExpenseFulfillmentsForTransaction(repository, updated.id);
     markFinanceBudgetsChangedByTransaction(repository, updated);
     recordTransactionFeed(repository, account, updated);
   }

@@ -1,5 +1,26 @@
 # Finance Experience Required Validation Runtime
 
+## November 14 Phase 9 upcoming-expense core and offline replay checkpoint
+
+Required discovery increased from the Phase 7 checkpoint by **31 tests and 8 files**.
+The complete required command remains unchanged and passes on Node 24 with runtime,
+typecheck, lint, all tests and all workspace builds. No test was added to the required
+Playwright quick selection, so its 31-case selection and the existing browser timeouts,
+retries and projects remain unchanged.
+
+| Command             | Actual result                                                    | Real / user / sys         |
+| ------------------- | ---------------------------------------------------------------- | ------------------------- |
+| Required validation | 1,907 passed in 491 files; typecheck, lint and all builds passed | 62.24 / 252.17 / 51.20 s  |
+| Focused core/replay | 51 passed in 4 files                                              | 0.28 s Vitest duration    |
+| Focused web         | 6 passed in 2 files                                               | 0.40 s Vitest duration    |
+
+The required runtime is **4.95 seconds lower** than the measured Phase 7 checkpoint
+despite the added coverage and remains far below the ten-minute target. Browser
+journeys are intentionally not recorded as complete yet because the Phase 9 list,
+detail and dashboard components still need shared landing-page integration after the
+concurrent Phase 8 branch is combined. Real DynamoDB and hosted acceptance remain
+deferred under T018; no migration, AWS write, deployment or production change ran.
+
 ## November 14 manual transaction entry on every editable account
 
 Phase 7 now accepts manual debit or credit transactions for every permitted account

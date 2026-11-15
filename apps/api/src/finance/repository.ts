@@ -618,6 +618,10 @@ export class FinanceMemoryRepository {
   readonly refundRelationshipByCredit = new Map<string, string>();
   readonly refundCreditCapacityVersions = new Map<string, number>();
   readonly refundAllocationCapacityVersions = new Map<string, number>();
+  readonly upcomingExpenses = new Map<string, import('@naaseh/domain').UpcomingExpense>();
+  readonly expenseFulfillments = new Map<string, import('@naaseh/domain').ExpenseFulfillment>();
+  readonly fulfillmentClaimVersions = new Map<string, number>();
+  readonly upcomingPlannedSourceLocks = new Map<string, string>();
   readonly keptSeparatePairs = new Set<string>();
   readonly categoryNameLocks = new Map<string, string>();
   readonly merchantKeyLocks = new Map<string, string>();
@@ -641,6 +645,7 @@ export class FinanceMemoryRepository {
   /** Server-only provenance, persisted beside reconciliation data rather than in public DTOs. */
   readonly reconciliationAccountSources = new Map<string, string[]>();
   readonly mutationReceipts = new Map<string, unknown>();
+  readonly mutationIntents = new Map<string, string>();
   private readonly canonicalTransactionReferenceHooks = new Set<
     (transfer: { fromTransactionId: string; toTransactionId: string }) => void
   >();
@@ -663,9 +668,16 @@ export class FinanceMemoryRepository {
   mutation<T>(actorId: string, mutationId: string): T | undefined {
     return this.mutationReceipts.get(`${actorId}:${mutationId}`) as T | undefined;
   }
+  mutationIntent(actorId: string, mutationId: string): string | undefined {
+    return this.mutationIntents.get(`${actorId}:${mutationId}`);
+  }
   remember<T>(actorId: string, mutationId: string, result: T): T {
     this.mutationReceipts.set(`${actorId}:${mutationId}`, result);
     return result;
+  }
+  rememberIntent<T>(actorId: string, mutationId: string, intent: string, result: T): T {
+    this.mutationIntents.set(`${actorId}:${mutationId}`, intent);
+    return this.remember(actorId, mutationId, result);
   }
   claimSourceIdentity(connectionId: string, sourceId: string, entityId: string): void {
     const key = `${connectionId}:${sourceId}`;

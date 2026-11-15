@@ -1,5 +1,18 @@
 # Finance Experience Expansion Implementation Validation
 
+> Current local checkpoint (November 14, Phase 9 upcoming-expense core and protected
+> offline replay): 78/166 tasks checked. T082, T083, T085–T089 and T092 are complete.
+> Domain, contract, storage, HTTP, access, owner-projection, transaction-recalculation,
+> encrypted outbox and replay evidence is passing. Required validation passes
+> **1,907 tests / 491 files / 62.24 s real**, including typecheck, lint and builds.
+> The pre-expansion measurement was **1,876 / 483 / 67.19 s real**; this checkpoint
+> adds 31 tests and 8 files while reducing observed required runtime by 4.95 seconds.
+> Focused replay/access/claim/offline coverage passes **51 / 4 files** and focused web
+> components pass **6 / 2 files**. Browser matrix evidence is not yet claimed:
+> T084, T090, T091 and T093 remain open until shared landing/dashboard integration
+> is combined with the concurrently developed Phase 8 branch and its required
+> Chromium/WebKit journeys pass.
+
 > Current local checkpoint (November 14, US10 manual transaction entry complete):
 > 70/166 tasks checked. T064–T071 are complete. Manual debit/credit entry works for
 > every editable account type/source with exact validation, current-access fencing,

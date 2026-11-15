@@ -67,6 +67,10 @@ const collections = [
   'importJobs',
   'pendingSimplefinAccounts',
   'deletionPreviews',
+  'upcomingExpenses',
+  'expenseFulfillments',
+  'fulfillmentClaimVersions',
+  'upcomingPlannedSourceLocks',
 ] as const;
 type Collection = (typeof collections)[number];
 type StateRow = {
@@ -1323,6 +1327,14 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
     if (collection === 'reusableOccurrenceLocks') {
       const item = this.budgetItems.get(String(value));
       if (item) return this.scopeFor('budgetItems', item.id, item);
+    }
+    if (collection === 'fulfillmentClaimVersions') {
+      const transaction = this.transactions.find(({ id }) => id === key);
+      if (transaction) return this.scopeFor('transactions', transaction.id, transaction);
+    }
+    if (collection === 'upcomingPlannedSourceLocks') {
+      const expense = this.upcomingExpenses.get(String(value));
+      if (expense) return this.scopeFor('upcomingExpenses', expense.id, expense);
     }
     if (
       collection === 'sourceIdentities' ||

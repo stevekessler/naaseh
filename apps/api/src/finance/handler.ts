@@ -46,6 +46,7 @@ const financeSnapshotPaths = [
   /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?::[1-9][0-9]{0,4})?$/u,
   /^\/api\/v1\/finance\/transactions\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?\/matches$/u,
   /^\/api\/v1\/finance\/(?:budgets(?:\/[0-9A-HJKMNP-TV-Z]{26}(?:\/reusable-offers)?)?|reusable-items)$/u,
+  /^\/api\/v1\/finance\/upcoming-expenses(?:\/[0-9A-HJKMNP-TV-Z]{26})?$/u,
   /^\/api\/v1\/finance\/records\/(?:transaction\/[0-9A-HJKMNP-TV-Z]{26}(?:(?::|%3[Aa])[1-9][0-9]{0,4})?|(?:account|reusable-item|match|category|merchant)\/[0-9A-HJKMNP-TV-Z]{26})\/deletion-preview$/u,
 ];
 
@@ -90,6 +91,8 @@ export async function createDefaultFinanceRegistry(event: APIGatewayProxyEventV2
             | 'budget-account-link-create-v1'
             | 'budget-item-create-v1'
             | 'manual-transaction-create-v1'
+            | 'upcoming-expense-create-v1'
+            | 'expense-fulfillment-create-v1'
             | 'reusable-create-v1',
         )
       : undefined,
@@ -266,6 +269,11 @@ export function createFinanceHandler(
         /^\/api\/v1\/finance\/budgets\/[0-9A-HJKMNP-TV-Z]{26}\/items$/u.test(event.rawPath);
       const manualTransactionCreatePath =
         /^\/api\/v1\/finance\/accounts\/[0-9A-HJKMNP-TV-Z]{26}\/transactions$/u.test(event.rawPath);
+      const upcomingExpenseCreatePath = event.rawPath === '/api/v1/finance/upcoming-expenses';
+      const expenseFulfillmentCreatePath =
+        /^\/api\/v1\/finance\/upcoming-expenses\/[0-9A-HJKMNP-TV-Z]{26}\/fulfillments$/u.test(
+          event.rawPath,
+        );
       const validReplay =
         replayKind === 'budget-edit-v1'
           ? event.requestContext.http.method === 'PATCH' &&
@@ -278,9 +286,13 @@ export function createFinanceHandler(
                 ? event.requestContext.http.method === 'POST' && budgetItemCreatePath
                 : replayKind === 'manual-transaction-create-v1'
                   ? event.requestContext.http.method === 'POST' && manualTransactionCreatePath
-                  : replayKind === 'reusable-create-v1' &&
-                    event.requestContext.http.method === 'POST' &&
-                    reusableCreatePath;
+                  : replayKind === 'upcoming-expense-create-v1'
+                    ? event.requestContext.http.method === 'POST' && upcomingExpenseCreatePath
+                    : replayKind === 'expense-fulfillment-create-v1'
+                      ? event.requestContext.http.method === 'POST' && expenseFulfillmentCreatePath
+                      : replayKind === 'reusable-create-v1' &&
+                        event.requestContext.http.method === 'POST' &&
+                        reusableCreatePath;
       if (
         (replayKind !== undefined && !validReplay) ||
         ((reusableCreatePath ||

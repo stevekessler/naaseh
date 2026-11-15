@@ -118,6 +118,8 @@ import {
   updateFinanceMerchant,
   updateTransactionPaymentMetadata,
 } from './transaction-service.js';
+import { registerUpcomingExpenseRoutes } from './upcoming-expense-handlers.js';
+import { reviewExpenseFulfillmentsForTransaction } from './upcoming-expense-service.js';
 
 export type FinanceRouteHandler = (
   event: APIGatewayProxyEventV2,
@@ -218,6 +220,7 @@ export function registerUserStory1FinanceRoutes(
   dependencies: UserStory1RouteDependencies,
 ) {
   const { repository } = dependencies;
+  registerUpcomingExpenseRoutes(registry, dependencies);
   registry.register('GET', '/api/v1/finance/accounts', async (event) => {
     const actor = await dependencies.actorFor(event);
     const items = [...repository.accounts.values()].filter((account) =>
@@ -1304,7 +1307,10 @@ export function registerUserStory1FinanceRoutes(
         const index = repository.transactions.findIndex((item) => item.id === preview.recordId);
         const transaction = repository.transactions[index]!;
         if (result.outcome === 'permanent-delete') repository.transactions.splice(index, 1);
-        else repository.transactions[index] = archiveFinancialTransaction(transaction);
+        else {
+          repository.transactions[index] = archiveFinancialTransaction(transaction);
+          reviewExpenseFulfillmentsForTransaction(repository, transaction.id);
+        }
         markFinanceBudgetsChangedByTransaction(repository, transaction);
       } else if (preview.recordType === 'budget') {
         if (!budget || budget.version !== preview.expectedVersion)

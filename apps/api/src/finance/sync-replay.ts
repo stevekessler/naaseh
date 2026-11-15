@@ -6,6 +6,8 @@ import {
   financeBudgetInputSchema,
   financeBudgetPatchSchema,
   financeReusableItemInputSchema,
+  financeUpcomingExpenseCreateSchema,
+  financeExpenseFulfillmentCreateSchema,
   manualFinanceTransactionReplayInputSchema,
 } from '@naaseh/contracts';
 import { ulidSchema, type Mutation, type StableMutationResult } from '@naaseh/domain';
@@ -48,13 +50,19 @@ export async function dispatchFinanceReplay(
   const reusable = mutation.entityType === 'financeReusableItem' && mutation.operation === 'create';
   const manualTransaction =
     mutation.entityType === 'financeTransaction' && mutation.operation === 'create';
+  const upcomingExpense =
+    mutation.entityType === 'financeUpcomingExpense' && mutation.operation === 'create';
+  const expenseFulfillment =
+    mutation.entityType === 'financeFulfillment' && mutation.operation === 'create';
   if (
     !budgetEdit &&
     !budgetCreate &&
     !budgetAccountLinkCreate &&
     !budgetItemCreate &&
     !reusable &&
-    !manualTransaction
+    !manualTransaction &&
+    !upcomingExpense &&
+    !expenseFulfillment
   )
     return outcome(event, mutation.id, 'retry', 'finance_replay_pending');
   const payload = mutation.payload;
@@ -126,7 +134,7 @@ export async function dispatchFinanceReplay(
     )
       return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
     input = business;
-  } else {
+  } else if (manualTransaction) {
     const { id, accountId, ...business } = object;
     if (
       !ulidSchema.safeParse(accountId).success ||
@@ -134,6 +142,19 @@ export async function dispatchFinanceReplay(
     ) {
       return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
     }
+    input = { ...business, id: mutation.entityId };
+  } else if (upcomingExpense) {
+    if (object.id !== undefined && object.id !== mutation.entityId)
+      return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
+    input = { ...object, id: mutation.entityId };
+  } else {
+    const { upcomingExpenseId, proposalStatus, ...business } = object;
+    if (
+      !ulidSchema.safeParse(upcomingExpenseId).success ||
+      (object.id !== undefined && object.id !== mutation.entityId) ||
+      (proposalStatus !== undefined && proposalStatus !== 'pending-server-acceptance')
+    )
+      return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
     input = { ...business, id: mutation.entityId };
   }
   const schema = budgetEdit
@@ -148,7 +169,11 @@ export async function dispatchFinanceReplay(
           ? financeBudgetItemInputSchema
           : manualTransaction
             ? manualFinanceTransactionReplayInputSchema
-            : financeReusableItemInputSchema;
+            : upcomingExpense
+              ? financeUpcomingExpenseCreateSchema
+              : expenseFulfillment
+                ? financeExpenseFulfillmentCreateSchema
+                : financeReusableItemInputSchema;
   const parsed = schema.safeParse(input);
   if (!parsed.success)
     return outcome(event, mutation.id, 'rejected', 'finance_replay_validation_failed');
@@ -166,7 +191,11 @@ export async function dispatchFinanceReplay(
             ? `/api/v1/finance/budgets/${String(object.budgetId)}/items`
             : manualTransaction
               ? `/api/v1/finance/accounts/${String(object.accountId)}/transactions`
-              : `/api/v1/finance/reusable-items/${mutation.entityId}`,
+              : upcomingExpense
+                ? '/api/v1/finance/upcoming-expenses'
+                : expenseFulfillment
+                  ? `/api/v1/finance/upcoming-expenses/${String(object.upcomingExpenseId)}/fulfillments`
+                  : `/api/v1/finance/reusable-items/${mutation.entityId}`,
     body: JSON.stringify(forwardedInput),
     isBase64Encoded: false,
     requestContext: {
@@ -191,7 +220,11 @@ export async function dispatchFinanceReplay(
               ? 'budget-item-create-v1'
               : manualTransaction
                 ? 'manual-transaction-create-v1'
-                : 'reusable-create-v1',
+                : upcomingExpense
+                  ? 'upcoming-expense-create-v1'
+                  : expenseFulfillment
+                    ? 'expense-fulfillment-create-v1'
+                    : 'reusable-create-v1',
     },
   });
   if (!response || typeof response !== 'object')
@@ -199,18 +232,30 @@ export async function dispatchFinanceReplay(
   const status = response.statusCode ?? 500;
   if (status >= 200 && status < 300) {
     try {
-      const body = JSON.parse(response.body ?? '{}') as { id?: unknown; version?: unknown };
+      const body = JSON.parse(response.body ?? '{}') as {
+        id?: unknown;
+        version?: unknown;
+        expense?: { id?: unknown; version?: unknown };
+        fulfillments?: Array<{ id?: unknown; version?: unknown }>;
+      };
+      const acknowledged = upcomingExpense
+        ? body.expense
+        : expenseFulfillment
+          ? body.fulfillments?.find(({ id }) => id === mutation.entityId)
+          : body;
       if (
-        body.id !== mutation.entityId ||
-        typeof body.version !== 'number' ||
-        !Number.isSafeInteger(body.version) ||
-        body.version <= mutation.baseVersion ||
+        acknowledged?.id !== mutation.entityId ||
+        typeof acknowledged.version !== 'number' ||
+        !Number.isSafeInteger(acknowledged.version) ||
+        acknowledged.version <= mutation.baseVersion ||
         ((reusable ||
           manualTransaction ||
           budgetCreate ||
           budgetAccountLinkCreate ||
-          budgetItemCreate) &&
-          body.version !== 1)
+          budgetItemCreate ||
+          upcomingExpense ||
+          expenseFulfillment) &&
+          acknowledged.version !== 1)
       )
         throw new Error('Invalid Finance replay acknowledgement');
       return {
@@ -219,7 +264,7 @@ export async function dispatchFinanceReplay(
           String(response.headers?.['x-finance-sync-replayed']) === '1'
             ? 'alreadyApplied'
             : 'applied',
-        version: body.version,
+        version: acknowledged.version,
       };
     } catch {
       return outcome(event, mutation.id, 'retry', 'finance_replay_unavailable');

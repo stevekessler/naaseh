@@ -22,6 +22,8 @@ export const financeSyncSourceCollections: Readonly<Record<string, string>> = {
   financeReconciliation: 'budgetReconciliations',
   financeTaskLink: 'financialTaskLinks',
   financeReviewIssue: 'reviewIssues',
+  financeUpcomingExpense: 'upcomingExpenses',
+  financeFulfillment: 'expenseFulfillments',
 };
 type Source = NonNullable<
   Awaited<ReturnType<typeof loadTargetedFinanceEntity<Record<string, unknown>>>>
