@@ -48,3 +48,9 @@ Commit `4c0f835451cad90efe3bd4e898279fc1bd1d9cd3` fixes receipt upload retries t
 Focused receipt, restore, and SimpleFIN checks passed 37 tests in 5 files in 0.48 seconds. On Node 24.22.2, required validation passed 1,937 tests in 491 files in 63.19 seconds, including typecheck, lint, and builds. The Playwright 1.64.1 Chromium and WebKit rerun stopped after 4.08 seconds when the sandbox denied the preview bind. No browser tests ran. Quick discovery remains 31 tests in 20 files.
 
 T122 stays open for the fulfillment and task-link reconciliation and combined restore checks. Phase 9 import is still blocked by GitHub connectivity. The T109 starting point and T111 ownership above still apply.
+
+## T122 receipt restore follow-up
+
+Commit `19e4c4b9feb8ec6081d8446a05803701f56b2093` expands the receipt restore fixture to round-trip the original and canonical transaction rows, locators, and alias. It verifies exact-version and policy verdict enforcement and retention under the active reconciled transaction. The receipt becomes eligible for deleted-source retention if the restored alias is missing.
+
+Focused validation passed 37 tests in 5 files in 0.47 seconds. Required validation passed 1,937 tests in 491 files in 64.38 seconds, including typecheck, lint, and builds. This change is test-only. The remaining T122 graph checks and T123 integration still need Computer 1's Phase 9 and Phase 11 commits.
