@@ -13,6 +13,7 @@ export type UpcomingExpenseState =
 export interface UpcomingExpenseView {
   expense: UpcomingExpense;
   fulfillments: ExpenseFulfillment[];
+  claimVersions: Record<string, number>;
   fulfilledAmountMinor: number;
   remainingAmountMinor: number;
   overpaidAmountMinor: number;

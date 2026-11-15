@@ -1,26 +1,20 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
-> Current local checkpoint (November 14, Phase 9 upcoming-expense core and offline
-> replay): 78/166 tasks checked. T082, T083, T085–T089 and T092 are complete.
-> Immutable browser-local entry context, due-date history, lifecycle/derived state,
-> planned-source identity and payment-claim capacity are implemented. Canonical
-> version-fenced records, due/account indexes, history, source locks and claim-ledger
-> writes support current account/budget/group access intersections, exact authorized
-> retries and owner-only projections with content-free revocation tombstones.
-> Transaction correction, transfer, archive and provider reconciliation re-evaluate
-> claims without posting or double-counting money. Protected HTTP routes cover list,
-> create/read/edit/reschedule/cancel/reopen and link/unlink. Encrypted offline drafts
-> retain the original date context; delayed replay never substitutes reconnect time,
-> and offline payment links remain proposals until accepted. Standalone list/detail/
-> form/dashboard components are implemented but not yet connected through the shared
-> landing page while Phase 8 is being developed on the second computer. Required
-> validation passes **1,907 tests / 491 files / 62.24 s real** with runtime,
-> typecheck, lint and builds. The focused replay/access/claim/offline set passes
-> **51 tests / 4 files** and the focused web set passes **6 tests / 2 files**.
-> T084, T090, T091 and T093 remain open for shared-page wiring, browser evidence and
-> final documentation. Phase 8 remains isolated on the second computer. T018 real
-> DynamoDB/hosted acceptance remains deferred; preserve the $6.50 combined ceiling,
-> leave the migration unrun, and do not deploy or change production.
+> Current local checkpoint (November 14, Phase 9 upcoming expenses complete):
+> 82/166 tasks checked; T082–T093 are complete. The canonical protected list/create/
+> detail workspace, account actions and dashboard upcoming/overdue widget are connected
+> through the shared Finance page. Create captures immutable browser-local entry
+> context, including encrypted offline intent; delayed Auckland replay preserved the
+> original date and zone. Current eligibility excludes inactive budgets from new links
+> while existing associations remain manageable. Reschedule/cancel and partial/full/
+> reversed payment-reference journeys reload canonical state and never post or
+> double-count money. The dedicated Chromium/WebKit gate passes **6/6 / 8.22 s real**.
+> Required validation passes **1,910 tests / 492 files / 63.58 s real** with runtime,
+> typecheck, lint and builds; the required command, 31-case quick selection, timeouts,
+> retries and browser projects are unchanged. Phase 8 remains isolated on the second
+> computer. Phase 10 is next here. T018 real DynamoDB/hosted acceptance remains
+> deferred; preserve the $6.50 combined ceiling, leave the migration unrun, and do not
+> deploy or change production.
 
 > Current local checkpoint (November 14, manual transaction entry complete): 70/166
 > tasks checked. Phase 7 T064–T071 is complete. Manual debit/credit entry now works

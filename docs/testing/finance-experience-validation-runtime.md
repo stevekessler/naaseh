@@ -1,5 +1,29 @@
 # Finance Experience Required Validation Runtime
 
+## November 14 Phase 9 upcoming-expense completion
+
+The shared Finance landing page now connects the protected upcoming-expense workspace
+and canonical dashboard widget. Required discovery increased from the core checkpoint
+by **3 tests and 1 file**. The complete required command remains unchanged and passes
+on Node 24 with runtime, typecheck, lint, all tests and all workspace builds. The new
+exhaustive browser file remains outside `test:e2e:quick`, so its 31-case selection and
+the existing browser timeouts, retries and projects remain unchanged.
+
+| Command                       | Actual result                                                    | Real / user / sys        |
+| ----------------------------- | ---------------------------------------------------------------- | ------------------------ |
+| Required validation           | 1,910 passed in 492 files; typecheck, lint and all builds passed | 63.58 / 253.62 / 50.95 s |
+| Focused web components        | 12 passed in 4 files                                             | 0.54 s Vitest duration   |
+| Chromium/WebKit upcoming gate | 6 passed                                                         | 8.22 / 11.20 / 1.98 s    |
+
+The required runtime is **1.34 seconds higher** than the 1,907-test core checkpoint
+and **3.61 seconds lower** than the measured Phase 7 checkpoint while remaining far
+below the ten-minute target. The browser gate covers original Denver entry context,
+inactive-budget selection and retained associations, reschedule/cancel, partial/full
+and reversed payment references, canonical upcoming/overdue dashboard identity and a
+delayed Auckland offline replay with unchanged due date. Real DynamoDB and hosted
+acceptance remain deferred under T018; no migration, AWS write, deployment or
+production change ran.
+
 ## November 14 Phase 9 upcoming-expense core and offline replay checkpoint
 
 Required discovery increased from the Phase 7 checkpoint by **31 tests and 8 files**.
@@ -8,11 +32,11 @@ typecheck, lint, all tests and all workspace builds. No test was added to the re
 Playwright quick selection, so its 31-case selection and the existing browser timeouts,
 retries and projects remain unchanged.
 
-| Command             | Actual result                                                    | Real / user / sys         |
-| ------------------- | ---------------------------------------------------------------- | ------------------------- |
-| Required validation | 1,907 passed in 491 files; typecheck, lint and all builds passed | 62.24 / 252.17 / 51.20 s  |
-| Focused core/replay | 51 passed in 4 files                                              | 0.28 s Vitest duration    |
-| Focused web         | 6 passed in 2 files                                               | 0.40 s Vitest duration    |
+| Command             | Actual result                                                    | Real / user / sys        |
+| ------------------- | ---------------------------------------------------------------- | ------------------------ |
+| Required validation | 1,907 passed in 491 files; typecheck, lint and all builds passed | 62.24 / 252.17 / 51.20 s |
+| Focused core/replay | 51 passed in 4 files                                             | 0.28 s Vitest duration   |
+| Focused web         | 6 passed in 2 files                                              | 0.40 s Vitest duration   |
 
 The required runtime is **4.95 seconds lower** than the measured Phase 7 checkpoint
 despite the added coverage and remains far below the ten-minute target. Browser

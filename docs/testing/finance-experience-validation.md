@@ -1,17 +1,53 @@
 # Finance Experience Expansion Implementation Validation
 
-> Current local checkpoint (November 14, Phase 9 upcoming-expense core and protected
-> offline replay): 78/166 tasks checked. T082, T083, T085–T089 and T092 are complete.
-> Domain, contract, storage, HTTP, access, owner-projection, transaction-recalculation,
-> encrypted outbox and replay evidence is passing. Required validation passes
-> **1,907 tests / 491 files / 62.24 s real**, including typecheck, lint and builds.
-> The pre-expansion measurement was **1,876 / 483 / 67.19 s real**; this checkpoint
-> adds 31 tests and 8 files while reducing observed required runtime by 4.95 seconds.
-> Focused replay/access/claim/offline coverage passes **51 / 4 files** and focused web
-> components pass **6 / 2 files**. Browser matrix evidence is not yet claimed:
-> T084, T090, T091 and T093 remain open until shared landing/dashboard integration
-> is combined with the concurrently developed Phase 8 branch and its required
-> Chromium/WebKit journeys pass.
+> Current local checkpoint (November 14, Phase 9 upcoming expenses complete):
+> 82/166 tasks checked. T082–T093 are complete. The protected shared Finance workspace
+> now provides canonical create/list/detail/reschedule/cancel/payment-reference flows,
+> encrypted offline creation with immutable original browser context, account actions,
+> and canonical dashboard upcoming/overdue lists. Required validation passes
+> **1,910 tests / 492 files / 63.58 s real**, including typecheck, lint and builds.
+> The dedicated Chromium/WebKit gate passes **6/6 / 8.22 s real**. Required discovery
+> increased by 3 tests and 1 file from the 1,907/491 core checkpoint; the required
+> command, quick-browser selection, browser projects, retries and timeouts are unchanged.
+
+## US11 upcoming-expense gate — 2026-11-14
+
+Upcoming expenses use positive expected money and date-only due dates while retaining
+the immutable instant, local date and IANA zone from the browser that originally
+confirmed the obligation. A delayed encrypted replay forwards that exact context;
+reconnect time and travel cannot move or reject the saved date. Rescheduling records a
+separate current context. The Auckland offline browser journey replayed the unchanged
+date and `Pacific/Auckland` context, while the original online journey recorded
+`America/Denver`.
+
+New or reassigned associations require a currently active, open budget and current
+account/group intersection. Inactive budgets are absent from the create selector, but
+an existing association remains readable and manageable; its reschedule and cancel
+journey passed. Payment fulfillment is an explicit reference to an eligible posted
+expense transaction. Partial and full links, claim versions and unlink reversal are
+canonical server state and do not post money, change account balances, or double-count
+Spend. Offline links remain proposals until server acceptance. Transaction correction,
+archive, transfer and provider reconciliation recompute compatible claims.
+
+The dashboard reads the canonical unpaid query, deduplicates planned-source identity,
+separates overdue obligations, omits paid/cancelled rows and limits the ordinary list
+to the next ten. Mutation responses are never display authority: the workspace rechecks
+the retained protected source and reloads proof-bearing canonical data before reporting
+success. Finance lock immediately clears retained expense data.
+
+The focused core/replay/access/claim/offline set passed **51 tests in 4 files**. The
+component set now passes **12 tests in 4 files**. The dedicated desktop browser file
+passed **6/6** across Chromium and WebKit in **8.22 / 11.20 / 1.98 seconds
+real/user/sys**. Required validation passed **1,910 tests in 492 files**, plus runtime,
+typecheck, lint and builds, in **63.58 / 253.62 / 50.95 seconds real/user/sys**.
+This is 3 tests and 1 file above the Phase 9 core checkpoint and remains far below the
+ten-minute required target. The exhaustive browser file was not added to the 31-case
+quick gate, and no required selection, timeout, retry or project changed.
+
+This evidence completes T084 and T090–T093. Real DynamoDB and hosted acceptance remain
+deferred under T018. The migration remains unrun, the combined AWS ceiling remains
+$6.50/month including 30% contingency, and no AWS, deployment, production or Apple
+operation ran.
 
 > Current local checkpoint (November 14, US10 manual transaction entry complete):
 > 70/166 tasks checked. T064–T071 are complete. Manual debit/credit entry works for

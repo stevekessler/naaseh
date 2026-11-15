@@ -33,6 +33,7 @@ const view = (
     acceptedAt: '2026-11-01T00:00:00.000Z',
   }),
   fulfillments: [],
+  claimVersions: {},
   fulfilledAmountMinor: 0,
   remainingAmountMinor: 2_500,
   overpaidAmountMinor: 0,

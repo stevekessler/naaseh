@@ -6,6 +6,8 @@ import {
   readFinanceApiSnapshot,
   type FinanceApiSnapshot,
 } from '../../../sync/finance-api-snapshot.js';
+import { UpcomingExpensesWidget } from './UpcomingExpensesWidget.js';
+import type { UpcomingExpenseView } from '../upcoming/types.js';
 
 export interface FinanceDashboardAccount {
   id: string;
@@ -24,14 +26,25 @@ export interface FinanceDashboardWidgetState<T> {
 export function FinanceDashboardPage({
   ownerId,
   onOpenAccount,
+  onOpenUpcomingExpense,
 }: {
   ownerId: string;
   onOpenAccount: (accountId: string) => void;
+  onOpenUpcomingExpense: (expenseId: string) => void;
 }) {
-  const [widget, setWidget] = useState<FinanceDashboardWidgetState<FinanceDashboardAccount[]>>({
-    state: 'checking',
-  });
-  const retained = useRef<FinanceApiSnapshot<FinanceDashboardAccount[]> | undefined>(undefined);
+  const [widget, setWidget] = useState<
+    FinanceDashboardWidgetState<{
+      accounts: FinanceDashboardAccount[];
+      upcomingExpenses: UpcomingExpenseView[];
+    }>
+  >({ state: 'checking' });
+  const retained = useRef<
+    | FinanceApiSnapshot<{
+        accounts: FinanceDashboardAccount[];
+        upcomingExpenses: UpcomingExpenseView[];
+      }>
+    | undefined
+  >(undefined);
   const request = useRef(0);
 
   const clear = useCallback(() => {
@@ -44,20 +57,28 @@ export function FinanceDashboardPage({
   const refresh = useCallback(async () => {
     const current = ++request.current;
     setWidget({ state: 'checking' });
-    let next: FinanceApiSnapshot<FinanceDashboardAccount[]> | undefined;
+    let next:
+      | FinanceApiSnapshot<{
+          accounts: FinanceDashboardAccount[];
+          upcomingExpenses: UpcomingExpenseView[];
+        }>
+      | undefined;
     try {
-      next = await loadFinanceApiSnapshot(
-        async (read) =>
-          (await read<{ items: FinanceDashboardAccount[] }>('/finance/accounts')).items,
-      );
-      const accounts = await readFinanceApiSnapshot(next, (value) => value);
+      next = await loadFinanceApiSnapshot(async (read) => {
+        const [accounts, upcomingExpenses] = await Promise.all([
+          read<{ items: FinanceDashboardAccount[] }>('/finance/accounts'),
+          read<{ items: UpcomingExpenseView[] }>('/finance/upcoming-expenses'),
+        ]);
+        return { accounts: accounts.items, upcomingExpenses: upcomingExpenses.items };
+      });
+      const value = await readFinanceApiSnapshot(next, (value) => value);
       if (current !== request.current) {
         disposeFinanceApiSnapshot(next);
         return;
       }
       if (retained.current) disposeFinanceApiSnapshot(retained.current);
       retained.current = next;
-      setWidget({ state: 'ready', value: accounts });
+      setWidget({ state: 'ready', value });
     } catch {
       if (next) disposeFinanceApiSnapshot(next);
       if (current === request.current) clear();
@@ -74,7 +95,8 @@ export function FinanceDashboardPage({
     };
   }, [ownerId, clear, refresh]);
 
-  const accounts = widget.value ?? [];
+  const accounts = widget.value?.accounts ?? [];
+  const upcomingExpenses = widget.value?.upcomingExpenses ?? [];
   return (
     <section className="finance-dashboard" aria-labelledby="finance-dashboard-title">
       <header>
@@ -119,6 +141,9 @@ export function FinanceDashboardPage({
             ))}
           </div>
         </section>
+      ) : null}
+      {widget.state === 'ready' ? (
+        <UpcomingExpensesWidget items={upcomingExpenses} onOpenExpense={onOpenUpcomingExpense} />
       ) : null}
     </section>
   );

@@ -205,6 +205,7 @@ export const financeUpcomingExpenseResponseSchema = z
   .object({
     expense: upcomingExpenseSchema,
     fulfillments: z.array(expenseFulfillmentSchema),
+    claimVersions: z.record(ulidSchema, z.number().int().nonnegative()),
     fulfilledAmountMinor: z.number().int().safe().nonnegative(),
     remainingAmountMinor: z.number().int().safe().nonnegative(),
     overpaidAmountMinor: z.number().int().safe().nonnegative(),

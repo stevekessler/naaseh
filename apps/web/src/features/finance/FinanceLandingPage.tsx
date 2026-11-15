@@ -19,6 +19,7 @@ import {
   type FinanceApiSnapshot,
 } from '../../sync/finance-api-snapshot.js';
 import type { AppHistoryState, AppRoute, FinanceRoute } from '../../app/router.js';
+import { UpcomingExpensesWorkspace } from './upcoming/UpcomingExpensesWorkspace.js';
 
 export function FinanceLandingPage({
   ownerId,
@@ -178,12 +179,23 @@ export function FinanceLandingPage({
         >
           Budgets
         </button>
+        <button
+          aria-current={
+            view === 'upcoming-expenses' || view === 'upcoming-expense-new' ? 'page' : undefined
+          }
+          onClick={() => navigate({ section: 'finance', view: 'upcoming-expenses' })}
+        >
+          Upcoming Expenses
+        </button>
       </nav>
       {view === 'dashboard' ? (
         <FinanceDashboardPage
           ownerId={ownerId}
           onOpenAccount={(accountId) =>
             navigate({ section: 'finance', view: 'accounts', accountId })
+          }
+          onOpenUpcomingExpense={(upcomingExpenseId) =>
+            navigate({ section: 'finance', view: 'upcoming-expenses', upcomingExpenseId })
           }
         />
       ) : view === 'accounts' ? (
@@ -257,15 +269,27 @@ export function FinanceLandingPage({
           onOpenBudget={(budgetId) => navigate({ section: 'finance', view: 'budgets', budgetId })}
           onOpenGroups={() => navigate({ section: 'groups' })}
         />
+      ) : view === 'upcoming-expenses' || view === 'upcoming-expense-new' ? (
+        <UpcomingExpensesWorkspace
+          ownerId={ownerId}
+          csrfToken={csrfToken}
+          {...(route.upcomingExpenseId ? { initialExpenseId: route.upcomingExpenseId } : {})}
+          creating={view === 'upcoming-expense-new'}
+          onCreate={() => navigate({ section: 'finance', view: 'upcoming-expense-new' })}
+          onOpenExpense={(upcomingExpenseId) =>
+            navigate({ section: 'finance', view: 'upcoming-expenses', upcomingExpenseId })
+          }
+          onOpenAccount={(accountId) =>
+            navigate({ section: 'finance', view: 'accounts', accountId })
+          }
+        />
       ) : (
         <section aria-labelledby={`finance-${view}-title`}>
           <h2 id={`finance-${view}-title`}>
-            {view === 'upcoming-expense-new'
-              ? 'New upcoming expense'
-              : view
-                  .split('-')
-                  .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
-                  .join(' ')}
+            {view
+              .split('-')
+              .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+              .join(' ')}
           </h2>
           <p>This Finance destination is not available yet.</p>
         </section>

@@ -97,8 +97,19 @@ function sourceIntersection(
 
 function envelope(repository: FinanceMemoryRepository, expense: UpcomingExpense) {
   const fulfillments = fulfillmentsForExpense(repository, expense.id);
+  const claimVersions = Object.fromEntries(
+    [...new Set(fulfillments.map(({ transactionId }) => transactionId))].map((transactionId) => [
+      transactionId,
+      repository.fulfillmentClaimVersions.get(transactionId) ?? 0,
+    ]),
+  );
   const date = localFinanceDate(new Date().toISOString(), 'UTC');
-  return { expense, fulfillments, ...deriveUpcomingExpenseState(expense, fulfillments, date) };
+  return {
+    expense,
+    fulfillments,
+    claimVersions,
+    ...deriveUpcomingExpenseState(expense, fulfillments, date),
+  };
 }
 
 function publish(repository: FinanceMemoryRepository, expense: UpcomingExpense) {

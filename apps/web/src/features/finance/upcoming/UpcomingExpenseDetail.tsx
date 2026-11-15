@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { localFinanceDate, parseMajorUnits } from '@naaseh/domain';
+import { localFinanceDate, parseMajorUnits, type ExpenseFulfillment } from '@naaseh/domain';
 import type { UpcomingExpenseView } from './types.js';
 import { formatUpcomingMoney } from './types.js';
 
@@ -8,7 +8,7 @@ export interface EligibleExpenseTransaction {
   description: string;
   amountMinor: number;
   version: number;
-  claimVersion: number;
+  claimVersion?: number;
 }
 
 export function UpcomingExpenseDetail({
@@ -37,7 +37,7 @@ export function UpcomingExpenseDetail({
     expectedTransactionVersion: number;
     expectedClaimVersion: number;
   }) => Promise<void>;
-  onUnlinkPayment: (fulfillmentId: string) => Promise<void>;
+  onUnlinkPayment: (fulfillment: ExpenseFulfillment) => Promise<void>;
   onOpenAccount: (accountId: string) => void;
 }) {
   const { expense } = value;
@@ -93,7 +93,7 @@ export function UpcomingExpenseDetail({
         amountMinor,
         expectedExpenseVersion: expense.version,
         expectedTransactionVersion: transaction.version,
-        expectedClaimVersion: transaction.claimVersion,
+        expectedClaimVersion: transaction.claimVersion ?? 0,
       }),
     );
   };
@@ -192,7 +192,7 @@ export function UpcomingExpenseDetail({
                 <button
                   disabled={busy}
                   type="button"
-                  onClick={() => void run(() => onUnlinkPayment(fulfillment.id))}
+                  onClick={() => void run(() => onUnlinkPayment(fulfillment))}
                 >
                   Remove reference
                 </button>
