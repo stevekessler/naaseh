@@ -1,45 +1,18 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
-## November 15 second-computer handoff
-
-| Branch or workstream | Contents |
-| --- | --- |
-| `origin/codex/task-item-creation-uploads` at `c4c4978` | Shared Finance 016 base through Phase 7. Includes Finance PIN and encrypted offline access, navigation and accounts, payment classification and refunds, group budgets, and manual transactions. |
-| `codex/finance-016-upcoming-expenses` | Continues from `c4c4978` with completed Phase 9 upcoming expenses and the Phase 11 task and post-it relationship checkpoint. |
-| Second computer's Phase 8 and Phase 10 work | Transaction browsing (T072–T081), receipts (T094–T108), and provider reconciliation and restore evidence (T122). Verify the branch names, commits and results on that computer before combining the work. |
-
-To import the sending branch from the handoff bundle, run these commands in the
-existing Na’aseh checkout after replacing the example path with the downloaded file.
-The fetch records the checkpoint under a new local branch so the checkout and any
-work on the receiving computer stay intact.
-
-```sh
-git fetch origin codex/task-item-creation-uploads
-git bundle verify ~/Downloads/naaseh-finance-016.bundle
-git fetch ~/Downloads/naaseh-finance-016.bundle refs/heads/codex/finance-016-upcoming-expenses:refs/heads/handoff/finance-016-nov15
-git log --oneline FETCH_HEAD ^c4c4978
-```
-
-Use this checkpoint and the second computer's verified work for the next integration.
-Finish the remaining T111 browser journeys and complete T123 after incorporating T122.
-Dashboard personalization, period comparisons, spend reports, forecasts and final
-acceptance are still open. Keep the migration unrun and preserve the approved
-$6.50 combined AWS cost ceiling. Real DynamoDB and hosted acceptance remain deferred.
-
-### Latest implementation checkpoint
-
 > Current local checkpoint (November 15, Phase 11 task/expense relationships in
-> progress): 94/166 tasks checked. T109, T110 and T112–T121 are complete. Canonical
+> progress): 95/166 tasks checked. T109–T121 are complete. Canonical
 > budget-item/transaction/upcoming-expense links now support multi-link task create and
 > edit, source-to-task and task-to-source navigation, bounded reverse reads, protected
 > default-off task/post-it details and encrypted offline replay behind the ordinary task
 > mutation. Current task plus Finance access is rechecked on writes, reads and retries;
 > inaccessible links disclose no IDs/counts and ordinary task/export/notification/search
 > data contains no Finance metadata. Task lifecycle never mutates payment state. The
-> focused implementation set passes **112 tests / 8 files**; the Chromium/WebKit file
-> passes **4/4 / 6.10 s**; required validation passes **1,932 / 496 files / 64.33 s**
-> with runtime, typecheck, lint and builds. T111 remains open for additional browser
-> journeys. The second computer owns Phase 10/T122 reconciliation and restore evidence;
+> focused implementation set passes **112 tests / 8 files**; required validation passes
+> **1,932 / 496 files / 73.47 s** with runtime, typecheck, lint and builds. The dedicated
+> Chromium/WebKit relationship journey passes **12/12 / 10.13 s real**, including multi-select offline queuing,
+> source-to-task navigation and embedded unlock/cancel. The second computer owns
+> Phase 10/T122 reconciliation and restore evidence;
 > complete T123 after combining it. Preserve the Apple project edit and `outputs/`, the
 > $6.50 combined AWS ceiling and the unrun migration. Do not deploy or change production.
 
@@ -218,9 +191,7 @@ $6.50 combined AWS cost ceiling. Real DynamoDB and hosted acceptance remain defe
 > T018 remains open; T027/T029/T032 are checked. No hosted, real DynamoDB or combined-cost PASS;
 > keep $6.50 including 30% contingency, no transaction expiry and migration unrun.
 
-## Historical November 5 handoff
-
-Prepared November 5, 2026. This records the earlier GitHub WIP checkpoint.
+Prepared November 5, 2026. Implementation stopped at the user’s request. The Finance WIP is published on the existing GitHub branch.
 
 - Existing repository: `stevekessler/naaseh`
 - Branch: `codex/task-item-creation-uploads`
@@ -229,7 +200,7 @@ Prepared November 5, 2026. This records the earlier GitHub WIP checkpoint.
 - `.specify/feature.json` resolves to `specs/016-finance-experience-expansion`.
 - Apple directories were unchanged by the WIP commit. The parent checkpoint contains Apple and other existing work that must be preserved.
 
-### Retrieve the historical shared branch
+## Bring the work into Steve’s checkout
 
 Fetch the latest branch from GitHub and fast-forward your local checkout. Run these commands from the existing Na’aseh checkout on `codex/task-item-creation-uploads`.
 
@@ -238,7 +209,7 @@ git fetch origin codex/task-item-creation-uploads
 git merge --ff-only FETCH_HEAD
 ```
 
-The branch contains the shared base. If Git reports divergence or an untracked file collision, stop and report it so existing work is preserved.
+The branch includes the full WIP and this handoff. If Git reports divergence or an untracked file collision, stop and report it so existing work is preserved.
 
 ## Instructions for the receiving Codex
 

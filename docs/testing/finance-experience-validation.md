@@ -1,15 +1,15 @@
 # Finance Experience Expansion Implementation Validation
 
 > Current local checkpoint (November 15, Phase 11 task/expense relationships in
-> progress): 94/166 tasks checked. T109, T110 and T112–T121 are complete. Tasks can
+> progress): 95/166 tasks checked. T109–T121 are complete. Tasks can
 > relate independently to budget items, transactions and upcoming expenses, including
 > multi-select create/edit, two-way navigation, bounded 50-task reads, encrypted
 > offline relationship replay and default-off task/post-it expense projections.
 > Access is the intersection of current task and Finance authority; ordinary task,
 > search, export and notification data contains no protected relationship metadata.
 > Completing or deleting a task never mutates its Finance source. Required validation
-> passes **1,932 tests / 496 files / 64.33 s real**, and the dedicated Chromium/WebKit
-> file passes **4/4 / 6.10 s**. T111 remains open for additional browser journeys.
+> passes **1,932 tests / 496 files / 73.47 s real**, and the dedicated Chromium/WebKit
+> file passes **12/12 / 10.13 s real**.
 > T122 remains assigned to Phase 10 on the second computer; T123 follows after merge.
 
 ## US12 task/expense relationship gate — 2026-11-15
@@ -37,9 +37,14 @@ unauthorized viewers receive no count or metadata.
 
 The focused contract, integration, security, durable-runtime, sync, component and
 offline-write selection passed **112 tests / 8 files**. The dedicated browser file
-passed **4/4** across Chromium and WebKit in **6.10 seconds**. Required validation
+passed **12/12** across Chromium and WebKit in **10.13 / 12.91 / 2.42 seconds
+real/user/sys**. It covers both expense source Add Task/cancel paths, protected-safe
+generic labels, encrypted multi-select offline queuing, source-to-task navigation,
+default-off task/post-it preferences and an embedded lock/cancel visit. The browser
+journey found and fixed display-only picker metadata leaking into the strict relationship
+command. Required validation
 passed **1,932 tests in 496 files**, plus Node 24 runtime enforcement, typecheck, lint
-and production builds, in **64.33 / 258.41 / 51.92 seconds real/user/sys**. The first
+and production builds, in **73.47 / 277.57 / 59.40 seconds real/user/sys**. The first
 required run found two legacy fixtures whose reverse-task mock omitted `tasks`; the
 component now treats malformed or legacy responses as empty, the focused retry passed,
 and the complete rerun passed. No required browser selection, timeout, retry or project

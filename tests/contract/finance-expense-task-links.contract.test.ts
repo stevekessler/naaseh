@@ -5,10 +5,12 @@ import {
   financialTaskLinkPairKey,
 } from '@naaseh/domain';
 import {
+  financeLinkedTaskCreateSchema,
   financeTaskCreateInputSchema,
   financeTaskCreateResponseSchema,
   financeTaskLinkBatchQuerySchema,
   financeTaskLinkCreateSchema,
+  financeTaskLinksReplaceSchema,
   financialTaskLinkSchema,
 } from '@naaseh/contracts';
 
@@ -30,7 +32,22 @@ describe('Finance expense task-link v2 contract', () => {
     });
     expect(financialTaskLinkSchema.parse(link)).toEqual(link);
     expect(link).toMatchObject(target);
-    expect(JSON.stringify(link)).not.toMatch(/amount|merchant|description|label/iu);
+    expect(financialTaskLinkSchema.safeParse({ ...link, label: 'Private expense' }).success).toBe(
+      false,
+    );
+    expect(financialTaskLinkSchema.safeParse({ ...link, targetType: 'receipt' }).success).toBe(
+      false,
+    );
+    if (target.targetType === 'budgetItem') {
+      expect(financialTaskLinkSchema.safeParse({ ...link, budgetId: undefined }).success).toBe(
+        false,
+      );
+      expect(financialTaskLinkSchema.safeParse({ ...link, budgetItemId: id(99) }).success).toBe(
+        false,
+      );
+    } else {
+      expect(financialTaskLinkSchema.safeParse({ ...link, budgetId: id(3) }).success).toBe(false);
+    }
   });
 
   it('adapts a legacy budget-item row without changing its link or target identity', () => {
@@ -42,76 +59,102 @@ describe('Finance expense task-link v2 contract', () => {
       financeAudience: `GROUP#${id(6)}`,
       createdBy: 'owner',
       createdAt: '2028-01-01T00:00:00.000Z',
-      updatedAt: '2028-01-01T00:00:00.000Z',
-      status: 'active' as const,
-      version: 1,
+      updatedAt: '2028-01-02T00:00:00.000Z',
+      status: 'removed' as const,
+      version: 2,
     };
     const adapted = adaptLegacyFinancialTaskLink(legacy);
-    expect(adapted).toMatchObject({
-      id: legacy.id,
-      taskId: legacy.taskId,
+    expect(adapted).toEqual({
+      ...legacy,
       targetType: 'budgetItem',
       targetId: legacy.budgetItemId,
-      budgetId: legacy.budgetId,
-      createdAt: legacy.createdAt,
-      version: 1,
     });
     expect(financialTaskLinkSchema.parse(legacy)).toEqual(adapted);
+    expect(financialTaskLinkSchema.parse(adapted)).toEqual(adapted);
   });
 
   it('defines unique task-target pairs while allowing several targets per task', () => {
-    expect(financialTaskLinkPairKey(id(1), 'transaction', id(4))).toBe(
-      `${id(1)}#transaction#${id(4)}`,
-    );
-    expect(financialTaskLinkPairKey(id(1), 'upcomingExpense', id(4))).not.toBe(
-      financialTaskLinkPairKey(id(1), 'transaction', id(4)),
-    );
+    const key = financialTaskLinkPairKey(id(1), 'transaction', id(4));
+    expect(key).toBe(`${id(1)}#transaction#${id(4)}`);
+    expect(
+      new Set([
+        key,
+        financialTaskLinkPairKey(id(2), 'transaction', id(4)),
+        financialTaskLinkPairKey(id(1), 'upcomingExpense', id(4)),
+        financialTaskLinkPairKey(id(1), 'transaction', id(5)),
+      ]).size,
+    ).toBe(4);
   });
 
   it('bounds deduplicated batch reads and create/edit selections to fifty targets', () => {
     const taskIds = Array.from({ length: 50 }, (_, index) => id(index + 100));
     expect(financeTaskLinkBatchQuerySchema.parse({ taskIds })).toEqual({ taskIds });
-    expect(() => financeTaskLinkBatchQuerySchema.parse({ taskIds: [...taskIds, id(999)] })).toThrow();
+    expect(() =>
+      financeTaskLinkBatchQuerySchema.parse({ taskIds: [...taskIds, id(999)] }),
+    ).toThrow();
     expect(() => financeTaskLinkBatchQuerySchema.parse({ taskIds: [id(100), id(100)] })).toThrow();
 
     const selection = { targetType: 'transaction' as const, targetId: id(4) };
+    const selections = [selection, { targetType: 'upcomingExpense', targetId: id(4) }];
     expect(financeTaskLinkCreateSchema.parse({ ...selection, expectedTaskVersion: 1 })).toEqual({
       ...selection,
       expectedTaskVersion: 1,
     });
+    const task = { label: 'Review expenses', visibility: 'private', groupId: id(6) };
+    const create = { task, financeLinkSelections: selections };
+    const replace = { expectedTaskVersion: 1, financeLinkSelections: selections };
+    const sourceCreate = {
+      label: task.label,
+      assigneeId: 'owner',
+      financeLinkSelections: selections,
+    };
+    expect(financeLinkedTaskCreateSchema.parse(create).financeLinkSelections).toEqual(selections);
+    expect(financeTaskLinksReplaceSchema.parse(replace)).toEqual(replace);
+    expect(financeTaskCreateInputSchema.parse(sourceCreate)).toEqual(sourceCreate);
+
+    const duplicates = { financeLinkSelections: [selection, selection] };
+    expect(financeLinkedTaskCreateSchema.safeParse({ ...create, ...duplicates }).success).toBe(
+      false,
+    );
+    expect(financeTaskLinksReplaceSchema.safeParse({ ...replace, ...duplicates }).success).toBe(
+      false,
+    );
+    const maxSelections = taskIds.map((targetId) => ({ ...selection, targetId }));
     expect(
-      financeTaskCreateInputSchema.parse({
-        label: 'Review expenses',
-        assigneeId: 'owner',
-        financeLinkSelections: [selection, { targetType: 'upcomingExpense', targetId: id(5) }],
-      }).financeLinkSelections,
-    ).toHaveLength(2);
+      financeTaskLinksReplaceSchema.parse({ ...replace, financeLinkSelections: maxSelections })
+        .financeLinkSelections,
+    ).toHaveLength(50);
+    expect(
+      financeTaskLinksReplaceSchema.safeParse({
+        ...replace,
+        financeLinkSelections: [...maxSelections, selection],
+      }).success,
+    ).toBe(false);
   });
 
-  it('represents atomic success and idempotent partial-link retry without another task', () => {
+  it('carries the saved task, applied links, and missing selections in a partial success receipt', () => {
+    const pending = {
+      taskId: id(1),
+      linkStatus: 'pending',
+      financialTaskLinkIds: [id(10)],
+      pendingSelections: [{ targetType: 'upcomingExpense', targetId: id(5) }],
+      retryToken: 'opaque-retry-token',
+    };
+    const applied = {
+      taskId: pending.taskId,
+      linkStatus: 'applied',
+      financialTaskLinkIds: [...pending.financialTaskLinkIds, id(11)],
+    };
+    expect(financeTaskCreateResponseSchema.parse(pending)).toEqual(pending);
+    expect(financeTaskCreateResponseSchema.parse(applied)).toEqual(applied);
     expect(
-      financeTaskCreateResponseSchema.parse({
-        taskId: id(1),
-        linkStatus: 'applied',
-        financialTaskLinkIds: [id(10), id(11)],
-      }),
-    ).toMatchObject({ linkStatus: 'applied', financialTaskLinkIds: [id(10), id(11)] });
+      financeTaskCreateResponseSchema.safeParse({ ...pending, retryToken: undefined }).success,
+    ).toBe(false);
     expect(
-      financeTaskCreateResponseSchema.parse({
-        taskId: id(1),
-        linkStatus: 'pending',
-        financialTaskLinkIds: [id(10)],
-        pendingSelections: [{ targetType: 'upcomingExpense', targetId: id(5) }],
-        retryToken: 'opaque-retry-token',
-      }),
-    ).toMatchObject({ taskId: id(1), linkStatus: 'pending', retryToken: 'opaque-retry-token' });
-    expect(() =>
-      financeTaskCreateResponseSchema.parse({
-        taskId: id(1),
-        linkStatus: 'pending',
-        financialTaskLinkIds: [],
-        pendingSelections: [{ targetType: 'transaction', targetId: id(4) }],
-      }),
-    ).toThrow();
+      financeTaskCreateResponseSchema.safeParse({ ...pending, pendingSelections: [] }).success,
+    ).toBe(false);
+    expect(
+      financeTaskCreateResponseSchema.safeParse({ ...applied, financialTaskLinkIds: [] }).success,
+    ).toBe(false);
   });
 });

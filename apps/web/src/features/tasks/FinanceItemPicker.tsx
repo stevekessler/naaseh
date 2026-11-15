@@ -11,6 +11,10 @@ export type FinanceLinkSelection =
 export type FinanceItemOption = FinanceLinkSelection & { label: string; context?: string };
 
 const keyOf = (value: FinanceLinkSelection) => `${value.targetType}#${value.targetId}`;
+const selectionOf = (option: FinanceItemOption): FinanceLinkSelection =>
+  option.targetType === 'budgetItem'
+    ? { targetType: option.targetType, targetId: option.targetId, budgetId: option.budgetId }
+    : { targetType: option.targetType, targetId: option.targetId };
 
 export async function readLocalFinanceItemOptions(): Promise<FinanceItemOption[]> {
   return readFinanceCachedData(async (lease) => {
@@ -102,7 +106,7 @@ export function FinanceItemPicker({
                   onChange(
                     selected.has(key)
                       ? value.filter((candidate) => keyOf(candidate) !== key)
-                      : [...value, option],
+                      : [...value, selectionOf(option)],
                   )
                 }
               />

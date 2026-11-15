@@ -86,7 +86,7 @@ describe('optional Finance expense task displays', () => {
     expect(view.queryByText('Transaction')).toBeNull();
     fireEvent.click(view.getByLabelText('Upcoming rent'));
     expect(changed).toHaveBeenCalledWith([
-      expect.objectContaining({ targetType: 'upcomingExpense', targetId: 'expense-1' }),
+      { targetType: 'upcomingExpense', targetId: 'expense-1' },
     ]);
   });
 });

@@ -318,7 +318,7 @@ acceptance. See validation and runtime reports; other US2 tasks remain open.
 
 - [x] T109 [P] [US12] Add target-union/legacy budget-item adapter, unique multi-link/query/create-with-link and idempotent partial-success contracts in `tests/contract/finance-expense-task-links.contract.test.ts`.
 - [x] T110 [P] [US12] Add task/source intersection, private-account/shared-task, export/notification/search exclusion and task completion/deletion no-financial-side-effect tests in `tests/security/finance-expense-task-links.security.test.ts` and `tests/integration/finance-expense-task-links.test.ts`.
-- [ ] T111 [P] [US12] Add Chromium/WebKit Add Task/cancel, task-form selector/multiple links, reverse navigation, optional task/post-it fields and embedded unlock journeys in `tests/e2e/finance-expense-task-links.spec.ts`.
+- [x] T111 [P] [US12] Add Chromium/WebKit Add Task/cancel, task-form selector/multiple links, reverse navigation, optional task/post-it fields and embedded unlock journeys in `tests/e2e/finance-expense-task-links.spec.ts`.
 - [x] T112 [P] [US12] Add optional-column/post-it preference, multi-target batching and locked/unauthorized display tests in `apps/web/test/features/finance-task-expense-display.test.tsx`; verify task completion never mutates source payment state.
 
 ### Implementation and Verification
