@@ -1,5 +1,22 @@
 # Finance Experience Expansion Implementation Validation
 
+## Dashboard account balances and upcoming count — 2026-11-15
+
+The dashboard uses owner-only flag/settings responses and existing authorized list
+endpoints. It displays only flagged account balances, reports missing freshness,
+persists the four upcoming-count choices through the expected-version API, and keeps
+overdue expenses outside the cap. The shared selector deduplicates explicit planned
+sources without merging distinct descriptions, and suppresses stale unpaid copies
+of paid records. The focused run passed 59 tests in 13 files. Required validation
+passed **1,946 tests / 498 files / 68.24 s**, versus 1,943 / 498 / 67.97 s at the
+previous checkpoint. Typecheck, lint and builds passed.
+
+The dedicated dashboard browser spec lists eight Chromium/WebKit cases and passes
+lint. Browser execution was blocked before the tests started because the agent
+session denied the Vite preview listener. The required quick selection was
+unchanged. T126 stays open for execution. T124 and T131 remain open for the
+remaining budget and recent-activity cases and widgets.
+
 ## Dashboard inclusion controls — 2026-11-15
 
 T130 is complete. The account and budget details, category manager and merchant

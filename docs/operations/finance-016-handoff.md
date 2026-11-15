@@ -1,5 +1,18 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 15 dashboard widgets checkpoint: 97/166 tasks checked. The dashboard
+> uses current personal flags to show only opted-in account balances and persists
+> the upcoming count (5/10/15/20) through protected versioned settings.
+> Account and upcoming reads report loading and failure independently. Overdue
+> rows remain separate, and the upcoming selector deduplicates explicit planned
+> sources and ignores old unpaid copies of a newer paid record.
+> Full local validation passed **1,946 tests / 498 files / 68.24 s**. The dedicated
+> T126 desktop suite discovers eight cases. Running it requires a local Terminal
+> because the agent session cannot listen on `127.0.0.1:4173`.
+> T124, T126 and T131 are in progress. The dashboard still uses the existing
+> authorized list APIs. Bounded widget queries, open-budget/recent-activity
+> sections, and preference sync remain open.
+
 > November 15 dashboard inclusion controls checkpoint: **97/166 tasks checked**.
 > T130 is complete. Account, budget, category and merchant views expose personal
 > dashboard inclusion flags. The controls use the protected API, send the displayed

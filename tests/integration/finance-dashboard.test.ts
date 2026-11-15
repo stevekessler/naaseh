@@ -1,3 +1,4 @@
+import { selectDashboardUpcoming, type UpcomingExpensePlannedSource } from '@naaseh/domain';
 import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { financeDashboardPreferencesResponseSchema } from '@naaseh/contracts';
 import { describe, expect, it, vi } from 'vitest';
@@ -146,4 +147,41 @@ describe('Finance dashboard preferences', () => {
     );
     expect(send).not.toHaveBeenCalled();
   });
+});
+
+it('deduplicates explicit obligations and never counts overdue, paid or cancelled expenses toward the upcoming limit', () => {
+  const source = { type: 'budgetItem', budgetItemId: experienceId(500) } as const;
+  const make = (
+    id: number,
+    state: 'upcoming' | 'overdue' | 'paid' | 'cancelled' = 'upcoming',
+    version = 1,
+    plannedSource?: UpcomingExpensePlannedSource,
+  ) => ({
+    state,
+    expense: {
+      id: experienceId(id),
+      dueDate: '2027-01-01',
+      version,
+      description: 'Same description',
+      ...(plannedSource ? { plannedSource } : {}),
+    },
+  });
+  const latest = make(2, 'upcoming', 2, source);
+  const overdue = make(3, 'overdue');
+  const distinct = Array.from({ length: 20 }, (_, i) => make(10 + i));
+  const available = [
+    make(1, 'upcoming', 1, source),
+    latest,
+    overdue,
+    make(4),
+    make(4, 'paid', 2),
+    make(5, 'cancelled'),
+    ...distinct,
+  ].reverse();
+  for (const limit of [5, 10, 15, 20] as const) {
+    expect(selectDashboardUpcoming(available, limit)).toEqual({
+      overdue: [overdue],
+      upcoming: [latest, ...distinct].slice(0, limit),
+    });
+  }
 });

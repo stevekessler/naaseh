@@ -1,7 +1,7 @@
 import {
   DashboardFlagControl,
   DashboardFlagStatus,
-  useDashboardFlags,
+  useDashboardPreferences,
 } from '../dashboard/DashboardFlagControl.js';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCatalogRemovalPreview } from './use-catalog-removal-preview.js';
@@ -52,7 +52,7 @@ function MerchantDetailContent({
   csrfToken,
   onRemoved,
 }: MerchantDetailProps) {
-  const dashboardFlags = useDashboardFlags(csrfToken);
+  const dashboardFlags = useDashboardPreferences(csrfToken);
   const [activity, setActivity] = useState<MerchantActivity>();
   const removal = useCatalogRemovalPreview('merchant', userId, csrfToken);
   const { preview, clear: clearPreview } = removal;

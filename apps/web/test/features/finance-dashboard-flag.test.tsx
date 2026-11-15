@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DashboardFlagControl,
   DashboardFlagStatus,
-  useDashboardFlags,
+  useDashboardPreferences,
 } from '../../src/features/finance/dashboard/DashboardFlagControl.js';
 
 const f = vi.hoisted(() => {
@@ -40,7 +40,7 @@ const flag = { targetKind: 'account', targetId, included: true, version: 1 };
 const response = (flags: object[] = []) => ({ flags, settings: { upcomingCount: 10, version: 0 } });
 
 function Controls() {
-  const preferences = useDashboardFlags('csrf-token');
+  const preferences = useDashboardPreferences('csrf-token');
   return (
     <>
       <DashboardFlagStatus preferences={preferences} />

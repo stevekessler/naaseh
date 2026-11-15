@@ -8,43 +8,16 @@ import {
 } from '../../../sync/finance-api-snapshot.js';
 import { UpcomingExpensesWidget } from './UpcomingExpensesWidget.js';
 import type { UpcomingExpenseView } from '../upcoming/types.js';
+import { AccountBalancesWidget, type FinanceDashboardAccount } from './AccountBalancesWidget.js';
+import { useDashboardPreferences } from './DashboardFlagControl.js';
 
-export interface FinanceDashboardAccount {
-  id: string;
-  friendlyName: string;
-  currency: string;
-  currencyExponent: number;
-  currentBalanceMinor: number;
-  freshness?: { lastUpdatedAt: string; stale: boolean };
-}
+type WidgetState<T> =
+  | { state: 'checking' | 'unavailable'; value?: undefined }
+  | { state: 'ready'; ownerId: string; value: T };
 
-export interface FinanceDashboardWidgetState<T> {
-  state: 'checking' | 'ready' | 'unavailable';
-  value?: T;
-}
-
-export function FinanceDashboardPage({
-  ownerId,
-  onOpenAccount,
-  onOpenUpcomingExpense,
-}: {
-  ownerId: string;
-  onOpenAccount: (accountId: string) => void;
-  onOpenUpcomingExpense: (expenseId: string) => void;
-}) {
-  const [widget, setWidget] = useState<
-    FinanceDashboardWidgetState<{
-      accounts: FinanceDashboardAccount[];
-      upcomingExpenses: UpcomingExpenseView[];
-    }>
-  >({ state: 'checking' });
-  const retained = useRef<
-    | FinanceApiSnapshot<{
-        accounts: FinanceDashboardAccount[];
-        upcomingExpenses: UpcomingExpenseView[];
-      }>
-    | undefined
-  >(undefined);
+function useDashboardItems<T>(ownerId: string, path: `/finance/${string}`) {
+  const [widget, setWidget] = useState<WidgetState<T[]>>({ state: 'checking' });
+  const retained = useRef<FinanceApiSnapshot<T[]> | undefined>(undefined);
   const request = useRef(0);
 
   const clear = useCallback(() => {
@@ -57,33 +30,22 @@ export function FinanceDashboardPage({
   const refresh = useCallback(async () => {
     const current = ++request.current;
     setWidget({ state: 'checking' });
-    let next:
-      | FinanceApiSnapshot<{
-          accounts: FinanceDashboardAccount[];
-          upcomingExpenses: UpcomingExpenseView[];
-        }>
-      | undefined;
+    let next: FinanceApiSnapshot<T[]> | undefined;
     try {
-      next = await loadFinanceApiSnapshot(async (read) => {
-        const [accounts, upcomingExpenses] = await Promise.all([
-          read<{ items: FinanceDashboardAccount[] }>('/finance/accounts'),
-          read<{ items: UpcomingExpenseView[] }>('/finance/upcoming-expenses'),
-        ]);
-        return { accounts: accounts.items, upcomingExpenses: upcomingExpenses.items };
-      });
-      const value = await readFinanceApiSnapshot(next, (value) => value);
+      next = await loadFinanceApiSnapshot(async (read) => (await read<{ items: T[] }>(path)).items);
+      const value = await readFinanceApiSnapshot(next, (items) => items);
       if (current !== request.current) {
         disposeFinanceApiSnapshot(next);
         return;
       }
       if (retained.current) disposeFinanceApiSnapshot(retained.current);
       retained.current = next;
-      setWidget({ state: 'ready', value });
+      setWidget({ state: 'ready', ownerId, value });
     } catch {
       if (next) disposeFinanceApiSnapshot(next);
       if (current === request.current) clear();
     }
-  }, [clear]);
+  }, [clear, ownerId, path]);
 
   useEffect(() => {
     clear();
@@ -95,56 +57,59 @@ export function FinanceDashboardPage({
     };
   }, [ownerId, clear, refresh]);
 
-  const accounts = widget.value?.accounts ?? [];
-  const upcomingExpenses = widget.value?.upcomingExpenses ?? [];
+  return widget.state === 'ready' && widget.ownerId !== ownerId
+    ? { state: 'checking' as const, value: undefined, refresh }
+    : { ...widget, refresh };
+}
+
+export function FinanceDashboardPage({
+  ownerId,
+  csrfToken,
+  onOpenAccount,
+  onOpenUpcomingExpense,
+}: {
+  ownerId: string;
+  csrfToken: string;
+  onOpenAccount: (accountId: string) => void;
+  onOpenUpcomingExpense: (expenseId: string) => void;
+}) {
+  const accounts = useDashboardItems<FinanceDashboardAccount>(ownerId, '/finance/accounts');
+  const upcoming = useDashboardItems<UpcomingExpenseView>(ownerId, '/finance/upcoming-expenses');
+  const preferences = useDashboardPreferences(csrfToken);
+  const includedIds = new Set(
+    preferences.flags
+      ?.filter((flag) => flag.targetKind === 'account' && flag.included)
+      .map(({ targetId }) => targetId),
+  );
+  const accountsReady = accounts.state === 'ready' && preferences.status === 'ready';
   return (
     <section className="finance-dashboard" aria-labelledby="finance-dashboard-title">
       <header>
         <h2 id="finance-dashboard-title">Finance dashboard</h2>
-        <p>Current protected account summaries and their recorded freshness.</p>
       </header>
-      {widget.state === 'checking' ? <p role="status">Checking Finance dashboard…</p> : null}
-      {widget.state === 'unavailable' ? (
-        <section aria-label="Finance dashboard unavailable">
-          <p>Reconnect and refresh Finance to view dashboard data.</p>
-          <button type="button" onClick={() => void refresh()}>
-            Refresh dashboard
+      {accounts.state === 'unavailable' ? (
+        <section aria-label="Dashboard accounts unavailable">
+          <p>Account balances are unavailable.</p>
+          <button type="button" onClick={() => void accounts.refresh()}>
+            Refresh account balances
           </button>
         </section>
+      ) : accountsReady ? (
+        <AccountBalancesWidget
+          accounts={accounts.value}
+          includedIds={includedIds}
+          onOpenAccount={onOpenAccount}
+        />
+      ) : preferences.status !== 'unavailable' ? (
+        <p role="status">Checking account balances…</p>
       ) : null}
-      {widget.state === 'ready' && accounts.length === 0 ? (
-        <section aria-label="Empty Finance dashboard">
-          <h3>No accounts yet</h3>
-          <p>Create an account or connect a provider to begin. No balance data is available.</p>
-        </section>
-      ) : null}
-      {widget.state === 'ready' && accounts.length ? (
-        <section aria-label="Dashboard accounts" className="finance-dashboard-accounts">
-          <h3>Accounts</h3>
-          <div className="finance-account-grid">
-            {accounts.map((account) => (
-              <article key={account.id}>
-                <h4>{account.friendlyName}</h4>
-                <p>
-                  {new Intl.NumberFormat(undefined, {
-                    style: 'currency',
-                    currency: account.currency,
-                    minimumFractionDigits: account.currencyExponent,
-                    maximumFractionDigits: account.currencyExponent,
-                  }).format(account.currentBalanceMinor / 10 ** account.currencyExponent)}
-                </p>
-                <p>{account.freshness?.stale ? 'Refresh recommended' : 'Up to date'}</p>
-                <button type="button" onClick={() => onOpenAccount(account.id)}>
-                  Open account
-                </button>
-              </article>
-            ))}
-          </div>
-        </section>
-      ) : null}
-      {widget.state === 'ready' ? (
-        <UpcomingExpensesWidget items={upcomingExpenses} onOpenExpense={onOpenUpcomingExpense} />
-      ) : null}
+      <UpcomingExpensesWidget
+        items={upcoming.value}
+        state={upcoming.state}
+        onRefresh={() => void upcoming.refresh()}
+        preferences={preferences}
+        onOpenExpense={onOpenUpcomingExpense}
+      />
     </section>
   );
 }

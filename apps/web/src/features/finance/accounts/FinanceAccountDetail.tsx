@@ -1,7 +1,7 @@
 import {
   DashboardFlagControl,
   DashboardFlagStatus,
-  useDashboardFlags,
+  useDashboardPreferences,
 } from '../dashboard/DashboardFlagControl.js';
 import { FormEvent, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
@@ -80,7 +80,7 @@ export function FinanceAccountDetail({
   authorizeEdit: () => Promise<boolean>;
   onChange: () => Promise<boolean>;
 }) {
-  const dashboardFlags = useDashboardFlags(csrfToken);
+  const dashboardFlags = useDashboardPreferences(csrfToken);
   const [friendlyName, setFriendlyName] = useState(account.friendlyName);
   const [balance, setBalance] = useState('');
   const [message, setMessage] = useState('');

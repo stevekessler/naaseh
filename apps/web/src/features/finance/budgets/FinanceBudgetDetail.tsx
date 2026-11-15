@@ -1,7 +1,7 @@
 import {
   DashboardFlagControl,
   DashboardFlagStatus,
-  useDashboardFlags,
+  useDashboardPreferences,
 } from '../dashboard/DashboardFlagControl.js';
 import { FormEvent, useMemo, useState } from 'react';
 import { createUlid } from '@naaseh/domain';
@@ -103,7 +103,7 @@ export function FinanceBudgetDetail({
   verifyAccess: () => Promise<boolean>;
   onChange: (budget: BudgetDetailView) => void;
 }) {
-  const dashboardFlags = useDashboardFlags(csrfToken);
+  const dashboardFlags = useDashboardPreferences(csrfToken);
   const [adding, setAdding] = useState(false);
   const [description, setDescription] = useState('');
   const [categoryId, setCategoryId] = useState(categories[0]?.id ?? '');

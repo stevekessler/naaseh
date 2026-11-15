@@ -191,6 +191,7 @@ export function FinanceLandingPage({
       {view === 'dashboard' ? (
         <FinanceDashboardPage
           ownerId={ownerId}
+          csrfToken={csrfToken}
           onOpenAccount={(accountId) =>
             navigate({ section: 'finance', view: 'accounts', accountId })
           }

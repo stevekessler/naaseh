@@ -1,7 +1,7 @@
 import {
   DashboardFlagControl,
   DashboardFlagStatus,
-  useDashboardFlags,
+  useDashboardPreferences,
 } from '../dashboard/DashboardFlagControl.js';
 import { FormEvent, useEffect, useState } from 'react';
 import { financeRequest } from '../finance-client.js';
@@ -25,7 +25,7 @@ export function FinanceCategoryManager({
   isAdmin: boolean;
   csrfToken: string;
 }) {
-  const dashboardFlags = useDashboardFlags(csrfToken);
+  const dashboardFlags = useDashboardPreferences(csrfToken);
   const [categories, setCategories] = useState<CategoryView[]>([]);
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState('');
