@@ -12,7 +12,10 @@ import { FinanceMemoryRepository } from './repository.js';
 import { DecryptCommand, EncryptCommand, KMSClient } from '@aws-sdk/client-kms';
 import { InvokeCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { claimSimplefinAccessUrl } from './simplefin-client.js';
-import { reconcileProviderImport } from './provider-reconciliation-service.js';
+import {
+  reconcileProviderImport,
+  repairReconciledTransactionTaskLinks,
+} from './provider-reconciliation-service.js';
 
 type ConnectionKms = Pick<KMSClient, 'send'>;
 const connectionContext = (connectionId: string, contextVersion = 1) => ({
@@ -274,6 +277,7 @@ function* importSimplefinSteps(
   scope: FinanceScope,
   payload: ReturnType<typeof parseSimplefinV2>,
 ) {
+  yield* repairReconciledTransactionTaskLinks(repository, connectionId);
   let importedAccounts = 0;
   let attentionAccounts = 0;
   let importedTransactions = 0;

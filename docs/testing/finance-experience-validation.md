@@ -1,5 +1,30 @@
 # Finance Experience Expansion Implementation Validation
 
+## November 16 combined reconciliation and restore
+
+T122 is complete on the integration branch. Provider reconciliation updates
+transaction task links and both lookup directions in the same DynamoDB
+transaction as the canonical transaction. Links keep their IDs unless a task
+already has the canonical relationship, in which case the redundant older link
+is tombstoned. The SimpleFIN refresh also repairs restored links that still
+point to a same-account provider alias.
+
+The durable runtime regression verifies an interrupted commit, a successful
+retry, a JSON round trip of the persistence snapshot and repair of older link
+rows from a mixed restore. The exact receipt version resolves from its original
+attachment parent and returns bytes with the original SHA-256. One fulfillment
+and one claim ledger survive on the canonical transaction. Both task lookup
+directions survive, and another user receives no result. A retry of an older
+fulfillment receipt fails safely after the durable authorization revision changes.
+
+The targeted contract, access, component, restore and import checks passed 92
+tests in 10 files. Required validation passed 2,008 tests in 506 files plus
+typecheck, lint and builds. The local Playwright report after the quick fixture
+fix recorded a passed run. The integrated Phase 11 desktop suite discovered
+12 Chromium and WebKit cases but this session could not start the preview
+listener. T123 remains open for browser execution and navigation evidence.
+Live storage and hosted acceptance remain open under T018.
+
 ## Two-computer integration — 2026-11-15
 
 November 16 follow-up recorded a complete local validation pass and corrected

@@ -1,5 +1,17 @@
 # Finance Experience Required Validation Runtime
 
+## November 16 T122 reconciliation and restore
+
+On Node 24.18.0 the required command passed **2,008 tests in 506 files in
+69.00 s**, including typecheck, lint and workspace builds. The previous
+complete run was 2,007 tests in 506 files in 66.90 s. The focused selection
+passed 92 tests in 10 files in 0.80 s (Vitest duration). The required workflow
+and 31-case quick browser selection are unchanged.
+
+The separate T123 browser command discovered 12 Chromium and WebKit cases.
+It stopped after 3.79 s when the environment denied the local preview listener.
+Hosted validation timing is pending.
+
 ## November 16 integrated quick browser fixture
 
 The quick Finance journey failed at sign-in because its mock required a cache

@@ -963,7 +963,7 @@ export function registerUserStory1FinanceRoutes(
         parameter(event, 'taskId'),
       ).find(({ id }) => id === replay.link.id);
       if (!current) throw new Error('Finance record not found.');
-      return json(200, replay);
+      return json(200, { link: current });
     }
     const replaying = event.headers['x-finance-sync-replay'] === 'task-link-create-v1';
     if (linkId && !replaying) throw new Error('Finance task link identity is server managed.');

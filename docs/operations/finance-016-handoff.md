@@ -1,5 +1,13 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 16 integration checkpoint: 124/166 tasks checked. T122 is complete.
+> A combined DynamoDB restore fixture verifies the exact receipt bytes, one
+> canonical fulfillment claim, and both directions of the task relationship
+> after provider reconciliation and an interrupted write. The SimpleFIN
+> refresh repairs older task links retained under the alias. Required validation
+> passed 2,008 tests in 506 files in 69.00 s. T123 needs the integrated desktop
+> browser evidence. T018 remains open for live storage and hosted acceptance.
+
 > November 15 two-computer integration checkpoint: 123/166 tasks checked.
 > The integration branch merges Computer 1 at `131e515f` and Computer 2 at
 > `3b5a7b58` from common base `c4c4978`. The combined paths retain bounded

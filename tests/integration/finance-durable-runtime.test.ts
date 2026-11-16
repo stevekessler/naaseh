@@ -19,6 +19,7 @@ import { commitAuthorizedCsvImportChunk } from '../../apps/api/src/finance/csv-i
 import {
   claimSimplefinConnection,
   dispatchSimplefinRefresh,
+  importSimplefinAccountsDurably,
 } from '../../apps/api/src/finance/connection-service.js';
 import {
   executeFinanceImport,
@@ -32,6 +33,9 @@ import {
   createUserFinanceCategory,
   createMerchant,
   createFinancialTransaction,
+  createUpcomingExpense,
+  attachmentSchema,
+  attachmentBlobSchema,
   replaceTransactionAllocations,
 } from '@naaseh/domain';
 import {
@@ -39,7 +43,18 @@ import {
   linkFinanceBudgetAccount,
   getFinanceBudget,
 } from '../../apps/api/src/finance/budget-service.js';
-import { createTaskFromFinanceBudgetItem } from '../../apps/api/src/finance/task-link-service.js';
+import {
+  authorizedFinancialTaskLinksForTask,
+  authorizedTasksForFinancialTarget,
+  createAuthorizedFinancialTaskLink,
+  createTaskFromFinanceBudgetItem,
+  createTaskFromFinanceTarget,
+} from '../../apps/api/src/finance/task-link-service.js';
+import { reconcileProviderImport } from '../../apps/api/src/finance/provider-reconciliation-service.js';
+import { financeKeys } from '../../apps/api/src/finance/repository.js';
+import { linkUpcomingExpenseFulfillment } from '../../apps/api/src/finance/upcoming-expense-service.js';
+import { resolveReceiptTransaction } from '../../apps/api/src/finance/receipt-transaction-source.js';
+import { createReceiptContentReader } from '../../apps/api/src/attachments/receipt-content-service.js';
 import { financeBudgetAccountPairKey } from '../../apps/api/src/finance/budget-account-link-index.js';
 import { simplefinV2Fixture } from '../fixtures/finance/simplefin.js';
 import {
@@ -1752,6 +1767,256 @@ describe('Finance deployed storage and routing', () => {
     expect(view.totalsComplete).toBe(false);
     expect(view.accountLinks).toEqual([]);
     expect(JSON.stringify(view)).not.toContain(accountInput.id);
+  });
+
+  it('restores receipt bytes, fulfillment and task references together after retried provider reconciliation', async () => {
+    vi.stubEnv('NAASEH_FINANCE_PUBLICATION_EVENT_BUS', '');
+    const id = (ordinal: number) => `01J${String(ordinal).padStart(23, '0')}`;
+    const now = '2026-01-05T12:00:00.000Z';
+    const groupId = id(860);
+    const member = { ...actor, groupMemberships: [{ groupId, role: 'owner' as const }] };
+    const repository = await DynamoFinanceRepository.forActor(member);
+    const account = await createManualAccount(repository, member, accountInput, 'create-account');
+    repository.connections.set('connection-a', { id: 'connection-a', scope: account.scope });
+    repository.accounts.set(account.id, { ...account, connectionId: 'connection-a' });
+    const budget = createBudget({
+      id: id(861),
+      groupId,
+      name: 'Fixture budget',
+      budgetDate: '2026-01-01',
+      startDate: '2026-01-01',
+      status: 'active',
+    });
+    repository.budgets.set(budget.id, budget);
+    const expense = createUpcomingExpense({
+      id: id(862),
+      groupId,
+      budgetId: budget.id,
+      accountId: accountInput.id,
+      description: 'Fixture bill',
+      expectedAmountMinor: 1000,
+      currency: 'USD',
+      dueDate: '2026-01-10',
+      creatorId: actor.id,
+      acceptedAt: now,
+      entryContext: { localDate: '2026-01-05', timeZone: 'America/Denver', enteredAt: now },
+    });
+    repository.upcomingExpenses.set(expense.id, expense);
+
+    const transaction = {
+      accountId: accountInput.id,
+      amountMinor: -1000,
+      currency: 'USD',
+      description: 'Fixture bill',
+      pending: false,
+      connectedAccount: true,
+    } as const;
+    const provisional = createFinancialTransaction({
+      ...transaction,
+      id: id(863),
+      origin: 'manual',
+      transactedAt: now,
+    });
+    const candidate = createFinancialTransaction({
+      ...transaction,
+      id: id(864),
+      origin: 'simplefin',
+      postedAt: now,
+      providerConnectionId: 'connection-a',
+      providerAccountId: 'provider-account-a',
+      sourceTransactionId: 'provider-transaction-a',
+    });
+    repository.transactions.push(provisional, candidate);
+    repository.claimSourceIdentity(
+      'connection-a',
+      'connection-a:provider-account-a:provider-transaction-a',
+      candidate.id,
+    );
+    const target = (targetId: string) => ({ targetType: 'transaction' as const, targetId });
+    const { task, link } = createTaskFromFinanceTarget(
+      repository,
+      member,
+      target(candidate.id),
+      { taskId: id(865), linkId: id(866), label: 'Review receipt', assigneeId: actor.id },
+      'link-task',
+    );
+    const duplicate = createTaskFromFinanceTarget(
+      repository,
+      member,
+      target(candidate.id),
+      { taskId: id(871), linkId: id(872), label: 'Compare receipts', assigneeId: actor.id },
+      'link-second-task',
+    );
+    const canonicalLink = createAuthorizedFinancialTaskLink(
+      repository,
+      member,
+      duplicate.taskId,
+      target(provisional.id),
+      id(873),
+      duplicate.task.version,
+    );
+    const fulfillmentInput = {
+      id: id(867),
+      transactionId: candidate.id,
+      amountMinor: 1000,
+      expectedExpenseVersion: expense.version,
+      expectedTransactionVersion: candidate.version,
+      expectedClaimVersion: 0,
+    };
+    const originalFulfillment = linkUpcomingExpenseFulfillment(
+      repository,
+      member,
+      expense.id,
+      fulfillmentInput,
+      'link-payment',
+    );
+    await repository.commit();
+
+    const bytes = Buffer.from('fixture receipt bytes');
+    const checksum = createHash('sha256').update(bytes).digest('hex');
+    const receipt = attachmentSchema.parse({
+      id: id(868),
+      blobId: id(869),
+      parentType: 'financeTransaction',
+      parentId: candidate.id,
+      originalFilename: 'receipt.pdf',
+      sizeBytes: bytes.length,
+      mediaType: 'application/pdf',
+      checksumSha256: checksum,
+      uploaderId: actor.id,
+      status: 'available',
+      version: 3,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const blob = attachmentBlobSchema.parse({
+      blobId: receipt.blobId,
+      attachmentId: receipt.id,
+      objectKey: 'attachments/' + receipt.blobId,
+      objectVersionId: 'verified-version',
+      sizeBytes: bytes.length,
+      checksumSha256: checksum,
+      encryptionKeyArn: 'fixture-key',
+      scanStatus: 'clean',
+      lifecycle: 'clean',
+      receiptChecks: {
+        objectETag: '"fixture-etag"',
+        policyCleanVersion: 'verified-version',
+        malwareCleanVersion: 'verified-version',
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    const oldTargetKey = financeKeys.financialTaskTargetLink('transaction', candidate.id, link.id);
+    const newTargetKey = financeKeys.financialTaskTargetLink('transaction', provisional.id, link.id);
+    const oldPairKey = financeKeys.financialTaskPair(task.id, 'transaction', candidate.id);
+    const newPairKey = financeKeys.financialTaskPair(task.id, 'transaction', provisional.id);
+    const reverseKey = financeKeys.financialTaskReverseLink(task.id, link.id);
+    const attempt = await DynamoFinanceRepository.forActor(member, 'link-payment');
+    expect(reconcileProviderImport(attempt, candidate, actor.id).id).toBe(provisional.id);
+    expect(
+      linkUpcomingExpenseFulfillment(attempt, member, expense.id, fulfillmentInput, 'link-payment'),
+    ).toEqual(originalFulfillment);
+    const originalSnapshot = structuredClone(store);
+    failCommit = true;
+    await expect(attempt.commit()).rejects.toThrow('Simulated storage outage.');
+    expect(store).toEqual(originalSnapshot);
+    failCommit = false;
+    await attempt.commit();
+
+    const snapshot = JSON.parse(JSON.stringify([...store])) as [string, Record<string, unknown>][];
+    store.clear();
+    for (const [key, row] of snapshot) store.set(key, row);
+    await expect(DynamoFinanceRepository.forActor(member, 'link-payment')).rejects.toMatchObject({
+      code: 'finance_mutation_sources_changed',
+    });
+    const restored = await DynamoFinanceRepository.forActor(member);
+    const writesBeforeRetry = transactions.length;
+    expect(reconcileProviderImport(restored, candidate, actor.id).id).toBe(provisional.id);
+    await restored.commit();
+    expect(transactions).toHaveLength(writesBeforeRetry);
+    expect([...restored.expenseFulfillments.values()]).toMatchObject([
+      {
+        id: fulfillmentInput.id,
+        transactionId: provisional.id,
+        amountMinor: 1000,
+        calculationState: 'valid',
+      },
+    ]);
+    expect([...restored.fulfillmentClaimVersions]).toEqual([[provisional.id, 1]]);
+    expect(authorizedFinancialTaskLinksForTask(restored, member, task.id)).toMatchObject([
+      { id: link.id, targetId: provisional.id, version: 2 },
+    ]);
+    expect(authorizedFinancialTaskLinksForTask(restored, member, duplicate.taskId)).toEqual([
+      canonicalLink,
+    ]);
+    expect(restored.financialTaskLinks.get(duplicate.link.id)).toMatchObject({ status: 'removed' });
+    expect(authorizedTasksForFinancialTarget(restored, member, target(provisional.id))).toEqual([
+      task,
+      duplicate.task,
+    ]);
+    expect(
+      authorizedTasksForFinancialTarget(
+        restored,
+        { ...member, id: 'other-user' },
+        target(provisional.id),
+      ),
+    ).toEqual([]);
+    expect(store.has(keyOf(oldTargetKey))).toBe(false);
+    expect(store.has(keyOf(oldPairKey))).toBe(false);
+    expect(store.get(keyOf(newTargetKey))).toMatchObject({ data: { targetId: provisional.id } });
+    expect(store.get(keyOf(reverseKey))).toMatchObject({ data: { targetId: provisional.id } });
+    expect(store.get(keyOf(newPairKey))).toMatchObject({ linkId: link.id });
+
+    // Restore the older task-link rows alongside the newer alias and fulfillment.
+    const locatorKey = keyOf(financeKeys.financialTaskReverseLink(task.id, link.id));
+    const sourceLocator = store.get(`FINANCE#LOCATOR#financialTaskLinks#${link.id}/CURRENT`)!;
+    const sourceKey = keyOf(sourceLocator.storageKey as Record<string, unknown>);
+    for (const key of [sourceKey, locatorKey, keyOf(oldTargetKey), keyOf(oldPairKey)])
+      store.set(key, structuredClone(originalSnapshot.get(key)!));
+    store.delete(keyOf(newTargetKey));
+    store.delete(keyOf(newPairKey));
+    const legacy = await DynamoFinanceRepository.forConnection('connection-a');
+    await importSimplefinAccountsDurably(legacy, 'connection-a', accountInput.scope, {
+      accounts: [],
+    });
+    const recovered = await DynamoFinanceRepository.forActor(member);
+    expect(authorizedFinancialTaskLinksForTask(recovered, member, task.id)).toMatchObject([
+      { id: link.id, targetId: provisional.id, version: 2 },
+    ]);
+    expect([...recovered.expenseFulfillments.values()]).toHaveLength(1);
+    expect(store.has(keyOf(oldPairKey))).toBe(false);
+
+    const restoredReceipt = attachmentSchema.parse(JSON.parse(JSON.stringify(receipt)));
+    const restoredBlob = attachmentBlobSchema.parse(JSON.parse(JSON.stringify(blob)));
+    const assertReceiptSource = async (parentId: string) => {
+      expect(await resolveReceiptTransaction(parentId)).toMatchObject({
+        id: provisional.id,
+        accountId: accountInput.id,
+        status: 'active',
+        transferred: true,
+      });
+    };
+    const read = createReceiptContentReader({
+      findReceipt: async () => restoredReceipt,
+      findBlob: async () => restoredBlob,
+      authorize: async (parentId) => {
+        await assertReceiptSource(parentId);
+        return () => assertReceiptSource(parentId);
+      },
+      readBytes: async ({ versionId }) => {
+        expect(versionId).toBe('verified-version');
+        return bytes;
+      },
+    });
+    const response = await read(receipt.id, {
+      ifMatch: '"fixture-etag"',
+      range: `bytes=0-${bytes.length - 1}`,
+    });
+    expect(response.statusCode).toBe(206);
+    expect(createHash('sha256').update(Buffer.from(response.body, 'base64')).digest('hex')).toBe(
+      receipt.checksumSha256,
+    );
   });
 
   it('does not let another scope replace a live source locator with a colliding Finance link ID', async () => {

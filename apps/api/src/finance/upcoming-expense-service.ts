@@ -485,8 +485,9 @@ export function linkUpcomingExpenseFulfillment(
       intent,
       'Fulfillment mutation identity conflict.',
     );
+    const canonicalId = repository.resolveTransactionId(input.transactionId);
     const saved = replay.fulfillments.find(
-      ({ transactionId }) => transactionId === repository.resolveTransactionId(input.transactionId),
+      ({ transactionId }) => repository.resolveTransactionId(transactionId) === canonicalId,
     );
     if (
       replay.expense.id !== expenseId ||

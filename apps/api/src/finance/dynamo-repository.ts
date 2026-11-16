@@ -1615,19 +1615,50 @@ export class DynamoFinanceRepository extends FinanceMemoryRepository {
         decode(row.data) as import('@naaseh/domain').FinancialTaskLink,
       );
       const previous = priorTaskLinks.get(link.id);
-      if (previous &&
-        (previous.taskId !== link.taskId || previous.targetType !== link.targetType ||
-          previous.targetId !== link.targetId))
+      const retargeted = previous !== undefined && previous.targetId !== link.targetId;
+      if (
+        previous &&
+        (previous.taskId !== link.taskId ||
+          previous.targetType !== link.targetType ||
+          (retargeted &&
+            (link.targetType !== 'transaction' ||
+              previous.status !== 'active' ||
+              link.status !== 'active' ||
+              this.transactionAliases.get(previous.targetId) !== link.targetId)))
+      )
         throw new Error('Financial task link identity is immutable.');
       if (link.status !== 'active') {
         if (previous?.status === 'active') removeTaskReferences(previous);
         continue;
       }
-      for (const key of [
-        financeKeys.financialTaskReverseLink(link.taskId, link.id),
-        financeKeys.financialTaskTargetLink(link.targetType, link.targetId, link.id),
-      ]) writes.push({ Put: { TableName: tableName, Item: { ...key, linkId: link.id, data: encode(link) },
-        ConditionExpression: 'attribute_not_exists(PK)' } });
+      if (retargeted) {
+        for (const key of [
+          financeKeys.financialTaskTargetLink(previous.targetType, previous.targetId, previous.id),
+          financeKeys.financialTaskPair(previous.taskId, previous.targetType, previous.targetId),
+        ]) writes.push({ Delete: { TableName: tableName, Key: key } });
+      }
+      const reverseKey = financeKeys.financialTaskReverseLink(link.taskId, link.id);
+      writes.push({
+        Put: {
+          TableName: tableName,
+          Item: { ...reverseKey, linkId: link.id, data: encode(link) },
+          ...(retargeted
+            ? {
+                ConditionExpression: 'attribute_not_exists(PK) OR #data.#version = :base',
+                ExpressionAttributeNames: { '#data': 'data', '#version': 'version' },
+                ExpressionAttributeValues: { ':base': previous.version },
+              }
+            : { ConditionExpression: 'attribute_not_exists(PK)' }),
+        },
+      });
+      const targetKey = financeKeys.financialTaskTargetLink(link.targetType, link.targetId, link.id);
+      writes.push({
+        Put: {
+          TableName: tableName,
+          Item: { ...targetKey, linkId: link.id, data: encode(link) },
+          ConditionExpression: 'attribute_not_exists(PK)',
+        },
+      });
       writes.push({ Put: { TableName: tableName,
         Item: { ...financeKeys.financialTaskPair(link.taskId, link.targetType, link.targetId), linkId: link.id },
         ConditionExpression: 'attribute_not_exists(PK)' } });

@@ -14,6 +14,7 @@ import { reviewRefundRelationshipsForTransaction } from './refund-service.js';
 import { reconcileRefundTransactionAlias } from './refund-repository.js';
 import { reconcileFulfillmentTransactionAlias } from './upcoming-expense-repository.js';
 import { reviewExpenseFulfillmentsForTransaction } from './upcoming-expense-service.js';
+import { reconcileTransactionTaskLinks } from './task-link-service.js';
 
 type ReconciliationDecision = {
   decision: 'reconcile' | 'keep-separate';
@@ -54,6 +55,14 @@ function applyReconciliation(
   if (candidateHasUserState(candidate))
     throw new Error('Provider candidate has user-owned state conflict.');
   const identity = providerIdentity(candidate);
+  const account = repository.accounts.get(provisional.accountId)!;
+  const audience = financeAudience(account.scope);
+  const now = new Date();
+  if (
+    repository.fulfillmentClaimVersions.has(candidate.id) &&
+    repository.fulfillmentClaimVersions.has(provisional.id)
+  )
+    throw new Error('Canonical fulfillment claim ledgers require review.');
   const { transaction } = reconcileProviderTransaction(provisional, candidate, actorId);
   repository.transferSourceIdentity(
     identity.connectionId,
@@ -68,14 +77,14 @@ function applyReconciliation(
   reviewRefundRelationshipsForTransaction(repository, transaction.id);
   reviewExpenseFulfillmentsForTransaction(repository, transaction.id);
   repository.transactionAliases.set(candidate.id, provisional.id);
+  reconcileTransactionTaskLinks(repository, candidate.id, provisional.id, audience, now);
   repository.notifyCanonicalTransactionReferenceTransfer({
     fromTransactionId: candidate.id,
     toTransactionId: provisional.id,
   });
-  const account = repository.accounts.get(provisional.accountId)!;
-  const changedAt = new Date().toISOString();
+  const changedAt = now.toISOString();
   repository.feedChanges.push({
-    audience: financeAudience(account.scope),
+    audience,
     entityType: 'financeTransaction',
     entityId: transaction.id,
     version: transaction.version,
@@ -84,7 +93,7 @@ function applyReconciliation(
     payload: transaction,
   });
   repository.feedChanges.push({
-    audience: financeAudience(account.scope),
+    audience,
     entityType: 'financeTransaction',
     entityId: candidate.id,
     version: candidate.version + 1,
@@ -92,6 +101,41 @@ function applyReconciliation(
     operation: 'tombstone',
   });
   return transaction;
+}
+
+/** Repair older snapshots whose provider alias survived but whose task links still use it. */
+export function* repairReconciledTransactionTaskLinks(
+  repository: FinanceMemoryRepository,
+  connectionId: string,
+) {
+  const sources = new Set<string>();
+  for (const link of repository.financialTaskLinks.values())
+    if (
+      link.status === 'active' &&
+      link.targetType === 'transaction' &&
+      repository.transactionAliases.has(link.targetId)
+    )
+      sources.add(link.targetId);
+  if (!sources.size) return;
+  const transactions = new Map(
+    repository.transactions.map((transaction) => [transaction.id, transaction]),
+  );
+  for (const sourceId of sources) {
+    const original = transactions.get(sourceId);
+    if (original?.status !== 'tombstone') continue;
+    const account = repository.accounts.get(original.accountId);
+    if (account?.connectionId !== connectionId) continue;
+    const canonical = transactions.get(repository.transactionAliases.get(sourceId)!);
+    if (canonical?.status !== 'active' || canonical.accountId !== original.accountId) continue;
+    reconcileTransactionTaskLinks(
+      repository,
+      original.id,
+      canonical.id,
+      financeAudience(account.scope),
+      new Date(),
+    );
+    yield;
+  }
 }
 
 export function reconcileProviderImport(

@@ -84,6 +84,18 @@ function normalizedLinks(repository: FinanceMemoryRepository) {
   return [...repository.financialTaskLinks.values()].map(adaptLegacyFinancialTaskLink);
 }
 
+function publishLink(repository: FinanceMemoryRepository, link: FinancialTaskLink) {
+  repository.feedChanges.push({
+    audience: link.financeAudience,
+    entityType: 'financeTaskLink',
+    entityId: link.id,
+    version: link.version,
+    changedAt: link.updatedAt,
+    operation: link.status === 'active' ? 'upsert' : 'tombstone',
+    ...(link.status === 'active' ? { payload: link } : {}),
+  });
+}
+
 function rememberLink(repository: FinanceMemoryRepository, link: FinancialTaskLink) {
   const pair = financialTaskLinkPairKey(link.taskId, link.targetType, link.targetId);
   const existingId = repository.financialTaskLinkPairs.get(pair);
@@ -91,15 +103,48 @@ function rememberLink(repository: FinanceMemoryRepository, link: FinancialTaskLi
   if (existing?.status === 'active') throw new Error('Financial task target is already linked.');
   repository.financialTaskLinks.set(link.id, link);
   repository.financialTaskLinkPairs.set(pair, link.id);
-  repository.feedChanges.push({
-    audience: link.financeAudience,
-    entityType: 'financeTaskLink',
-    entityId: link.id,
-    version: link.version,
-    changedAt: link.updatedAt,
-    operation: 'upsert',
-    payload: link,
-  });
+  publishLink(repository, link);
+}
+
+/** Retarget a reconciled source without changing the relationship or task identity. */
+export function reconcileTransactionTaskLinks(
+  repository: FinanceMemoryRepository,
+  fromTransactionId: string,
+  toTransactionId: string,
+  audience: string,
+  now: Date,
+) {
+  const links = normalizedLinks(repository).filter(
+    (link) =>
+      link.status === 'active' &&
+      link.targetType === 'transaction' &&
+      link.financeAudience === audience,
+  );
+  const canonicalTasks = new Set(
+    links.filter(({ targetId }) => targetId === toTransactionId).map(({ taskId }) => taskId),
+  );
+  for (const link of links.filter(({ targetId }) => targetId === fromTransactionId)) {
+    repository.financialTaskLinkPairs.delete(
+      financialTaskLinkPairKey(link.taskId, 'transaction', fromTransactionId),
+    );
+    const updated: FinancialTaskLink = canonicalTasks.has(link.taskId)
+      ? removeFinancialTaskLink(link, now)
+      : {
+          ...link,
+          targetId: toTransactionId,
+          version: link.version + 1,
+          updatedAt: now.toISOString(),
+        };
+    repository.financialTaskLinks.set(updated.id, updated);
+    if (updated.status === 'active') {
+      canonicalTasks.add(updated.taskId);
+      repository.financialTaskLinkPairs.set(
+        financialTaskLinkPairKey(updated.taskId, 'transaction', toTransactionId),
+        updated.id,
+      );
+    }
+    publishLink(repository, updated);
+  }
 }
 
 /** Creates an ordinary task and all selected protected relationships as one in-memory commit. */
@@ -319,10 +364,7 @@ export function removeAuthorizedFinancialTaskLink(
   const removed = removeFinancialTaskLink(link, now);
   repository.financialTaskLinks.set(removed.id, removed);
   repository.financialTaskLinkPairs.delete(financialTaskLinkPairKey(link.taskId, link.targetType, link.targetId));
-  repository.feedChanges.push({
-    audience: removed.financeAudience, entityType: 'financeTaskLink', entityId: removed.id,
-    version: removed.version, changedAt: removed.updatedAt, operation: 'tombstone',
-  });
+  publishLink(repository, removed);
   return removed;
 }
 
