@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   financeSnapshotFixtureHeaders,
+  mockFinanceTransactionBrowsing,
   mockFinanceSnapshotEvidence,
   mockUnprotectedFinanceSecurity,
   signIn,
@@ -102,6 +103,7 @@ test('edits payment, category hierarchy, merchant and an explicit partial refund
   };
   let refundEnvelope: Record<string, unknown> | undefined;
 
+  await mockFinanceTransactionBrowsing(page, () => records.values());
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
@@ -177,9 +179,7 @@ test('edits payment, category hierarchy, merchant and an explicit partial refund
         originalExpenseTransactionId: ids.original,
         linkedAmountMinor: 2_500,
         confirmedPartialAllocations: true,
-        refundedAllocations: [
-          { originalAllocationId: ids.allocationFood, amountMinor: 2_500 },
-        ],
+        refundedAllocations: [{ originalAllocationId: ids.allocationFood, amountMinor: 2_500 }],
       });
       refundEnvelope = {
         relationship: {
@@ -196,20 +196,23 @@ test('edits payment, category hierarchy, merchant and an explicit partial refund
       return route.fulfill({ status: 200, json: refundEnvelope });
     },
   );
-  await page.route(`**/api/v1/finance/transactions/${ids.refund}`, async (route) => {
-    if (route.request().method() === 'PATCH') {
-      const input = route.request().postDataJSON() as Record<string, unknown>;
-      const updated = { ...records.get(ids.refund)!, ...input, version: 2 };
-      delete updated.expectedVersion;
-      records.set(ids.refund, updated);
-      return route.fulfill({ status: 200, json: updated });
-    }
-    return route.fulfill({
-      status: 200,
-      headers: financeSnapshotFixtureHeaders,
-      json: records.get(ids.refund),
-    });
-  });
+  await page.route(
+    new RegExp('/api/v1/finance/transactions/' + ids.refund + '(?:[?]browse=1)?$'),
+    async (route) => {
+      if (route.request().method() === 'PATCH') {
+        const input = route.request().postDataJSON() as Record<string, unknown>;
+        const updated = { ...records.get(ids.refund)!, ...input, version: 2 };
+        delete updated.expectedVersion;
+        records.set(ids.refund, updated);
+        return route.fulfill({ status: 200, json: updated });
+      }
+      return route.fulfill({
+        status: 200,
+        headers: financeSnapshotFixtureHeaders,
+        json: records.get(ids.refund),
+      });
+    },
+  );
   await page.route(`**/api/v1/finance/transactions/${ids.original}`, (route) =>
     route.fulfill({
       status: 200,
@@ -241,13 +244,20 @@ test('edits payment, category hierarchy, merchant and an explicit partial refund
 
   await financeSections.getByRole('button', { name: 'Transactions', exact: true }).click();
   await page.getByLabel('Search transactions').fill('Dinner refund received');
-  await page.getByRole('button', { name: 'Review Dinner refund received' }).click();
+  await page.getByRole('link', { name: 'Review Dinner refund received' }).click();
   await page.getByLabel('Payment type').selectOption('check');
-  await page.getByLabel('Check number').fill('000123');
+  await page
+    .getByRole('region', { name: 'Payment details' })
+    .getByLabel('Check number', { exact: true })
+    .fill('000123');
   await page.getByRole('button', { name: 'Save payment details' }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Payment details saved.' })).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Payment details saved.' }),
+  ).toBeVisible();
   await expect(page.getByText(/Unlinked credits do not reduce spending/u)).toBeVisible();
-  await expect(page.getByText(/10\/2\/2026/u)).toBeVisible();
+  await expect(
+    page.getByRole('dialog', { name: 'Transaction details' }).getByText(/10\/2\/2026/u),
+  ).toBeVisible();
   await page.getByLabel('Original expense').selectOption(ids.original);
   await page.getByLabel(`Refunded amount for allocation ${ids.allocationFood}`).fill('25.00');
   await page.getByLabel(`Refunded amount for allocation ${ids.allocationOther}`).fill('0');

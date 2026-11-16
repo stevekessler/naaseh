@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const f = vi.hoisted(() => ({
   request: vi.fn(),
@@ -22,7 +23,10 @@ vi.mock('../../src/features/finance/security/finance-access.js', async (original
     },
   }),
 }));
-vi.mock('../../src/features/finance/finance-client.js', () => ({ financeRequest: f.request }));
+vi.mock('../../src/features/finance/finance-client.js', () => ({
+  financeRequest: f.request,
+  FinanceClientError: Error,
+}));
 vi.mock('../../src/sync/finance-api-snapshot.js', () => ({
   loadFinanceApiSnapshot: f.load,
   readFinanceApiSnapshot: f.read,
@@ -50,32 +54,61 @@ vi.mock('../../src/features/finance/transactions/TransactionDetail.js', () => ({
 import { FinanceTransactionsPage } from '../../src/features/finance/transactions/FinanceTransactionsPage.js';
 const accountId = '01J00000000000000000000001',
   transactionId = '01J00000000000000000000002';
+const fixtureTransaction = {
+  id: transactionId,
+  accountId,
+  description: 'Juniper groceries',
+  amountMinor: -1000,
+  currency: 'USD',
+  currencyExponent: 2,
+  version: 1,
+  allocations: [],
+  reviewState: 'none',
+  reconciliationState: 'unreconciled',
+};
+
+function RoutedPage() {
+  const [id, setId] = useState<string>();
+  return (
+    <FinanceTransactionsPage
+      csrfToken="csrf"
+      {...(id ? { initialTransactionId: id } : {})}
+      onOpenTransaction={setId}
+      onCloseTransaction={() => setId(undefined)}
+    />
+  );
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   f.deny = false;
   f.listeners.clear();
   f.values.clear();
-  f.request.mockImplementation(async (path: string) => ({
-    items:
-      path === '/finance/accounts'
-        ? [{ id: accountId, friendlyName: 'Checking' }]
-        : path.endsWith('/transactions')
-          ? [
-              {
-                id: transactionId,
-                accountId,
-                description: 'Juniper groceries',
-                amountMinor: -1000,
-                currency: 'USD',
-                currencyExponent: 2,
-                version: 1,
-                allocations: [],
-                reviewState: 'none',
-                reconciliationState: 'unreconciled',
-              },
-            ]
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
+  f.request.mockImplementation(async (path: string) => {
+    if (path.startsWith('/finance/transactions?')) {
+      const text = new URL(path, 'https://fixture.invalid').searchParams.get('text');
+      const items = !text || /Juniper|groceries/u.test(text) ? [fixtureTransaction] : [];
+      return {
+        items,
+        rowsState: items.length ? 'ready' : 'confirmed-empty',
+        aggregateState: 'exact',
+        totalCount: items.length,
+      };
+    }
+    if (path.startsWith('/finance/transactions/' + transactionId)) return fixtureTransaction;
+    return {
+      items:
+        path === '/finance/accounts'
+          ? [{ id: accountId, friendlyName: 'Checking', currency: 'USD' }]
           : [],
-  }));
+    };
+  });
   f.load.mockImplementation(async (load: (request: typeof f.request) => Promise<unknown>) => {
     f.value = await load(f.request);
     f.token = {};
@@ -97,16 +130,23 @@ beforeEach(() => {
 afterEach(cleanup);
 describe('retained transaction snapshot views', () => {
   it('publishes a freshly verified graph after a mutation and clears it after revocation', async () => {
-    const view = render(<FinanceTransactionsPage csrfToken="csrf" />);
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
-    fireEvent.click(view.getByRole('button', { name: 'Review Juniper groceries' }));
+    const view = render(<RoutedPage />);
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+    fireEvent.click(view.getByRole('link', { name: 'Review Juniper groceries' }));
     await view.findByText('Private transaction details');
     const originalRequest = f.request.getMockImplementation()!;
     f.request.mockImplementation(async (path: string) => {
-      if (path !== `/finance/transactions/${transactionId}`) return originalRequest(path);
-      const result = await originalRequest(`/finance/accounts/${accountId}/transactions`);
-      return { ...result.items[0], description: 'Verified fresh groceries' };
+      const result = await originalRequest(path);
+      if (path === `/finance/transactions/${transactionId}?browse=1`)
+        return { ...fixtureTransaction, description: 'Verified fresh groceries' };
+      if (path.startsWith('/finance/transactions?') && result.items?.length)
+        return {
+          ...result,
+          items: [{ ...fixtureTransaction, description: 'Verified fresh groceries' }],
+        };
+      return result;
     });
+    const priorLoads = f.load.mock.calls.length;
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
@@ -119,28 +159,26 @@ describe('retained transaction snapshot views', () => {
       return f.token;
     });
     fireEvent.click(view.getByRole('button', { name: 'Save fixture transaction' }));
-    await waitFor(() => expect(f.load).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(f.load).toHaveBeenCalledTimes(priorLoads + 1));
     expect(view.queryByText('Verified fresh groceries')).toBeNull();
     release();
-    await view.findByRole('article', { name: 'Verified fresh groceries transaction' });
-    expect(f.request).toHaveBeenCalledWith(`/finance/transactions/${transactionId}`);
+    await view.findByRole('link', { name: 'Review Verified fresh groceries' });
+    expect(f.request).toHaveBeenCalledWith(`/finance/transactions/${transactionId}?browse=1`);
     expect(
       f.request.mock.calls.filter(
         ([path]) => path === `/finance/accounts/${accountId}/transactions`,
       ),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
     f.deny = true;
     fireEvent.click(view.getByRole('button', { name: 'Save fixture transaction' }));
     await view.findByText('Reconnect and refresh Finance to search transactions.');
-    expect(
-      view.queryByRole('article', { name: 'Verified fresh groceries transaction' }),
-    ).toBeNull();
+    expect(view.queryByRole('link', { name: 'Review Verified fresh groceries' })).toBeNull();
     expect(view.queryByText('0 transactions found')).toBeNull();
   });
   it('shows a removal impact only after verification and clears it on lock', async () => {
-    const view = render(<FinanceTransactionsPage csrfToken="csrf" />);
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
-    fireEvent.click(view.getByRole('button', { name: 'Review Juniper groceries' }));
+    const view = render(<RoutedPage />);
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+    fireEvent.click(view.getByRole('link', { name: 'Review Juniper groceries' }));
     await view.findByText('Private transaction details');
 
     let finish!: () => void;
@@ -171,9 +209,9 @@ describe('retained transaction snapshot views', () => {
   });
 
   it('discards a removal impact response when lock occurs before it resolves', async () => {
-    const view = render(<FinanceTransactionsPage csrfToken="csrf" />);
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
-    fireEvent.click(view.getByRole('button', { name: 'Review Juniper groceries' }));
+    const view = render(<RoutedPage />);
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+    fireEvent.click(view.getByRole('link', { name: 'Review Juniper groceries' }));
     await view.findByText('Private transaction details');
 
     let finish!: () => void;
@@ -204,67 +242,61 @@ describe('retained transaction snapshot views', () => {
     expect(view.queryByText(outcome)).toBeNull();
   });
 
-  it('withholds a reused index while checking and does not label revoked data an empty result', async () => {
-    const view = render(<FinanceTransactionsPage csrfToken="csrf" />);
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
-    let release!: () => void,
-      started = false;
+  it('withholds the previous page while checking and distinguishes revoked data from empty', async () => {
+    const view = render(<RoutedPage />);
+    const row = () => view.queryByRole('link', { name: 'Review Juniper groceries' });
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+
+    const request = f.request.getMockImplementation()!;
+    let release!: () => void;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
-    f.read.mockImplementationOnce(async (_token, read: (value: unknown) => unknown) => {
-      started = true;
+    f.request.mockImplementationOnce(async (path: string) => {
       await pending;
-      return read(f.value);
+      return request(path);
     });
     fireEvent.change(view.getByLabelText('Search transactions'), { target: { value: 'Juniper' } });
-    await waitFor(() => expect(started).toBe(true));
-    expect(view.queryByRole('article', { name: 'Juniper groceries transaction' })).toBeNull();
-    expect(view.getByText('Checking transactions…')).toBeTruthy();
+    expect(row()).toBeNull();
+    expect(view.getByText('Searching transactions…')).toBeTruthy();
     release();
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
-    f.deny = true;
-    fireEvent.change(view.getByLabelText('Search transactions'), {
-      target: { value: 'groceries' },
-    });
-    await view.findByText('Reconnect and refresh Finance to search transactions.');
-    expect(view.queryByRole('article', { name: 'Juniper groceries transaction' })).toBeNull();
-    expect(view.queryByText('0 transactions found')).toBeNull();
-    expect(view.queryByRole('option', { name: 'Checking' })).toBeNull();
-  });
-  it('ignores a late query, rechecks before opening retained details and disposes memory on unmount', async () => {
-    const view = render(<FinanceTransactionsPage csrfToken="csrf" />);
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+
     act(() => {
       for (const listener of f.listeners) listener();
     });
-    await waitFor(() =>
-      expect(view.queryByRole('article', { name: 'Juniper groceries transaction' })).toBeNull(),
-    );
+    await view.findByText('Reconnect and refresh Finance to search transactions.');
+    expect(row()).toBeNull();
+    expect(view.queryByText('No matching transactions')).toBeNull();
     expect(view.queryByRole('option', { name: 'Checking' })).toBeNull();
-    fireEvent.click(view.getByRole('button', { name: 'Refresh transactions' }));
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
+  });
 
-    let release!: () => void,
-      started = false;
+  it('ignores a late query, verifies detail on entry and disposes memory on unmount', async () => {
+    const view = render(<RoutedPage />);
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+
+    const request = f.request.getMockImplementation()!;
+    let release!: () => void;
+    let started = false;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
-    f.read.mockImplementationOnce(async (_token, read: (value: unknown) => unknown) => {
+    f.request.mockImplementationOnce(async (path: string) => {
       started = true;
       await pending;
-      return read(f.value);
+      return request(path);
     });
     fireEvent.change(view.getByLabelText('Search transactions'), { target: { value: 'no-match' } });
     await waitFor(() => expect(started).toBe(true));
     fireEvent.change(view.getByLabelText('Search transactions'), { target: { value: 'Juniper' } });
-    await view.findByRole('article', { name: 'Juniper groceries transaction' });
-    release();
-    await Promise.resolve();
-    expect(view.getByRole('article', { name: 'Juniper groceries transaction' })).toBeTruthy();
+    await view.findByRole('link', { name: 'Review Juniper groceries' });
+    await act(async () => {
+      release();
+    });
+    expect(view.getByRole('link', { name: 'Review Juniper groceries' })).toBeTruthy();
     f.deny = true;
-    fireEvent.click(view.getByRole('button', { name: 'Review Juniper groceries' }));
-    await view.findByText('Reconnect and refresh Finance to search transactions.');
+    fireEvent.click(view.getByRole('link', { name: 'Review Juniper groceries' }));
+    await view.findByText('Transaction unavailable.');
     expect(view.queryByText('Private transaction details')).toBeNull();
     view.unmount();
     expect(f.dispose).toHaveBeenCalledWith(f.token);

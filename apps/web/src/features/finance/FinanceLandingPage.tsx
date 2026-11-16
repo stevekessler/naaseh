@@ -1,3 +1,5 @@
+import { FinanceReceiptsPage } from './receipts/FinanceReceiptsPage.js';
+import { resumeReceiptUploads } from './receipts/receipt-client.js';
 import { FinanceAccountsPage } from './accounts/FinanceAccountsPage.js';
 import { FinanceAccountCreatePage } from './accounts/FinanceAccountCreatePage.js';
 import {
@@ -18,7 +20,12 @@ import {
   readFinanceApiSnapshot,
   type FinanceApiSnapshot,
 } from '../../sync/finance-api-snapshot.js';
-import type { AppHistoryState, AppRoute, FinanceRoute } from '../../app/router.js';
+import {
+  financeTransactionOrigin,
+  type AppHistoryState,
+  type AppRoute,
+  type FinanceRoute,
+} from '../../app/router.js';
 import { UpcomingExpensesWorkspace } from './upcoming/UpcomingExpensesWorkspace.js';
 
 export function FinanceLandingPage({
@@ -34,6 +41,18 @@ export function FinanceLandingPage({
   route?: FinanceRoute;
   navigate?: (route: AppRoute, state?: AppHistoryState) => void;
 }) {
+  useEffect(() => {
+    const request = new AbortController();
+    const resume = () => void resumeReceiptUploads(csrfToken, request.signal).catch(() => {});
+    const unsubscribe = peekFinanceAccess()?.onLock(() => request.abort());
+    window.addEventListener('online', resume);
+    resume();
+    return () => {
+      request.abort();
+      unsubscribe?.();
+      window.removeEventListener('online', resume);
+    };
+  }, [csrfToken, ownerId]);
   const [connection, setConnection] = useState<SimplefinConnectionView>();
   const [connectionState, setConnectionState] = useState<'checking' | 'ready' | 'unavailable'>(
     'checking',
@@ -83,12 +102,13 @@ export function FinanceLandingPage({
   useEffect(() => {
     clearConnection();
     const unsubscribe = peekFinanceAccess()?.onLock(clearConnection);
-    void refreshConnections();
+    if (route.view === 'dashboard' || route.view === 'accounts' || route.view === 'account-new')
+      void refreshConnections();
     return () => {
       unsubscribe?.();
       clearConnection();
     };
-  }, [clearConnection, refreshConnections]);
+  }, [clearConnection, refreshConnections, route.view]);
   const claim = async (setupToken: string) => {
     const claimed = await financeRequest<{ id: string }>('/finance/connections/simplefin/claim', {
       method: 'POST',
@@ -118,12 +138,53 @@ export function FinanceLandingPage({
     if (!(await refreshConnections(connection.id)))
       throw new Error('The SimpleFIN refresh could not be confirmed.');
   };
+  const modalOrigin = route.transactionId
+    ? financeTransactionOrigin(history.state as AppHistoryState | null)
+    : undefined;
+  const modalBackground = modalOrigin?.background;
+  const originAccount =
+    modalOrigin?.route.view === 'accounts' ? modalOrigin.route.accountId : undefined;
+  const openTransaction = (transactionId: string, focusId?: string) => {
+    navigate(
+      { section: 'finance', view: 'transactions', transactionId },
+      {
+        financeBackground: {
+          pathname: location.pathname,
+          search: location.search,
+          scrollY: window.scrollY,
+          ...(focusId ? { focusId } : {}),
+        },
+      },
+    );
+  };
+  const closeTransaction = () => {
+    if (modalBackground) history.back();
+    else navigate({ section: 'finance', view: 'transactions' });
+  };
+  const openBudget = (budgetId: string) =>
+    navigate({ section: 'finance', view: 'budgets', budgetId });
+
+  useEffect(() => {
+    if (!modalBackground) return;
+    return () => {
+      if (location.pathname !== modalBackground.pathname) return;
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: modalBackground.scrollY, left: 0 });
+        if (modalBackground.focusId)
+          document.getElementById(modalBackground.focusId)?.focus({ preventScroll: true });
+      });
+    };
+  }, [modalBackground]);
+
   const accountWorkspace = (
     <>
       <FinanceAccountsPage
         ownerId={ownerId}
         csrfToken={csrfToken}
-        {...(route.accountId ? { initialAccountId: route.accountId } : {})}
+        {...(originAccount || route.accountId
+          ? { initialAccountId: (originAccount || route.accountId)! }
+          : {})}
+        onOpenTransaction={openTransaction}
         onOpenAccount={(accountId) => navigate({ section: 'finance', view: 'accounts', accountId })}
       />
       {connectionState === 'ready' ? (
@@ -141,7 +202,7 @@ export function FinanceLandingPage({
       )}
     </>
   );
-  const view = route.view;
+  const view = originAccount ? 'accounts' : route.view;
   return (
     <section className="finance-landing">
       <header>
@@ -200,7 +261,19 @@ export function FinanceLandingPage({
           }
         />
       ) : view === 'accounts' ? (
-        accountWorkspace
+        <>
+          {accountWorkspace}
+          {originAccount && route.transactionId ? (
+            <FinanceTransactionsPage
+              csrfToken={csrfToken}
+              currentUserId={ownerId}
+              initialTransactionId={route.transactionId}
+              modalOnly
+              onCloseTransaction={closeTransaction}
+              onOpenBudget={openBudget}
+            />
+          ) : null}
+        </>
       ) : view === 'account-new' ? (
         <>
           <FinanceAccountCreatePage
@@ -221,39 +294,15 @@ export function FinanceLandingPage({
           csrfToken={csrfToken}
           currentUserId={ownerId}
           {...(route.transactionId ? { initialTransactionId: route.transactionId } : {})}
-          onOpenTransaction={(transactionId, focusId) =>
-            navigate(
-              { section: 'finance', view: 'transactions', transactionId },
-              {
-                financeBackground: {
-                  pathname: location.pathname,
-                  search: location.search,
-                  scrollY: window.scrollY,
-                  ...(focusId ? { focusId } : {}),
-                },
-              },
-            )
-          }
-          onCloseTransaction={() => {
-            const background = (history.state as AppHistoryState | null)?.financeBackground;
-            if (!background) {
-              navigate({ section: 'finance', view: 'transactions' });
-              return;
-            }
-            window.addEventListener(
-              'popstate',
-              () => {
-                window.scrollTo({ top: background.scrollY, left: 0 });
-                if (background.focusId) document.getElementById(background.focusId)?.focus();
-              },
-              { once: true },
-            );
-            history.back();
-          }}
+          onOpenTransaction={openTransaction}
+          onCloseTransaction={closeTransaction}
+          onOpenBudget={openBudget}
           onOpenMerchant={(merchantId) =>
             navigate({ section: 'finance', view: 'merchants', merchantId })
           }
         />
+      ) : view === 'receipts' ? (
+        <FinanceReceiptsPage />
       ) : view === 'categories' ? (
         <FinanceCategoriesPage userId={ownerId} isAdmin={role === 'admin'} csrfToken={csrfToken} />
       ) : view === 'merchants' ? (

@@ -1,3 +1,5 @@
+import { cleanupReceiptOrphan } from './receipt-orphan-cleanup.js';
+import { applyReceiptScanResult } from './receipt-scan-service.js';
 import {
   DeleteObjectCommand,
   GetObjectTaggingCommand,
@@ -5,9 +7,15 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import type { ScheduledHandler } from 'aws-lambda';
-import { attachmentBlobSchema, attachmentSchema, transitionAttachment } from '@naaseh/domain';
+import {
+  attachmentBlobSchema,
+  attachmentSchema,
+  transitionAttachment,
+  type Attachment,
+} from '@naaseh/domain';
 import { log, metric } from '@naaseh/observability';
 import {
+  findAttachment,
   listAllAttachmentBlobs,
   listAllAttachments,
   listBlobReferences,
@@ -16,7 +24,8 @@ import {
   saveAttachmentBlob,
 } from './attachment-repository.js';
 import { publishAttachmentChange } from './attachment-audience.js';
-import { taskAttachmentRetention } from './retention-service.js';
+import { resolveReceiptTransaction } from '../finance/receipt-transaction-source.js';
+import { receiptRetention, taskAttachmentRetention } from './retention-service.js';
 import { findTask } from '../tasks/task-repository.js';
 
 const s3 = new S3Client({});
@@ -30,6 +39,7 @@ export const handler: ScheduledHandler = async (event) => {
   let stalledScans = 0;
   let missingObjects = 0;
   let orphanBlobs = 0;
+  let protectedReceiptBlobs = 0;
   let retentionScheduled = 0;
   let retentionCleared = 0;
   let purgedAttachments = 0;
@@ -39,7 +49,7 @@ export const handler: ScheduledHandler = async (event) => {
   const blobs = await listAllAttachmentBlobs();
   const blobsByAttachmentId = new Map(blobs.map((blob) => [blob.attachmentId, blob]));
   const tasks = new Map<string, Awaited<ReturnType<typeof findTask>>>();
-  const attachmentsById = new Map();
+  const attachmentsById = new Map<string, Attachment>();
   for (const storedAttachment of attachments) {
     let attachment = storedAttachment;
     if (attachment.status !== 'deleted' && attachment.parentType === 'task') {
@@ -66,6 +76,25 @@ export const handler: ScheduledHandler = async (event) => {
         else retentionCleared += 1;
       }
     }
+    if (attachment.status !== 'deleted' && attachment.parentType === 'financeTransaction') {
+      const transaction = await resolveReceiptTransaction(attachment.parentId);
+      const desired = receiptRetention(attachment, transaction, now);
+      if (
+        desired?.purgeAfter !== attachment.purgeAfter ||
+        desired?.retentionReason !== attachment.retentionReason
+      ) {
+        attachment = attachmentSchema.parse({
+          ...attachment,
+          purgeAfter: desired?.purgeAfter,
+          retentionReason: desired?.retentionReason,
+          updatedAt: now.toISOString(),
+          version: attachment.version + 1,
+        });
+        await saveAttachment(attachment, storedAttachment.version);
+        if (desired) retentionScheduled += 1;
+        else retentionCleared += 1;
+      }
+    }
     if (
       attachment.status !== 'deleted' &&
       attachment.purgeAfter &&
@@ -80,6 +109,16 @@ export const handler: ScheduledHandler = async (event) => {
     }
     attachmentsById.set(attachment.id, attachment);
     const age = now.getTime() - new Date(attachment.updatedAt).getTime();
+    if (
+      attachment.parentType === 'financeTransaction' &&
+      ['expired', 'cancelled'].includes(attachment.status)
+    ) {
+      try {
+        if (await cleanupReceiptOrphan(attachment.id, now)) orphanBlobs += 1;
+      } catch {
+        metric('AttachmentReconciliationFailures', 1, 'Count', { operation: 'receipt_orphan' });
+      }
+    }
     if (attachment.status === 'pending_upload' && age >= uploadTimeoutMs) {
       const expired = transitionAttachment(attachment, 'expired', now);
       await saveAttachment(expired, attachment.version);
@@ -105,7 +144,19 @@ export const handler: ScheduledHandler = async (event) => {
           // A transient tag lookup must not turn a healthy upload into a failed scan.
         }
       }
-      if (blob && taggedResult) {
+      if (
+        attachment.parentType === 'financeTransaction' &&
+        blob?.objectVersionId &&
+        (taggedResult || age >= scanTimeoutMs)
+      ) {
+        const status = await applyReceiptScanResult(
+          attachment.id,
+          blob.objectVersionId,
+          taggedResult ?? 'SCAN_TIMEOUT',
+        );
+        if (status && taggedResult) recoveredScans += 1;
+        if (status && !taggedResult) stalledScans += 1;
+      } else if (attachment.parentType !== 'financeTransaction' && blob && taggedResult) {
         const status =
           taggedResult === 'NO_THREATS_FOUND'
             ? 'available'
@@ -190,6 +241,21 @@ export const handler: ScheduledHandler = async (event) => {
     }
     const references = await listBlobReferences(blob.blobId);
     if (references.length === 0 && blob.objectVersionId) {
+      // A partial restore can omit the reference row while retaining the receipt and blob.
+      if (
+        blob.receiptChecks ||
+        attachmentsById.get(blob.attachmentId)?.parentType === 'financeTransaction'
+      ) {
+        const receipt = await findAttachment(blob.attachmentId);
+        if (
+          receipt?.parentType === 'financeTransaction' &&
+          receipt.status !== 'deleted' &&
+          receipt.blobId === blob.blobId
+        ) {
+          protectedReceiptBlobs += 1;
+          continue;
+        }
+      }
       await s3.send(
         new DeleteObjectCommand({
           Bucket: bucket,
@@ -211,6 +277,7 @@ export const handler: ScheduledHandler = async (event) => {
     stalledScans,
     missingObjects,
     orphanBlobs,
+    protectedReceiptBlobs,
     retentionScheduled,
     retentionCleared,
     purgedAttachments,

@@ -100,6 +100,55 @@ async function currentActor(userId: string) {
   return { actor, fingerprint };
 }
 
+export async function listFinanceBrowseKeys(
+  userId: string,
+  collection: 'accounts' | 'categories' | 'merchants' | 'reviewIssues',
+) {
+  const current = await currentActor(userId);
+  if (!current)
+    throw new FinanceExperienceFailure('authorization', 'Finance query access denied.', 'user');
+  const partitions =
+    collection === 'categories' || collection === 'merchants'
+      ? ['FINANCE#CATALOG']
+      : [
+          `FINANCE#SCOPE#OWNER#${userId}`,
+          ...current.actor.groupMemberships.map(({ groupId }) => `FINANCE#SCOPE#GROUP#${groupId}`),
+        ];
+  if (partitions.length > 50)
+    throw new FinanceExperienceFailure('capacity', 'Finance metadata scope is too large.', 'user');
+  const keys: string[] = [];
+  const maximum = collection === 'accounts' ? 50 : 1000;
+  for (let offset = 0; offset < partitions.length; offset += 5) {
+    const pages = await Promise.all(
+      partitions.slice(offset, offset + 5).map((PK) =>
+        dynamodb.send(
+          new QueryCommand({
+            TableName: tableName,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+            ExpressionAttributeValues: { ':pk': PK, ':prefix': 'ROW#' + collection + '#' },
+            ProjectionExpression: 'entryKey',
+            ConsistentRead: true,
+            Limit: maximum + 1,
+          }),
+        ),
+      ),
+    );
+    for (const page of pages) {
+      if (page.LastEvaluatedKey || keys.length + (page.Items?.length ?? 0) > maximum)
+        throw new FinanceExperienceFailure(
+          'capacity',
+          'Finance metadata selection is too large.',
+          'user',
+        );
+      for (const item of page.Items ?? []) {
+        if (typeof item.entryKey !== 'string') throw new Error('Finance metadata key is invalid.');
+        keys.push(item.entryKey);
+      }
+    }
+  }
+  return keys;
+}
+
 type RecordKey = { PK: string; SK: string };
 const recordId = (key: RecordKey) => JSON.stringify([key.PK, key.SK]);
 async function batchRows(keys: RecordKey[]) {
@@ -379,6 +428,9 @@ export function createFinanceQueryRuntime(
       currentSources.get(context.accountId) !== context.sourceRevision
     )
       return false;
+    // Browsing counts only the authorized transaction and its signed principal.
+    // Private spend, refund and budget associations are never part of its response.
+    if (context.filters.transactionBrowse) return true;
     // These reads compute privately. step()/status() refresh the full canonical snapshot
     // before publication/delivery, so we can reuse it across the five bounded source scans.
     const current = currentPolicy;
@@ -435,8 +487,9 @@ export function createFinanceQueryRuntime(
     authorizeDelivery: options.authorizeDelivery ?? (async () => false),
     preview: async (job) => {
       const filters = financeQueryFiltersSchema.parse(job.filters);
+      const { transactionBrowse, ...summaryFilters } = filters;
       if (
-        !supportsFinanceAccountSummary(filters) ||
+        !supportsFinanceAccountSummary(summaryFilters) ||
         !job.partitions.every((partition) => currentOrderedSources.has(partition.accountId))
       )
         return undefined;
@@ -465,10 +518,11 @@ export function createFinanceQueryRuntime(
         .slice(0, 200)
         .map(({ id, accountId, effectiveAt }) => ({ id, accountId, effectiveAt }));
       const complete = results.every((result) => !result.nextCursor);
+      if (transactionBrowse && firstIds.length !== 200) return undefined;
       return {
         firstIds,
         examined: addMinorUnits(results.map((result) => result.examined)),
-        ...(complete
+        ...(complete && !transactionBrowse
           ? {
               exact: {
                 count: addMinorUnits(results.map((result) => result.matchedCount)),
@@ -561,6 +615,39 @@ export function createFinanceQueryRuntime(
       }
       if (facts.length !== job.firstIds.length)
         throw new Error('Finance query source changed; restart required.');
+      if (filters.transactionBrowse && facts.length) {
+        const transactions = await scopedRows(
+          'transactions',
+          facts.map(({ id }) => id),
+        );
+        for (const fact of facts) {
+          const record = transactions.get(fact.id)?.data;
+          if (
+            !record ||
+            record.accountId !== fact.accountId ||
+            record.version !== fact.sourceVersion ||
+            record.status !== 'active'
+          )
+            throw new Error('Finance query source changed; restart required.');
+          delete fact.originalSourceAccountIds;
+          fact.slices = [];
+          if (typeof record.paymentType === 'string') fact.paymentType = record.paymentType;
+          if (typeof record.reviewState === 'string') fact.reviewState = record.reviewState;
+          if (Array.isArray(record.allocations)) {
+            fact.classificationNames = [
+              ...new Set(
+                record.allocations.flatMap((allocation) => {
+                  const names = [
+                    allocation?.classification?.categoryLabel,
+                    allocation?.classification?.subcategoryLabel,
+                  ].filter((name): name is string => typeof name === 'string');
+                  return names.length ? [names.join(' / ')] : [];
+                }),
+              ),
+            ];
+          }
+        }
+      }
       return facts.sort(compareFinanceRows);
     },
   });
@@ -575,12 +662,31 @@ export function createFinanceQueryRuntime(
         throw new FinanceExperienceFailure('authorization', 'Finance query access denied.', 'user');
       const accounts = await scopedRows('accounts', accountIds);
       const originalAccounts = new Set<string>();
-      const revisions = await sourceSnapshot(current.actor, accountIds, accounts, originalAccounts);
+      const revisions = await sourceSnapshot(
+        current.actor,
+        accountIds,
+        accounts,
+        filters.transactionBrowse ? undefined : originalAccounts,
+      );
       if (revisions.size !== accountIds.length)
         throw new FinanceExperienceFailure(
           'authorization',
           'Finance query source access or coverage is unavailable.',
           'user',
+        );
+      if (
+        filters.transactionBrowse &&
+        !filters.currency &&
+        (filters.amount !== undefined ||
+          filters.amountMin !== undefined ||
+          filters.amountMax !== undefined) &&
+        new Set([...accounts.values()].map(({ data }) => data.currency)).size > 1
+      )
+        throw new SafeApiError(
+          400,
+          'finance_currency_required',
+          'Choose a currency for the amount filter.',
+          'validation',
         );
       // Verified account coverage supplies these IDs; never accept a client source
       // vector. Dependencies authorize computation but do not expand selected rows.
@@ -602,10 +708,10 @@ export function createFinanceQueryRuntime(
       const name = normalizeFinanceText(filters.accountName ?? '');
       const selected = accountIds.filter((id) => {
         if (!name) return true;
-        const friendlyName = accounts.get(id)!.data.friendlyName;
-        if (typeof friendlyName !== 'string')
-          throw new FinanceExperienceFailure('invariant', 'Finance account name is unavailable.');
-        return normalizeFinanceText(friendlyName).includes(name);
+        const { friendlyName, sourceName, organizationName } = accounts.get(id)!.data;
+        return [friendlyName, sourceName, organizationName].some(
+          (value) => typeof value === 'string' && normalizeFinanceText(value).includes(name),
+        );
       });
       // Keep the whole requested vector: a name-filtered empty result still depends
       // on those canonical account names, current access and verified coverage.

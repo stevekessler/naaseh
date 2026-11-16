@@ -1,5 +1,26 @@
 # Finance Experience Required Validation Runtime
 
+## November 15 two-computer integration
+
+The first-parent validation baseline used `3dd1e337` on Node 24.18.0.
+The newer first-parent checkpoint `131e515f` changes only browser evidence and
+the T126 checklist entry. Integration adds 61 passing tests across eight files
+over that baseline. The workflow, quick selection, projects, timeouts and
+retries are unchanged.
+
+| Command | Actual result | Real time |
+| --- | --- | --- |
+| Baseline `npm run validate` | 1,946 tests in 498 files plus runtime, typecheck, lint and builds | 77.60 s |
+| Integrated focused Vitest | 132 passed in 19 files | 2.09 s |
+| Integrated `npm test` | 2,007 passed in 506 files | 55.32 s |
+| Integrated `npm run lint` | Passed | 4.89 s |
+| Integrated `npm run validate` | Stopped at typecheck because `pdfjs-dist@6.5.438` was unavailable | 7.37 s to block |
+| Integrated `npm run test:e2e:quick` | Preview build stopped at the same missing package. Discovery listed 31 tests in 20 files. | 2.43 s to block |
+
+The locked package was absent from the local npm cache and the registry hostname
+was unavailable from this session. A complete integrated validation duration,
+browser results and hosted validation timing are pending.
+
 ## November 14 Phase 9 upcoming-expense completion
 
 The shared Finance landing page now connects the protected upcoming-expense workspace

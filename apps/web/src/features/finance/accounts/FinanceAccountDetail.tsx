@@ -16,6 +16,7 @@ import {
 } from '../../../db/finance-repository.js';
 import { queueEncryptedCsvChunks, type CsvQueueReview } from '../csv/csv-import.js';
 import type { DuplicateCandidate, DuplicateDecision } from '../csv/csv-import.js';
+import { TransactionTable } from '../transactions/TransactionTable.js';
 import { ManualTransactionForm } from '../transactions/ManualTransactionForm.js';
 
 export interface FinanceAccountView {
@@ -45,6 +46,7 @@ export type AccountRemovalImpact = {
 
 export function FinanceAccountDetail({
   account,
+  onOpenTransaction,
   csrfToken,
   removalImpact,
   onPreviewRemoval,
@@ -63,6 +65,7 @@ export function FinanceAccountDetail({
   onChange,
 }: {
   account: FinanceAccountView;
+  onOpenTransaction?: (id: string, focusId: string) => void;
   csrfToken: string;
   removalImpact?: AccountRemovalImpact;
   onPreviewRemoval: () => Promise<void>;
@@ -87,6 +90,7 @@ export function FinanceAccountDetail({
   const [saving, setSaving] = useState(false);
   const [confirmedSavedBatch, setConfirmedSavedBatch] = useState<string>();
   const [addingTransaction, setAddingTransaction] = useState(false);
+  const [transactionReload, setTransactionReload] = useState(0);
   const saveAccount = async (write: () => Promise<unknown>, success: () => void) => {
     if (saving) return;
     setSaving(true);
@@ -311,10 +315,19 @@ export function FinanceAccountDetail({
             csrfToken={csrfToken}
             authorizeEdit={authorizeEdit}
             onSaved={async (_transaction, queued) => {
-              if (!queued) await onChange();
+              if (!queued) {
+                await onChange();
+                setTransactionReload((value) => value + 1);
+              }
             }}
           />
         ) : null}
+        <TransactionTable
+          accounts={[account]}
+          accountId={account.id}
+          reload={transactionReload}
+          {...(onOpenTransaction ? { onOpen: onOpenTransaction } : {})}
+        />
         {!account.connectionId ? (
           <CsvImportWizard
             currency={account.currency}

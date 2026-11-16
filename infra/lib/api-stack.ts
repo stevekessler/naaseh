@@ -133,6 +133,8 @@ export function createApplicationApi(
     ...sharedLambdaDefaults({
       ...options.environment,
       NAASEH_FINANCE_IMPORT_FUNCTION_NAME: financeImport.functionName,
+      NAASEH_ATTACHMENT_BUCKET: options.media.bucketName,
+      NAASEH_ATTACHMENT_KMS_KEY_ARN: options.dataKey.keyArn,
       NAASEH_FINANCE_KMS_KEY_ARN: options.dataKey.keyArn,
     }),
     entry: fileURLToPath(new URL('../../apps/api/src/finance/handler.ts', import.meta.url)),
@@ -145,6 +147,24 @@ export function createApplicationApi(
     logGroup: options.logGroups.sync,
   });
   financeImport.grantInvoke(finance);
+  finance.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['s3:PutObject', 's3:GetObject', 's3:GetObjectVersion'],
+      resources: [options.media.arnForObjects('attachments/*')],
+    }),
+  );
+  finance.addToRolePolicy(
+    new iam.PolicyStatement({
+      actions: ['kms:Decrypt', 'kms:GenerateDataKey'],
+      resources: [options.dataKey.keyArn],
+      conditions: {
+        StringEquals: {
+          'kms:ViaService': `s3.${Stack.of(scope).region}.${Stack.of(scope).urlSuffix}`,
+          'kms:EncryptionContext:aws:s3:arn': options.media.bucketArn,
+        },
+      },
+    }),
+  );
   // Default-bus delivery avoids Function -> importer -> Function environment cycles.
   // Only durable publication identifiers cross this internal boundary.
   for (const fn of [finance, financeImport, sync]) {

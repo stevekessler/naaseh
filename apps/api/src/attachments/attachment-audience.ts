@@ -3,6 +3,7 @@ import { contentAudiences, appendAudienceChange } from '../sync/change-feed-repo
 import { findTask } from '../tasks/task-repository.js';
 import { findList, findListItem } from '../lists/list-repository.js';
 export async function publishAttachmentChange(value: Attachment) {
+  if (value.parentType === 'financeTransaction') return;
   let audiences: string[] = [];
   if (value.parentType === 'task') {
     const task = await findTask(value.parentId);

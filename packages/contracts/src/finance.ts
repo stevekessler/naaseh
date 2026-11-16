@@ -244,6 +244,7 @@ export const financeTaskTargetSchema = z.union([
 export const financeQueryFiltersSchema = z
   .object({
     postedSpendOnly: z.boolean().default(false),
+    transactionBrowse: z.literal(true).optional(),
     accountIds: z.array(ulidSchema).max(50).optional(),
     merchantIds: z.array(ulidSchema).max(50).optional(),
     budgetIds: z.array(ulidSchema).max(50).optional(),
@@ -279,6 +280,19 @@ export const financeQueryFiltersSchema = z
       context.addIssue({
         code: 'custom',
         message: 'Select an exact value or a valid inclusive range.',
+      });
+    if (
+      value.transactionBrowse &&
+      (value.postedSpendOnly ||
+        value.merchantIds?.length ||
+        value.budgetIds?.length ||
+        value.budgetItemIds?.length ||
+        value.categoryIds?.length ||
+        value.subcategoryIds?.length)
+    )
+      context.addIssue({
+        code: 'custom',
+        message: 'Transaction browsing only supports table filters.',
       });
     try {
       new Intl.DateTimeFormat('en', { timeZone: value.timeZone });

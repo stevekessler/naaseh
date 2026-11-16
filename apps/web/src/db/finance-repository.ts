@@ -115,7 +115,7 @@ export function migrateLegacyFinanceValue(
 }
 
 /** Abort the active IndexedDB transaction when its original Finance visit ends. */
-async function commitFinanceWrite(
+export async function commitFinanceWrite(
   tables: Table[],
   write: () => Promise<void>,
   signal?: AbortSignal,

@@ -4,6 +4,7 @@ import {
   mockUnprotectedFinanceSecurity,
   mockFinanceSnapshotEvidence,
   financeSnapshotFixtureHeaders,
+  mockFinanceTransactionBrowsing,
 } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
@@ -77,6 +78,12 @@ async function routeTransactionData(page: Page) {
       },
     ],
   ]);
+  await mockFinanceTransactionBrowsing(page, () =>
+    [...records.values()].map((record) => ({
+      ...record,
+      ...(record.merchantId === ids.merchant ? { merchantName: 'Fixture Cafe' } : {}),
+    })),
+  );
   await page.route('**/api/v1/finance/transactions/*', (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
     const value = records.get(new URL(route.request().url()).pathname.split('/').at(-1)!);
@@ -167,6 +174,32 @@ test('reviews, searches, splits, and confirms a transfer without losing the sour
   page,
 }) => {
   const records = await routeTransactionData(page);
+  const firstCandidate = {
+    ...records.get(ids.transferLeg)!,
+    id: ids.candidate,
+    description: 'First candidate',
+  };
+  records.set(ids.candidate, firstCandidate);
+  const candidateQuery = '01J00000000000000000000651';
+  const result = {
+    asOf: transaction.effectiveAt,
+    projectionRevision: 'candidate-fixture',
+    rowsState: 'ready',
+    aggregateState: 'exact',
+    complete: true,
+    coverage: { examined: 2, scopeComplete: true },
+    queryId: candidateQuery,
+    totalCount: 2,
+    totalsByCurrency: [],
+  };
+  await page.route(/\/api\/v1\/finance\/transactions\?/u, (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.get('amount') !== '1000') return route.fallback();
+    return route.fulfill({ json: { ...result, items: [firstCandidate], nextCursor: 'rest' } });
+  });
+  await page.route('**/api/v1/finance/queries/' + candidateQuery + '/rows?cursor=rest', (route) =>
+    route.fulfill({ json: { ...result, items: [records.get(ids.transferLeg)!] } }),
+  );
   let allocationRequests = 0;
   await page.route(
     `**/api/v1/finance/transactions/${ids.transaction}/allocations`,
@@ -225,8 +258,8 @@ test('reviews, searches, splits, and confirms a transfer without losing the sour
   await page.getByRole('button', { name: 'Transactions' }).click();
   await page.getByLabel('Search transactions').fill('fixture cafe');
   await page.getByLabel('Account scope').selectOption(ids.account);
-  await expect(page.getByRole('article', { name: 'Fixture Cafe transaction' })).toBeVisible();
-  await page.getByRole('button', { name: 'Review Fixture Cafe' }).click();
+  await expect(page.getByRole('link', { name: 'Review Fixture Cafe' })).toBeVisible();
+  await page.getByRole('link', { name: 'Review Fixture Cafe' }).click();
 
   await expect(page.getByText('Original total: -$10.00')).toBeVisible();
   await page.getByRole('button', { name: 'Add split' }).click();
@@ -241,6 +274,7 @@ test('reviews, searches, splits, and confirms a transfer without losing the sour
   await expect(page.getByText('Unverified allocation response')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Mark as transfer' }).click();
+  await page.getByRole('button', { name: 'Load more candidate transactions' }).click();
   await page.getByLabel('Other transfer side').selectOption(ids.transferLeg);
   await page.getByRole('button', { name: 'Confirm transfer' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Transfer confirmed' })).toBeVisible();
@@ -264,7 +298,7 @@ test('reviews, searches, splits, and confirms a transfer without losing the sour
     releaseVerification();
   }
   await expect(page.getByRole('button', { name: 'Refresh Finance security' })).toBeVisible();
-  await expect(page.getByRole('article', { name: 'Fixture Cafe transaction' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Review Fixture Cafe' })).toHaveCount(0);
   await expect(page.getByText('0 transactions found')).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Transaction removal impact' })).toHaveCount(0);
   expect(allocationRequests).toBe(1);
@@ -321,10 +355,9 @@ test('shows a global merchant with only authorized activity and supports all-acc
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Transactions' }).click();
-  await page.getByLabel('Account scope').selectOption('all');
   await page.getByLabel('Search transactions').fill('fixture');
   await expect(page.getByText('1 transaction found')).toBeVisible();
-  await page.getByRole('link', { name: 'Fixture Cafe' }).click();
+  await page.getByRole('link', { name: 'Fixture Cafe', exact: true }).click();
   await expect(page.getByRole('heading', { level: 2, name: 'Fixture Cafe' })).toBeVisible();
   await expect(
     page.getByRole('region', { name: 'Authorized merchant activity' }).getByText('Fixture Cafe'),
@@ -409,7 +442,7 @@ test('compares ambiguous reconciliation candidates and handles a stale conflict 
   await signIn(page);
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Transactions' }).click();
-  await page.getByRole('button', { name: 'Review reconciliation' }).click();
+  await page.getByRole('link', { name: 'Review reconciliation' }).click();
   await expect(page.getByRole('region', { name: 'Entry and provider comparison' })).toContainText(
     'Fixture Cafe',
   );
@@ -425,7 +458,7 @@ test('compares ambiguous reconciliation candidates and handles a stale conflict 
   await expect(page.getByRole('button', { name: 'Keep separate' })).toBeDisabled();
   await page.getByRole('button', { name: 'Refresh reconciliation' }).click();
   await page.getByRole('button', { name: 'Close transaction' }).click();
-  await page.getByRole('button', { name: 'Review reconciliation' }).click();
+  await page.getByRole('link', { name: 'Review reconciliation' }).click();
   await page.getByRole('button', { name: 'Keep separate' }).click();
   await expect(page.getByText('Transactions kept separate.')).toBeVisible();
   await expect(page.getByText('Unverified reconciliation response')).toHaveCount(0);
@@ -435,7 +468,7 @@ test('compares ambiguous reconciliation candidates and handles a stale conflict 
   records.set(ids.transaction, { ...transaction });
   await page.goto('/finance');
   await page.getByRole('button', { name: 'Transactions' }).click();
-  await page.getByRole('button', { name: 'Review reconciliation' }).click();
+  await page.getByRole('link', { name: 'Review reconciliation' }).click();
   const decision = page.getByRole('button', { name: 'Keep separate' });
   await expect(decision).toBeEnabled();
   let releaseVerification!: () => void;

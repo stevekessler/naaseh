@@ -1,4 +1,4 @@
-import { DeleteCommand, QueryCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+import { DeleteCommand, QueryCommand, ScanCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import type { Attachment, AttachmentBlob, BlobReference } from '@naaseh/domain';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { getRecord, putRecord } from '../shared/store.js';
@@ -7,6 +7,30 @@ export async function findAttachment(id: string) {
   return (await getRecord<{ data: Attachment }>(keys.attachment(id).PK, 'CURRENT'))?.data;
 }
 export async function saveAttachment(value: Attachment, expectedVersion: number) {
+  if (value.parentType === 'financeTransaction') {
+    if (expectedVersion < 1)
+      throw new Error('Receipt creation requires a protected upload session.');
+    await dynamodb.send(
+      new UpdateCommand({
+        TableName: tableName,
+        Key: keys.attachment(value.id),
+        UpdateExpression: 'SET #data = :data, #version = :version',
+        ConditionExpression: '#version = :expected AND #data.#parent = :parent',
+        ExpressionAttributeNames: {
+          '#data': 'data',
+          '#version': 'version',
+          '#parent': 'parentType',
+        },
+        ExpressionAttributeValues: {
+          ':data': value,
+          ':version': value.version,
+          ':expected': expectedVersion,
+          ':parent': value.parentType,
+        },
+      }),
+    );
+    return value;
+  }
   await putRecord(
     {
       ...keys.attachment(value.id),

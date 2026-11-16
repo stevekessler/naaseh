@@ -56,6 +56,16 @@ export interface AppHistoryState {
   financeBackground?: FinanceModalBackground;
 }
 
+export function financeTransactionOrigin(state: AppHistoryState | null) {
+  const background = state?.financeBackground;
+  if (!background) return undefined;
+  const route = parseAppRoute(background.pathname);
+  return route.section === 'finance' &&
+    (route.view === 'accounts' || (route.view === 'transactions' && !route.transactionId))
+    ? { background, route }
+    : undefined;
+}
+
 export function parseAppRoute(pathname: string): AppRoute {
   if (/^\/journal\/new\/?$/.test(pathname)) return { section: 'journal', create: true };
   if (/^\/journal\/settings\/?$/.test(pathname)) return { section: 'journal', view: 'settings' };
@@ -109,9 +119,7 @@ export function parseAppRoute(pathname: string): AppRoute {
         ? { transactionId: decodeURIComponent(financeTransaction[1]) }
         : {}),
     };
-  const financeUpcomingExpense = pathname.match(
-    /^\/finance\/upcoming-expenses(?:\/([^/]+))?\/?$/u,
-  );
+  const financeUpcomingExpense = pathname.match(/^\/finance\/upcoming-expenses(?:\/([^/]+))?\/?$/u);
   if (financeUpcomingExpense)
     return {
       section: 'finance',
@@ -129,12 +137,10 @@ export function parseAppRoute(pathname: string): AppRoute {
       view: 'merchants',
       ...(financeMerchant[1] ? { merchantId: decodeURIComponent(financeMerchant[1]) } : {}),
     };
-  if (/^\/finance\/receipts\/?$/u.test(pathname))
-    return { section: 'finance', view: 'receipts' };
+  if (/^\/finance\/receipts\/?$/u.test(pathname)) return { section: 'finance', view: 'receipts' };
   if (/^\/finance\/reports\/spend\/?$/u.test(pathname))
     return { section: 'finance', view: 'spend-report' };
-  if (/^\/finance\/reports\/?$/u.test(pathname))
-    return { section: 'finance', view: 'reports' };
+  if (/^\/finance\/reports\/?$/u.test(pathname)) return { section: 'finance', view: 'reports' };
   if (/^\/finance\/?$/u.test(pathname)) return { section: 'finance', view: 'dashboard' };
   if (/^\/groups\/?$/.test(pathname)) return { section: 'groups' };
   if (/^\/directory\/?$/.test(pathname)) return { section: 'directory' };

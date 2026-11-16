@@ -1,5 +1,5 @@
 import { peekFinanceAccess } from '../security/finance-access.js';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   loadFinanceApiSnapshot,
   readFinanceApiSnapshot,
@@ -18,7 +18,14 @@ import {
   type ReconciliationIssueView,
   type ReconciliationDecision,
 } from './ReconciliationReview.js';
-import { TransactionSearch } from './TransactionSearch.js';
+import {
+  continueTransactionQuery,
+  startTransactionQuery,
+  transactionFilters,
+  waitForTransactionQuery,
+} from './transaction-query.js';
+import { TransactionTable } from './TransactionTable.js';
+import { TransactionModal } from './TransactionModal.js';
 import { ManualTransactionForm } from './ManualTransactionForm.js';
 
 type AccountView = {
@@ -33,38 +40,96 @@ type AccountView = {
 };
 type CategoryView = { id: string; name: string };
 type MerchantView = { id: string; name: string };
+type CandidateCursor = { queryId: string; cursor?: string };
 type SnapshotData = {
   accounts: AccountView[];
   transactions: TransactionView[];
   categories: CategoryView[];
   merchants: MerchantView[];
   issues: ReconciliationIssueView[];
+  candidateCursor?: CandidateCursor;
 };
 
-async function loadTransactionGraph(request: FinanceSnapshotRequest): Promise<SnapshotData> {
-  const accountPage = await request<{ items: AccountView[] }>('/finance/accounts');
-  const [pages, categoryPage, merchantPage, reviewPage] = await Promise.all([
-    Promise.all(
-      accountPage.items.map(({ id }) =>
-        request<{ items: TransactionView[] }>(`/finance/accounts/${id}/transactions`),
-      ),
-    ),
-    request<{ items: CategoryView[] }>('/finance/categories'),
-    request<{ items: MerchantView[] }>('/finance/merchants'),
-    request<{ items: ReconciliationIssueView[] }>('/finance/review-issues'),
+async function loadTransactionGraph(
+  request: FinanceSnapshotRequest,
+  transactionId?: string,
+  signal?: AbortSignal,
+): Promise<SnapshotData> {
+  const [accountPage, categoryPage, merchantPage, reviewPage] = await Promise.all([
+    request<{ items: AccountView[] }>('/finance/accounts', { browse: true }),
+    request<{ items: CategoryView[] }>('/finance/categories', { browse: true }),
+    request<{ items: MerchantView[] }>('/finance/merchants', { browse: true }),
+    transactionId
+      ? request<{ items: ReconciliationIssueView[] }>('/finance/review-issues', { browse: true })
+      : Promise.resolve({ items: [] }),
   ]);
+  const issues = transactionId
+    ? reviewPage.items.filter(({ candidateIds }) => candidateIds.includes(transactionId))
+    : [];
+  const transactions = [];
+  let candidateCursor: CandidateCursor | undefined;
+  if (transactionId) {
+    const selected = await request<TransactionView>(
+      `/finance/transactions/${encodeURIComponent(transactionId)}?browse=1`,
+    );
+    transactions.push(selected);
+    if (signal && accountPage.items.length) {
+      const started = performance.now();
+      const filters = transactionFilters(
+        {
+          currency: selected.currency,
+          ...(selected.amountMinor > 0
+            ? { amountMax: '-1' }
+            : { amount: String(-selected.amountMinor) }),
+        },
+        accountPage.items.map(({ id }) => id),
+      );
+      try {
+        let candidates = await startTransactionQuery(filters, undefined, signal);
+        while (
+          candidates.rowsState === 'searching' &&
+          candidates.queryId &&
+          performance.now() - started < 1500
+        ) {
+          await waitForTransactionQuery(signal);
+          candidates = await continueTransactionQuery(candidates.queryId, signal);
+        }
+        transactions.push(
+          ...(await Promise.all(
+            candidates.items
+              .filter(({ id }) => id !== transactionId)
+              .slice(0, 50)
+              .map(({ id }) =>
+                request<TransactionView>(`/finance/transactions/${encodeURIComponent(id)}`),
+              ),
+          )),
+        );
+        if (candidates.queryId && (candidates.nextCursor || candidates.rowsState === 'searching'))
+          candidateCursor = {
+            queryId: candidates.queryId,
+            ...(candidates.nextCursor ? { cursor: candidates.nextCursor } : {}),
+          };
+      } catch {
+        signal.throwIfAborted();
+        // The selected transaction remains reviewable when candidate lookup is unavailable.
+      }
+    }
+  }
   return {
     accounts: accountPage.items,
-    transactions: pages.flatMap(({ items }) => items),
+    transactions,
     categories: categoryPage.items,
     merchants: merchantPage.items,
-    issues: reviewPage.items,
+    issues,
+    ...(candidateCursor ? { candidateCursor } : {}),
   };
 }
 
 export function FinanceTransactionsPage({
   csrfToken,
   currentUserId,
+  modalOnly = false,
+  onOpenBudget,
   onOpenMerchant,
   initialTransactionId,
   onOpenTransaction,
@@ -72,7 +137,9 @@ export function FinanceTransactionsPage({
 }: {
   csrfToken: string;
   currentUserId?: string;
-  onOpenMerchant?: (merchantId: string) => void;
+  modalOnly?: boolean;
+  onOpenBudget?: (budgetId: string) => void;
+  onOpenMerchant?: (id: string) => void;
   initialTransactionId?: string;
   onOpenTransaction?: (transactionId: string, focusId?: string) => void;
   onCloseTransaction?: () => void;
@@ -82,16 +149,19 @@ export function FinanceTransactionsPage({
   const [categories, setCategories] = useState<CategoryView[]>([]);
   const [merchants, setMerchants] = useState<MerchantView[]>([]);
   const [issues, setIssues] = useState<ReconciliationIssueView[]>([]);
-  const [matchedIds, setMatchedIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string>();
   const [removalImpact, setRemovalImpact] = useState<TransactionRemovalImpact>();
   const previewRequest = useRef(0);
   const selectionRequest = useRef(0);
   const [loading, setLoading] = useState(true);
   const [snapshot, setSnapshot] = useState<FinanceApiSnapshot<SnapshotData>>();
-  const [searchState, setSearchState] = useState<'checking' | 'ready' | 'failed'>('checking');
   const retainedSnapshot = useRef<FinanceApiSnapshot<SnapshotData> | undefined>(undefined);
   const [reload, setReload] = useState(0);
+  const [tableRevision, setTableRevision] = useState(0);
+  const [scopeError, setScopeError] = useState(false);
+  const [candidateCursor, setCandidateCursor] = useState<CandidateCursor>();
+  const [candidateMessage, setCandidateMessage] = useState('');
+  const candidateLoad = useRef<AbortController | undefined>(undefined);
   const [reconciliationMessage, setReconciliationMessage] = useState('');
   const [addingTransaction, setAddingTransaction] = useState(false);
   const clearRemovalImpact = useCallback(() => {
@@ -103,26 +173,39 @@ export function FinanceTransactionsPage({
     retainedSnapshot.current = undefined;
     setSnapshot(undefined);
     setSelectedId(undefined);
+    candidateLoad.current?.abort();
+    candidateLoad.current = undefined;
+    setCandidateCursor(undefined);
+    setCandidateMessage('');
     setReconciliationMessage('');
     selectionRequest.current++;
     clearRemovalImpact();
-    setAccounts((value) => (value.length ? [] : value));
     setTransactions((value) => (value.length ? [] : value));
     setCategories((value) => (value.length ? [] : value));
     setMerchants((value) => (value.length ? [] : value));
     setIssues((value) => (value.length ? [] : value));
-    setMatchedIds((value) => (value.length ? [] : value));
-    setSearchState('failed');
     setLoading(false);
   }, [clearRemovalImpact]);
+  const revokeSnapshot = useCallback(() => {
+    setAccounts([]);
+    setScopeError(true);
+    clearSnapshot();
+  }, [clearSnapshot]);
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     clearSnapshot();
     setLoading(true);
-    const unsubscribe = peekFinanceAccess()?.onLock(clearSnapshot);
+    const unsubscribe = peekFinanceAccess()?.onLock(() => {
+      controller.abort();
+      active = false;
+      revokeSnapshot();
+    });
     let retained: FinanceApiSnapshot<SnapshotData> | undefined;
     void (async () => {
-      retained = await loadFinanceApiSnapshot(loadTransactionGraph);
+      retained = await loadFinanceApiSnapshot((request) =>
+        loadTransactionGraph(request, initialTransactionId, controller.signal),
+      );
       if (!active) {
         disposeFinanceApiSnapshot(retained);
         return;
@@ -130,10 +213,12 @@ export function FinanceTransactionsPage({
       const data = await readFinanceApiSnapshot(retained, (value) => value);
       if (!active) return;
       setAccounts(data.accounts);
+      setScopeError(false);
       setTransactions(data.transactions);
       setCategories(data.categories);
       setMerchants(data.merchants);
       setIssues(data.issues);
+      setCandidateCursor(data.candidateCursor);
       setSelectedId(
         initialTransactionId && data.transactions.some(({ id }) => id === initialTransactionId)
           ? initialTransactionId
@@ -141,72 +226,78 @@ export function FinanceTransactionsPage({
       );
       retainedSnapshot.current = retained;
       setSnapshot(retained);
-      setSearchState('checking');
       setLoading(false);
     })().catch(() => {
       if (retained) disposeFinanceApiSnapshot(retained);
-      if (active) clearSnapshot();
+      if (active) revokeSnapshot();
     });
     return () => {
       active = false;
+      controller.abort();
+      candidateLoad.current?.abort();
       unsubscribe?.();
       if (retained) disposeFinanceApiSnapshot(retained);
       if (retainedSnapshot.current) disposeFinanceApiSnapshot(retainedSnapshot.current);
       retainedSnapshot.current = undefined;
     };
-  }, [clearSnapshot, initialTransactionId, reload]);
-  const searchDocuments = useMemo(
-    () =>
-      transactions.map((transaction) => ({
-        id: transaction.id,
-        accountId: transaction.accountId,
-        description: transaction.description,
-        ...(transaction.payee ? { payee: transaction.payee } : {}),
-        ...(transaction.memo ? { memo: transaction.memo } : {}),
-        ...(transaction.merchantId && merchants.find(({ id }) => id === transaction.merchantId)
-          ? { merchantName: merchants.find(({ id }) => id === transaction.merchantId)!.name }
-          : {}),
-      })),
-    [merchants, transactions],
-  );
-  const receiveMatches = useCallback(
-    (ids: string[]) => {
-      if (snapshot && snapshot === retainedSnapshot.current) setMatchedIds(ids);
-    },
-    [snapshot],
-  );
-  const authorizeSearch = useCallback(
-    async (search: () => string[]) => {
-      if (!snapshot) throw new Error('Refresh Finance before searching.');
-      return readFinanceApiSnapshot(snapshot, () => search());
-    },
-    [snapshot],
-  );
-  const receiveSearchState = useCallback(
-    (state: 'checking' | 'ready' | 'failed') => {
-      if (!snapshot || snapshot !== retainedSnapshot.current) return;
-      if (state === 'failed') clearSnapshot();
-      else setSearchState(state);
-    },
-    [clearSnapshot, snapshot],
-  );
-  const openTransaction = async (id: string) => {
-    const visit = ++selectionRequest.current;
-    clearRemovalImpact();
+  }, [clearSnapshot, initialTransactionId, reload, revokeSnapshot]);
+  const loadMoreCandidates = async () => {
+    const previous = retainedSnapshot.current;
+    if (!previous || !candidateCursor || candidateLoad.current) return;
+    const controller = new AbortController();
+    candidateLoad.current = controller;
+    const { signal } = controller;
+    const { queryId, cursor } = candidateCursor;
+    let additional: FinanceApiSnapshot<TransactionView[]> | undefined;
+    let next: FinanceApiSnapshot<SnapshotData> | undefined;
+    const current = () => !signal.aborted && retainedSnapshot.current === previous;
+    setCandidateMessage('Loading more transactions…');
     try {
-      if (!snapshot) throw new Error('Refresh Finance before reviewing.');
-      const verified = await readFinanceApiSnapshot(snapshot, () => id);
-      if (snapshot === retainedSnapshot.current && visit === selectionRequest.current) {
-        clearRemovalImpact();
-        setSelectedId(verified);
-        onOpenTransaction?.(verified, `finance-transaction-${verified}`);
+      const started = performance.now();
+      let result = await continueTransactionQuery(queryId, signal, cursor);
+      while (result.rowsState === 'searching' && performance.now() - started < 10_000) {
+        await waitForTransactionQuery(signal);
+        result = await continueTransactionQuery(queryId, signal, cursor);
       }
+      if (!current()) return;
+      if (result.rowsState === 'searching') throw new Error('Candidate page unavailable.');
+      if (result.items.length) {
+        additional = await loadFinanceApiSnapshot((request) =>
+          Promise.all(
+            result.items.map(({ id }) =>
+              request<TransactionView>(`/finance/transactions/${encodeURIComponent(id)}`),
+            ),
+          ),
+        );
+        if (!current()) return;
+        next = await combineFinanceApiSnapshots(previous, additional, (data, rows) => {
+          const known = new Set(data.transactions.map(({ id }) => id));
+          return {
+            ...data,
+            transactions: [...data.transactions, ...rows.filter(({ id }) => !known.has(id))],
+          };
+        });
+        const data = await readFinanceApiSnapshot(next, (value) => value);
+        if (!current()) return;
+        retainedSnapshot.current = next;
+        setSnapshot(next);
+        setTransactions(data.transactions);
+        disposeFinanceApiSnapshot(previous);
+      }
+      setCandidateCursor(result.nextCursor ? { queryId, cursor: result.nextCursor } : undefined);
+      setCandidateMessage('');
     } catch {
-      if (snapshot === retainedSnapshot.current && visit === selectionRequest.current) {
-        clearSnapshot();
-      }
+      if (current())
+        setCandidateMessage(
+          'More candidate transactions are unavailable. Reopen this transaction to retry.',
+        );
+    } finally {
+      if (candidateLoad.current === controller) candidateLoad.current = undefined;
+      if (additional) disposeFinanceApiSnapshot(additional);
+      if (next && next !== retainedSnapshot.current) disposeFinanceApiSnapshot(next);
     }
   };
+
   const previewRemoval = async (id: string) => {
     if (!snapshot || snapshot !== retainedSnapshot.current) return;
     const visit = ++previewRequest.current;
@@ -228,7 +319,7 @@ export function FinanceTransactionsPage({
       }));
       if (current()) setRemovalImpact(impact);
     } catch {
-      if (current()) clearSnapshot();
+      if (current()) revokeSnapshot();
     } finally {
       if (preview) disposeFinanceApiSnapshot(preview);
     }
@@ -240,10 +331,10 @@ export function FinanceTransactionsPage({
       snapshot === retainedSnapshot.current && selection === selectionRequest.current;
     try {
       const allowed = await readFinanceApiSnapshot(snapshot, verify);
-      if (current() && !allowed) clearSnapshot();
+      if (current() && !allowed) revokeSnapshot();
       return current() && allowed;
     } catch {
-      if (current()) clearSnapshot();
+      if (current()) revokeSnapshot();
       return false;
     }
   };
@@ -287,12 +378,16 @@ export function FinanceTransactionsPage({
     let changed: FinanceApiSnapshot<TransactionView[]> | undefined;
     try {
       if (reconciliation) {
-        next = await loadFinanceApiSnapshot(loadTransactionGraph);
+        next = await loadFinanceApiSnapshot((request) =>
+          loadTransactionGraph(request, transactionId),
+        );
       } else {
         changed = await loadFinanceApiSnapshot((request) =>
           Promise.all(
             [...new Set([transactionId, ...relatedIds])].map(async (id) => {
-              const value = await request<TransactionView>(`/finance/transactions/${id}`);
+              const value = await request<TransactionView>(
+                `/finance/transactions/${encodeURIComponent(id)}${id === transactionId ? '?browse=1' : ''}`,
+              );
               if (value.id !== id) throw new Error('Refresh Finance to verify this transaction.');
               return value;
             }),
@@ -336,23 +431,18 @@ export function FinanceTransactionsPage({
             ? transactionId
             : undefined,
         );
-      setMatchedIds([]);
-      setSearchState('checking');
       disposeFinanceApiSnapshot(previous);
+      setTableRevision((value) => value + 1);
       return true;
     } catch {
       if (next) disposeFinanceApiSnapshot(next);
-      if (previous === retainedSnapshot.current) clearSnapshot();
+      if (previous === retainedSnapshot.current) revokeSnapshot();
       return false;
     } finally {
       if (changed) disposeFinanceApiSnapshot(changed);
     }
   };
 
-  const filtered = useMemo(() => {
-    const ids = new Set(matchedIds);
-    return transactions.filter(({ id }) => ids.has(id));
-  }, [matchedIds, transactions]);
   const selected = transactions.find(({ id }) => id === selectedId);
   const selectedIssue =
     selected &&
@@ -360,105 +450,49 @@ export function FinanceTransactionsPage({
       ({ candidateIds, status }) =>
         (!status || status === 'open') && candidateIds.includes(selected.id),
     );
-  const merchantName = (id: string | undefined) =>
-    merchants.find((merchant) => merchant.id === id)?.name;
   return (
     <section className="finance-transactions">
-      <h2>Transactions</h2>
-      <button type="button" onClick={() => setAddingTransaction((value) => !value)}>
-        Add Transaction
-      </button>
-      {addingTransaction ? (
-        <ManualTransactionForm
-          accounts={accounts}
-          merchants={merchants}
-          categories={categories}
-          csrfToken={csrfToken}
-          authorizeEdit={async () => Boolean(snapshot && retainedSnapshot.current === snapshot)}
-          onSaved={async (_transaction, queued) => {
-            if (!queued) {
-              setReload((value) => value + 1);
-            }
-          }}
-        />
+      {!modalOnly ? (
+        <>
+          <h2>Transactions</h2>
+          <button type="button" onClick={() => setAddingTransaction((value) => !value)}>
+            Add Transaction
+          </button>
+          {addingTransaction ? (
+            <ManualTransactionForm
+              accounts={accounts}
+              merchants={merchants}
+              categories={categories}
+              csrfToken={csrfToken}
+              authorizeEdit={async () => Boolean(snapshot && retainedSnapshot.current === snapshot)}
+              onSaved={async (_transaction, queued) => {
+                if (!queued) setReload((value) => value + 1);
+              }}
+            />
+          ) : null}
+          <TransactionTable
+            accounts={accounts}
+            categories={categories}
+            reload={reload + tableRevision}
+            scopeLoading={loading}
+            scopeError={scopeError}
+            onRefreshScope={() => setReload((value) => value + 1)}
+            {...(onOpenTransaction ? { onOpen: onOpenTransaction } : {})}
+            {...(onOpenMerchant ? { onOpenMerchant } : {})}
+          />
+        </>
       ) : null}
       {reconciliationMessage ? <p role="status">{reconciliationMessage}</p> : null}
-      <TransactionSearch
-        accounts={accounts}
-        documents={searchDocuments}
-        onMatches={receiveMatches}
-        authorizeSearch={authorizeSearch}
-        onState={receiveSearchState}
-      />
-      <p role="status">
-        {loading
-          ? 'Indexing transactions…'
-          : !snapshot || searchState === 'failed'
-            ? 'Reconnect and refresh Finance to search transactions.'
-            : searchState === 'checking'
-              ? 'Checking transactions…'
-              : `${filtered.length} ${filtered.length === 1 ? 'transaction' : 'transactions'} found`}
-      </p>
-      {!loading && (!snapshot || searchState === 'failed') ? (
-        <button onClick={() => setReload((value) => value + 1)}>Refresh transactions</button>
-      ) : null}
-      <div
-        className="finance-transaction-window"
-        role="feed"
-        aria-busy={loading || Boolean(snapshot && searchState === 'checking')}
-      >
-        {filtered.slice(0, 200).map((transaction) => (
-          <article key={transaction.id} aria-label={`${transaction.description} transaction`}>
-            <h3>{transaction.description}</h3>
-            <p>
-              {new Date(
-                (transaction as TransactionView & { effectiveAt?: string }).effectiveAt ??
-                  Date.now(),
-              ).toLocaleDateString()}
-            </p>
-            {transaction.merchantId && merchantName(transaction.merchantId) ? (
-              <a
-                href={`/finance/merchants/${transaction.merchantId}`}
-                onClick={(event) => {
-                  if (onOpenMerchant) {
-                    event.preventDefault();
-                    onOpenMerchant(transaction.merchantId!);
-                  }
-                }}
-              >
-                {merchantName(transaction.merchantId)}
-              </a>
-            ) : null}
-            <button
-              id={`finance-transaction-${transaction.id}`}
-              onClick={() => {
-                void openTransaction(transaction.id);
-              }}
-            >
-              Review {transaction.description}
-            </button>
-            {transaction.reviewState === 'reconciliation-review' ? (
-              <button
-                onClick={() => {
-                  void openTransaction(transaction.id);
-                }}
-              >
-                Review reconciliation
-              </button>
-            ) : null}
-          </article>
-        ))}
-      </div>
-      {selected ? (
-        <div className="modal-backdrop">
-          <section role="dialog" aria-modal="true" aria-label="Transaction details">
-            <button type="button" onClick={onCloseTransaction}>
-              Close transaction
-            </button>
+      {initialTransactionId && onCloseTransaction ? (
+        <TransactionModal onClose={onCloseTransaction}>
+          {selected ? (
             <TransactionDetail
+              {...(onOpenBudget ? { onOpenBudget } : {})}
               key={selected.id}
               transaction={selected}
               allTransactions={transactions}
+              candidateMessage={candidateMessage}
+              {...(candidateCursor ? { onMoreCandidates: loadMoreCandidates } : {})}
               categories={categories}
               {...(accounts.find(({ id }) => id === selected.accountId)?.scope
                 ? { scope: accounts.find(({ id }) => id === selected.accountId)!.scope! }
@@ -483,8 +517,10 @@ export function FinanceTransactionsPage({
                 return snapshot ? refreshAfterMutation(snapshot, selected.id, relatedIds) : false;
               }}
             />
-          </section>
-        </div>
+          ) : (
+            <p role="status">{loading ? 'Loading transaction…' : 'Transaction unavailable.'}</p>
+          )}
+        </TransactionModal>
       ) : null}
     </section>
   );

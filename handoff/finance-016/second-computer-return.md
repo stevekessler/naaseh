@@ -1,0 +1,62 @@
+# Finance 016 second-computer return
+
+November 15, 2026
+
+The provisional branch is `codex/finance-016-second-computer` in an isolated local checkout. It starts from the shared Phase 7 checkpoint `c4c4978820697701dfa11ac33a9c83a78f68437b`. The original checkout remains on `codex/mobile-task-list-layout`. Its feature pointer is Finance 015. This branch's `.specify/feature.json` points to `specs/016-finance-experience-expansion`.
+
+## What is on the branch
+
+| Scope | Commit and status |
+| --- | --- |
+| Phase 8, T072–T081 | `a73dcf91198684bb1760384537a663dd987dd959`. Already committed and checked in the local Finance branch. |
+| Phase 9, T082–T093 | Reported complete in the first computer's handoff. Import still pending. Verify tip `d9bc35b`, ancestry of `0855a36`, and the latest handoff note before carrying over the checkmarks. |
+| Phase 10, T094–T108 | `9eafd458168c709147c9bb3923947101b97bb5e5`. Already committed and checked in the local receipts branch. |
+| Receipt recovery | `e71d4eb7bc8271da81d082a9ac48c6dea1c21b4c` replays local commit `1d00d176c8a1167a6644039fa0b1fa2bea2d71e8` on the receipts base. It covers expired upload cancellation and stale or revoked receipt content and listings. |
+| Phase 11, T122 | Open. The local provider reconciler registers the canonical transaction alias and invokes the existing reference-transfer hook. It needs the imported Phase 9 fulfillment graph and the Phase 11 generalized task-link and partial-retry implementation to verify the receipt/task/fulfillment graph and restore path together. |
+| Phase 11, T123 | Open until T122 and the remaining browser journeys are ready. |
+
+Local Spend Report `913e40abd5af31f68bfdef306aede0843ec77859` and Forecast `42bc68da4f08911fdf914b08bda38711a6d78eaa` remain in their existing worktrees. The provisional branch contains only Phase 8, Phase 10, and receipt recovery.
+
+## First computer
+
+The T109 test-authoring baseline remains `origin/codex/task-item-creation-uploads` at `c4c4978820697701dfa11ac33a9c83a78f68437b`. The first computer can draft the target union, legacy budget-item adapter, unique links, and partial-success retry contracts in `tests/contract/finance-expense-task-links.contract.test.ts`. Keep this pass test-file-only and leave T109 unchecked until the corresponding implementation passes.
+
+T111 stays reserved for the first computer. The full Chromium/WebKit run in `tests/e2e/finance-expense-task-links.spec.ts` needs the Phase 9 base and the Phase 11 Add Task flow, selectors, reverse navigation, task/Post-it settings and embedded authorization. Avoid parallel changes to shared Finance handlers and contracts, transaction and receipt browser specs, provider reconciliation and restore tests, and the Finance task checklist. This computer retains Phase 8, Phase 10 and T122.
+
+## Integration and release
+
+Git writes in the original checkout failed at `.git/FETCH_HEAD`. A read-only GitHub check and a fetch in the isolated checkout both failed to resolve `github.com`. The GitHub bundle's availability could not be confirmed, and neither requested commit object was present locally. No branch was pushed. Use the verified Phase 9 tip as the integration base once the handoff can be fetched. Confirm Phase 8 ancestry there before adding receipts and receipt recovery.
+
+Keep T018 open for real DynamoDB and hosted acceptance, preserve the combined $6.50/month AWS ceiling, and leave the migration unrun. No deployment, production change, or merge to main was performed.
+
+## Fresh local validation
+
+Node 24.22.2 and Playwright 1.64.1 were used against the provisional branch.
+
+| Gate | Result | Real time |
+| --- | --- | --- |
+| `npm run validate` | 1,936 tests passed in 491 files. Runtime check, typecheck, lint, and builds passed. | 70.89 s |
+| Affected Chromium and WebKit specs | 14 tests discovered across the transaction browsing and receipts specs. The application built, but the sandbox denied the preview bind on `127.0.0.1:4173` before any browser tests ran. | 4.10 s |
+| Required quick selection | 31 tests discovered in 20 files. Selection, projects, timeouts, and retries are unchanged. | Discovery only |
+
+This validates the provisional branch. Run these gates again after importing Phase 9 and adding T122.
+
+## T122 receipt retry follow-up
+
+Commit `4c0f835451cad90efe3bd4e898279fc1bd1d9cd3` fixes receipt upload retries through a reconciled transaction's canonical URL. Both transaction references must authorize the same current canonical transaction and account. The receipt keeps its original parent, intent fingerprint, blob, and upload session. The regression covers renewed pending uploads, retries after availability, changed upload intent, unrelated same-account transactions, and revoked original access.
+
+Focused receipt, restore, and SimpleFIN checks passed 37 tests in 5 files in 0.48 seconds. On Node 24.22.2, required validation passed 1,937 tests in 491 files in 63.19 seconds, including typecheck, lint, and builds. The Playwright 1.64.1 Chromium and WebKit rerun stopped after 4.08 seconds when the sandbox denied the preview bind. No browser tests ran. Quick discovery remains 31 tests in 20 files.
+
+T122 stays open for the fulfillment and task-link reconciliation and combined restore checks. Phase 9 import is still blocked by GitHub connectivity. The T109 starting point and T111 ownership above still apply.
+
+## T122 receipt restore follow-up
+
+Commit `19e4c4b9feb8ec6081d8446a05803701f56b2093` expands the receipt restore fixture to round-trip the original and canonical transaction rows, locators, and alias. It verifies exact-version and policy verdict enforcement and retention under the active reconciled transaction. The receipt becomes eligible for deleted-source retention if the restored alias is missing.
+
+Focused validation passed 37 tests in 5 files in 0.47 seconds. Required validation passed 1,937 tests in 491 files in 64.38 seconds, including typecheck, lint, and builds. This change is test-only. The remaining T122 graph checks and T123 integration still need Computer 1's Phase 9 and Phase 11 commits.
+
+## T122 partial receipt restore cleanup
+
+Commit `aae3c287d5846bed888e422284c79739be1b53a7` prevents the scheduled cleanup from deleting a restored receipt's exact object version when its separate blob reference row is missing. Before deleting a possible orphan receipt blob, cleanup point-reads the current receipt and preserves the version if that receipt still names it and is live. The regression exercises the scheduled handler with a restored canonical transaction alias and mocked storage calls. It also verifies that deletion can proceed for the exact version after the receipt is marked deleted.
+
+Focused validation passed 37 tests in 5 files in 0.49 seconds. Required validation on Node 24.22.2 passed 1,937 tests in 491 files in 65.00 seconds, including typecheck, lint, and builds. The required browser selection is unchanged. Live storage verification remains under T018. T122 and T123 remain open for the combined graph and Phase 11 verification.

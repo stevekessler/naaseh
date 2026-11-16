@@ -29,6 +29,7 @@ export function createProfileMediaResources(
         allowedMethods: [s3.HttpMethods.PUT],
         allowedHeaders: [
           'content-type',
+          'if-none-match',
           'x-amz-checksum-sha256',
           'x-amz-server-side-encryption',
           'x-amz-server-side-encryption-aws-kms-key-id',

@@ -52,7 +52,20 @@ describe('Finance experience serverless infrastructure and worker boundary', () 
       Key: 'NaasehFinanceWorkerBoundary',
       Value: 'FinanceExperienceInfrastructureTest/FinanceApiFunction',
     });
-    expect(policy).not.toContain('kms:Decrypt');
+    const financeStatements = policies.Properties.PolicyDocument.Statement as {
+      Action: string | string[];
+      Condition?: { StringEquals?: Record<string, unknown> };
+    }[];
+    const decrypt = financeStatements.filter(({ Action }) =>
+      [Action].flat().includes('kms:Decrypt'),
+    );
+    expect(decrypt).toHaveLength(1);
+    expect(decrypt[0]?.Condition?.StringEquals).toEqual({
+      'kms:ViaService': { 'Fn::Join': ['', ['s3.us-west-2.', { Ref: 'AWS::URLSuffix' }]] },
+      'kms:EncryptionContext:aws:s3:arn': {
+        'Fn::GetAtt': [expect.stringMatching(/^Media/u), 'Arn'],
+      },
+    });
     expect(policy).not.toContain('secretsmanager:GetSecretValue');
     expect(policy).toContain('events:PutEvents');
     expect(policy).toContain('event-bus/default');

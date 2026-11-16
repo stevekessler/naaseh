@@ -1,5 +1,16 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 15 two-computer integration checkpoint: 123/166 tasks checked.
+> The integration branch merges Computer 1 at `131e515f` and Computer 2 at
+> `3b5a7b58` from common base `c4c4978`. The combined paths retain bounded
+> transaction browsing, private receipts, upcoming expenses, task links and
+> dashboard preferences. T126 retains its eight-case pre-integration Terminal
+> browser pass. Integrated tests passed 2,007/506 and lint passed. Full
+> validation and browser execution need the locked PDF dependency. See the
+> [validation runtime record](../testing/finance-experience-validation-runtime.md).
+> T122 and T123 still need combined reconciliation, restore and browser evidence.
+> T018 remains open for live storage and hosted acceptance under the $6.50 ceiling.
+
 > November 15 dashboard widgets checkpoint: 98/166 tasks checked. The dashboard
 > uses current personal flags to show only opted-in account balances and persists
 > the upcoming count (5/10/15/20) through protected versioned settings.

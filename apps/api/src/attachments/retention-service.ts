@@ -20,3 +20,17 @@ export function taskAttachmentRetention(
     retentionReason: completed ? 'completed' : 'archived',
   };
 }
+
+/** Financial receipts follow their own transaction's deletion, independent of tasks. */
+export function receiptRetention(
+  current: Pick<Attachment, 'purgeAfter' | 'retentionReason'>,
+  transaction: { status?: unknown } | undefined,
+  now: Date,
+): Pick<Attachment, 'purgeAfter' | 'retentionReason'> | undefined {
+  if (transaction && transaction.status !== 'tombstone' && transaction.status !== 'deleted')
+    return undefined;
+  return {
+    purgeAfter: current.purgeAfter ?? attachmentPurgeAfter(now),
+    retentionReason: 'deleted',
+  };
+}

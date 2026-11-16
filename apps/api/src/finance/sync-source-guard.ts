@@ -1,7 +1,8 @@
+import { projectTransactionBudgetLinks } from './transaction-query-service.js';
 import type { FinanceCacheAuthorizationSnapshot } from './cache-proof.js';
 import { isDeepStrictEqual } from 'node:util';
 import { GetCommand } from '@aws-sdk/lib-dynamodb';
-import { canReadTaskAs, type SyncChange } from '@naaseh/domain';
+import { canReadTaskAs, expenseRefundRelationshipSchema, type SyncChange } from '@naaseh/domain';
 import { getMembership } from '../groups/group-repository.js';
 import { dynamodb, tableName } from '../shared/dynamodb.js';
 import { SafeApiError } from '../shared/http.js';
@@ -383,6 +384,59 @@ export class FinanceSyncSourceGuard {
       }),
     ];
   }
+
+  /** The browsing view authorizes the transaction and each optional linked budget separately. */
+  async readTransactionForBrowsing(id: string) {
+    const source = await this.source('transactions', id);
+    const value = source?.value;
+    if (!source || !value || value.status !== 'active') return undefined;
+    const account = await this.eligible('accounts', value.accountId);
+    if (
+      !account ||
+      account.storageKey.PK !== source.storageKey.PK ||
+      ['tombstone', 'deleting'].includes(String(account.value.status))
+    )
+      return undefined;
+    const projection = await projectTransactionBudgetLinks(value, async (itemId) => {
+      const locator = await this.work.get(financeLocatorKey('budgetItems', itemId));
+      if (!locator) return { status: 'missing' };
+      const item = await this.eligible('budgetItems', itemId);
+      if (item?.value.status === 'tombstone') return { status: 'missing' };
+      if (!item || typeof item.value.budgetId !== 'string') return { status: 'hidden' };
+      const budget = await this.eligible('budgets', item.value.budgetId);
+      if (budget?.value.status === 'tombstone') return { status: 'missing' };
+      if (!budget || typeof budget.value.name !== 'string') return { status: 'hidden' };
+      return { status: 'visible', budgetId: item.value.budgetId, budgetName: budget.value.name };
+    });
+    if (Number(value.amountMinor) <= 0) return projection;
+    const stored = await loadTargetedFinanceEntity(this.work, 'refundRelationships', id);
+    if (
+      stored?.storageKey.PK !== source.storageKey.PK ||
+      stored.scopeRevision !== source.scopeRevision
+    )
+      return projection;
+    const relationship = expenseRefundRelationshipSchema.safeParse(stored.value);
+    if (
+      !relationship.success ||
+      relationship.data.status !== 'active' ||
+      relationship.data.refundTransactionId !== id
+    )
+      return projection;
+    const original = await this.readCanonicalSource(
+      'financeTransaction',
+      relationship.data.originalExpenseTransactionId,
+    );
+    return original && typeof original.description === 'string'
+      ? {
+          ...projection,
+          refundOriginal: {
+            id: relationship.data.originalExpenseTransactionId,
+            description: original.description,
+          },
+        }
+      : projection;
+  }
+
   /** Private evidence for sources checked in this delivery; never a public Finance DTO. */
   async cacheAuthorizationSnapshot(): Promise<FinanceCacheAuthorizationSnapshot> {
     if (!this.options.userId) throw changed();

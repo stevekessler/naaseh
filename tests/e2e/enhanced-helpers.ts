@@ -268,3 +268,166 @@ export async function mockFinanceSnapshotEvidence(
     },
   };
 }
+
+export async function mockFinanceTransactionBrowsing(
+  page: Page,
+  records: () => Iterable<Record<string, unknown>>,
+) {
+  await page.route(/\/api\/v1\/finance\/(?:accounts\/[^/?]+\/)?transactions\?/u, (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET' || url.searchParams.get('browse') !== '1')
+      return route.fallback();
+    const accountId = url.pathname.match(/accounts\/([^/]+)\/transactions$/u)?.[1];
+    const accounts = accountId ? [accountId] : url.searchParams.getAll('accountIds[]');
+    const text = url.searchParams.get('text')?.toLowerCase();
+    const amount = url.searchParams.get('amount');
+    const amountMax = url.searchParams.get('amountMax');
+    const currency = url.searchParams.get('currency');
+    const items = [...records()].filter(
+      (row) =>
+        accounts.includes(String(row.accountId)) &&
+        (!text || String(row.description).toLowerCase().includes(text)) &&
+        (!currency || row.currency === currency) &&
+        (amount === null || row.amountMinor === Number(amount)) &&
+        (amountMax === null || Number(row.amountMinor) <= Number(amountMax)),
+    );
+    return route.fulfill({
+      json: {
+        items,
+        asOf: '2026-11-14T00:00:00.000Z',
+        projectionRevision: 'fixture',
+        complete: true,
+        rowsState: items.length ? 'ready' : 'confirmed-empty',
+        aggregateState: 'exact',
+        totalCount: items.length,
+        totalsByCurrency: [],
+        coverage: { examined: items.length, scopeComplete: true },
+      },
+    });
+  });
+}
+
+export type SeedFinanceValue = {
+  id: string;
+  entityType: string;
+  scopeKey: string;
+  accountId?: string;
+  occurredAt?: string;
+  value: Record<string, unknown>;
+};
+
+export async function seedFinanceSearch(page: Page, values: SeedFinanceValue[]) {
+  // Synthetic server acceptance for this UI fixture; real proof authentication/revocation has API tests.
+  await page.route('**/api/v1/sync/pull', async (route) => {
+    const body = route.request().postDataJSON() as {
+      financeCacheOnly?: boolean;
+      financeCacheProtocol?: number;
+      financeCacheProof?: string | string[];
+      financeCursor?: Record<string, number>;
+    };
+    if (!body.financeCacheOnly) return route.fallback();
+    expect(body.financeCacheProtocol).toBe(1);
+    const proofs = Array.isArray(body.financeCacheProof)
+      ? body.financeCacheProof
+      : [body.financeCacheProof];
+    expect(proofs.length).toBeGreaterThan(0);
+    expect(proofs.every((proof) => proof === 'fc1.synthetic.fixture.proof')).toBe(true);
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        changes: [],
+        financeChanges: [],
+        cursor: {},
+        financeCursor: body.financeCursor,
+        financeCache: { status: 'current', proof: 'fc1.synthetic.fixture.proof' },
+      }),
+    });
+  });
+  await page.evaluate(async (input) => {
+    const request = indexedDB.open('naaseh');
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const keyTransaction = database.transaction('cryptoKeys', 'readwrite');
+    const keyStore = keyTransaction.objectStore('cryptoKeys');
+    const currentRequest = keyStore.get('device');
+    const current = await new Promise<{ key: CryptoKey } | undefined>((resolve, reject) => {
+      currentRequest.onsuccess = () =>
+        resolve(currentRequest.result as { key: CryptoKey } | undefined);
+      currentRequest.onerror = () => reject(currentRequest.error);
+    });
+    const key =
+      current?.key ??
+      (await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+        'encrypt',
+        'decrypt',
+      ]));
+    if (!current) keyStore.put({ id: 'device', key });
+    await new Promise<void>((resolve, reject) => {
+      keyTransaction.oncomplete = () => resolve();
+      keyTransaction.onerror = () => reject(keyTransaction.error);
+    });
+    const encoder = new TextEncoder();
+    const encode = (bytes: ArrayBuffer) => btoa(String.fromCharCode(...new Uint8Array(bytes)));
+    const cacheGeneration = crypto.randomUUID();
+    const encrypted = await Promise.all(
+      input.map(async (item) => {
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const ciphertext = await crypto.subtle.encrypt(
+          {
+            name: 'AES-GCM',
+            iv,
+            additionalData: encoder.encode(`finance:${item.entityType}:${item.id}:v1`),
+          },
+          key,
+          encoder.encode(JSON.stringify(item.value)),
+        );
+        return {
+          id: item.id,
+          entityType: item.entityType,
+          scopeKey: item.scopeKey,
+          cacheGeneration,
+          version: 1,
+          updatedAt: '2026-10-28T12:00:00.000Z',
+          value: { iv: encode(iv.buffer), ciphertext: encode(ciphertext) },
+          ...(item.accountId ? { accountId: item.accountId } : {}),
+          ...(item.occurredAt ? { occurredAt: item.occurredAt } : {}),
+        };
+      }),
+    );
+    const proofIv = crypto.getRandomValues(new Uint8Array(12));
+    const proofCiphertext = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: proofIv,
+        additionalData: encoder.encode('finance:delivery:local-steve:v1'),
+      },
+      key,
+      encoder.encode(
+        JSON.stringify({
+          ownerId: 'local-steve',
+          cursor: {},
+          cacheGeneration,
+          cacheProof: 'fc1.synthetic.fixture.proof',
+        }),
+      ),
+    );
+    const write = database.transaction(['secureFinanceRecords', 'settings'], 'readwrite');
+    write.objectStore('settings').put({
+      key: 'finance-delivery:local-steve',
+      value: JSON.stringify({
+        version: 1,
+        value: { iv: encode(proofIv.buffer), ciphertext: encode(proofCiphertext) },
+      }),
+    });
+    const store = write.objectStore('secureFinanceRecords');
+    for (const record of encrypted) store.put(record);
+    await new Promise<void>((resolve, reject) => {
+      write.oncomplete = () => resolve();
+      write.onerror = () => reject(write.error);
+    });
+    database.close();
+  }, values);
+}

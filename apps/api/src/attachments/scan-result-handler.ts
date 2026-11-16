@@ -1,3 +1,4 @@
+import { applyReceiptScanResult } from './receipt-scan-service.js';
 import type { EventBridgeHandler } from 'aws-lambda';
 import { attachmentBlobSchema, transitionAttachment } from '@naaseh/domain';
 import {
@@ -36,6 +37,16 @@ export const handler: EventBridgeHandler<
   if (!id || !blob || blob.objectVersionId !== parsed.versionId) return;
   const current = await findAttachment(id);
   if (!current || current.status !== 'scanning') return;
+  if (current.parentType === 'financeTransaction') {
+    // The event's optional attachment ID is never authoritative for a receipt.
+    if (
+      id === blob.attachmentId &&
+      current.blobId === parsed.blobId &&
+      event.detail.s3ObjectDetails?.bucketName === process.env.NAASEH_ATTACHMENT_BUCKET
+    )
+      await applyReceiptScanResult(id, parsed.versionId, parsed.result);
+    return;
+  }
   const result = parsed.result;
   const status =
     result === 'NO_THREATS_FOUND'

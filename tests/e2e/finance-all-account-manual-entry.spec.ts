@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import {
   financeSnapshotFixtureHeaders,
+  mockFinanceTransactionBrowsing,
   mockFinanceSnapshotEvidence,
   mockUnprotectedFinanceSecurity,
   signIn,
@@ -50,6 +51,7 @@ const accounts = [
 async function routeManualEntry(page: Page) {
   const transactions: Array<Record<string, unknown>> = [];
   let posts = 0;
+  await mockFinanceTransactionBrowsing(page, () => transactions);
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       status: 200,
@@ -91,12 +93,14 @@ async function routeManualEntry(page: Page) {
     transactions.push(transaction);
     return route.fulfill({ status: 201, json: transaction });
   });
-  await page.route(`**/api/v1/finance/transactions/${ids.transaction}`, (route) =>
-    route.fulfill({
-      status: 200,
-      headers: financeSnapshotFixtureHeaders,
-      json: transactions.at(-1),
-    }),
+  await page.route(
+    new RegExp('/api/v1/finance/transactions/' + ids.transaction + '(?:[?]browse=1)?$'),
+    (route) =>
+      route.fulfill({
+        status: 200,
+        headers: financeSnapshotFixtureHeaders,
+        json: transactions.at(-1),
+      }),
   );
   await page.route('**/api/v1/finance/categories**', (route) =>
     route.fulfill({
@@ -128,7 +132,7 @@ async function setup(page: Page) {
 
 async function completeForm(page: Page, description = 'Manual lunch') {
   await page.getByLabel('Transaction date').fill('2026-01-05');
-  await page.getByLabel('Amount').fill('12.50');
+  await page.getByLabel('Amount', { exact: true }).fill('12.50');
   await page.getByLabel('Direction').selectOption('debit');
   await page.getByLabel('Description').fill(description);
   await page.getByLabel('Payment type').selectOption('card');
@@ -162,18 +166,18 @@ test('global Add Transaction retains invalid input and saves to the selected acc
   await page.getByRole('button', { name: 'Add Transaction' }).click();
   await page.getByLabel('Account', { exact: true }).selectOption(ids.manual);
   await page.getByLabel('Transaction date').fill('2026-01-05');
-  await page.getByLabel('Amount').fill('25.00');
+  await page.getByLabel('Amount', { exact: true }).fill('25.00');
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'Description is required' }),
   ).toBeVisible();
-  await expect(page.getByLabel('Amount')).toHaveValue('25.00');
+  await expect(page.getByLabel('Amount', { exact: true })).toHaveValue('25.00');
   await page.getByLabel('Description').fill('Groceries');
   await page.getByLabel('Merchant').selectOption(ids.merchant);
   await page.getByLabel('Category allocation').selectOption(ids.category);
   await page.getByLabel('Allocation note').fill('Weekly shop');
   await page.getByLabel('Payment type').selectOption('check');
-  await page.getByLabel('Check number').fill('000321');
+  await page.locator('form').getByLabel('Check number', { exact: true }).fill('000321');
   await page.getByLabel('Memo').fill('Household groceries');
   await page.getByRole('button', { name: 'Save transaction' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Transaction saved' })).toBeVisible();

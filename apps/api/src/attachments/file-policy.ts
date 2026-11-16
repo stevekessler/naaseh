@@ -1,3 +1,6 @@
+import { MAX_FINANCE_RECEIPT_BYTES, financeReceiptMediaTypes } from '@naaseh/domain';
+import { SafeApiError } from '../shared/http.js';
+
 const allowedTypes = new Set([
   'application/pdf',
   'image/jpeg',
@@ -80,4 +83,47 @@ export function validateFilePolicy(input: {
       code: 'invalid_attachment',
     });
   return { ...input, filename: sanitizeFilename(input.filename), mediaType };
+}
+
+export function validateReceiptFilePolicy(input: {
+  filename: string;
+  mediaType: string;
+  sizeBytes: number;
+}) {
+  let filename: string;
+  try {
+    filename = sanitizeFilename(input.filename);
+  } catch {
+    throw new SafeApiError(
+      400,
+      'invalid_receipt',
+      'Choose a valid receipt filename.',
+      'validation',
+    );
+  }
+  const extension = filename.slice(filename.lastIndexOf('.') + 1).toLowerCase();
+  const mediaType =
+    Object.hasOwn(financeReceiptMediaTypes, extension) && filename.includes('.')
+      ? financeReceiptMediaTypes[extension as keyof typeof financeReceiptMediaTypes]
+      : undefined;
+  const claimed = input.mediaType.trim().toLowerCase();
+  if (!mediaType || (claimed && claimed !== 'application/octet-stream' && claimed !== mediaType))
+    throw new SafeApiError(
+      400,
+      'invalid_receipt',
+      'Choose a supported receipt with a matching file extension and type.',
+      'validation',
+    );
+  if (
+    !Number.isSafeInteger(input.sizeBytes) ||
+    input.sizeBytes < 1 ||
+    input.sizeBytes > MAX_FINANCE_RECEIPT_BYTES
+  )
+    throw new SafeApiError(
+      400,
+      'invalid_receipt',
+      'Choose a receipt between 1 byte and 10 MB.',
+      'validation',
+    );
+  return { filename, sizeBytes: input.sizeBytes, mediaType };
 }

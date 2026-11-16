@@ -1,3 +1,4 @@
+import { TransactionReceipts } from '../receipts/TransactionReceipts.js';
 import type { ComponentProps } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createUlid } from '@naaseh/domain';
@@ -10,6 +11,10 @@ import { RelatedFinanceTasks } from '../RelatedFinanceTasks.js';
 export type TransactionView = {
   id: string;
   accountId: string;
+  budgetLinks?: Array<{ id: string; name: string }>;
+  missingBudget?: boolean;
+  canEditAllocations?: boolean;
+  refundOriginal?: { id: string; description: string };
   description: string;
   amountMinor: number;
   currency: string;
@@ -20,6 +25,7 @@ export type TransactionView = {
     amountMinor: number;
     financeCategoryId: string;
     subcategoryId?: string;
+    budgetItemId?: string;
   }>;
   paymentType?: string;
   checkNumber?: string;
@@ -49,7 +55,10 @@ const money = (minor: number, currency: string, exponent: number) =>
 
 export function TransactionDetail({
   transaction,
+  onOpenBudget,
   allTransactions,
+  candidateMessage,
+  onMoreCandidates,
   categories,
   scope,
   issue,
@@ -63,7 +72,10 @@ export function TransactionDetail({
   currentUserId,
 }: {
   transaction: TransactionView;
+  onOpenBudget?: (id: string) => void;
   allTransactions: TransactionView[];
+  candidateMessage?: string;
+  onMoreCandidates?: () => Promise<void>;
   categories: CategoryView[];
   scope?: { type: 'owner'; ownerId: string } | { type: 'group'; groupId: string };
   issue?: ReconciliationIssueView;
@@ -85,13 +97,16 @@ export function TransactionDetail({
           amount: String(allocation.amountMinor / 10 ** transaction.currencyExponent),
           categoryId: allocation.financeCategoryId,
           subcategoryId: allocation.subcategoryId ?? '',
+          budgetItemId: allocation.budgetItemId,
         }))
       : [],
   );
   const [message, setMessage] = useState('');
   const knownPaymentTypes = ['cash', 'check', 'card', 'ach', 'digital-other'];
   const [paymentType, setPaymentType] = useState(
-    knownPaymentTypes.includes(transaction.paymentType ?? '') ? (transaction.paymentType ?? '') : '',
+    knownPaymentTypes.includes(transaction.paymentType ?? '')
+      ? (transaction.paymentType ?? '')
+      : '',
   );
   const [checkNumber, setCheckNumber] = useState(transaction.checkNumber ?? '');
   const [saving, setSaving] = useState(false);
@@ -117,19 +132,23 @@ export function TransactionDetail({
     [splits, transaction.currencyExponent],
   );
   const remaining = transaction.amountMinor - allocated;
+  const allocationsEditable = transaction.canEditAllocations !== false;
   const addSplit = () =>
     setSplits((current) => [
       ...current,
       {
         id: createUlid(),
         amount: '',
-        categoryId: categories.find(({ parentId, status }) => !parentId && status !== 'archived')?.id ?? '',
+        categoryId:
+          categories.find(({ parentId, status }) => !parentId && status !== 'archived')?.id ?? '',
         subcategoryId: '',
+        budgetItemId: undefined,
       },
     ]);
   const save = async () => {
     if (
       saving ||
+      !allocationsEditable ||
       remaining !== 0 ||
       splits.some(({ categoryId, amount }) => !categoryId || !Number.isFinite(Number(amount)))
     )
@@ -150,6 +169,7 @@ export function TransactionDetail({
               amountMinor: Math.round(Number(split.amount) * 10 ** transaction.currencyExponent),
               financeCategoryId: split.categoryId,
               ...(split.subcategoryId ? { subcategoryId: split.subcategoryId } : {}),
+              ...(split.budgetItemId ? { budgetItemId: split.budgetItemId } : {}),
             })),
           }),
         },
@@ -230,6 +250,43 @@ export function TransactionDetail({
         />
       ) : null}
       <RelatedFinanceTasks targetType="transaction" targetId={transaction.id} />
+      {transaction.budgetLinks?.length || transaction.missingBudget ? (
+        <section aria-label="Linked budgets">
+          <h3>Linked budgets</h3>
+          <ul>
+            {transaction.budgetLinks?.map(({ id, name }) => (
+              <li key={id}>
+                <a
+                  href={'/finance/budgets/' + encodeURIComponent(id)}
+                  onClick={(event) => {
+                    if (
+                      !onOpenBudget ||
+                      event.altKey ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey
+                    )
+                      return;
+                    event.preventDefault();
+                    onOpenBudget(id);
+                  }}
+                >
+                  {name}
+                </a>
+              </li>
+            ))}
+          </ul>
+          {transaction.missingBudget ? <p>A linked budget is no longer available.</p> : null}
+        </section>
+      ) : null}
+      {transaction.refundOriginal ? (
+        <p>
+          Original expense{' '}
+          <a href={'/finance/transactions/' + encodeURIComponent(transaction.refundOriginal.id)}>
+            {transaction.refundOriginal.description}
+          </a>
+        </p>
+      ) : null}
       <p>
         Original total:{' '}
         {money(transaction.amountMinor, transaction.currency, transaction.currencyExponent)}
@@ -303,9 +360,9 @@ export function TransactionDetail({
                 {categories
                   .filter(({ parentId, status }) => !parentId && status !== 'archived')
                   .map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
                   ))}
               </select>
             </label>
@@ -337,10 +394,12 @@ export function TransactionDetail({
           </div>
         ))}
         <p>Remaining: {money(remaining, transaction.currency, transaction.currencyExponent)}</p>
-        <button onClick={addSplit}>Add split</button>
+        <button onClick={addSplit} disabled={!allocationsEditable}>
+          Add split
+        </button>
         <button
           onClick={() => void save()}
-          disabled={saving || remaining !== 0 || splits.length === 0}
+          disabled={saving || !allocationsEditable || remaining !== 0 || splits.length === 0}
         >
           Save splits
         </button>
@@ -375,6 +434,16 @@ export function TransactionDetail({
           </button>
         </section>
       ) : null}
+      {transaction.amountMinor > 0 || transferOpen ? (
+        <>
+          {onMoreCandidates ? (
+            <button type="button" onClick={() => void onMoreCandidates()}>
+              Load more candidate transactions
+            </button>
+          ) : null}
+          {candidateMessage ? <p role="status">{candidateMessage}</p> : null}
+        </>
+      ) : null}
       {issue ? (
         <button onClick={() => setShowReconciliation(true)}>Review reconciliation</button>
       ) : null}
@@ -387,6 +456,11 @@ export function TransactionDetail({
           onResolved={onReconciled}
         />
       ) : null}
+      <TransactionReceipts
+        transactionId={transaction.id}
+        csrfToken={csrfToken}
+        editable={Boolean(scope)}
+      />
       <button onClick={() => void onPreviewRemoval()}>Preview transaction removal</button>
       {removalImpact ? (
         <section aria-label="Transaction removal impact">
