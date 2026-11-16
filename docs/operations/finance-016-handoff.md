@@ -5,8 +5,9 @@
 > `3b5a7b58` from common base `c4c4978`. The combined paths retain bounded
 > transaction browsing, private receipts, upcoming expenses, task links and
 > dashboard preferences. T126 retains its eight-case pre-integration Terminal
-> browser pass. Integrated tests passed 2,007/506 and lint passed. Full
-> validation and browser execution need the locked PDF dependency. See the
+> browser pass. On November 16, integrated validation passed 2,007 tests in
+> 506 files, typecheck, lint and builds. The quick browser fixture now handles
+> initial Finance cache sync. Its rerun needs a local preview server. See the
 > [validation runtime record](../testing/finance-experience-validation-runtime.md).
 > T122 and T123 still need combined reconciliation, restore and browser evidence.
 > T018 remains open for live storage and hosted acceptance under the $6.50 ceiling.

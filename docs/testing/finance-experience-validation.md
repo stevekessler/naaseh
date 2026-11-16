@@ -2,6 +2,9 @@
 
 ## Two-computer integration — 2026-11-15
 
+November 16 follow-up recorded a complete local validation pass and corrected
+the quick Finance sign-in fixture. See the [runtime results](finance-experience-validation-runtime.md).
+
 The source histories meet at the Phase 7 checkpoint `c4c4978`. The integration
 combines the Phase 8 and Phase 10 work and receipt recovery at `3b5a7b58` with
 the latest Computer 1 Phase 9, Phase 11 and dashboard checkpoint `131e515f`.

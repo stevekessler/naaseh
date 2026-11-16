@@ -1,5 +1,19 @@
 # Finance Experience Required Validation Runtime
 
+## November 16 integrated quick browser fixture
+
+The quick Finance journey failed at sign-in because its mock required a cache
+proof before initial Finance cache sync produced one. The trace also showed an
+unmocked ordinary sync request returning 500. The journey now uses the existing
+ordinary sync mock and allows the initial proofless request. Requests carrying a
+proof still validate against the fixture token.
+
+With the locked PDF package installed, `npm run validate` passed 2,007 tests in
+506 files, plus runtime, typecheck, lint and workspace builds in **66.90 s** on
+Node 24.18.0. The quick selection still lists 31 tests in 20 files. The timed quick
+rerun built the web app and stopped after **3.87 s** when the environment denied
+the preview listener on `127.0.0.1:4173`. Browser execution still needs verification.
+
 ## November 15 two-computer integration
 
 The first-parent validation baseline used `3dd1e337` on Node 24.18.0.

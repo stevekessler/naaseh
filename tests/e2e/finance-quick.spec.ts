@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import {
   signIn,
   mockUnprotectedFinanceSecurity,
+  mockSuccessfulSync,
   mockFinanceSnapshotEvidence,
   financeSnapshotFixtureHeaders,
   mockFinanceTransactionBrowsing,
@@ -186,7 +187,8 @@ test('completes the representative Finance account, CSV, split, budget, and offl
     }),
   );
   await mockUnprotectedFinanceSecurity(page, { role: 'user' });
-  await mockFinanceSnapshotEvidence(page);
+  await mockSuccessfulSync(page);
+  await mockFinanceSnapshotEvidence(page, { allowProoflessPull: true });
   await signIn(page);
   await page.getByRole('button', { name: 'Show Finance menu' }).click();
   await page.getByRole('button', { name: 'New Account' }).click();
