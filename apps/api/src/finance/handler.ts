@@ -42,6 +42,11 @@ import {
   manualFinanceTransactionReplayInputSchema,
 } from '@naaseh/contracts';
 import { dashboardPreferenceResponse } from './dashboard-preference-handler.js';
+import {
+  readDashboardBudget,
+  readDashboardUpcoming,
+  startSpendTrendPeriod,
+} from './dashboard-service.js';
 import { FinanceExperienceFailure } from './telemetry.js';
 import type { z } from 'zod';
 import { createFinanceUnlockGuard, assertFinanceClientUser } from './finance-unlock-guard.js';
@@ -458,6 +463,49 @@ export function createFinanceHandler(
         }
         return json(200, value);
       }
+      if (
+        event.requestContext.http.method === 'GET' &&
+        event.rawPath === '/api/v1/finance/upcoming-expenses' &&
+        event.headers['x-finance-browse'] === '1'
+      ) {
+        const role = auth.role === 'admin' ? 'admin' : 'user';
+        const source = new FinanceSyncSourceGuard({ userId: auth.userId, role });
+        const items = await readDashboardUpcoming(auth.userId, source);
+        await source.assertCurrent();
+        await authorize(gate);
+        const proof = snapshotRequested
+          ? await new FinanceCacheProofService({
+              userId: auth.userId,
+              role,
+              secret: process.env.CURSOR_SIGNING_SECRET ?? '',
+              authorize: () => authorize(gate),
+            }).issue(source, priorSnapshot)
+          : undefined;
+        if (proof && proof.length > 4000)
+          throw new Error('Finance snapshot evidence exceeds the header budget.');
+        return json(200, { items }, proof ? { 'x-finance-cache-proof': proof } : {});
+      }
+      const dashboardBudget =
+        /^\/api\/v1\/finance\/dashboard\/budgets\/([0-9A-HJKMNP-TV-Z]{26})$/u.exec(event.rawPath);
+      if (event.requestContext.http.method === 'GET' && dashboardBudget) {
+        const budget = await readDashboardBudget(auth.userId, dashboardBudget[1]!);
+        await authorize(gate);
+        return json(200, budget);
+      }
+      if (
+        event.requestContext.http.method === 'POST' &&
+        event.rawPath === '/api/v1/finance/spend-trends'
+      ) {
+        const result = await startSpendTrendPeriod(
+          queryRuntime({}),
+          auth.userId,
+          visit.securityRevision,
+          JSON.parse(event.body ?? '{}'),
+          event.headers['idempotency-key']!,
+        );
+        await authorize(gate);
+        return json(202, result);
+      }
       // The web client opts into the paged shape. Legacy clients keep their existing DTOs.
       const browsePath = /^\/api\/v1\/finance\/(?:accounts\/([^/]+)\/)?transactions$/u.exec(
         event.rawPath,
@@ -518,7 +566,9 @@ export function createFinanceHandler(
         }
         const result = queryPath?.[2]
           ? await jobs.page(auth.userId, queryId!, request)
-          : await jobs.status(auth.userId, queryId!);
+          : event.queryStringParameters?.totalsOnly === '1'
+            ? await jobs.status(auth.userId, queryId!, true)
+            : await jobs.status(auth.userId, queryId!);
         await authorize(gate);
         return json(
           queryPath?.[2] && result.rowsState === 'searching' ? 202 : 200,

@@ -25,6 +25,7 @@ export interface FinanceFact {
   paymentType?: string;
   reviewState?: string;
   classificationNames?: string[];
+  dashboardCategoryIds?: string[];
   textOrdinal?: number;
   textMonth?: string;
   sourceStatus?: 'active' | 'archived' | 'tombstone';
@@ -53,6 +54,7 @@ export interface FinanceReadResult {
   nextCursor?: string;
   asOf: string;
   projectionRevision: string;
+  sourceRevision?: string;
   complete: boolean;
   rowsState: 'searching' | 'ready' | 'confirmed-empty';
   aggregateState: 'pending' | 'exact' | 'failed';
@@ -196,6 +198,16 @@ export function decodeFinanceCursor(
   }
 }
 
+export function matchesFinanceCalendar(effectiveAt: string, filters: FinanceQueryFilters) {
+  if (!filters.date && !filters.dateFrom && !filters.dateTo) return true;
+  const day = localFinanceDate(effectiveAt, filters.timeZone);
+  return (
+    (!filters.date || day === filters.date) &&
+    (!filters.dateFrom || day >= filters.dateFrom) &&
+    (!filters.dateTo || day <= filters.dateTo)
+  );
+}
+
 export function matchesFinanceFact(fact: FinanceFact, filters: FinanceQueryFilters): boolean {
   if (fact.sourceStatus && fact.sourceStatus !== 'active') return false;
   if (filters.postedSpendOnly && !fact.slices.length) return false;
@@ -203,6 +215,11 @@ export function matchesFinanceFact(fact: FinanceFact, filters: FinanceQueryFilte
   if (
     filters.merchantIds?.length &&
     (!fact.merchantId || !filters.merchantIds.includes(fact.merchantId))
+  )
+    return false;
+  if (
+    filters.dashboardCategoryIds &&
+    !filters.dashboardCategoryIds.some((id) => fact.dashboardCategoryIds?.includes(id))
   )
     return false;
   if (filters.currency && filters.currency !== fact.currency) return false;
@@ -217,15 +234,7 @@ export function matchesFinanceFact(fact: FinanceFact, filters: FinanceQueryFilte
     ).includes(normalizeFinanceText(filters.text))
   )
     return false;
-  if (filters.date || filters.dateFrom || filters.dateTo) {
-    const day = localFinanceDate(fact.effectiveAt, filters.timeZone);
-    if (
-      (filters.date && day !== filters.date) ||
-      (filters.dateFrom && day < filters.dateFrom) ||
-      (filters.dateTo && day > filters.dateTo)
-    )
-      return false;
-  }
+  if (!matchesFinanceCalendar(fact.effectiveAt, filters)) return false;
   const allocationFiltered = Boolean(
     filters.budgetIds?.length ||
       filters.budgetItemIds?.length ||

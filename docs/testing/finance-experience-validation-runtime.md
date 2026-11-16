@@ -1,5 +1,17 @@
 # Finance Experience Required Validation Runtime
 
+## November 16 Dashboard and spending trends
+
+On Node 24.18.0, `npm run validate` passed **2,021 tests in 507 files
+in 65.57 s**, including runtime, typecheck, lint and builds. The prior staging
+checkpoint passed 2,013 tests in 506 files in 70.11 s. The required command
+and workflow are unchanged.
+
+The dashboard suite discovered 10 desktop cases in one file. Preview startup
+was denied on `127.0.0.1:4173` after 3.81 s. The timed quick command reached
+the same listener denial after 3.82 s. Quick discovery still lists 31 cases in
+20 files. Hosted timing and the two-second dashboard read target remain open.
+
 ## November 16 T122 reconciliation and restore
 
 On Node 24.18.0 the required command passed **2,008 tests in 506 files in

@@ -4,6 +4,11 @@ import type { FinanceDashboardTargetKind, FinanceDashboardUpcomingCount } from '
 import { financeRequest } from '../finance-client.js';
 import { peekFinanceAccess, subscribeFinanceAccess } from '../security/finance-access.js';
 
+import {
+  readCachedDashboardPreferences,
+  saveCachedDashboardPreferences,
+} from './dashboard-cache.js';
+
 const path = '/finance/dashboard-preferences';
 const readableAccess = () => {
   const access = peekFinanceAccess();
@@ -26,11 +31,23 @@ export function useDashboardPreferences(csrfToken: string) {
   const [reload, setReload] = useState(0);
   const [status, setStatus] = useState<'checking' | 'ready' | 'unavailable'>('checking');
   const [pending, setPending] = useState(false);
+  const [offline, setOffline] = useState(false);
   const [feedback, setFeedback] = useState<{
     kind: FinanceDashboardTargetKind | 'settings';
     id?: string;
     text: string;
   }>();
+  useEffect(() => {
+    const refresh = () => setReload((value) => value + 1);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('online', refresh);
+    window.addEventListener('offline', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('online', refresh);
+      window.removeEventListener('offline', refresh);
+    };
+  }, []);
   useEffect(() => {
     setPreferences(undefined);
     setPending(false);
@@ -48,11 +65,18 @@ export function useDashboardPreferences(csrfToken: string) {
       setStatus('unavailable');
     };
     const unsubscribe = access.onLock(clear);
-    void readPreferences(signal).then(
+    const offlineNow = navigator.onLine === false;
+    setOffline(offlineNow);
+    const read = offlineNow
+      ? readCachedDashboardPreferences(access.ownerId)
+      : readPreferences(signal);
+    void read.then(
       (result) => {
         if (!signal.aborted && readableAccess() === access) {
           setPreferences(result);
           setStatus('ready');
+          if (!offlineNow && access.ownerId)
+            void saveCachedDashboardPreferences(access.ownerId, result).catch(() => undefined);
         }
       },
       () => {
@@ -78,6 +102,7 @@ export function useDashboardPreferences(csrfToken: string) {
       signal.aborted ||
       readableAccess() !== access ||
       !preferences ||
+      offline ||
       writing.current
     )
       return;
@@ -97,6 +122,8 @@ export function useDashboardPreferences(csrfToken: string) {
       const result = await readPreferences(signal);
       if (!current()) return;
       setPreferences(result);
+      if (access.ownerId)
+        void saveCachedDashboardPreferences(access.ownerId, result).catch(() => undefined);
       setFeedback({
         ...target,
         text: confirmed(result)
@@ -170,7 +197,7 @@ export function useDashboardPreferences(csrfToken: string) {
     status: activeVisit ? status : access ? 'checking' : 'unavailable',
     flags: activeVisit ? preferences?.flags : undefined,
     settings: activeVisit ? preferences?.settings : undefined,
-    pending: Boolean(activeVisit && pending),
+    pending: Boolean(activeVisit && (pending || offline)),
     feedback: activeVisit ? feedback : undefined,
     refresh: () => setReload((value) => value + 1),
     change,

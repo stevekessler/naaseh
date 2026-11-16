@@ -633,11 +633,14 @@ export class FinanceQueryJobService {
     };
   }
 
-  async status(userId: string, id: string): Promise<FinanceReadResult> {
+  async status(userId: string, id: string, totalsOnly = false): Promise<FinanceReadResult> {
     const job = await this.checked(userId, id);
     if (!(await this.options.authorizeDelivery(job)))
       throw new FinanceExperienceFailure('authorization', 'Finance query unlock required.', 'user');
-    const items = job.state === 'exact' || job.rowsReady ? await this.options.hydrate(job) : [];
+    const items =
+      !totalsOnly && (job.state === 'exact' || job.rowsReady)
+        ? await this.options.hydrate(job)
+        : [];
     // Fact dependencies can require asynchronous reads. Refresh the canonical snapshot
     // and visit grant after those reads, immediately before delivering the payload.
     if (
@@ -660,7 +663,22 @@ export class FinanceQueryJobService {
       projectionRevision: job.fingerprint,
       complete,
       queryId: id,
-      rowsState: items.length ? 'ready' : complete ? 'confirmed-empty' : 'searching',
+      rowsState: items.length
+        ? 'ready'
+        : complete && (!totalsOnly || job.count === 0)
+          ? 'confirmed-empty'
+          : 'searching',
+      ...(totalsOnly
+        ? {
+            sourceRevision: createHash('sha256')
+              .update(
+                JSON.stringify(
+                  Object.entries(job.sourceRevisions).sort(([a], [b]) => a.localeCompare(b)),
+                ),
+              )
+              .digest('hex'),
+          }
+        : {}),
       aggregateState: job.state,
       coverage: { examined: job.examined, scopeComplete: complete },
       ...(complete ? { totalCount: job.count, totalsByCurrency: job.totals } : {}),

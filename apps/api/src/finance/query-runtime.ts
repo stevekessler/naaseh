@@ -102,7 +102,13 @@ async function currentActor(userId: string) {
 
 export async function listFinanceBrowseKeys(
   userId: string,
-  collection: 'accounts' | 'categories' | 'merchants' | 'reviewIssues',
+  collection:
+    | 'accounts'
+    | 'categories'
+    | 'merchants'
+    | 'reviewIssues'
+    | 'upcomingExpenses'
+    | 'expenseFulfillments',
 ) {
   const current = await currentActor(userId);
   if (!current)
@@ -202,6 +208,35 @@ async function scopedRows(collection: string, ids: string[]) {
   }
   return resolved;
 }
+/** A category watch includes raw allocations for pending and other non-spend rows. */
+async function loadDashboardCategories(facts: FinanceFact[]) {
+  const live = facts.filter(
+    (fact) => fact.sourceStatus === undefined || fact.sourceStatus === 'active',
+  );
+  const transactions = await scopedRows('transactions', [...new Set(live.map(({ id }) => id))]);
+  for (const fact of live) {
+    const source = transactions.get(fact.id)?.data;
+    if (
+      !source ||
+      source.status !== 'active' ||
+      source.accountId !== fact.accountId ||
+      source.version !== fact.sourceVersion ||
+      !Array.isArray(source.allocations)
+    )
+      throw new Error('Finance classification source changed; retry required.');
+    const ids = [
+      ...source.allocations.flatMap((allocation) => [
+        allocation?.financeCategoryId,
+        allocation?.subcategoryId,
+      ]),
+      ...fact.slices.flatMap((slice) => [slice.categoryId, slice.subcategoryId]),
+    ];
+    fact.dashboardCategoryIds = [
+      ...new Set(ids.filter((id): id is string => typeof id === 'string')),
+    ];
+  }
+}
+
 async function sourceSnapshot(
   actor: FinanceActor,
   ids: string[],
@@ -478,6 +513,7 @@ export function createFinanceQueryRuntime(
       return estimates;
     },
     authorize: authorizeSources,
+    loadDashboardCategories,
   });
   const service = new FinanceQueryJobService({
     repository,
@@ -602,7 +638,7 @@ export function createFinanceQueryRuntime(
             fact.accountId !== ref.accountId ||
             fact.effectiveAt !== ref.effectiveAt ||
             !Array.isArray(fact.slices) ||
-            !matchesFinanceFact(fact, filters) ||
+            (!filters.dashboardCategoryIds && !matchesFinanceFact(fact, filters)) ||
             !isFinanceFactBefore(fact, job.before)
           )
             throw new FinanceExperienceFailure(
@@ -615,6 +651,12 @@ export function createFinanceQueryRuntime(
       }
       if (facts.length !== job.firstIds.length)
         throw new Error('Finance query source changed; restart required.');
+      if (filters.dashboardCategoryIds) {
+        await loadDashboardCategories(facts);
+        if (facts.some((fact) => !matchesFinanceFact(fact, filters)))
+          throw new Error('Finance classification source changed; retry required.');
+        for (const fact of facts) delete fact.dashboardCategoryIds;
+      }
       if (filters.transactionBrowse && facts.length) {
         const transactions = await scopedRows(
           'transactions',

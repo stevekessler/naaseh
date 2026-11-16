@@ -1,5 +1,37 @@
 # Finance Experience Expansion Implementation Validation
 
+## November 16 Dashboard and spending trends
+
+The Finance landing dashboard combines independently loaded upcoming
+expenses, account balances, open budgets, recent merchant/category
+transactions and spending trends. The spending view defaults to all
+accessible accounts, supports an explicit empty selection and keeps
+currencies in separate graphs and value tables.
+
+Local checks cover open/inactive and source-restricted budgets, planned
+expenses, zero-plan and overspent arithmetic, pending category activity,
+recent transaction links and the shared spending predicates. Independent
+fixtures include partial and later-period refunds, negative net spending,
+different currencies, zero-activity periods and local month boundaries.
+The compact-reference read test uses one DynamoDB query against the storage
+double and excludes out-of-period rows returned by the widened UTC key range.
+Offline trends, balances and expenses are labeled as partial or saved
+values. Open-budget and recent-activity values require a connection.
+
+T131 and T134–T139 are implemented. T124–T125 and T127 need their remaining
+regression fixtures. T129 needs the live two-second widget measurement.
+T132–T133 still require cross-device preference and dashboard access evidence.
+T140 needs the desktop browser run and normal read measurements against
+live storage. The 10-case Chromium/WebKit dashboard suite and 31-case quick
+suite were discovered. Both preview attempts were denied permission to
+listen at `127.0.0.1:4173` before any browser case ran.
+
+Run the dashboard browser check from the integration checkout:
+
+```sh
+npm run test:e2e -- finance-dashboard.spec.ts --project=chromium --project=webkit
+```
+
 ## November 16 T018 staging synthesis
 
 The CDK entry point synthesized `NaasehStagingEdge` in us-east-1 and

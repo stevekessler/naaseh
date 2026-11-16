@@ -16,7 +16,8 @@ const f = vi.hoisted(() => {
   };
 });
 
-vi.mock('@naaseh/domain', () => ({
+vi.mock('@naaseh/domain', async (original) => ({
+  ...(await original<typeof import('@naaseh/domain')>()),
   createUlid: () => '01J00000000000000000000009',
   digestDuplicateDecisions: vi.fn(async () => 'decision-digest'),
 }));

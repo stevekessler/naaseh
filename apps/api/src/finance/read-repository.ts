@@ -10,6 +10,7 @@ import {
   FINANCE_MAX_EXAMINED,
   decodeFinanceCursor,
   encodeFinanceCursor,
+  matchesFinanceCalendar,
   matchesFinanceFact,
   isFinanceFactBefore,
   compareFinanceRows,
@@ -56,6 +57,7 @@ export interface FinanceReadOptions {
   tableName: string;
   cursorSecret: string;
   estimate?: (partitions: readonly string[]) => Promise<ReadonlyMap<string, number>>;
+  loadDashboardCategories?: (facts: FinanceFact[]) => Promise<void>;
   authorize: (
     context: FinanceReadContext,
     originalSourceAccountIds?: readonly string[],
@@ -134,19 +136,25 @@ export class FinanceReadRepository {
     if (!['budgetItem', 'transaction', 'upcomingExpense'].includes(targetType) || !targetId)
       throw new Error('Invalid Finance task target.');
     const PK = targetLinkPartition(targetType, targetId);
-    const page = await this.options.client.send(new QueryCommand({
-      TableName: this.options.tableName,
-      KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
-      ExpressionAttributeValues: { ':pk': PK, ':prefix': 'TASK_LINK#' },
-      ConsistentRead: true,
-      Limit: 51,
-    }));
+    const page = await this.options.client.send(
+      new QueryCommand({
+        TableName: this.options.tableName,
+        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :prefix)',
+        ExpressionAttributeValues: { ':pk': PK, ':prefix': 'TASK_LINK#' },
+        ConsistentRead: true,
+        Limit: 51,
+      }),
+    );
     if (page.LastEvaluatedKey || (page.Items?.length ?? 0) > 50)
       throw new Error('Finance target relationship projection exceeds its bounded size.');
     return (page.Items ?? []).map((row) => {
       const link = financialTaskLinkSchema.parse(row.data);
-      if (link.targetType !== targetType || link.targetId !== targetId ||
-        row.PK !== PK || row.SK !== `TASK_LINK#${link.id}`)
+      if (
+        link.targetType !== targetType ||
+        link.targetId !== targetId ||
+        row.PK !== PK ||
+        row.SK !== `TASK_LINK#${link.id}`
+      )
         throw new Error('Finance target relationship projection is incomplete.');
       return link;
     });
@@ -498,6 +506,16 @@ export class FinanceReadRepository {
         if (fact) loaded.set(fact.id, fact);
       }
     }
+    if (filters.dashboardCategoryIds) {
+      if (!this.options.loadDashboardCategories)
+        throw new Error('Finance category lookup is unavailable.');
+      const candidates = rows.map(
+        (row) => row.fact ?? (row.transactionId ? loaded.get(row.transactionId) : undefined),
+      );
+      if (candidates.some((fact) => !fact || fact.accountId !== accountId))
+        throw new Error('Finance category projection is incomplete.');
+      await this.options.loadDashboardCategories(candidates as FinanceFact[]);
+    }
     const matches: Array<{ fact: FinanceFact; row: Row }> = [];
     const aggregateMatches: FinanceAccountReadSummary[] = [];
     for (const row of rows) {
@@ -507,6 +525,7 @@ export class FinanceReadRepository {
           summary.active &&
           (!filters.postedSpendOnly || summary.hasSpend) &&
           (!filters.accountIds?.length || filters.accountIds.includes(accountId)) &&
+          matchesFinanceCalendar(summary.effectiveAt, filters) &&
           isFinanceFactBefore(summary, request.before)
         )
           aggregateMatches.push(summary);

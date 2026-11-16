@@ -1,5 +1,15 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 16 dashboard and spending trends checkpoint: 132/166 tasks checked.
+> The default dashboard displays canonical upcoming expenses, flagged balances,
+> open budgets, recent merchant/category transactions and spending trends by
+> month, quarter or year. Spending uses local-date bounds and refund-aware
+> indexed totals, with currency-separated graphs and tables. Offline readings
+> come from the encrypted cache and are labeled as partial or saved values.
+> Required validation passed 2,021 tests in 507 files in 65.57 s.
+> Browser and cross-device preference acceptance and the live dashboard timing
+> target remain open. See the [validation record](../testing/finance-experience-validation.md).
+
 > November 16 T018 staging checkpoint: both staging stacks synthesize with
 > isolated inputs and the production templates match the earlier synthesis.
 > Local validation passed 2,013 tests in 506 files in 70.11 s. T018 remains

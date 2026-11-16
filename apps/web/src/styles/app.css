@@ -5035,3 +5035,31 @@ canvas.finance-receipt-preview[hidden] {
   display: grid;
   gap: 1rem;
 }
+
+.finance-dashboard-widget {
+  margin-block: 1.5rem;
+}
+
+.finance-dashboard-widget fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-block: 0.75rem;
+}
+
+.finance-trend-graph {
+  display: block;
+  width: 100%;
+  max-width: 38rem;
+  color: currentColor;
+}
+
+.finance-dashboard-widget table {
+  width: min(100%, 38rem);
+}
+
+.finance-dashboard-widget th,
+.finance-dashboard-widget td {
+  padding: 0.35rem 0.5rem;
+  text-align: start;
+}

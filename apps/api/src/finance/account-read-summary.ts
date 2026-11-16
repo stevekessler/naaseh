@@ -51,8 +51,16 @@ export function createFinanceAccountReadSummary(fact: FinanceFact): FinanceAccou
   });
 }
 
-/** Account/name selection is already resolved by the coordinator. Other filters need facts. */
+/** Account/name selection is already resolved by the coordinator. Other filters may require facts. */
 export function supportsFinanceAccountSummary(filters: FinanceQueryFilters) {
-  const allowed = new Set(['accountIds', 'accountName', 'postedSpendOnly', 'timeZone']);
+  const allowed = new Set([
+    'accountIds',
+    'accountName',
+    'postedSpendOnly',
+    'timeZone',
+    'date',
+    'dateFrom',
+    'dateTo',
+  ]);
   return Object.keys(filters).every((key) => allowed.has(key));
 }

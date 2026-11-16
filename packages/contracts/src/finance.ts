@@ -250,6 +250,7 @@ export const financeQueryFiltersSchema = z
     budgetIds: z.array(ulidSchema).max(50).optional(),
     budgetItemIds: z.array(ulidSchema).max(100).optional(),
     categoryIds: z.array(ulidSchema).max(50).optional(),
+    dashboardCategoryIds: z.array(ulidSchema).min(1).max(50).optional(),
     subcategoryIds: z.array(ulidSchema).max(50).optional(),
     text: z.string().trim().max(500).optional(),
     accountName: z.string().trim().max(200).optional(),
@@ -288,6 +289,7 @@ export const financeQueryFiltersSchema = z
         value.budgetIds?.length ||
         value.budgetItemIds?.length ||
         value.categoryIds?.length ||
+        value.dashboardCategoryIds?.length ||
         value.subcategoryIds?.length)
     )
       context.addIssue({
@@ -343,6 +345,7 @@ export const financeQueryEnvelopeSchema = z
     nextCursor: z.string().max(4096).optional(),
     asOf: z.string().datetime(),
     projectionRevision: z.string().min(1),
+    sourceRevision: z.string().min(1).optional(),
     complete: z.boolean(),
     rowsState: z.enum(['searching', 'ready', 'confirmed-empty']),
     aggregateState: z.enum(['pending', 'exact', 'failed']),
@@ -1219,10 +1222,7 @@ export const financeTaskCreateResponseSchema = z
         path: ['financialTaskLinkIds'],
         message: 'Applied task creation requires at least one financial link id.',
       });
-    if (
-      value.linkStatus === 'pending' &&
-      (!value.pendingSelections?.length || !value.retryToken)
-    )
+    if (value.linkStatus === 'pending' && (!value.pendingSelections?.length || !value.retryToken))
       context.addIssue({
         code: 'custom',
         path: ['retryToken'],

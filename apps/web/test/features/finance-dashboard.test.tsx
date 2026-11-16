@@ -59,6 +59,8 @@ describe('protected Finance dashboard', () => {
         ownerId="owner"
         csrfToken="csrf"
         onOpenAccount={vi.fn()}
+        onOpenBudget={vi.fn()}
+        onOpenTransaction={vi.fn()}
         onOpenUpcomingExpense={vi.fn()}
       />,
     );
@@ -96,15 +98,116 @@ describe('protected Finance dashboard', () => {
         ownerId="owner"
         csrfToken="csrf"
         onOpenAccount={open}
+        onOpenBudget={vi.fn()}
+        onOpenTransaction={vi.fn()}
         onOpenUpcomingExpense={vi.fn()}
       />,
     );
-    await view.findByText('Household checking');
+    await view.findByRole('region', { name: 'Dashboard accounts' });
     expect(view.getByText('$123.45')).toBeTruthy();
-    expect(view.queryByText('Unselected account')).toBeNull();
+    expect(
+      within(view.getByRole('region', { name: 'Dashboard accounts' })).queryByText(
+        'Unselected account',
+      ),
+    ).toBeNull();
     expect(view.getByText('Refresh recommended')).toBeTruthy();
     fireEvent.click(view.getByRole('button', { name: 'Open account' }));
     expect(open).toHaveBeenCalledWith(accountId);
+  });
+
+  it('shows budget overspending and opens a transaction from each watched section', async () => {
+    const budgetId = '01J00000000000000000000003';
+    const itemId = '01J00000000000000000000004';
+    const transactionId = '01J00000000000000000000005';
+    const kindIds = {
+      budget: budgetId,
+      category: '01J00000000000000000000006',
+      merchant: '01J00000000000000000000007',
+    };
+    f.request.mockImplementation(async (path: string) => ({
+      items:
+        path === '/finance/accounts'
+          ? [
+              {
+                id: accountId,
+                friendlyName: 'Checking',
+                currency: 'USD',
+                currencyExponent: 2,
+                currentBalanceMinor: 100,
+              },
+            ]
+          : [],
+    }));
+    f.preferences.mockImplementation(async (path: string) => {
+      if (path === '/finance/dashboard-preferences')
+        return {
+          ...settings(),
+          flags: Object.entries(kindIds).map(([targetKind, targetId]) => ({
+            targetKind,
+            targetId,
+            included: true,
+            version: 1,
+          })),
+        };
+      if (path === '/finance/dashboard/budgets/' + budgetId)
+        return {
+          id: budgetId,
+          name: 'Groceries',
+          startDate: '2020-01-01',
+          items: [{ id: itemId, currency: 'USD', currencyExponent: 2, plannedAmountMinor: -1000 }],
+          accountIds: [accountId],
+          complete: true,
+        };
+      if (path === '/finance/queries') return { queryId: transactionId };
+      return {
+        asOf: '2026-11-14T00:00:00Z',
+        projectionRevision: 'r1',
+        complete: true,
+        rowsState: 'ready',
+        aggregateState: 'exact',
+        coverage: { examined: 1, scopeComplete: true },
+        totalCount: 1,
+        totalsByCurrency: [{ currency: 'USD', currencyExponent: 2, amountMinor: 1200 }],
+        items: path.endsWith('/rows?limit=10')
+          ? [
+              {
+                id: transactionId,
+                description: 'Market',
+                effectiveAt: '2026-11-14T00:00:00Z',
+                amountMinor: -1200,
+                currency: 'USD',
+                currencyExponent: 2,
+              },
+            ]
+          : [],
+      };
+    });
+    const openBudget = vi.fn();
+    const openTransaction = vi.fn();
+    const view = render(
+      <FinanceDashboardPage
+        ownerId="owner"
+        csrfToken="csrf"
+        onOpenAccount={vi.fn()}
+        onOpenUpcomingExpense={vi.fn()}
+        onOpenBudget={openBudget}
+        onOpenTransaction={openTransaction}
+      />,
+    );
+    const budgets = within(await view.findByRole('region', { name: 'Dashboard budgets' }));
+    await budgets.findByText('Overspent');
+    expect(budgets.getByText('120%')).toBeTruthy();
+    expect(budgets.getByText('-$2.00')).toBeTruthy();
+    fireEvent.click(budgets.getByRole('button', { name: 'Open budget' }));
+    expect(openBudget).toHaveBeenCalledWith(budgetId);
+    for (const kind of ['category', 'merchant']) {
+      const activity = within(view.getByRole('region', { name: 'Recent ' + kind + ' activity' }));
+      fireEvent.click(await activity.findByRole('link', { name: 'Market' }));
+      expect(openTransaction).toHaveBeenLastCalledWith(
+        transactionId,
+        `dashboard-${kind}-${transactionId}`,
+      );
+    }
   });
 
   it('removes account names and balances immediately when Finance locks', async () => {
@@ -127,10 +230,12 @@ describe('protected Finance dashboard', () => {
         ownerId="owner"
         csrfToken="csrf"
         onOpenAccount={vi.fn()}
+        onOpenBudget={vi.fn()}
+        onOpenTransaction={vi.fn()}
         onOpenUpcomingExpense={vi.fn()}
       />,
     );
-    await view.findByText('Private account');
+    await view.findByRole('region', { name: 'Dashboard accounts' });
     act(() => {
       for (const listener of f.listeners) listener();
     });
@@ -166,6 +271,8 @@ describe('protected Finance dashboard', () => {
         ownerId="owner"
         csrfToken="csrf"
         onOpenAccount={vi.fn()}
+        onOpenBudget={vi.fn()}
+        onOpenTransaction={vi.fn()}
         onOpenUpcomingExpense={vi.fn()}
       />,
     );
@@ -198,6 +305,8 @@ describe('protected Finance dashboard', () => {
         ownerId="owner"
         csrfToken="csrf"
         onOpenAccount={vi.fn()}
+        onOpenBudget={vi.fn()}
+        onOpenTransaction={vi.fn()}
         onOpenUpcomingExpense={vi.fn()}
       />,
     );
@@ -227,11 +336,15 @@ describe('protected Finance dashboard', () => {
         ownerId="owner"
         csrfToken="csrf"
         onOpenAccount={vi.fn()}
+        onOpenBudget={vi.fn()}
+        onOpenTransaction={vi.fn()}
         onOpenUpcomingExpense={vi.fn()}
       />,
     );
     await view.findByText('Upcoming expenses are unavailable.');
-    expect(await view.findByText('Checking')).toBeTruthy();
+    expect(
+      within(await view.findByRole('region', { name: 'Dashboard accounts' })).getByText('Checking'),
+    ).toBeTruthy();
     expect(view.getByText('Freshness unavailable')).toBeTruthy();
   });
 });

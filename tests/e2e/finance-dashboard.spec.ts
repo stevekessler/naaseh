@@ -59,7 +59,10 @@ const merchant = {
   version: 1,
 };
 
-async function openDashboard(page: Page, options: { accountFailure?: boolean } = {}) {
+async function openDashboard(
+  page: Page,
+  options: { accountFailure?: boolean; accounts?: (typeof account)[] } = {},
+) {
   let upcomingCount = 10;
   let settingsVersion = 0;
   const flags = new Map<
@@ -87,7 +90,10 @@ async function openDashboard(page: Page, options: { accountFailure?: boolean } =
   await page.route('**/api/v1/finance/accounts', (route) =>
     options.accountFailure
       ? route.fulfill({ status: 503, json: { code: 'test_unavailable' } })
-      : route.fulfill({ headers: financeSnapshotFixtureHeaders, json: { items: [account] } }),
+      : route.fulfill({
+          headers: financeSnapshotFixtureHeaders,
+          json: { items: options.accounts ?? [account] },
+        }),
   );
   await page.route('**/api/v1/finance/upcoming-expenses', (route) =>
     route.fulfill({ headers: financeSnapshotFixtureHeaders, json: { items: expenses } }),
@@ -254,4 +260,95 @@ test('saves personal preferences from the budget, category and merchant pages', 
     const flag = page.getByRole('checkbox', { name: `Include on my Finance dashboard: ${name}` });
     await expect(flag).toBeChecked();
   }
+});
+
+test('shows currency-separated trend values and switches calendar periods and account scope', async ({
+  page,
+  context,
+}, testInfo) => {
+  desktopOnly(testInfo);
+  const euro = {
+    ...account,
+    id: '01J00000000000000000000100',
+    friendlyName: 'Euro savings',
+    currency: 'EUR',
+  };
+  const { financeTrendPeriods } = await import('@naaseh/domain');
+  await page.route('**/api/v1/finance/spend-trends', (route) => {
+    const input = route.request().postDataJSON() as {
+      mode: 'month' | 'quarter' | 'year';
+      timeZone: string;
+      period: number;
+      accountIds: string[];
+    };
+    expect(input.accountIds.length).toBeGreaterThan(0);
+    expect(input.accountIds.every((id) => [accountId, euro.id].includes(id))).toBe(true);
+    const scope =
+      (input.accountIds.includes(accountId) ? 1 : 0) + (input.accountIds.includes(euro.id) ? 2 : 0);
+    const { dateFrom, dateTo } = financeTrendPeriods(
+      input.mode,
+      input.timeZone,
+      new Date().toISOString(),
+    )[input.period]!;
+    return route.fulfill({
+      status: 202,
+      json: {
+        queryId: `01J${String(scope * 100 + input.period).padStart(23, '0')}`,
+        dateFrom,
+        dateTo,
+      },
+    });
+  });
+  await page.route(/\/api\/v1\/finance\/queries\/[^/?]+\?totalsOnly=1$/u, (route) => {
+    const code = Number(new URL(route.request().url()).pathname.slice(-3));
+    const scope = Math.floor(code / 100);
+    const period = code % 100;
+    return route.fulfill({
+      json: {
+        items: [],
+        asOf: new Date().toISOString(),
+        projectionRevision: 'fixture',
+        sourceRevision: 'same-source',
+        complete: true,
+        rowsState: 'searching',
+        aggregateState: 'exact',
+        coverage: { examined: 2, scopeComplete: true },
+        totalCount: 2,
+        totalsByCurrency:
+          period === 0
+            ? [
+                ...(scope & 1
+                  ? [{ currency: 'USD', currencyExponent: 2, amountMinor: -2500 }]
+                  : []),
+                ...(scope & 2 ? [{ currency: 'EUR', currencyExponent: 2, amountMinor: 6250 }] : []),
+              ]
+            : [],
+      },
+    });
+  });
+  await openDashboard(page, { accounts: [account, euro] });
+  const trend = page.getByRole('region', { name: 'Spending trends' });
+  const usd = trend.getByRole('table', { name: 'USD net spending by period' });
+  await expect(usd.getByRole('row')).toHaveCount(13);
+  await expect(usd.getByRole('cell', { name: '-$25.00' })).toBeVisible();
+  await expect(trend.getByRole('table', { name: 'EUR net spending by period' })).toBeVisible();
+  await trend.getByRole('combobox', { name: 'Period' }).selectOption('quarter');
+  await expect(usd.getByRole('row')).toHaveCount(9);
+  await trend.getByRole('combobox', { name: 'Period' }).selectOption('year');
+  await expect(usd.getByRole('row')).toHaveCount(6);
+  await trend.getByRole('checkbox', { name: euro.friendlyName }).uncheck();
+  await expect(usd.getByRole('cell', { name: '-$25.00' })).toBeVisible();
+  await expect(trend.getByRole('table', { name: 'EUR net spending by period' })).toHaveCount(0);
+  await trend.getByRole('checkbox', { name: accountName }).uncheck();
+  await expect(trend.getByText('No accessible accounts in this selection.')).toBeVisible();
+  await trend.getByRole('checkbox', { name: 'All accessible accounts' }).check();
+  await expect(usd.getByRole('row')).toHaveCount(6);
+  await context.setOffline(true);
+  await expect(
+    trend.getByText(/Partial offline data|Spending trends are unavailable/u),
+  ).toBeVisible();
+  await expect(
+    trend.getByText('Posted spending after linked refunds.', { exact: false }),
+  ).toHaveCount(0);
+  await context.setOffline(false);
 });

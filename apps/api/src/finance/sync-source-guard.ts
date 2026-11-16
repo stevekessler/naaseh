@@ -278,16 +278,26 @@ export class FinanceSyncSourceGuard {
     if (collection === 'upcomingExpenses') {
       const account = await parent('accounts', data.accountId);
       const budget = await parent('budgets', data.budgetId);
-      return account?.storageKey.PK === source.storageKey.PK &&
-        budget?.value.groupId === data.groupId
+      const groupPartition = `FINANCE#SCOPE#GROUP#${data.groupId}`;
+      const scope = account?.value.scope as { type?: string; groupId?: string } | undefined;
+      return account &&
+        budget?.value.groupId === data.groupId &&
+        (scope?.type !== 'group' || scope.groupId === data.groupId) &&
+        (source.storageKey.PK === groupPartition || source.storageKey.PK === account.storageKey.PK)
         ? source
         : undefined;
     }
-    if (collection === 'expenseFulfillments')
-      return (await parent('upcomingExpenses', data.expenseId)) &&
-        (await parent('transactions', data.transactionId))
+    if (collection === 'expenseFulfillments') {
+      const expense = await parent('upcomingExpenses', data.upcomingExpenseId);
+      const transaction = await parent('transactions', data.transactionId);
+      return expense &&
+        transaction &&
+        expense.value.accountId === data.accountId &&
+        transaction.value.accountId === data.accountId &&
+        source.storageKey.PK === transaction.storageKey.PK
         ? source
         : undefined;
+    }
     if (collection === 'financialTaskLinks') {
       const targetType = data.targetType ?? (data.budgetItemId ? 'budgetItem' : undefined);
       const targetId = data.targetId ?? data.budgetItemId;

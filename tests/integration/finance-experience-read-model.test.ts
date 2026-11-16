@@ -113,6 +113,52 @@ describe('bounded source-authorized Finance indexed reads', () => {
     ).toBe(0);
   });
 
+  it('uses compact trend inputs and enforces local boundaries within the widened UTC read', async () => {
+    const before = { ...fact, id: 'before', effectiveAt: '2026-10-01T06:59:59Z' };
+    const inside = { ...fact, id: 'inside', effectiveAt: '2026-10-01T07:00:00Z' };
+    const after = { ...fact, id: 'after', effectiveAt: '2026-11-01T07:00:00Z' };
+    const { repository, send } = setup([
+      { Items: [summaryRow(before, 400), summaryRow(inside, -30), summaryRow(after, 200)] },
+    ]);
+    await expect(
+      repository.scanForJob({
+        ...request,
+        filters: {
+          dateFrom: '2026-10-01',
+          dateTo: '2026-10-31',
+          timeZone: 'America/Los_Angeles',
+          postedSpendOnly: true,
+        },
+      }),
+    ).resolves.toMatchObject({ matchedCount: 1, totalsByCurrency: [{ amountMinor: -30 }] });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('matches watched category activity for pending rows without treating it as posted spend', async () => {
+    const categoryId = '01K00000000000000000000001';
+    const pending = { ...fact, id: 'pending', pending: true };
+    const outside = { ...fact, id: 'outside' };
+    const send = vi.fn().mockResolvedValue({ Items: [{ fact: pending }, { fact: outside }] });
+    const loadDashboardCategories = vi.fn(async (facts: FinanceFact[]) => {
+      facts.find(({ id }) => id === pending.id)!.dashboardCategoryIds = [categoryId];
+    });
+    const repository = new FinanceReadRepository({
+      client: { send },
+      tableName: 'table',
+      cursorSecret: 'x'.repeat(32),
+      authorize: async () => true,
+      loadDashboardCategories,
+    });
+    await expect(
+      repository.scanForJob({ ...request, filters: { dashboardCategoryIds: [categoryId] } }),
+    ).resolves.toMatchObject({
+      matchedCount: 1,
+      topRows: [{ id: 'pending' }],
+      totalsByCurrency: [],
+    });
+    expect(loadDashboardCategories).toHaveBeenCalledOnce();
+  });
+
   it('hydrates real facts for public rows and filters unsupported by compact aggregates', async () => {
     for (const filters of [
       {},

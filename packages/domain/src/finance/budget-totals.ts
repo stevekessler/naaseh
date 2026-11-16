@@ -200,7 +200,14 @@ export function calculateDashboardBudgetTotals(input: {
       (slice) =>
         slice.budgetId === input.budgetId && slice.budgetItemId && itemIds.has(slice.budgetItemId),
     );
-  const actuals = sumSpendByCurrency(slices);
+  return summarizeDashboardBudget(items, sumSpendByCurrency(slices));
+}
+
+/** Combine visible planned items with exact posted/refund-aware query results. */
+export function summarizeDashboardBudget(
+  items: readonly Pick<BudgetItem, 'currency' | 'currencyExponent' | 'plannedAmountMinor'>[],
+  actuals: ReturnType<typeof sumSpendByCurrency>,
+) {
   const currencies = new Set([
     ...items.map((item) => item.currency),
     ...actuals.map((actual) => actual.currency),

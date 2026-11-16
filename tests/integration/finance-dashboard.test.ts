@@ -185,3 +185,159 @@ it('deduplicates explicit obligations and never counts overdue, paid or cancelle
     });
   }
 });
+
+it('creates a protected local-calendar trend query and leaves source authorization to the query runtime', async () => {
+  const { startSpendTrendPeriod } = await import('../../apps/api/src/finance/dashboard-service.js');
+  const start = vi.fn(async () => experienceId(20));
+  const request = {
+    mode: 'quarter',
+    period: 7,
+    timeZone: 'America/Denver',
+    accountIds: [experienceId(1)],
+  };
+  const instant = '2026-01-01T02:00:00.000Z';
+  await expect(
+    startSpendTrendPeriod({ start }, 'owner', 4, request, 'retry', instant),
+  ).resolves.toMatchObject({ dateFrom: '2025-10-01', dateTo: '2025-12-31' });
+  expect(start).toHaveBeenCalledWith(
+    'owner',
+    4,
+    {
+      accountIds: request.accountIds,
+      filters: {
+        postedSpendOnly: true,
+        dateFrom: '2025-10-01',
+        dateTo: '2025-12-31',
+        timeZone: request.timeZone,
+      },
+    },
+    'retry',
+  );
+  await expect(
+    startSpendTrendPeriod({ start }, 'owner', 4, { ...request, period: 9 }, 'invalid', instant),
+  ).rejects.toThrow('valid period');
+  expect(start).toHaveBeenCalledTimes(1);
+});
+
+it('reports zero-plan and overspent budgets with independent currency totals', async () => {
+  const { summarizeDashboardBudget } = await import('@naaseh/domain');
+  expect(
+    summarizeDashboardBudget(
+      [
+        { currency: 'USD', currencyExponent: 2, plannedAmountMinor: -1000 },
+        { currency: 'EUR', currencyExponent: 2, plannedAmountMinor: 0 },
+      ],
+      [
+        { currency: 'USD', currencyExponent: 2, amountMinor: 1200 },
+        { currency: 'EUR', currencyExponent: 2, amountMinor: -100 },
+      ],
+    ),
+  ).toEqual([
+    {
+      currency: 'EUR',
+      currencyExponent: 2,
+      plannedMinor: 0,
+      spentMinor: -100,
+      remainingMinor: 100,
+      percentUsed: null,
+    },
+    {
+      currency: 'USD',
+      currencyExponent: 2,
+      plannedMinor: 1000,
+      spentMinor: 1200,
+      remainingMinor: -200,
+      percentUsed: 120,
+    },
+  ]);
+});
+
+it('keeps hidden budget amounts and linked accounts out of the dashboard projection', async () => {
+  const [{ readDashboardBudget }, { FinanceSyncSourceGuard }, { dynamodb }] = await Promise.all([
+    import('../../apps/api/src/finance/dashboard-service.js'),
+    import('../../apps/api/src/finance/sync-source-guard.js'),
+    import('../../apps/api/src/shared/dynamodb.js'),
+  ]);
+  const [
+    budgetId,
+    groupId,
+    visibleAccount,
+    hiddenAccount,
+    firstLink,
+    secondLink,
+    firstItem,
+    secondItem,
+  ] = Array.from({ length: 8 }, (_, index) => experienceId(300 + index)) as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+  const budget = {
+    id: budgetId,
+    groupId,
+    name: 'Shared budget',
+    startDate: '2026-11-01',
+    status: 'active',
+  };
+  const sources = new Map<string, Record<string, unknown>>([
+    [budgetId, budget],
+    [firstLink, { budgetId, status: 'active', accountId: visibleAccount }],
+    [
+      firstItem,
+      {
+        budgetId,
+        status: 'active',
+        relatedAccountIds: [visibleAccount],
+        currency: 'USD',
+        currencyExponent: 2,
+        plannedAmountMinor: -1200,
+      },
+    ],
+    [
+      secondItem,
+      {
+        budgetId,
+        status: 'active',
+        relatedAccountIds: [hiddenAccount],
+        currency: 'USD',
+        currencyExponent: 2,
+        plannedAmountMinor: -987654,
+      },
+    ],
+  ]);
+  const source = vi
+    .spyOn(FinanceSyncSourceGuard.prototype, 'readCanonicalSource')
+    .mockImplementation(async (_, id) => sources.get(id));
+  const assertCurrent = vi
+    .spyOn(FinanceSyncSourceGuard.prototype, 'assertCurrent')
+    .mockResolvedValue(undefined);
+  const send = vi.spyOn(dynamodb, 'send').mockImplementation((async (command: QueryCommand) => ({
+    Items: (String(command.input.ExpressionAttributeValues?.[':prefix']).includes('budgetItems')
+      ? [firstItem, secondItem]
+      : [firstLink, secondLink]
+    ).map((entryKey) => ({ entryKey })),
+  })) as never);
+  try {
+    const result = await readDashboardBudget('owner', budgetId);
+    expect(result).toMatchObject({
+      accountIds: [visibleAccount],
+      complete: false,
+      items: [{ id: firstItem, plannedAmountMinor: -1200 }],
+    });
+    expect(JSON.stringify(result)).not.toContain(hiddenAccount);
+    expect(JSON.stringify(result)).not.toContain('987654');
+    expect(assertCurrent).toHaveBeenCalledTimes(1);
+    sources.set(budgetId, { ...budget, activity: 'inactive' });
+    await expect(readDashboardBudget('owner', budgetId)).resolves.toBeNull();
+    expect(send).toHaveBeenCalledTimes(2);
+  } finally {
+    source.mockRestore();
+    assertCurrent.mockRestore();
+    send.mockRestore();
+  }
+});

@@ -202,7 +202,18 @@ export function FinanceLandingPage({
       )}
     </>
   );
-  const view = originAccount ? 'accounts' : route.view;
+  const originDashboard = modalOrigin?.route.view === 'dashboard';
+  const view = originDashboard ? 'dashboard' : originAccount ? 'accounts' : route.view;
+  const transactionModal = route.transactionId ? (
+    <FinanceTransactionsPage
+      csrfToken={csrfToken}
+      currentUserId={ownerId}
+      initialTransactionId={route.transactionId}
+      modalOnly
+      onCloseTransaction={closeTransaction}
+      onOpenBudget={openBudget}
+    />
+  ) : null;
   return (
     <section className="finance-landing">
       <header>
@@ -250,29 +261,25 @@ export function FinanceLandingPage({
         </button>
       </nav>
       {view === 'dashboard' ? (
-        <FinanceDashboardPage
-          ownerId={ownerId}
-          csrfToken={csrfToken}
-          onOpenAccount={(accountId) =>
-            navigate({ section: 'finance', view: 'accounts', accountId })
-          }
-          onOpenUpcomingExpense={(upcomingExpenseId) =>
-            navigate({ section: 'finance', view: 'upcoming-expenses', upcomingExpenseId })
-          }
-        />
+        <>
+          <FinanceDashboardPage
+            ownerId={ownerId}
+            csrfToken={csrfToken}
+            onOpenAccount={(accountId) =>
+              navigate({ section: 'finance', view: 'accounts', accountId })
+            }
+            onOpenUpcomingExpense={(upcomingExpenseId) =>
+              navigate({ section: 'finance', view: 'upcoming-expenses', upcomingExpenseId })
+            }
+            onOpenBudget={openBudget}
+            onOpenTransaction={openTransaction}
+          />
+          {originDashboard && transactionModal}
+        </>
       ) : view === 'accounts' ? (
         <>
           {accountWorkspace}
-          {originAccount && route.transactionId ? (
-            <FinanceTransactionsPage
-              csrfToken={csrfToken}
-              currentUserId={ownerId}
-              initialTransactionId={route.transactionId}
-              modalOnly
-              onCloseTransaction={closeTransaction}
-              onOpenBudget={openBudget}
-            />
-          ) : null}
+          {originAccount && transactionModal}
         </>
       ) : view === 'account-new' ? (
         <>

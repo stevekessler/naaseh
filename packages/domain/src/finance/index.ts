@@ -28,3 +28,4 @@ export * from './forecast-window.js';
 export * from './upcoming-expense.js';
 export * from './expense-fulfillment.js';
 export * from './dashboard.js';
+export * from './spend-trends.js';

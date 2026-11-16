@@ -1,6 +1,10 @@
-import { localFinanceDate } from '@naaseh/domain';
+import { calculateCachedSpendTrend, localFinanceDate } from '@naaseh/domain';
 import type { FinanceQueryFilters } from '@naaseh/contracts';
-import type { FinanceBrowseDocument, FinanceWorkerRequest } from './finance-index.js';
+import type {
+  FinanceBrowseDocument,
+  FinanceSpendWorkerRequest,
+  FinanceWorkerRequest,
+} from './finance-index.js';
 
 const normalize = (value: string) =>
   value.normalize('NFKC').toLocaleLowerCase('en-US').replace(/\s+/gu, ' ').trim();
@@ -33,7 +37,17 @@ function matches(row: FinanceBrowseDocument, filters: FinanceQueryFilters) {
 }
 
 let generation = 0;
-self.onmessage = ({ data }: MessageEvent<FinanceWorkerRequest>) => {
+self.onmessage = ({
+  data,
+}: MessageEvent<FinanceWorkerRequest | { spend: FinanceSpendWorkerRequest }>) => {
+  if ('spend' in data) {
+    try {
+      self.postMessage({ totals: calculateCachedSpendTrend(data.spend) });
+    } catch {
+      self.postMessage({});
+    }
+    return;
+  }
   const current = ++generation;
   const { documents, filters } = data;
   void (async () => {

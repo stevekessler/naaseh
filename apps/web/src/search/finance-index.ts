@@ -459,3 +459,42 @@ export function filterFinanceDocuments(
     worker.postMessage(request);
   });
 }
+
+export interface FinanceSpendWorkerRequest {
+  periods: { dateFrom: string; dateTo: string }[];
+  timeZone: string;
+  selected: string[];
+  transactions: FinancialTransaction[];
+  refunds: import('@naaseh/domain').ExpenseRefundRelationship[];
+}
+
+export function aggregateCachedSpend(request: FinanceSpendWorkerRequest, signal: AbortSignal) {
+  type Totals = ReturnType<typeof import('@naaseh/domain').sumSpendByCurrency>[];
+  signal.throwIfAborted();
+  return new Promise<Totals>((resolve, reject) => {
+    const worker = new Worker(new URL('./finance-index.worker.ts', import.meta.url), {
+      type: 'module',
+    });
+    const clear = () => {
+      worker.terminate();
+      signal.removeEventListener('abort', cancel);
+      unregister();
+    };
+    const cancel = () => {
+      clear();
+      reject(new DOMException('Cached spending calculation cancelled.', 'AbortError'));
+    };
+    const unregister = registerFinanceSearchIndex({ clear: cancel });
+    signal.addEventListener('abort', cancel, { once: true });
+    worker.onmessage = ({ data }: MessageEvent<{ totals?: Totals }>) => {
+      clear();
+      if (data.totals) resolve(data.totals);
+      else reject(new Error('Cached spending is unavailable.'));
+    };
+    worker.onerror = () => {
+      clear();
+      reject(new Error('Cached spending is unavailable.'));
+    };
+    worker.postMessage({ spend: request });
+  });
+}
