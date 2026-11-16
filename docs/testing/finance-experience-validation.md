@@ -1,5 +1,21 @@
 # Finance Experience Expansion Implementation Validation
 
+## November 16 T018 staging synthesis
+
+The CDK entry point synthesized `NaasehStagingEdge` in us-east-1 and
+`NaasehStaging` in us-west-2 with synthetic account, domain, hosted zone and
+recovery role inputs. The application template includes the DynamoDB table,
+versioned S3 and backup resources, and the HTTP API. Both production templates
+match the pre-change synthesis byte for byte. No live AWS synthesis lookups,
+resources or tests were used.
+
+Five target tests cover staging isolation, missing or production DNS,
+account mismatch and recovery role boundaries. Required local validation
+passed 2,013 tests in 506 files in 70.11 s, compared with 2,008 / 506 in
+67.15 s before the change. The required workflow and quick browser selection
+are unchanged. Hosted validation and live acceptance still need the actual
+staging deployment inputs and the isolated environment.
+
 ## November 16 T123 closure and T018 preflight
 
 Steve ran the integrated Phase 11 desktop suite at `267bca6` and reported

@@ -88,6 +88,40 @@ deployed there, and the staging DynamoDB and versioned receipt storage resources
 Confirm the one-time fixture spend independently of the ongoing $6.50 forecast.
 Keep production data and the production migration outside this exercise.
 
+### Synthesize the staging target
+
+The CDK entry point supports separate `NaasehStagingEdge` and
+`NaasehStaging` stack IDs. Obtain the staging account's delegated Route 53
+zone and same-account recovery role. Set these values for the synthesis:
+
+| Environment variable | Value |
+| --- | --- |
+| `NAASEH_STAGE` | `staging` |
+| `NAASEH_STAGING_ACCOUNT_ID` | Intended separate staging AWS account |
+| `CDK_DEFAULT_ACCOUNT` | Account returned by STS using the staging CLI profile |
+| `NAASEH_STAGING_DOMAIN_NAME` | Hostname to use for staging |
+| `NAASEH_STAGING_HOSTED_ZONE_ID`, `NAASEH_STAGING_HOSTED_ZONE_NAME` | Delegated staging zone containing that hostname |
+| `NAASEH_STAGING_BREAK_GLASS_ROLE_ARN` | Existing recovery role in the staging account |
+| `NAASEH_STAGING_ALERT_EMAIL` | Optional destination for staging alerts |
+
+With the Node 24 toolchain, build the web app and synthesize the assembly.
+Use a separate output directory for review.
+
+```sh
+staging_assembly="$(mktemp -d /tmp/naaseh-staging-synth.XXXXXX)" &&
+npm run build -w @naaseh/web &&
+(
+  cd infra &&
+  CDK_OUTDIR="$staging_assembly" node --import tsx bin/naaseh.ts
+)
+```
+
+Review the staging deployment under the AWS release procedure before enabling
+the staging workflow. Account and DNS setup, OIDC, and the hosted smoke test
+are deployment prerequisites. Synthesis alone validates template generation.
+
+### Measure the deployed target
+
 1. Seed the synthetic scale in the [Finance quickstart](../../specs/016-finance-experience-expansion/quickstart.md)
    and publish projections. Record the revision and verify canonical coverage
    for every measured account. Keep independent expected row IDs, counts and

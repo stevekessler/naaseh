@@ -470,11 +470,11 @@ The role ARN must be
 `AdministratorAccess`, store AWS access keys in GitHub, or allow this role to assume
 `naaseh-recovery-break-glass`.
 
-Do not create or run the staging deployment role yet. The current CDK entry point uses the fixed
-stack IDs `NaasehEdge` and `NaasehProd`. The repository's staging workflow is currently a
-non-deploying placeholder because no staging AWS environment exists.
-First implement stage-specific stack IDs and a separate staging hostname, then create a staging
-role with an exact `repo:stevekessler/naaseh:environment:staging` subject.
+The CDK entry point can synthesize separate `NaasehStagingEdge` and `NaasehStaging`
+stacks using the [staging target inputs](finance-experience.md#synthesize-the-staging-target).
+The staging workflow remains a placeholder pending a separate AWS account, DNS setup,
+an exact `repo:stevekessler/naaseh:environment:staging` OIDC role, and reviewed smoke and
+rollback steps.
 
 ## 5. Configure GitHub Actions
 

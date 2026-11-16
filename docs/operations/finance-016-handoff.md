@@ -1,5 +1,12 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 16 T018 staging checkpoint: both staging stacks synthesize with
+> isolated inputs and the production templates match the earlier synthesis.
+> Local validation passed 2,013 tests in 506 files in 70.11 s. T018 remains
+> open for a deployed staging target, live measurements and cost acceptance.
+> The [staging inputs](finance-experience.md#synthesize-the-staging-target)
+> describe the account, DNS and recovery role needed for the next step.
+
 > November 16 T123/T018 checkpoint: 125/166 tasks checked. Steve reported
 > 12/12 integrated Phase 11 browser cases passing. T018 local preflight passed
 > 217 checks. Live DynamoDB, receipt storage and hosted timing still need a
