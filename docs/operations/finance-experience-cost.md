@@ -1,5 +1,45 @@
 # Finance 015 + 016 cost gate
 
+## November 16 T018 cost preflight
+
+The rerun used the current integration tree and the established household
+inputs of eight accounts, 250 new transactions and 100 corrections per month,
+five years of initial transaction history, and 50 new 2 MB Standard receipts
+per month. DynamoDB public pricing still lists $0.625 per million standard
+writes and $0.125 per million reads. The GuardDuty public example still lists
+$0.09 per scanned GB and $0.215 per thousand evaluated objects. Other paid
+Oregon rates below are carried forward from the earlier regional offer-file
+checks. [DynamoDB pricing](https://aws.amazon.com/dynamodb/pricing/) ·
+[GuardDuty pricing](https://aws.amazon.com/guardduty/pricing/).
+
+| Offline probe | Result |
+| --- | --- |
+| Eight accounts, 15,000 transactions spread over 60 months | 127,616,386 estimated projection bytes |
+| Fifty accounts, 100,000 transactions in one month | 576,937,456 estimated projection bytes |
+| Same stress workload spread over 60 months | 659,914,475 estimated projection bytes, above the 0.6 GB incremental metadata allowance before other records |
+| Broad compact query, 50 accounts, first 200 rows | 150 index queries, 86 metadata gets, 200 hydration reads, 21,050 estimated RRUs including hydration, and 1,068 estimated checkpoint WRUs |
+| Household projection and query write subtotal plus existing journal and recovery allowances | 347,815 of the 500,000 incremental WRU reserve before remaining actions and retries |
+
+The reruns match the committed [projection](../testing/finance-experience-projection-sizing.json),
+[query](../testing/finance-query-checkpoint-sizing.json), and
+[receipt](../testing/finance-receipt-storage-sizing.json) sizing results. The probes
+use generated commands and simulated persistence. Coverage guard,
+service retries, SDK timings, full billed storage and the remaining invocation
+and request allocation still need live data. The separate 100,000-source
+initial projection estimate is **$20.96 in DynamoDB writes alone**, assuming
+335.3 WRUs per source at the checked write rate. Setup and fixture expenditure
+are outside the quoted ongoing monthly scenario.
+
+Using the established two-total-views assumption and retaining the modeled
+extra version and warm backup copies, the receipt sensitivity is **$6.38/month
+at month 12**, **$6.52 at month 24**, and **$6.94 at month 60**, with 30%
+contingency. The comparison carries the earlier conditional non-receipt costs.
+It exposes a **$0.44/month** gap at month 60 before any unallocated work.
+Measure version churn, incremental backup storage, and measured query and
+publication usage before relying on a reduction. Keep the $6.50 ceiling and
+the established Standard receipt retention settings. T018 cost acceptance
+remains open.
+
 > November 9 household update: two simultaneously visible devices and mixed
 > private/shared accounts are confirmed. Ten daily overall hours include two Finance
 > hours. Current source/proof/group work is not accepted under a measured combined

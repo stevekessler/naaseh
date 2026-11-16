@@ -61,6 +61,8 @@ describe('optional Finance expense task displays', () => {
     expect(html).toMatch(/\$1,250\.00/);
     expect(html).toMatch(/Checking/);
     expect(html).toMatch(/Insurance/);
+    expect(html).toContain('href="/finance/upcoming-expenses/expense-1"');
+    expect(html).toContain('href="/finance/upcoming-expenses/expense-2"');
 
     const note = renderToStaticMarkup(<PostItNote
       task={task}
@@ -70,6 +72,8 @@ describe('optional Finance expense task displays', () => {
     />);
     expect(note).toMatch(/Rent/);
     expect(note).toMatch(/Insurance/);
+    expect(note).toContain('href="/finance/upcoming-expenses/expense-1"');
+    expect(note).toContain('href="/finance/upcoming-expenses/expense-2"');
   });
 
   it('supports type/search and multiple target selection without creating on cancel', () => {

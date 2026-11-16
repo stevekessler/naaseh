@@ -1,5 +1,12 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 16 T123/T018 checkpoint: 125/166 tasks checked. Steve reported
+> 12/12 integrated Phase 11 browser cases passing. T018 local preflight passed
+> 217 checks. Live DynamoDB, receipt storage and hosted timing still need a
+> separate staging target. The projected receipt-retention sensitivity crosses
+> $6.50/month by month 24; cost acceptance remains open. See the
+> [acceptance procedure](finance-experience.md#t018-live-acceptance).
+
 > November 16 integration checkpoint: 124/166 tasks checked. T122 is complete.
 > A combined DynamoDB restore fixture verifies the exact receipt bytes, one
 > canonical fulfillment claim, and both directions of the task relationship

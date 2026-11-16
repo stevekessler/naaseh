@@ -78,6 +78,41 @@ staging environment. Establish an approved isolated environment and explicit
 synthetic fixtures before live acceptance; this runbook does not authorize
 creating one, deploying this branch or using production as the performance lab.
 
+
+## T018 live acceptance
+
+The release procedure requires an isolated target. The published staging
+workflow is still a placeholder. To run the remaining checks, identify the
+separate AWS account/profile and trusted hosted URL, the integration revision
+deployed there, and the staging DynamoDB and versioned receipt storage resources.
+Confirm the one-time fixture spend independently of the ongoing $6.50 forecast.
+Keep production data and the production migration outside this exercise.
+
+1. Seed the synthetic scale in the [Finance quickstart](../../specs/016-finance-experience-expansion/quickstart.md)
+   and publish projections. Record the revision and verify canonical coverage
+   for every measured account. Keep independent expected row IDs, counts and
+   currency totals for each query, including an exact leading-zero check match
+   and a verified no-match case.
+2. Use the protected hosted transaction browse route with `browse=1` and an
+   explicit authorized account or account list. Measure the four cases in 20
+   runs each using the specified mobile/network profile, including cold and warm
+   runs, sparse results and verified zero-match. Use the bound query status and
+   rows endpoints for a returned query ID. Poll for progress and exact totals
+   without paging through rows. Separate time to progress, time to first actual
+   rows or confirmed empty, and time to exact count and totals.
+3. Correlate each run with staging API/worker telemetry and DynamoDB operation
+   counts, examined rows, and consumed capacity. Record raw timings and p95.
+   Use `ReturnConsumedCapacity: TOTAL` for staged SDK instrumentation where
+   applicable, including worker requests, and separate it from command counts.
+   Verify authorization and projection revision during delivery and compare the
+   results with the independent ledger.
+4. Upload and restore a synthetic receipt on the staging storage path. Confirm
+   both policy and malware verdicts for the same object version and compare the
+   restored bytes to the original SHA-256. Record stored bytes, version/backup
+   growth, reads and scan costs. Reprice the full household forecast against the
+   unchanged ceiling. Record the hosted Validate result and duration for the
+   integration revision separately from the application timing.
+
 ## SimpleFIN configuration finding
 
 The current SimpleFIN Bridge integration does not require an application-wide

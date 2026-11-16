@@ -1,5 +1,41 @@
 # Finance Experience Expansion Implementation Validation
 
+## November 16 T123 closure and T018 preflight
+
+Steve ran the integrated Phase 11 desktop suite at `267bca6` and reported
+**12/12** Chromium and WebKit cases passing. The local last-run report agrees.
+The browser suite covers the protected Add Task flow, links from expenses to
+ordinary tasks, encrypted offline queuing, opt-in display and the embedded
+unlock boundary. The component check verifies that task-list and Post-it links
+route back to each selected upcoming expense. The integration and access checks
+verify that completion/deletion neither creates payments nor cancels the
+expense and that ordinary task data does not acquire protected Finance details.
+T123 is complete.
+
+T018 local preflight passed **217 tests in 23 files** in two disjoint runs,
+including indexed reads, parity, migration compatibility, infrastructure,
+automatic completion and the combined receipt restore checks. The injected SDK
+sparse/zero-match test exercised 20 requests against a model of a
+100,000-transaction scope. Each used one indexed query and examined at most one
+row. This is command-shape evidence from a storage double. It supplies no live
+latency or consumed capacity. The complete local validation run covered
+2,008 tests in 506 files, runtime, typecheck, lint and builds in 67.15 s.
+
+| T018 evidence | November 16 result |
+| --- | --- |
+| Cold/warm/sparse/zero-match p95, usable rows or confirmed empty at ≤2 s | Pending live measurement |
+| Exact connected count and totals at ≤10 s, progress at ≤1 s, automatic completion without pagination | Local state transitions passed. Live timings pending. |
+| Capacity, stored bytes, rows examined and storage/API call counts | Offline sizing completed. Live DynamoDB and hosted measurements pending. |
+| Exact receipt version and original-byte recovery | Local restore passed. Live S3 version, scan and restore checks pending. |
+| Combined ongoing cost at or below $6.50 including 30% contingency | Receipt-retention sensitivity crosses the ceiling by month 24. Complete live-backed forecast pending. |
+| Hosted validation for the integration branch | No matching PR workflow run found for the checkpoint. |
+
+AWS identity lookup with the repository's CLI profile could not reach the
+regional sign-in endpoint. The published staging workflow is still disabled.
+Use the [staging acceptance procedure](../operations/finance-experience.md#t018-live-acceptance)
+and the [cost preflight](../operations/finance-experience-cost.md) when a
+separate environment is ready.
+
 ## November 16 combined reconciliation and restore
 
 T122 is complete on the integration branch. Provider reconciliation updates

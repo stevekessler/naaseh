@@ -333,7 +333,7 @@ acceptance. See validation and runtime reports; other US2 tasks remain open.
 - [x] T120 [US12] Add default-off Upcoming Expenses details through `apps/web/src/features/postit/PostItFieldSettings.tsx`, `apps/web/src/features/postit/PostItBoard.tsx` and `apps/web/src/features/postit/PostItNote.tsx`; preserve existing per-user/layout preference behavior, batch visible target reads and expose in-place unlock only for authorized viewers.
 - [x] T121 [US12] Extend encrypted relationship migration/outbox/feed projections and source/task revocation in `apps/web/src/sync/finance-sync.ts` and `apps/api/src/sync/sync-service.ts`; keep financial target metadata out of ordinary shared task/export/notification/search serialization.
 - [x] T122 [US12] Preserve receipt/task/fulfillment references across provider canonical identity reconciliation and test legacy-link/partial retry graph recovery in `apps/api/src/finance/provider-reconciliation-service.ts` and `tests/integration/finance-durable-runtime.test.ts`.
-- [ ] T123 [US12] Run contract/access/component/browser/restore checks and verify no protected auto-copy and no payment/cancellation from task completion/deletion in `docs/testing/finance-experience-validation.md`; record task-to-source and source-to-task navigation results.
+- [x] T123 [US12] Run contract/access/component/browser/restore checks and verify no protected auto-copy and no payment/cancellation from task completion/deletion in `docs/testing/finance-experience-validation.md`; record task-to-source and source-to-task navigation results.
 
 **Checkpoint**: Connect Tasks and Post-its to Expenses is complete only after its independent acceptance and relevant failure paths pass; preserve pending evidence as unresolved.
 
