@@ -2,6 +2,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test';
 import {
   financeSnapshotFixtureHeaders,
   mockFinanceSnapshotEvidence,
+  mockSuccessfulSync,
   mockUnprotectedFinanceSecurity,
   signIn,
 } from './enhanced-helpers.js';
@@ -143,8 +144,31 @@ async function openDashboard(page: Page, options: { accountFailure?: boolean } =
       json: { merchant, transactions: [], totalsComplete: true },
     }),
   );
+  await page.route('**/api/v1/users/directory', (route) =>
+    route.fulfill({
+      json: { items: [{ id: 'local-steve', displayName: 'Steve', username: 'steve' }] },
+    }),
+  );
+  await page.route('**/api/v1/groups', (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: budget.groupId,
+            name: 'Household',
+            ownerId: 'local-steve',
+            status: 'active',
+            joined: true,
+            role: 'member',
+            version: 1,
+          },
+        ],
+      },
+    }),
+  );
   await mockUnprotectedFinanceSecurity(page, { role: 'user' });
-  await mockFinanceSnapshotEvidence(page);
+  await mockSuccessfulSync(page);
+  await mockFinanceSnapshotEvidence(page, { allowProoflessPull: true });
   await signIn(page);
   await page.goto('/finance');
 }
@@ -172,7 +196,8 @@ test('persists the upcoming count and keeps overdue rows outside the limit', asy
 
 test('includes only the account the user selects and preserves balance freshness', async ({
   page,
-}) => {
+}, testInfo) => {
+  desktopOnly(testInfo);
   await openDashboard(page);
   await expect(
     page.getByText('Choose accounts to include from their Finance detail pages.'),
@@ -207,7 +232,8 @@ test('keeps upcoming expenses usable when account balances are unavailable', asy
 
 test('saves personal preferences from the budget, category and merchant pages', async ({
   page,
-}) => {
+}, testInfo) => {
+  desktopOnly(testInfo);
   await openDashboard(page);
   const targets = [
     { path: `/finance/budgets/${budget.id}`, name: budget.name },

@@ -216,7 +216,10 @@ export async function mockUnprotectedFinanceSecurity(
 export const financeSnapshotFixtureHeaders = {
   'x-finance-cache-proof': 'fc1.synthetic.fixture.proof',
 };
-export async function mockFinanceSnapshotEvidence(page: Page) {
+export async function mockFinanceSnapshotEvidence(
+  page: Page,
+  { allowProoflessPull = false }: { allowProoflessPull?: boolean } = {},
+) {
   let current = true;
   await page.route('**/api/v1/finance/connections', (route) =>
     route.fulfill({
@@ -235,13 +238,16 @@ export async function mockFinanceSnapshotEvidence(page: Page) {
     };
     if (!body.financeCacheOnly) return route.fallback();
     expect(body.financeCacheProtocol).toBe(1);
-    const proofs = Array.isArray(body.financeCacheProof)
-      ? body.financeCacheProof
-      : [body.financeCacheProof];
-    expect(proofs.length).toBeGreaterThan(0);
-    expect(
-      proofs.every((proof) => proof === financeSnapshotFixtureHeaders['x-finance-cache-proof']),
-    ).toBe(true);
+    // An empty cache verifies its initial checkpoint before a proof exists.
+    if (!allowProoflessPull || body.financeCacheProof !== undefined) {
+      const proofs = Array.isArray(body.financeCacheProof)
+        ? body.financeCacheProof
+        : [body.financeCacheProof];
+      expect(proofs.length).toBeGreaterThan(0);
+      expect(
+        proofs.every((proof) => proof === financeSnapshotFixtureHeaders['x-finance-cache-proof']),
+      ).toBe(true);
+    }
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
