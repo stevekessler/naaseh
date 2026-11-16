@@ -11,11 +11,12 @@ of paid records. The focused run passed 59 tests in 13 files. Required validatio
 passed **1,946 tests / 498 files / 68.24 s**, versus 1,943 / 498 / 67.97 s at the
 previous checkpoint. Typecheck, lint and builds passed.
 
-The dedicated dashboard browser spec lists eight Chromium/WebKit cases and passes
-lint. Browser execution was blocked before the tests started because the agent
-session denied the Vite preview listener. The required quick selection was
-unchanged. T126 stays open for execution. T124 and T131 remain open for the
-remaining budget and recent-activity cases and widgets.
+Steve ran the dedicated dashboard spec in macOS Terminal after the initial cache
+sync fixture was corrected. All eight cases passed, four each in Chromium and
+WebKit. Coverage includes per-kind preferences, balance freshness, independent
+widget failures, count persistence and separate overdue rows. T126 is complete.
+T124 and T131 remain open for the remaining budget and recent-activity cases and
+widgets. The required quick selection was unchanged.
 
 ## Dashboard inclusion controls — 2026-11-15
 

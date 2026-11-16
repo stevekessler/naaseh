@@ -350,7 +350,7 @@ acceptance. See validation and runtime reports; other US2 tasks remain open.
 
 - [ ] T124 [P] [US7] Add owner-only flags/count, canonical upcoming dedupe, active-on-save/inactive/closed budget eligibility, zero/overspent positive spent/percent-used and refund-aware recent activity reference tests in `tests/integration/finance-dashboard.test.ts` using shared predicates.
 - [ ] T125 [P] [US7] Add personal preference isolation, hidden account totals/counts and revoked-flag/source leakage tests in `tests/security/finance-dashboard.security.test.ts`.
-- [ ] T126 [P] [US7] Add Chromium/WebKit per-kind flag controls, independent widget empty/stale/error states and count persistence journeys in `tests/e2e/finance-dashboard.spec.ts`.
+- [x] T126 [P] [US7] Add Chromium/WebKit per-kind flag controls, independent widget empty/stale/error states and count persistence journeys in `tests/e2e/finance-dashboard.spec.ts`.
 - [ ] T127 [P] [US7] Add/validate separate row/aggregate readiness and exactness, owner-only preferences and budget activity/refund-aware response contracts in `tests/contract/finance-dashboard.contract.test.ts`; progress is distinct from usable values and stale revisions are never final totals.
 
 ### Implementation and Verification
