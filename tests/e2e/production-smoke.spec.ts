@@ -18,6 +18,14 @@ function expectNoStore(response: { headers(): Record<string, string> }) {
   expect(response.headers()['cache-control']).toContain('no-store');
 }
 
+function expectNoSecretFields(value: unknown) {
+  if (!value || typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value)) {
+    expect(key).not.toMatch(/password|pepper|privateKey|sessionToken/i);
+    expectNoSecretFields(child);
+  }
+}
+
 test('static delivery exposes the safe login shell', async ({ page }) => {
   await page.goto(productionUrl ?? '/');
   await expect(page.getByLabel('Username')).toBeVisible();
@@ -41,7 +49,8 @@ test.describe('deployed production canary', () => {
     expect(directory.status()).toBe(200);
     expectNoStore(directory);
     expect(await directory.json()).toHaveProperty('items');
-    expect(JSON.stringify(body)).not.toMatch(/password|pepper|privateKey|sessionToken/i);
+    expectNoSecretFields(body);
+    expect(JSON.stringify(body).includes(smokePassword!)).toBe(false);
   });
 
   test('returns a correlated safe error without protected request data', async ({ page }) => {
