@@ -1,4 +1,9 @@
-import { expect, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+
+test.afterEach(async ({ page }, info) => {
+  if (info.status !== info.expectedStatus)
+    console.log('Failed browser page', await page.evaluate(() => document.body.innerText));
+});
 
 export async function expandTaskDetails(form: Locator) {
   const details = form.locator('.task-form-details');
@@ -51,13 +56,7 @@ export async function signIn(page: Page) {
   const bootstrapResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === '/api/v1/sync/bootstrap',
   );
-  await page
-    .getByRole('button', { name: 'Sign in' })
-    .click()
-    .catch(async (error) => {
-      console.log('Sign-in page contents', await page.locator('body').innerText());
-      throw error;
-    });
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await bootstrapResponse;
   await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
 }
