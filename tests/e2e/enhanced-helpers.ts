@@ -40,6 +40,10 @@ export async function mockEmptySyncBootstrap(page: Page) {
 }
 
 export async function signIn(page: Page) {
+  page.on('pageerror', (error) => console.log('Browser page error', error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.log('Browser console error', message.text());
+  });
   await mockEmptySyncBootstrap(page);
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
@@ -47,7 +51,13 @@ export async function signIn(page: Page) {
   const bootstrapResponse = page.waitForResponse(
     (response) => new URL(response.url()).pathname === '/api/v1/sync/bootstrap',
   );
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page
+    .getByRole('button', { name: 'Sign in' })
+    .click()
+    .catch(async (error) => {
+      console.log('Sign-in page contents', await page.locator('body').innerText());
+      throw error;
+    });
   await bootstrapResponse;
   await expect(page.getByRole('heading', { name: /Ready when you are/ })).toBeVisible();
 }
