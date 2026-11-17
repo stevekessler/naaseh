@@ -6,7 +6,11 @@ export interface BrowserSession {
 }
 export const saveSessionView = (session: BrowserSession) =>
   sessionStorage.setItem('naaseh-session-view', JSON.stringify(session));
-export const clearSessionView = () => sessionStorage.removeItem('naaseh-session-view');
+export const taskCatchUpSessionKey = 'naaseh-task-catch-up-pending';
+export const clearSessionView = () => {
+  sessionStorage.removeItem('naaseh-session-view');
+  sessionStorage.removeItem(taskCatchUpSessionKey);
+};
 
 export async function validateBrowserSession(): Promise<
   { valid: true; session: BrowserSession } | { valid: false; reason: 'revoked' | 'expired' }

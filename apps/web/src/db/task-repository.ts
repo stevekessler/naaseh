@@ -15,7 +15,7 @@ import {
   type CompletionEvent,
 } from '@naaseh/domain';
 import Dexie from 'dexie';
-import { db } from './database.js';
+import { db, type EncryptedTaskRecord } from './database.js';
 import { createDeviceKey, decryptText, encryptText } from '../crypto/vault.js';
 import { getClientId } from './client-id.js';
 import { assertNoExtraLowActiveValues } from './extra-low-removal.js';
@@ -47,8 +47,8 @@ export async function decryptLocalValue<T>(
 ): Promise<T> {
   return JSON.parse(await decryptText(value, await deviceKey(), `${namespace}:${id}`)) as T;
 }
-export async function taskToEncryptedRecord(task: Task) {
-  const value = await encryptText(JSON.stringify(task), await deviceKey(), `task:${task.id}`);
+async function encryptTaskRecord(task: Task, key: CryptoKey): Promise<EncryptedTaskRecord> {
+  const value = await encryptText(JSON.stringify(task), key, `task:${task.id}`);
   return {
     id: task.id,
     ownerId: task.ownerId,
@@ -72,6 +72,16 @@ export async function taskToEncryptedRecord(task: Task) {
     value,
   };
 }
+export async function taskToEncryptedRecord(task: Task): Promise<EncryptedTaskRecord> {
+  return encryptTaskRecord(task, await deviceKey());
+}
+export async function tasksToEncryptedRecords(
+  tasks: readonly Task[],
+): Promise<EncryptedTaskRecord[]> {
+  if (!tasks.length) return [];
+  const key = await deviceKey();
+  return Promise.all(tasks.map((task) => encryptTaskRecord(task, key)));
+}
 async function encryptMutationPayload(mutationId: string, payload: unknown) {
   return encryptText(JSON.stringify(payload), await deviceKey(), `mutation:${mutationId}`);
 }
@@ -87,32 +97,39 @@ async function encryptRevision(revision: TaskRevision) {
 async function migrateLegacyTasks() {
   const legacy = await db.tasks.toArray();
   if (!legacy.length) return;
-  const encrypted = await Promise.all(legacy.map(taskToEncryptedRecord));
+  const encrypted = await tasksToEncryptedRecords(legacy);
   await db.transaction('rw', db.tasks, db.secureTasks, async () => {
     await db.secureTasks.bulkPut(encrypted);
     await db.tasks.clear();
   });
 }
-export async function readLocalTaskSnapshot() {
+export async function readLocalTaskSnapshot(ids?: string[]) {
   await migrateLegacyTasks();
-  const records = await db.secureTasks.orderBy('updatedAt').reverse().toArray();
-  const key = await deviceKey();
+  const records = ids
+    ? (await db.secureTasks.bulkGet(ids)).filter((record) => record !== undefined)
+    : await db.secureTasks.orderBy('updatedAt').reverse().toArray();
   const tasks: Task[] = [];
-  const unreadable: import('./database.js').EncryptedTaskRecord[] = [];
-  for (const record of records) {
-    try {
-      const raw = JSON.parse(await decryptText(record.value, key, `task:${record.id}`)) as Record<
-        string,
-        unknown
-      >;
-      const task = taskSchema.parse(raw);
-      tasks.push(task);
-      if (!raw.assigneeId) await db.secureTasks.put(await taskToEncryptedRecord(task));
-    } catch (error) {
-      // Keep the original ciphertext intact. A broken cached task must not take
-      // the entire application down or conceal the other readable tasks.
-      if (!(error instanceof Error) || error.name !== 'OperationError') throw error;
-      unreadable.push(record);
+  const unreadable: EncryptedTaskRecord[] = [];
+  const key = await deviceKey();
+  const batchSize = 32;
+  for (let offset = 0; offset < records.length; offset += batchSize) {
+    const results = await Promise.all(
+      records.slice(offset, offset + batchSize).map(async (record) => {
+        try {
+          const raw = JSON.parse(await decryptText(record.value, key, `task:${record.id}`));
+          const task = taskSchema.parse(raw);
+          if (!raw.assigneeId) await db.secureTasks.put(await encryptTaskRecord(task, key));
+          return { task };
+        } catch (error) {
+          // Keep unreadable ciphertext available for recovery when the server copy arrives.
+          if (!(error instanceof Error) || error.name !== 'OperationError') throw error;
+          return { unreadable: record };
+        }
+      }),
+    );
+    for (const result of results) {
+      if (result.task) tasks.push(result.task);
+      else unreadable.push(result.unreadable);
     }
   }
   return { tasks, unreadable };

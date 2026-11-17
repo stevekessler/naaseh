@@ -36,6 +36,7 @@ import {
   serializeSharedWorkChange,
 } from './sync-service.js';
 import {
+  hasMoreAudienceChanges,
   prepareAudienceChange,
   prepareAudienceChanges,
   pullAudience,
@@ -148,32 +149,44 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       event.requestContext.requestId,
     );
   if (event.rawPath.endsWith('/bootstrap')) {
-    const [shared, owned, taskTimer, categories, projects, lists, journalRecords, journalFeed] =
+    const ordinaryOnly = event.headers['x-naaseh-sync-bootstrap'] === 'ordinary';
+    const listsWithItems = listOwnerLists(actorId).then(async (lists) => ({
+      lists,
+      listItems: (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat(),
+    }));
+    const journalBootstrap = async () => {
+      if (ordinaryOnly) return {};
+      const [keyRegistry, journalRecords, journalFeed] = await Promise.all([
+        loadPublicKeyRegistry(),
+        journalRepository.bootstrap(actorId),
+        journalRepository.changes(actorId, 0),
+      ]);
+      return {
+        keyRegistry,
+        journalContractVersion: journalSyncContractVersion,
+        journalRecords,
+        journalCursor: journalFeed.cursor,
+      };
+    };
+    const [shared, owned, taskTimer, categories, projects, { lists, listItems }, journal] =
       await Promise.all([
         listPublicTasks(),
         listOwnerTasks(actorId),
         getTaskTimer(actorId),
         listCategories(),
         listProjects(),
-        listOwnerLists(actorId),
-        journalRepository.bootstrap(actorId),
-        journalRepository.changes(actorId, 0),
+        listsWithItems,
+        journalBootstrap(),
       ]);
-    const listItems = (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat();
-    const keyRegistry = await loadPublicKeyRegistry();
     return json(200, {
-      financeSyncVersion: 1,
       tasks: [...shared, ...owned].map((task) => taskSchema.parse(task)),
       categories: categories.map((category) => categorySchema.parse(category)),
       projects: projects.map((project) => projectSchema.parse(project)),
       lists: lists.map((list) => listSchema.parse(list)),
       listItems: listItems.map((item) => listItemSchema.parse(item)),
       ...(taskTimer ? { taskTimer } : {}),
-      keyRegistry,
       cursor: { public: 0, owner: 0 },
-      journalContractVersion: journalSyncContractVersion,
-      journalRecords,
-      journalCursor: journalFeed.cursor,
+      ...journal,
     });
   }
   let parsed: unknown;
@@ -228,6 +241,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
         return { name, after, changes };
       }),
     );
+    const ordinaryHasMore = pulled.some(({ changes }) => hasMoreAudienceChanges(changes));
     const deduped = new Map<string, SyncFeedChange>();
     for (const { changes } of pulled)
       for (const change of changes) {
@@ -241,6 +255,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
       }
     return json(200, {
       financeSyncVersion: 1,
+      ordinaryHasMore,
       changes: [...deduped.values()]
         .filter((change) => !change.entityType?.startsWith('finance'))
         .map((change) =>

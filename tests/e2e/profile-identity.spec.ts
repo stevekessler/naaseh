@@ -1,10 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { signIn, expandTaskDetails } from './enhanced-helpers.js';
+import { signIn, expandTaskDetails, mockSuccessfulSync } from './enhanced-helpers.js';
 import { expectNoDocumentOverflow } from './responsive-assertions.js';
 test.use({ serviceWorkers: 'block' });
 test('ordinary users see identity, all assignees, readable priorities, and consistently spaced buttons', async ({
   page,
 }) => {
+  await mockSuccessfulSync(page);
   await page.route('**/api/v1/auth/login', (route) =>
     route.fulfill({
       json: { user: { id: 'alex', displayName: 'Alex', role: 'user' }, csrfToken: 'csrf' },

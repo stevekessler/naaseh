@@ -22,7 +22,7 @@ export async function setTaskDueDate(form: Locator, date: string, time?: string)
   await dialog.getByRole('button', { name: 'Set due date' }).click();
 }
 
-export async function signIn(page: Page) {
+export async function mockEmptySyncBootstrap(page: Page) {
   await page.route('**/api/v1/sync/bootstrap', (route) =>
     route.fulfill({
       status: 200,
@@ -37,6 +37,10 @@ export async function signIn(page: Page) {
       }),
     }),
   );
+}
+
+export async function signIn(page: Page) {
+  await mockEmptySyncBootstrap(page);
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
   await page.getByLabel('Password').fill('local');

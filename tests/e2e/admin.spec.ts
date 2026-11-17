@@ -1,6 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { mockEmptySyncBootstrap, mockSuccessfulSync } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
+test.beforeEach(async ({ page }) => {
+  await mockEmptySyncBootstrap(page);
+  await mockSuccessfulSync(page);
+});
 
 test('an administrator responsively lists, disables, and reactivates users without self-disablement', async ({
   page,
