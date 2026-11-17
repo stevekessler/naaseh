@@ -395,10 +395,10 @@ export function App() {
   const completionUndo = useTaskCompletionUndo(session?.userId);
   // The live query can still hold its previous result while it reads the synced cache.
   const taskSnapshot = useLiveQuery(
-    async () =>
+    () =>
       taskCatchUpPending
-        ? undefined
-        : { revision: taskSnapshotRevision, result: await readLocalTaskSnapshot() },
+        ? Promise.resolve(undefined)
+        : readLocalTaskSnapshot().then((result) => ({ revision: taskSnapshotRevision, result })),
     [taskCatchUpPending, taskSnapshotRevision],
   );
   const taskResult =

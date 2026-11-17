@@ -1,9 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
-
-test.afterEach(async ({ page }, info) => {
-  if (info.status !== info.expectedStatus)
-    console.log('Failed browser page', await page.evaluate(() => document.body.innerText));
-});
+import { expect, type Locator, type Page } from '@playwright/test';
 
 export async function expandTaskDetails(form: Locator) {
   const details = form.locator('.task-form-details');
@@ -45,10 +40,6 @@ export async function mockEmptySyncBootstrap(page: Page) {
 }
 
 export async function signIn(page: Page) {
-  page.on('pageerror', (error) => console.log('Browser page error', error.message));
-  page.on('console', (message) => {
-    if (message.type() === 'error') console.log('Browser console error', message.text());
-  });
   await mockEmptySyncBootstrap(page);
   await page.goto('/');
   await page.getByLabel('Username').fill('steve');
