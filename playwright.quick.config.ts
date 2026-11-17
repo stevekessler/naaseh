@@ -28,6 +28,8 @@ const chromiumJourneys = [
 
 export default defineConfig({
   ...fullConfig,
+  reporter: 'line',
+  maxFailures: process.env.CI ? 1 : 0,
   // Keep the required gate comfortably below ten minutes on a hosted runner.
   workers: 2,
   projects: [
