@@ -29,9 +29,9 @@ import {
   decryptLocalValue,
   decryptMutation,
   encryptLocalValue,
-  taskToEncryptedRecord,
   markRevisionSynced,
   readLocalTaskSnapshot,
+  tasksToEncryptedRecords,
 } from '../db/task-repository.js';
 import { getClientId } from '../db/client-id.js';
 import { listReviewConflicts, readConflictDisplayContext } from './conflict-review.js';
@@ -166,6 +166,12 @@ export const shouldRefreshTaskSnapshot = (
   refreshAfterMs = 60_000,
 ) => shouldBootstrapOrganizationSnapshot(lastHydratedAt, now, refreshAfterMs);
 
+const fetchOrdinaryBootstrap = () =>
+  fetch('/api/v1/sync/bootstrap', {
+    credentials: 'include',
+    headers: { 'x-naaseh-sync-bootstrap': 'ordinary' },
+  });
+
 async function recoverMissingSnapshots(): Promise<void> {
   const [
     snapshot,
@@ -195,9 +201,7 @@ async function recoverMissingSnapshots(): Promise<void> {
   );
   const shouldRecoverLists = shouldBootstrapListSnapshot(listBootstrapState?.value);
   if (shouldRecoverTasks || shouldRecoverOrganization || shouldRecoverLists) {
-    const response = await fetch('/api/v1/sync/bootstrap', {
-      credentials: 'include',
-    });
+    const response = await fetchOrdinaryBootstrap();
     if (!response.ok) throw await syncHttpResponseError('Synchronization bootstrap', response);
     const body = (await response.json()) as {
       tasks?: unknown[];
@@ -207,9 +211,20 @@ async function recoverMissingSnapshots(): Promise<void> {
       lists?: unknown[];
       listItems?: unknown[];
     };
+    const cachedTasks = new Map(snapshot.tasks.map((task) => [task.id, task]));
+    const serverTasks = new Map<string, Task>();
+    if (shouldRecoverTasks) {
+      for (const value of body.tasks ?? []) {
+        const task = taskSchema.parse(value);
+        serverTasks.set(task.id, task);
+      }
+    }
     const records = shouldRecoverTasks
-      ? await Promise.all(
-          (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
+      ? await tasksToEncryptedRecords(
+          [...serverTasks.values()].filter((task) => {
+            const cached = cachedTasks.get(task.id);
+            return !cached || JSON.stringify(cached) !== JSON.stringify(task);
+          }),
         )
       : [];
     const organizationSnapshotAvailable =
@@ -314,26 +329,28 @@ async function recoverMissingSnapshots(): Promise<void> {
           pending.filter((item) => item.entityType === 'listItem').map((item) => item.entityId),
         );
         const unreadable = new Map(snapshot.unreadable.map((record) => [record.id, record]));
-        for (const record of records) {
-          if (protectedTasks.has(record.id)) continue;
-          const existing = await db.secureTasks.get(record.id);
-          if (existing) {
-            const broken = unreadable.get(record.id);
-            if (broken) {
-              // Recheck inside the transaction so a concurrent local save wins.
-              if (
-                existing.value.ciphertext !== broken.value.ciphertext ||
-                existing.value.iv !== broken.value.iv
-              )
-                continue;
-              await db.settings.put({
-                key: `task-recovery:${existing.id}:${existing.value.iv}`,
-                value: JSON.stringify(existing),
-              });
-            }
+        const writes = new Map(
+          records.filter((record) => !protectedTasks.has(record.id)).map((row) => [row.id, row]),
+        );
+        const repairs = [...unreadable.keys()].filter((id) => writes.has(id));
+        const previous = repairs.length ? await db.secureTasks.bulkGet(repairs) : [];
+        for (const existing of previous) {
+          if (!existing) continue;
+          const broken = unreadable.get(existing.id)!;
+          // Recheck inside the transaction so a concurrent local save wins.
+          if (
+            existing.value.ciphertext !== broken.value.ciphertext ||
+            existing.value.iv !== broken.value.iv
+          ) {
+            writes.delete(existing.id);
+            continue;
           }
-          await db.secureTasks.put(record);
+          await db.settings.put({
+            key: `task-recovery:${existing.id}:${existing.value.iv}`,
+            value: JSON.stringify(existing),
+          });
         }
+        if (writes.size) await db.secureTasks.bulkPut([...writes.values()]);
         for (const record of categoryRecords) {
           if (!protectedCategories.has(record.id)) await db.secureCategories.put(record);
         }
@@ -426,6 +443,7 @@ async function pushMutation(
 export async function drainOutbox(csrfToken: string): Promise<void> {
   if (!navigator.onLine) return;
   const stored = await db.outbox.orderBy('createdAt').toArray();
+  if (!stored.length) return;
   const blockedCategoryIds = new Set(
     (await listReviewConflicts())
       .filter((conflict) => conflict.mutation?.entityType === 'category')
@@ -577,6 +595,10 @@ export function cursorAdvanced(current: VectorCursor, next: VectorCursor): boole
 
 export async function pullChanges(): Promise<boolean> {
   if (!navigator.onLine) return false;
+  return (await pullOrdinaryPage()).advanced;
+}
+
+async function pullOrdinaryPage() {
   const current = await readCursor();
   const response = await fetch('/api/v1/sync/pull', {
     method: 'POST',
@@ -596,9 +618,14 @@ export async function pullChanges(): Promise<boolean> {
       changedAt?: string;
     }>;
     cursor: VectorCursor;
+    ordinaryHasMore?: boolean;
   };
   if (body.financeSyncVersion === 1) await pullFinanceSnapshot();
-  const records = [];
+  const cursor = mergeCursor(current, body.cursor);
+  const advanced = cursorAdvanced(current, cursor);
+  if (body.ordinaryHasMore === true && !advanced)
+    throw new Error('Synchronization did not advance safely.');
+  const tasks: Task[] = [];
   const tombstones = [];
   const enhanced = [];
   const revocations: { groupId: string; listIds: string[] }[] = [];
@@ -805,27 +832,26 @@ export async function pullChanges(): Promise<boolean> {
       tombstones.push(change.entityId);
       continue;
     }
-    records.push(await taskToEncryptedRecord(taskSchema.parse(change.payload)));
+    tasks.push(taskSchema.parse(change.payload));
   }
-  const cursor = mergeCursor(current, body.cursor);
+  const [records, unreadable] = tasks.length
+    ? await Promise.all([
+        tasksToEncryptedRecords(tasks),
+        readLocalTaskSnapshot(tasks.map(({ id }) => id)).then((snapshot) => snapshot.unreadable),
+      ])
+    : [[], []];
   if (enhanced.length) await commitEnhancedPull(enhanced, [], cursor, revocations);
   if (records.length || tombstones.length || !enhanced.length)
-    await commitPull(
-      records,
-      tombstones,
-      [],
-      cursor,
-      records.length ? (await readLocalTaskSnapshot()).unreadable : [],
-    );
-  return cursorAdvanced(current, cursor);
+    await commitPull(records, tombstones, [], cursor, unreadable);
+  return { advanced, hasMore: body.ordinaryHasMore };
 }
 
 async function refreshTaskSnapshotFromServer(): Promise<void> {
-  const response = await fetch('/api/v1/sync/bootstrap', { credentials: 'include' });
+  const response = await fetchOrdinaryBootstrap();
   if (!response.ok) throw await syncHttpResponseError('Task snapshot refresh', response);
   const body = (await response.json()) as { tasks?: unknown[] };
-  const records = await Promise.all(
-    (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
+  const records = await tasksToEncryptedRecords(
+    (body.tasks ?? []).map((task) => taskSchema.parse(task)),
   );
   const canonical = [...new Map(records.map((record) => [record.id, record])).values()];
   await db.transaction('rw', db.secureTasks, db.outbox, db.settings, async () => {
@@ -839,7 +865,17 @@ async function refreshTaskSnapshotFromServer(): Promise<void> {
     });
   });
 }
-async function performSync(csrfToken: string) {
+async function catchUpOrdinaryChanges(maxPages = 100): Promise<void> {
+  for (let page = 0; page < maxPages; page += 1) {
+    if (!navigator.onLine) throw new Error('Reconnect to finish downloading your changes.');
+    const { advanced, hasMore } = await pullOrdinaryPage();
+    // Older servers omit continuation. Their cursor can advance even on Finance-only pages.
+    if (!(hasMore ?? advanced)) return;
+  }
+  throw new Error('There are more changes to download. Synchronization will retry.');
+}
+
+async function performSync(csrfToken: string, onOrdinaryReady?: () => void) {
   let recoveryError: unknown;
   try {
     await recoverMissingSnapshots();
@@ -852,7 +888,8 @@ async function performSync(csrfToken: string) {
   } catch (error) {
     pushError = error;
   }
-  await pullChanges();
+  await catchUpOrdinaryChanges();
+  if (!recoveryError) onOrdinaryReady?.();
   if (pushError) throw pushError;
   if (recoveryError) throw recoveryError;
 }
@@ -880,8 +917,8 @@ export async function runWithSyncLock(
   }
 }
 
-export async function syncNow(csrfToken: string) {
-  await runWithSyncLock(() => performSync(csrfToken));
+export async function syncNow(csrfToken: string, onOrdinaryReady?: () => void) {
+  await runWithSyncLock(() => performSync(csrfToken, onOrdinaryReady));
 }
 
 /**
@@ -902,25 +939,21 @@ export async function resyncFromServer(csrfToken: string, maxPages = 100) {
       await db.settings.delete('sync-cursor');
       await db.settings.delete('pending-sync-replay-cursor');
     });
-    for (let page = 0; page < maxPages; page += 1) {
-      if (!(await pullChanges())) return;
-    }
-    throw new Error('Full synchronization exceeded the safe replay limit.');
+    await catchUpOrdinaryChanges(maxPages);
   });
 }
 export async function drainSequentially(
   csrfToken: string,
   onRetry: (delay: number) => void = () => {},
+  failedSyncAttempts = 0,
+  onOrdinaryReady?: () => void,
 ): Promise<void> {
   try {
-    await syncNow(csrfToken);
+    await syncNow(csrfToken, onOrdinaryReady);
   } catch (error) {
     const item = await db.outbox.orderBy('createdAt').first();
-    if (item) {
-      const delay = nextRetryDelay(item.attempts);
-      await db.outbox.update(item.id, { attempts: item.attempts + 1 });
-      onRetry(delay);
-    }
+    if (item) await db.outbox.update(item.id, { attempts: item.attempts + 1 });
+    onRetry(nextRetryDelay(Math.max(failedSyncAttempts, item?.attempts ?? 0)));
     throw error instanceof Error ? error : new Error('Pending changes remain safely stored.');
   }
 }

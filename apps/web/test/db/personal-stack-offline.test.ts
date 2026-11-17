@@ -118,14 +118,15 @@ vi.mock('../../src/db/task-repository.js', () => ({
     payload: JSON.parse(Buffer.from(record.payload.ciphertext, 'base64').toString()),
   }),
   markRevisionSynced: vi.fn(),
-  taskToEncryptedRecord: async (task: Row) => ({
-    id: task.id,
-    ownerId: task.ownerId,
-    status: task.status,
-    visibility: task.visibility,
-    updatedAt: task.updatedAt,
-    value: { iv: 'test-iv', ciphertext: Buffer.from(JSON.stringify(task)).toString('base64') },
-  }),
+  tasksToEncryptedRecords: async (tasks: Row[]) =>
+    tasks.map((task) => ({
+      id: task.id,
+      ownerId: task.ownerId,
+      status: task.status,
+      visibility: task.visibility,
+      updatedAt: task.updatedAt,
+      value: { iv: 'test-iv', ciphertext: Buffer.from(JSON.stringify(task)).toString('base64') },
+    })),
   readLocalTaskSnapshot: async () => ({ tasks: [], unreadable: [] }),
 }));
 
@@ -223,6 +224,7 @@ describe('encrypted offline personal-stack persistence', () => {
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/sync/bootstrap', {
       credentials: 'include',
+      headers: { 'x-naaseh-sync-bootstrap': 'ordinary' },
     });
     expect(state.tasks.get(recoveredTask.id)).toMatchObject({
       id: recoveredTask.id,

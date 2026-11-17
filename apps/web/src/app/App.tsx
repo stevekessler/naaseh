@@ -113,6 +113,7 @@ import { purgeAllAuthorizedData } from '../sync/privacy-purge.js';
 import {
   revalidateProtectedSession,
   saveSessionView,
+  taskCatchUpSessionKey,
   validateBrowserSession,
 } from '../features/auth/session.js';
 import { confirmSignOutWithUnsyncedData, signOutBrowser } from '../features/auth/sign-out.js';
@@ -279,6 +280,10 @@ export function App() {
       active = false;
     };
   }, [checkingSavedSession]);
+  const [taskCatchUpPending, setTaskCatchUpPending] = useState(() =>
+    Boolean(session && sessionStorage.getItem(taskCatchUpSessionKey) === session.userId),
+  );
+  const [taskSnapshotRevision, setTaskSnapshotRevision] = useState(0);
   const [view, setView] = useState<'list' | 'postit'>('list');
   const [headerCollapsed, setHeaderCollapsed] = useState(false);
   const headerExpandTimer = useRef<number | undefined>(undefined);
@@ -388,7 +393,18 @@ export function App() {
     () => location.pathname.match(/^\/tasks\/([^/]+)$/)?.[1],
   );
   const completionUndo = useTaskCompletionUndo(session?.userId);
-  const taskResult = useLiveQuery(() => readLocalTaskSnapshot(), []);
+  // The live query can still hold its previous result while it reads the synced cache.
+  const taskSnapshot = useLiveQuery(
+    () =>
+      taskCatchUpPending
+        ? Promise.resolve(undefined)
+        : readLocalTaskSnapshot().then((result) => ({ revision: taskSnapshotRevision, result })),
+    [taskCatchUpPending, taskSnapshotRevision],
+  );
+  const taskResult =
+    !taskCatchUpPending && taskSnapshot?.revision === taskSnapshotRevision
+      ? taskSnapshot.result
+      : undefined;
   const tasks = taskResult?.tasks ?? [];
   const categories = useLiveQuery(() => listCategories(), []) ?? [];
   const projects = useLiveQuery(() => listLocalProjects(), []) ?? [];
@@ -659,6 +675,7 @@ export function App() {
   const fullResyncRequested = useRef(new URLSearchParams(location.search).has('recover-sync'));
   const validatingSession = useRef(false);
   const hiddenAt = useRef<number | undefined>(undefined);
+  const syncRetryAttempt = useRef(0);
   const syncRetryTimer = useRef<number | undefined>(undefined);
   const visible = useMemo(() => {
     const filtered = filterTasksForViewer(
@@ -920,8 +937,20 @@ export function App() {
         syncRetryTimer.current = undefined;
       }
       syncing.current = true;
-      try {
-        let journalError: unknown;
+      const initialTaskCatchUp = sessionStorage.getItem(taskCatchUpSessionKey) === session.userId;
+      const finishTaskCatchUp = () => {
+        if (
+          !initialTaskCatchUp ||
+          signingOutRef.current ||
+          sessionStorage.getItem(taskCatchUpSessionKey) !== session.userId
+        )
+          return;
+        sessionStorage.removeItem(taskCatchUpSessionKey);
+        setTaskSnapshotRevision((revision) => revision + 1);
+        setTaskCatchUpPending(false);
+      };
+      let journalError: unknown;
+      const syncJournal = async () => {
         try {
           await drainJournalDataInDependencyOrder(
             session.userId,
@@ -932,15 +961,28 @@ export function App() {
         } catch (error) {
           journalError = error;
         }
-        if (fullReplay) await resyncFromServer(session.csrfToken);
-        else
-          await drainSequentially(session.csrfToken, (delay) => {
-            if (syncRetryTimer.current !== undefined) window.clearTimeout(syncRetryTimer.current);
-            syncRetryTimer.current = window.setTimeout(() => {
-              syncRetryTimer.current = undefined;
-              void synchronize();
-            }, delay);
-          });
+      };
+      try {
+        if (!initialTaskCatchUp) await syncJournal();
+        if (fullReplay) {
+          await resyncFromServer(session.csrfToken);
+          finishTaskCatchUp();
+        } else {
+          await drainSequentially(
+            session.csrfToken,
+            (delay) => {
+              syncRetryAttempt.current += 1;
+              syncRetryTimer.current = window.setTimeout(() => {
+                syncRetryTimer.current = undefined;
+                void synchronize();
+              }, delay);
+            },
+            syncRetryAttempt.current,
+            finishTaskCatchUp,
+          );
+          syncRetryAttempt.current = 0;
+        }
+        if (initialTaskCatchUp) await syncJournal();
         if (journalError) throw journalError;
         setSyncError(undefined);
       } catch (error) {
@@ -1088,7 +1130,12 @@ export function App() {
     return (
       <Login
         onAuthenticated={(next) => {
-          sessionStorage.setItem('naaseh-session-view', JSON.stringify(next));
+          saveSessionView(next);
+          const requiresCatchUp = next.userId !== 'local-steve';
+          if (requiresCatchUp) sessionStorage.setItem(taskCatchUpSessionKey, next.userId);
+          else sessionStorage.removeItem(taskCatchUpSessionKey);
+          setTaskCatchUpPending(requiresCatchUp);
+          setSyncError(undefined);
           setSession(next);
           setSessionValidation('valid');
         }}
@@ -1110,6 +1157,27 @@ export function App() {
           {(sessionValidation === 'retry' || sessionValidation === 'wrong_account') && (
             <button type="button" onClick={() => void revalidateSession()}>
               Retry validation
+            </button>
+          )}
+        </section>
+      </main>
+    );
+
+  if (taskCatchUpPending)
+    return (
+      <main className="login-page">
+        <section className="login-card" aria-live="polite">
+          <h1>Syncing your tasks</h1>
+          <p>
+            {!online
+              ? 'Reconnect to finish loading your tasks.'
+              : syncError
+                ? 'Your tasks could not finish syncing. Na’aseh will retry.'
+                : 'Downloading your latest task changes…'}
+          </p>
+          {online && syncError && (
+            <button type="button" onClick={() => void synchronize()}>
+              Retry sync
             </button>
           )}
         </section>

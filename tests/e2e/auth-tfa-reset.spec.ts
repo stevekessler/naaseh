@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { mockEmptySyncBootstrap, mockSuccessfulSync } from './enhanced-helpers.js';
 
 test('TFA challenge and PIN reset remain generic and usable', async ({ page }) => {
   await page.route('**/api/v1/auth/login', (route) =>
@@ -21,6 +22,8 @@ test('TFA challenge and PIN reset remain generic and usable', async ({ page }) =
 });
 
 test('offers a 30-day browser choice only after the TFA code is verified', async ({ page }) => {
+  await mockEmptySyncBootstrap(page);
+  await mockSuccessfulSync(page);
   let challengeBody: unknown;
   await page.route('**/api/v1/auth/login', (route) =>
     route.fulfill({

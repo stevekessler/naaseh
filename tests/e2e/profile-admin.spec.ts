@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { signIn } from './enhanced-helpers.js';
+import { mockEmptySyncBootstrap, mockSuccessfulSync, signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
@@ -48,6 +48,8 @@ test('discovers personal settings on Profile and renders a responsive administra
 });
 
 test('keeps system administration unavailable to an ordinary user', async ({ page }) => {
+  await mockEmptySyncBootstrap(page);
+  await mockSuccessfulSync(page);
   await page.route('**/api/v1/auth/login', (route) =>
     route.fulfill({
       status: 200,

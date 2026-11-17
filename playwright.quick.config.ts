@@ -3,6 +3,8 @@ import fullConfig from './playwright.config.js';
 
 const chromiumJourneys = [
   'auth.spec.ts',
+  'session-sync-account.spec.ts',
+  'task-sync-recovery.spec.ts',
   'profile-identity.spec.ts',
   'baseline.spec.ts',
   'tasks-list.spec.ts',
@@ -26,6 +28,8 @@ const chromiumJourneys = [
 
 export default defineConfig({
   ...fullConfig,
+  reporter: 'line',
+  maxFailures: process.env.CI ? 1 : 0,
   // Keep the required gate comfortably below ten minutes on a hosted runner.
   workers: 2,
   projects: [
