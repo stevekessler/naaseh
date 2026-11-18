@@ -4,7 +4,9 @@
     { "path": "packages/domain" },
     { "path": "packages/contracts" },
     { "path": "packages/observability" },
+    { "path": "packages/contacts-inventory-contracts" },
     { "path": "apps/web" },
+    { "path": "apps/contacts-inventory" },
     { "path": "apps/api" },
     { "path": "infra" }
   ]

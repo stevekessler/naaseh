@@ -1,4 +1,4 @@
-import { Duration, Fn, RemovalPolicy } from 'aws-cdk-lib';
+import { CfnOutput, Duration, Fn, RemovalPolicy, Tags } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -58,6 +58,23 @@ export function createWebResources(
     versioned: true,
     removalPolicy: RemovalPolicy.RETAIN,
   });
+  const featureArtifacts = new s3.Bucket(scope, 'ContactsInventoryArtifacts', {
+    blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+    enforceSSL: true,
+    encryption: s3.BucketEncryption.S3_MANAGED,
+    versioned: true,
+    removalPolicy: RemovalPolicy.RETAIN,
+  });
+  Tags.of(featureArtifacts).add('Feature', 'contacts-inventory');
+  new CfnOutput(scope, 'ContactsInventoryArtifactBucketName', {
+    value: featureArtifacts.bucketName,
+  });
+  const featureOrigin = origins.S3BucketOrigin.withOriginAccessControl(featureArtifacts);
+  const featureOriginBehavior = {
+    origin: featureOrigin,
+    viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+    responseHeadersPolicy,
+  };
   const spaRouteRewrite = new cloudfront.Function(scope, 'SpaRouteRewrite', {
     code: cloudfront.FunctionCode.fromInline(`
 function handler(event) {
@@ -65,9 +82,10 @@ function handler(event) {
   var uri = request.uri;
   var isSafeMethod = request.method === 'GET' || request.method === 'HEAD';
   var isApiPath = uri.indexOf('/api/') === 0;
+  var isFeatureAsset = uri.indexOf('/features/contacts-inventory/') === 0;
   var lastSegment = uri.substring(uri.lastIndexOf('/') + 1);
   var isSpaRoute = uri.charAt(uri.length - 1) === '/' || lastSegment.indexOf('.') === -1;
-  if (isSafeMethod && !isApiPath && isSpaRoute) request.uri = '/index.html';
+  if (isSafeMethod && !isApiPath && !isFeatureAsset && isSpaRoute) request.uri = '/index.html';
   return request;
 }
 `),
@@ -92,6 +110,16 @@ function handler(event) {
           eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
         },
       ],
+    },
+    additionalBehaviors: {
+      '/features/contacts-inventory/releases/*': {
+        ...featureOriginBehavior,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+      },
+      '/features/contacts-inventory/*': {
+        ...featureOriginBehavior,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+      },
     },
     defaultRootObject: 'index.html',
   });

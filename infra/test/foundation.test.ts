@@ -47,7 +47,7 @@ describe('foundation infrastructure', () => {
     template.resourceCountIs('AWS::StepFunctions::StateMachine', 3);
   });
   it('uses private, retained S3 origins and CloudFront OAC over HTTPS', () => {
-    template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 1);
+    template.resourceCountIs('AWS::CloudFront::OriginAccessControl', 2);
     template.hasResourceProperties('AWS::S3::Bucket', {
       PublicAccessBlockConfiguration: {
         BlockPublicAcls: true,

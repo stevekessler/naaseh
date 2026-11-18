@@ -1,0 +1,15 @@
+{
+  "name": "@naaseh/contacts-inventory",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:release": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@naaseh/contacts-inventory-contracts": "1.0.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

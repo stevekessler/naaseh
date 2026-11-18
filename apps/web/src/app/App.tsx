@@ -1,3 +1,5 @@
+import { FeatureView, useFeatureRelease } from '../features/contacts-inventory-host/FeatureView.js';
+import type { FeatureLocation } from '@naaseh/contacts-inventory-contracts';
 import { useTaskCompletionUndo } from '../features/tasks/useTaskCompletionUndo.js';
 import { AdminNavigation } from '../components/AdminNavigation.js';
 import { TasksNavigation } from '../components/TasksNavigation.js';
@@ -299,24 +301,25 @@ export function App() {
   const [sessionValidation, setSessionValidation] = useState<
     'valid' | 'locked' | 'retry' | 'wrong_account'
   >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
-  const initialRoute = parseAppRoute(location.pathname);
-  const [section, setSection] = useState<
-    | 'tasks'
-    | 'search'
-    | 'finance'
-    | 'lists'
-    | 'directory'
-    | 'groups'
-    | 'archive'
-    | 'projects'
-    | 'dashboard'
-    | 'stack'
-    | 'google'
-    | 'profile'
-    | 'admin'
-    | 'admin-categories'
-    | 'journal'
-  >(initialRoute.section);
+  const [currentPath, setCurrentPath] = useState(() => location.pathname);
+  const initialRoute = parseAppRoute(currentPath);
+  const [section, setSection] = useState<(typeof initialRoute)['section']>(initialRoute.section);
+  const featureRelease = useFeatureRelease(
+    Boolean(session && sessionValidation === 'valid'),
+    online,
+  );
+  const featureLocation = useMemo<FeatureLocation | null>(() => {
+    const route = parseAppRoute(currentPath);
+    if (route.section === 'contacts')
+      return { page: 'contacts', ...(route.recordId ? { recordId: route.recordId } : {}) };
+    if (route.section === 'inventory')
+      return route.medicationList
+        ? { page: 'medication-list' }
+        : { page: 'inventory', ...(route.recordId ? { recordId: route.recordId } : {}) };
+    if (route.section === 'inventory-admin' && route.catalog)
+      return { page: 'catalog', catalog: route.catalog };
+    return null;
+  }, [currentPath]);
   const [journalKey, setJournalKey] = useState<Uint8Array>();
   const lockJournal = useCallback(() => {
     setJournalKey((current) => {
@@ -1094,6 +1097,7 @@ export function App() {
 
   useEffect(() => {
     const syncRoute = () => {
+      setCurrentPath(location.pathname);
       const route = parseAppRoute(location.pathname);
       setSection(route.section);
       setSelectedId(route.section === 'tasks' ? route.taskId : undefined);
@@ -1338,13 +1342,29 @@ export function App() {
               >
                 Search
               </button>
-              <ListsNavigation section={section} navigate={(next) => navigate({ section: next })} />
+              <ListsNavigation
+                section={section}
+                contactsAvailable={Boolean(featureRelease.manifest)}
+                navigate={(next) => navigate({ section: next })}
+              />
+              {featureRelease.manifest && (
+                <button
+                  type="button"
+                  className="quiet"
+                  aria-current={section === 'inventory' ? 'page' : undefined}
+                  onClick={() => navigate({ section: 'inventory' })}
+                >
+                  Inventory
+                </button>
+              )}
               <FinanceNavigation
                 active={section === 'finance'}
                 navigate={() => navigate({ section: 'finance' })}
               />
               <AdminNavigation
                 isAdmin={session.role === 'admin'}
+                featureCatalogsAvailable={Boolean(featureRelease.manifest)}
+                openFeatureCatalog={(catalog) => navigate({ section: 'inventory-admin', catalog })}
                 section={section}
                 navigate={(next) => navigate({ section: next })}
               />
@@ -1386,7 +1406,18 @@ export function App() {
           </div>
         </header>
         <main>
-          {section === 'finance' ? (
+          {featureLocation ? (
+            <FeatureView
+              key={session.userId}
+              manifest={featureRelease.manifest}
+              location={featureLocation}
+              userId={session.userId}
+              isAdmin={session.role === 'admin'}
+              csrfToken={session.csrfToken}
+              refresh={featureRelease.refresh}
+              revalidateSession={revalidateSession}
+            />
+          ) : section === 'finance' ? (
             <FinanceLandingPage
               ownerId={session.userId}
               role={session.role}
