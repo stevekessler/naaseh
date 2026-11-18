@@ -1,4 +1,5 @@
 import { purgeAllAuthorizedData, purgeFinanceSearchState } from '../../sync/privacy-purge.js';
+import { featureQueueCounts } from '../contacts-inventory-host/local-state.js';
 import { clearSessionView } from './session.js';
 
 type SignOutDependencies = {
@@ -22,6 +23,17 @@ export function confirmSignOutWithUnsyncedData(
   return confirm(
     `You have ${details}. Signing out removes local data and may permanently lose changes that have not synced. Are you sure you want to sign out?`,
   );
+}
+
+export async function confirmBrowserSignOut(account: string, pending: number, conflicts: number) {
+  try {
+    const feature = await featureQueueCounts(account);
+    return confirmSignOutWithUnsyncedData(pending + feature.pending, conflicts + feature.conflicts);
+  } catch {
+    return window.confirm(
+      'The Contacts and Inventory queue could not be checked. Signing out may discard unsynced changes. Continue?',
+    );
+  }
 }
 
 /** Revoke the online session when possible, then remove all account-derived browser data. */

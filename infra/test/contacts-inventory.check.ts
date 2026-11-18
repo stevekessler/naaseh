@@ -15,6 +15,7 @@ describe('Contacts and Inventory artifact origin', () => {
       domainName: 'naaseh.example.test',
       webAclArn: 'arn:aws:wafv2:us-east-1:123456789012:global/webacl/site/id',
       webAssetPath: 'tests/fixtures',
+      contactsInventoryMediaOrigin: 'https://upload.example.test',
     });
     const template = Template.fromStack(stack);
     template.hasResource('AWS::S3::Bucket', {
@@ -38,6 +39,17 @@ describe('Contacts and Inventory artifact origin', () => {
             CachePolicyId: '4135ea2d-6df8-44a3-9df3-4b5a84be39ad',
           }),
         ]),
+      },
+    });
+    template.hasResourceProperties('AWS::CloudFront::ResponseHeadersPolicy', {
+      ResponseHeadersPolicyConfig: {
+        SecurityHeadersConfig: {
+          ContentSecurityPolicy: {
+            ContentSecurityPolicy: Match.stringLikeRegexp(
+              "connect-src 'self' https://upload[.]example[.]test",
+            ),
+          },
+        },
       },
     });
     template.hasResourceProperties('Custom::CDKBucketDeployment', {

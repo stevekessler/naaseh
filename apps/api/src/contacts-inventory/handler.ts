@@ -1,3 +1,7 @@
+import { DynamoWorkspaceStore } from './dynamo-store.js';
+import { isWorkspaceReadPath, readWorkspace } from './read-routes.js';
+import { WorkspaceError, WorkspaceRepository } from './repository.js';
+import { createFeatureTelemetry, featureOperation } from './telemetry.js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import {
   featureApiPrefix,
@@ -19,7 +23,9 @@ function error(
   };
 }
 
-export function handler(event: APIGatewayProxyEventV2): APIGatewayProxyStructuredResultV2 {
+async function handleRequest(
+  event: APIGatewayProxyEventV2,
+): Promise<APIGatewayProxyStructuredResultV2> {
   const session = sessionAuthorizerContext(event);
   if (!session?.userId || (session.role !== 'user' && session.role !== 'admin')) {
     return error(401, 'session_required', 'Sign in and try again.');
@@ -65,5 +71,50 @@ export function handler(event: APIGatewayProxyEventV2): APIGatewayProxyStructure
     return error(403, 'forbidden', 'Refresh your session and retry the action.');
   }
 
+  const table = process.env.CONTACTS_INVENTORY_RECORDS_TABLE;
+  const ledger = process.env.CONTACTS_INVENTORY_LEDGER_TABLE;
+  if (table && ledger && method === 'GET' && isWorkspaceReadPath(path)) {
+    try {
+      const repo = new WorkspaceRepository(new DynamoWorkspaceStore(workspace, table, ledger));
+      const body = await readWorkspace(
+        repo,
+        session.userId,
+        workspace,
+        path,
+        event.queryStringParameters ?? {},
+        event.headers,
+      );
+      if (!body) return error(404, 'record_unavailable', 'This record is unavailable.');
+      return {
+        statusCode: 200,
+        headers: { 'Cache-Control': 'no-store', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      };
+    } catch (failure) {
+      if (failure instanceof WorkspaceError && failure.code === 'reset_required')
+        return error(409, failure.code, 'Refresh the local workspace before continuing.');
+      if (failure instanceof WorkspaceError && failure.code === 'invalid_cursor')
+        return error(400, failure.code, 'Refresh the current page and try again.');
+      return error(503, 'retry_required', 'The workspace is temporarily unavailable. Try again.');
+    }
+  }
+
   return error(503, 'feature_unavailable', 'Contacts and Inventory is temporarily unavailable.');
+}
+
+const telemetry = createFeatureTelemetry();
+
+export async function handler(event: APIGatewayProxyEventV2) {
+  const start = performance.now();
+  const response = await handleRequest(event);
+  const release = process.env.CONTACTS_INVENTORY_RELEASE;
+  const prefix = release ? featureApiPrefix(release) : '';
+  const path = event.rawPath.startsWith(prefix) ? event.rawPath.slice(prefix.length) : '';
+  telemetry(
+    featureOperation(path),
+    event.requestContext.requestId,
+    response.statusCode ?? 500,
+    Math.round(performance.now() - start),
+  );
+  return response;
 }

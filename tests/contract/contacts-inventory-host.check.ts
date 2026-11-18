@@ -19,6 +19,8 @@ describe('Contacts and Inventory host contract', () => {
   it('builds the fixture that the browser release tests load', async () => {
     const entry = await buildFeatureFixture();
     expect(entry).toContain('Contacts and Inventory release fixture');
+    const offline = await buildFeatureFixture('offline');
+    expect(offline).toContain('Cache synthetic contact');
   });
 
   it('loads only compatible immutable paths from the selected release', () => {

@@ -29,6 +29,7 @@ export interface NaasehStackProps extends StackProps {
   hostedZoneName: string;
   webAclArn: string;
   webAssetPath: string;
+  contactsInventoryMediaOrigin?: string;
 }
 
 export class NaasehStack extends Stack {
@@ -65,6 +66,7 @@ export class NaasehStack extends Stack {
       domainName: props.domainName,
       webAclArn: props.webAclArn,
       webAssetPath: props.webAssetPath,
+      contactsInventoryMediaOrigin: props.contactsInventoryMediaOrigin,
       mediaOrigin: `https://${media.bucketRegionalDomainName}`,
       exportOrigin: `https://${exportResources.bucket.bucketRegionalDomainName}`,
     });

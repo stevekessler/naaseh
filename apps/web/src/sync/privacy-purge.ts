@@ -1,3 +1,4 @@
+import { clearFeatureLocalState } from '../features/contacts-inventory-host/local-state.js';
 import { db } from '../db/database.js';
 import {
   purgeLocalPersonalStack,
@@ -106,6 +107,7 @@ export async function purgeAllAuthorizedData() {
   await db.transaction('rw', protectedTables, async () => {
     for (const table of protectedTables) await table.clear();
   });
+  await clearFeatureLocalState();
   clearFinanceSearchIndexes();
   clearFinanceSearchPreferences();
 }

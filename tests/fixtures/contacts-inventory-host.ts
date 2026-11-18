@@ -6,14 +6,16 @@ import { contactsInventoryFixture } from './contacts-inventory.js';
 
 const [first, second] = contactsInventoryFixture.releases;
 
-export async function buildFeatureFixture(): Promise<string> {
+export async function buildFeatureFixture(
+  kind: 'release' | 'offline' = 'release',
+): Promise<string> {
   const result = await build({
     configFile: false,
     logLevel: 'silent',
     build: {
       write: false,
       lib: {
-        entry: fileURLToPath(new URL('./contacts-inventory-release-entry.ts', import.meta.url)),
+        entry: fileURLToPath(new URL(`./contacts-inventory-${kind}-entry.ts`, import.meta.url)),
         formats: ['es'],
       },
     },

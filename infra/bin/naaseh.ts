@@ -44,6 +44,9 @@ const application = new NaasehStack(app, 'NaasehProd', {
   hostedZoneId,
   hostedZoneName,
   webAclArn: edge.webAclArn,
+  contactsInventoryMediaOrigin:
+    app.node.tryGetContext('contactsInventoryMediaOrigin') ??
+    process.env.NAASEH_CONTACTS_INVENTORY_MEDIA_ORIGIN,
   webAssetPath: fileURLToPath(new URL('../../apps/web/dist', import.meta.url)),
 });
 application.addStackDependency(edge);

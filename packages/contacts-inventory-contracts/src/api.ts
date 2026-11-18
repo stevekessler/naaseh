@@ -31,3 +31,30 @@ export const mutationPreconditionSchema = z.discriminatedUnion('mode', [
 export function featureApiPrefix(releaseId: string) {
   return `/api/v1/contacts-inventory/releases/${releaseId}/`;
 }
+
+export const workspaceRecordSchema = recordIdentitySchema.extend({
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  fields: z.record(z.string(), z.json()),
+});
+export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
+export type MutationPrecondition = z.infer<typeof mutationPreconditionSchema>;
+export const workspaceGenerationHeader = 'x-workspace-generation';
+
+export function parseMutationHeaders(headers: Record<string, string | undefined>) {
+  const generation = headers[workspaceGenerationHeader];
+  const mutationId = headers['idempotency-key'];
+  const creates = headers['if-none-match'];
+  const matches = headers['if-match'];
+  if (!generation || !/^[1-9]\d*$/u.test(generation)) return null;
+  const shared = { generation: Number(generation), mutationId };
+  const revision = matches?.match(/^"([1-9]\d*)"$/u)?.[1];
+  const parsed = mutationPreconditionSchema.safeParse(
+    creates === '*' && matches === undefined
+      ? { ...shared, mode: 'create' }
+      : creates === undefined && revision
+        ? { ...shared, mode: 'update', revision: Number(revision) }
+        : null,
+  );
+  return parsed.success ? parsed.data : null;
+}

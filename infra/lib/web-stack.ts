@@ -17,9 +17,18 @@ export function createWebResources(
     webAssetPath: string;
     mediaOrigin?: string;
     exportOrigin?: string;
+    contactsInventoryMediaOrigin?: string;
   },
 ) {
-  const connectOrigins = [options.mediaOrigin, options.exportOrigin].filter(Boolean).join(' ');
+  const featureUploadOrigin = options.contactsInventoryMediaOrigin;
+  if (featureUploadOrigin) {
+    const parsed = new URL(featureUploadOrigin);
+    if (parsed.protocol !== 'https:' || parsed.origin !== featureUploadOrigin)
+      throw new Error('Contacts and Inventory uploads require an exact HTTPS origin.');
+  }
+  const connectOrigins = [options.mediaOrigin, options.exportOrigin, featureUploadOrigin]
+    .filter(Boolean)
+    .join(' ');
   const responseHeadersPolicy = new cloudfront.ResponseHeadersPolicy(scope, 'SecurityHeaders', {
     securityHeadersBehavior: {
       contentSecurityPolicy: {

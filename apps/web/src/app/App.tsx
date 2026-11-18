@@ -118,7 +118,7 @@ import {
   taskCatchUpSessionKey,
   validateBrowserSession,
 } from '../features/auth/session.js';
-import { confirmSignOutWithUnsyncedData, signOutBrowser } from '../features/auth/sign-out.js';
+import { confirmBrowserSignOut, signOutBrowser } from '../features/auth/sign-out.js';
 import {
   initializeLocalStack,
   latestAppliedStackOperationAt,
@@ -1386,11 +1386,13 @@ export function App() {
                   : undefined
               }
               onClick={() => {
-                if (!confirmSignOutWithUnsyncedData(pending, savedConflictCount)) return;
+                if (signingOutRef.current) return;
                 signingOutRef.current = true;
-                setSigningOut(true);
-                void signOutBrowser(session.csrfToken)
-                  .then(() => {
+                void confirmBrowserSignOut(session.userId, pending, savedConflictCount)
+                  .then(async (confirmed) => {
+                    if (!confirmed) return;
+                    setSigningOut(true);
+                    await signOutBrowser(session.csrfToken);
                     setSession(null);
                     setSessionValidation('valid');
                   })
@@ -1409,7 +1411,7 @@ export function App() {
           {featureLocation ? (
             <FeatureView
               key={session.userId}
-              manifest={featureRelease.manifest}
+              manifest={signingOut ? null : featureRelease.manifest}
               location={featureLocation}
               userId={session.userId}
               isAdmin={session.role === 'admin'}

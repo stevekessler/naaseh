@@ -6,6 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import type { Construct } from 'constructs';
+import { observeContactsInventory } from './contacts-inventory-observability.js';
 import { backupControls } from './backup-stack.js';
 
 export class ContactsInventoryDataStack extends Stack {
@@ -57,6 +58,7 @@ export class ContactsInventoryDataStack extends Stack {
       encryptionKey: key,
       removalPolicy: RemovalPolicy.RETAIN,
     });
+    observeContactsInventory(this, backupVault.backupVaultName);
     const backupPlan = new backup.BackupPlan(this, 'DailyBackup', {
       backupPlanRules: [
         new backup.BackupPlanRule({
