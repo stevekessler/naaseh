@@ -3,9 +3,10 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   base: './',
+  define: { 'process.env.NODE_ENV': JSON.stringify('production') },
   build: {
     lib: {
-      entry: fileURLToPath(new URL('./src/entry.ts', import.meta.url)),
+      entry: fileURLToPath(new URL('./src/entry.tsx', import.meta.url)),
       formats: ['es'],
       fileName: () => 'entry.js',
     },

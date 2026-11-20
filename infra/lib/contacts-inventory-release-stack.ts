@@ -12,6 +12,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import type { Construct } from 'constructs';
+import { retainFeatureAudit } from './contacts-inventory-observability.js';
 import type { ContactsInventoryDataStack } from './contacts-inventory-data-stack.js';
 
 export class ContactsInventoryReleaseStack extends Stack {
@@ -33,6 +34,9 @@ export class ContactsInventoryReleaseStack extends Stack {
     const authorizerId = new CfnParameter(this, 'HostAuthorizerId', {
       allowedPattern: '[a-z0-9]+',
     });
+    const artifacts = new CfnParameter(this, 'ArtifactBucket', {
+      allowedPattern: '[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]',
+    });
     const workspace = new CfnParameter(this, 'WorkspaceId', { minLength: 1, noEcho: true });
     const memberOne = new CfnParameter(this, 'MemberOne', { minLength: 1, noEcho: true });
     const memberTwo = new CfnParameter(this, 'MemberTwo', { minLength: 1, noEcho: true });
@@ -41,11 +45,20 @@ export class ContactsInventoryReleaseStack extends Stack {
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.RETAIN,
     });
+    retainFeatureAudit(this, logGroup);
     const role = new iam.Role(this, 'Runtime', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
     });
     props.data.grantRuntimeAccess(role);
     logGroup.grantWrite(role);
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        actions: ['s3:GetObject'],
+        resources: [
+          `arn:${this.partition}:s3:::${artifacts.valueAsString}/features/contacts-inventory/release.json`,
+        ],
+      }),
+    );
 
     const functionInstance = new lambda.Function(this, 'FeatureApi', {
       runtime: lambda.Runtime.NODEJS_24_X,
@@ -60,6 +73,7 @@ export class ContactsInventoryReleaseStack extends Stack {
         NODE_ENV: 'production',
         ALLOWED_ORIGINS: props.webOrigin,
         CONTACTS_INVENTORY_RELEASE: props.releaseId,
+        CONTACTS_INVENTORY_ARTIFACT_BUCKET: artifacts.valueAsString,
         CONTACTS_INVENTORY_WORKSPACE: workspace.valueAsString,
         CONTACTS_INVENTORY_MEMBER_ONE: memberOne.valueAsString,
         CONTACTS_INVENTORY_MEMBER_TWO: memberTwo.valueAsString,

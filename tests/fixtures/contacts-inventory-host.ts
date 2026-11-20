@@ -7,15 +7,23 @@ import { contactsInventoryFixture } from './contacts-inventory.js';
 const [first, second] = contactsInventoryFixture.releases;
 
 export async function buildFeatureFixture(
-  kind: 'release' | 'offline' = 'release',
+  kind: 'release' | 'offline' | 'contacts' = 'release',
 ): Promise<string> {
   const result = await build({
     configFile: false,
     logLevel: 'silent',
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     build: {
       write: false,
       lib: {
-        entry: fileURLToPath(new URL(`./contacts-inventory-${kind}-entry.ts`, import.meta.url)),
+        entry: fileURLToPath(
+          new URL(
+            kind === 'contacts'
+              ? '../../apps/contacts-inventory/src/entry.tsx'
+              : `./contacts-inventory-${kind}-entry.ts`,
+            import.meta.url,
+          ),
+        ),
         formats: ['es'],
       },
     },

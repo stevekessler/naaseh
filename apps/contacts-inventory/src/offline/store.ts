@@ -1,8 +1,10 @@
 import Dexie, { type Table } from 'dexie';
 import {
+  contactTypeSchema,
   featureDatabaseName,
   featureDatabaseSchema,
   featureDatabaseVersion,
+  type ContactType,
   type FeatureHost,
   type SyncCursor,
   type Tombstone,
@@ -34,7 +36,7 @@ export type QueueRow = {
   status: Status;
   ciphertext?: string;
 };
-type SyncRow = SyncCursor & { account: string };
+type SyncRow = SyncCursor & { account: string; contactTypes?: string };
 
 export class OfflineWorkspace {
   private readonly db = new Dexie(featureDatabaseName);
@@ -77,6 +79,28 @@ export class OfflineWorkspace {
         status: 'pending',
       });
     });
+  }
+
+  async contactTypes() {
+    const state = await this.sync.get(this.account);
+    if (!state?.contactTypes) return [];
+    const decoded: unknown = JSON.parse(
+      await this.host.decrypt('contact-types', state.contactTypes),
+    );
+    return contactTypeSchema.array().parse(decoded);
+  }
+
+  async cacheContactTypes(types: ContactType[]) {
+    const encrypted = await this.host.encrypt('contact-types', JSON.stringify(types));
+    await this.sync.update(this.account, { contactTypes: encrypted });
+  }
+
+  async draftStatus() {
+    const rows = await this.outbox.where('account').equals(this.account).sortBy('order');
+    const drafts = await Promise.all(
+      rows.filter((row) => row.status === 'pending').map((row) => this.decode(row)),
+    );
+    return { drafts, conflicts: rows.length - drafts.length };
   }
 
   async cursor() {
@@ -203,7 +227,13 @@ export class OfflineWorkspace {
             });
         }
       }
-      await this.sync.put({ ...next, account: this.account });
+      await this.sync.put({
+        ...next,
+        account: this.account,
+        ...(current?.generation === next.generation && current.contactTypes
+          ? { contactTypes: current.contactTypes }
+          : {}),
+      });
       return true;
     });
   }

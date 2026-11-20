@@ -16,16 +16,29 @@
 
 ## Browser evidence and follow-up
 
-The first release fixture passed in the regular Mac Terminal on Chromium, WebKit, iPhone and iPad, confirmed by the user and the Playwright result file. The new encrypted offline storage and sign-out fixture is ready on the same four projects. Playwright could not start the same-origin preview server because this session denied listening on `127.0.0.1:4173`. The locked Chromium and WebKit revisions are now installed. Run both fixtures from a terminal that allows a local preview server and browser processes.
+The first release fixture passed in the regular Mac Terminal on Chromium, WebKit, iPhone and iPad, confirmed by the user and the Playwright result file. The user also confirmed that the encrypted offline storage and sign-out fixture passed in the regular Mac Terminal. Playwright could not start the same-origin preview server because this session denied listening on `127.0.0.1:4173`. The locked Chromium and WebKit revisions are now installed. Run both fixtures from a terminal that allows a local preview server and browser processes.
 
 ```sh
 npx playwright test tests/e2e/contacts-inventory-release.spec.ts tests/e2e/contacts-inventory-offline-foundation.spec.ts
 ```
 
-The browser fixture exercises host activation, upgrade, rollback, and safe fallback. The complete release proof still needs the supported Finance compatibility, offline, and persistence checks specified in T016 and quickstart. Workspace reads and the shared persistence layer are implemented. Record mutations remain pending until the feature-specific schemas and reference checks are implemented. No AWS rollout or recovery drill was performed.
+The browser fixture exercises host activation, upgrade, rollback, and safe fallback. The complete release proof still needs the supported Finance compatibility, offline, and persistence checks specified in T016 and quickstart. Workspace reads and Contacts create, update, and delete are implemented. Inventory and Medication features still need their schemas and workflows. No AWS rollout or recovery drill was performed.
 
 ## Persistence and offline foundation
 
 - Sixteen targeted checks passed. New cases cover actor-scoped receipts, conditional revisions, bounded change delivery, deletion redaction, restores, the DynamoDB transaction shape, the offline fixture build, and aggregate telemetry.
 - TypeScript, the standalone builds, Apple contract validation, and local CDK synthesis passed. The quick browser command still lists 36 tests.
-- The feature can generate a version-scoped release manifest with `node --import tsx tools/release-contacts-inventory.mjs pack local-proof apps/contacts-inventory/dist <output-directory>`. Protected publication and rollback are pending.
+- The feature can generate a version-scoped release manifest with `node --import tsx tools/release-contacts-inventory.mjs pack local-proof apps/contacts-inventory/dist <output-directory>`. The protected publication, reactivation and withdrawal workflow has local contract tests. AWS publication and rollback still need isolated hosted proof.
+
+## Shared Contacts and release controls
+
+- The Contacts directory can create, edit, filter, and delete shared contacts. The catalog serves a stable Prescriber ID from first use, and administrators can rename it without changing the ID.
+- The release workflow stages a feature API stack and immutable assets, probes public denial and member readiness, then switches a conditional manifest pointer. It can reactivate retained releases and reject stale API versions. Provision the dedicated environment, retained data stack, artifact bucket and endpoint configuration before hosted proof.
+- Twenty-six targeted tests, TypeScript, standalone builds, local CDK synthesis, and GitHub workflow validation passed. The required Playwright selection still lists 36 tests and Playwright remains at 1.61.1.
+- The managed session now starts the preview server, but Chromium and WebKit exit before assertions. The shared Contacts journey is ready for a normal terminal run across the four existing browser projects.
+
+```sh
+npx playwright test tests/e2e/contacts-inventory-contacts.spec.ts
+```
+
+The `contacts-inventory-release` GitHub environment owns the feature-specific deployment role, workspace canary session, and workspace identities. Before the isolated proof, configure the target host's API and authorizer IDs, HTTPS origin, and retained artifact bucket. Provision the retained data stack first. The release role needs conditional writes to the feature manifest and release prefix, and prefix-scoped listing for the first manifest lookup. The feature API role only reads the active manifest. Use the expected active release ID on each manual workflow dispatch, or `inactive` before the first publication.

@@ -13,11 +13,18 @@ export function featureOperation(path: string): Operation {
 
 export function createFeatureTelemetry(sink?: (entry: string) => void) {
   const logger = createLogger(process.env, { verbose: false, ...(sink ? { sink } : {}) });
-  return (operation: Operation, requestId: string | undefined, status: number, latency: number) => {
+  return (
+    operation: Operation,
+    requestId: string | undefined,
+    status: number,
+    latency: number,
+    mutation = false,
+  ) => {
     const correlationId =
       requestId && /^[A-Za-z0-9_=-]{1,128}$/u.test(requestId) ? requestId : undefined;
     const fields = { operationType: operation, correlationId, status, latencyMs: latency };
     logger.info('contactsInventory.request', fields);
+    if (mutation) logger.info('contactsInventory.audit', fields);
     logger.metric('ContactsInventoryLatency', latency, 'Milliseconds');
     if (status >= 500) logger.metric('ContactsInventoryRequestFailures', 1);
   };

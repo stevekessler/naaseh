@@ -35,7 +35,10 @@ export async function readWorkspace(
     const [collection, id] = path.split('/');
     const parsedId = uuid.safeParse(id);
     return parsedId.success
-      ? repo.read({ kind: collection === 'contacts' ? 'contact' : 'item', id: parsedId.data })
+      ? repo.read({
+          kind: collection === 'contacts' ? 'contact' : 'item',
+          id: parsedId.data.toLowerCase(),
+        })
       : null;
   }
 
