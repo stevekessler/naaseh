@@ -91,8 +91,10 @@ test('workspace members create, filter and edit the same contact', async ({
   await page.getByLabel('Last Name').fill('Contact');
   await page.getByLabel('Cell', { exact: true }).fill('303-555-0198');
   await page.getByLabel('Zip', { exact: true }).fill('00123');
-  await page.getByLabel('Default Number').selectOption('cell');
-  await page.getByLabel('Contact Type', { exact: true }).selectOption('prescriber');
+  await page.getByRole('combobox', { name: 'Default Number', exact: true }).selectOption('cell');
+  await page
+    .getByRole('combobox', { name: 'Contact Type', exact: true })
+    .selectOption('prescriber');
   const created = page.waitForResponse(
     (response) =>
       response.request().method() === 'PUT' &&
@@ -102,7 +104,9 @@ test('workspace members create, filter and edit the same contact', async ({
   await page.getByRole('button', { name: 'Save contact' }).click();
   const creation = await (await created).json();
   await page.getByLabel('Search contacts').fill('555-0198');
-  await page.getByLabel('Filter by contact type').selectOption('prescriber');
+  await page
+    .getByRole('combobox', { name: 'Filter by contact type', exact: true })
+    .selectOption('prescriber');
   await expect(page.getByRole('button', { name: 'Synthetic Contact' })).toBeVisible();
 
   const context = await browser.newContext({
@@ -115,7 +119,9 @@ test('workspace members create, filter and edit the same contact', async ({
     await other.getByRole('button', { name: 'Synthetic Contact' }).click();
     await expect(other.getByLabel('Zip', { exact: true })).toHaveValue('00123');
     await other.getByLabel('Cell', { exact: true }).fill('');
-    await expect(other.getByLabel('Default Number')).toHaveValue('');
+    await expect(other.getByRole('combobox', { name: 'Default Number', exact: true })).toHaveValue(
+      '',
+    );
     const updated = other.waitForResponse(
       (response) =>
         response.request().method() === 'PUT' &&
