@@ -1,0 +1,54 @@
+name: Browser tests on demand
+on:
+  workflow_dispatch:
+    inputs:
+      test_ref:
+        description: Branch, tag, or commit to test (empty uses the workflow run ref)
+        type: string
+        required: false
+      test_file:
+        description: Filename directly under tests/e2e
+        type: string
+        required: true
+        default: contacts-inventory-contacts.spec.ts
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    name: Chromium and WebKit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ inputs.test_ref || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Install the locked Playwright browsers and system dependencies
+        run: npx --no-install playwright install --with-deps chromium webkit
+      - name: Run the selected browser suite
+        env:
+          TEST_FILE: ${{ inputs.test_file }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/results.json
+        run: |
+          if [[ ! "$TEST_FILE" =~ ^[A-Za-z0-9_-]+[.]spec[.]ts$ ]] || [[ ! -f "tests/e2e/$TEST_FILE" ]]; then
+            echo 'Enter the name of an existing .spec.ts file directly under tests/e2e.'
+            exit 1
+          fi
+          test_stem="${TEST_FILE%.spec.ts}"
+          env -u PRODUCTION_BASE_URL npx --no-install playwright test \
+            --project=chromium --project=webkit --project=iphone --project=ipad \
+            --reporter=line,json "[/]tests[/]e2e[/]${test_stem}[.]spec[.]ts$"
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-results
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
