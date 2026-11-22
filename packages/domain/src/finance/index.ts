@@ -29,3 +29,4 @@ export * from './upcoming-expense.js';
 export * from './expense-fulfillment.js';
 export * from './dashboard.js';
 export * from './spend-trends.js';
+export * from './forecast.js';
