@@ -5063,3 +5063,32 @@ canvas.finance-receipt-preview[hidden] {
   padding: 0.35rem 0.5rem;
   text-align: start;
 }
+
+.finance-spend-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem;
+  min-inline-size: 0;
+}
+
+.finance-spend-filters label {
+  display: grid;
+  gap: 0.375rem;
+  max-inline-size: 100%;
+}
+
+.finance-spend-table {
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+
+.finance-spend-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.finance-spend-table :is(th, td) {
+  padding: 0.5rem;
+  text-align: start;
+}

@@ -1,3 +1,5 @@
+import { FinanceReportsPage } from './reports/FinanceReportsPage.js';
+import { SpendReportPage } from './reports/SpendReportPage.js';
 import { FinanceReceiptsPage } from './receipts/FinanceReceiptsPage.js';
 import { resumeReceiptUploads } from './receipts/receipt-client.js';
 import { FinanceAccountsPage } from './accounts/FinanceAccountsPage.js';
@@ -203,7 +205,8 @@ export function FinanceLandingPage({
     </>
   );
   const originDashboard = modalOrigin?.route.view === 'dashboard';
-  const view = originDashboard ? 'dashboard' : originAccount ? 'accounts' : route.view;
+  const originReport = modalOrigin?.route.view === 'spend-report';
+  const view = originDashboard ? 'dashboard' : originAccount ? 'accounts' : originReport ? 'spend-report' : route.view;
   const transactionModal = route.transactionId ? (
     <FinanceTransactionsPage
       csrfToken={csrfToken}
@@ -308,6 +311,15 @@ export function FinanceLandingPage({
             navigate({ section: 'finance', view: 'merchants', merchantId })
           }
         />
+      ) : view === 'reports' ? (
+        <FinanceReportsPage
+          onOpenSpend={() => navigate({ section: 'finance', view: 'spend-report' })}
+        />
+      ) : view === 'spend-report' ? (
+        <>
+          <SpendReportPage onOpenTransaction={openTransaction} />
+          {transactionModal}
+        </>
       ) : view === 'receipts' ? (
         <FinanceReceiptsPage />
       ) : view === 'categories' ? (

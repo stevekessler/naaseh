@@ -61,7 +61,10 @@ export function financeTransactionOrigin(state: AppHistoryState | null) {
   if (!background) return undefined;
   const route = parseAppRoute(background.pathname);
   return route.section === 'finance' &&
-    (route.view === 'accounts' || (route.view === 'transactions' && !route.transactionId))
+    (route.view === 'accounts' ||
+      route.view === 'dashboard' ||
+      route.view === 'spend-report' ||
+      (route.view === 'transactions' && !route.transactionId))
     ? { background, route }
     : undefined;
 }

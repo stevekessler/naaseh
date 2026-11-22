@@ -1,8 +1,15 @@
-import { calculateCachedSpendTrend, localFinanceDate } from '@naaseh/domain';
+import {
+  addMinorUnits,
+  calculateCachedSpendTrend,
+  filterSpendSlices,
+  localFinanceDate,
+  sumSpendByCurrency,
+} from '@naaseh/domain';
 import type { FinanceQueryFilters } from '@naaseh/contracts';
 import type {
   FinanceBrowseDocument,
   FinanceSpendWorkerRequest,
+  FinanceTrendWorkerRequest,
   FinanceWorkerRequest,
 } from './finance-index.js';
 
@@ -39,7 +46,7 @@ function matches(row: FinanceBrowseDocument, filters: FinanceQueryFilters) {
 let generation = 0;
 self.onmessage = ({
   data,
-}: MessageEvent<FinanceWorkerRequest | { spend: FinanceSpendWorkerRequest }>) => {
+}: MessageEvent<FinanceWorkerRequest | FinanceSpendWorkerRequest | { spend: FinanceTrendWorkerRequest }>) => {
   if ('spend' in data) {
     try {
       self.postMessage({ totals: calculateCachedSpendTrend(data.spend) });
@@ -49,7 +56,29 @@ self.onmessage = ({
     return;
   }
   const current = ++generation;
-  const { documents, filters } = data;
+  const { filters } = data;
+  if ('spendSlices' in data) {
+    const slices = filterSpendSlices(data.spendSlices, {
+      ...filters,
+      dateFrom: filters.date ?? filters.dateFrom,
+      dateTo: filters.date ?? filters.dateTo,
+    });
+    const amounts: Record<string, number> = Object.create(null);
+    for (const slice of slices)
+      amounts[slice.transactionId] = addMinorUnits([
+        amounts[slice.transactionId] ?? 0,
+        slice.amountMinor,
+      ]);
+    self.postMessage({
+      result: {
+        ids: Object.keys(amounts),
+        totals: sumSpendByCurrency(slices),
+        amounts,
+      },
+    });
+    return;
+  }
+  const { documents } = data;
   void (async () => {
     const hits: FinanceBrowseDocument[] = [];
     for (let start = 0; start < documents.length; start += 500) {
@@ -71,7 +100,7 @@ self.onmessage = ({
         right.id.localeCompare(left.id),
     );
     self.postMessage({
-      ids: hits.map(({ id }) => id),
+      result: hits.map(({ id }) => id),
       progress: { indexed: documents.length, total: documents.length, complete: true },
     });
   })();
