@@ -1,0 +1,965 @@
+diff --git a/apps/api/src/sync/handler.ts b/apps/api/src/sync/handler.ts
+index 59c948e5..63273d97 100644
+--- a/apps/api/src/sync/handler.ts
++++ b/apps/api/src/sync/handler.ts
+@@ -37,6 +37,7 @@ import {
+   serializeSharedWorkChange,
+ } from './sync-service.js';
+ import {
++  hasMoreAudienceChanges,
+   prepareAudienceChange,
+   prepareAudienceChanges,
+   pullAudience,
+@@ -170,19 +171,35 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
+       event.requestContext.requestId,
+     );
+   if (event.rawPath.endsWith('/bootstrap')) {
+-    const [shared, owned, taskTimer, categories, projects, lists, journalRecords, journalFeed] =
++    const ordinaryOnly = event.headers['x-naaseh-sync-bootstrap'] === 'ordinary';
++    const listsWithItems = listOwnerLists(actorId).then(async (lists) => ({
++      lists,
++      listItems: (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat(),
++    }));
++    const journalBootstrap = async () => {
++      if (ordinaryOnly) return {};
++      const [keyRegistry, journalRecords, journalFeed] = await Promise.all([
++        loadPublicKeyRegistry(),
++        journalRepository.bootstrap(actorId),
++        journalRepository.changes(actorId, 0),
++      ]);
++      return {
++        keyRegistry,
++        journalContractVersion: journalSyncContractVersion,
++        journalRecords,
++        journalCursor: journalFeed.cursor,
++      };
++    };
++    const [shared, owned, taskTimer, categories, projects, { lists, listItems }, journal] =
+       await Promise.all([
+         listPublicTasks(),
+         listOwnerTasks(actorId),
+         getTaskTimer(actorId),
+         listCategories(),
+         listProjects(),
+-        listOwnerLists(actorId),
+-        journalRepository.bootstrap(actorId),
+-        journalRepository.changes(actorId, 0),
++        listsWithItems,
++        journalBootstrap(),
+       ]);
+-    const listItems = (await Promise.all(lists.map((list) => listItemsForList(list.id)))).flat();
+-    const keyRegistry = await loadPublicKeyRegistry();
+     return json(200, {
+       tasks: [...shared, ...owned].map((task) => taskSchema.parse(task)),
+       categories: categories.map((category) => categorySchema.parse(category)),
+@@ -190,11 +207,8 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
+       lists: lists.map((list) => listSchema.parse(list)),
+       listItems: listItems.map((item) => listItemSchema.parse(item)),
+       ...(taskTimer ? { taskTimer } : {}),
+-      keyRegistry,
+       cursor: { public: 0, owner: 0 },
+-      journalContractVersion: journalSyncContractVersion,
+-      journalRecords,
+-      journalCursor: journalFeed.cursor,
++      ...journal,
+     });
+   }
+   let parsed: unknown;
+@@ -261,6 +275,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
+               return { name, after, changes };
+             }),
+           );
++    const ordinaryHasMore = pulled.some(({ changes }) => hasMoreAudienceChanges(changes));
+     const financeRequest = parsed as {
+       contractVersion?: number;
+       version?: number;
+@@ -496,6 +511,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
+             : serializeSharedWorkChange(change);
+       return json(200, {
+         ...lanes,
++        ordinaryHasMore,
+         ...(financeCache ? { financeCache } : {}),
+         changes: lanes.changes.map(serialize),
+         financeChanges: lanes.financeChanges.map(serialize),
+@@ -513,6 +529,7 @@ async function handle(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyRes
+           deduped.set(key, change);
+       }
+     return json(200, {
++      ordinaryHasMore,
+       changes: [...deduped.values()].map((change) =>
+         change.entityType === 'personalStackOperation' ? change : serializeSharedWorkChange(change),
+       ),
+diff --git a/apps/web/src/app/App.tsx b/apps/web/src/app/App.tsx
+index 23830ee4..9df426f3 100644
+--- a/apps/web/src/app/App.tsx
++++ b/apps/web/src/app/App.tsx
+@@ -123,6 +123,7 @@ import { purgeAllAuthorizedData } from '../sync/privacy-purge.js';
+ import {
+   revalidateProtectedSession,
+   saveSessionView,
++  taskCatchUpSessionKey,
+   validateBrowserSession,
+ } from '../features/auth/session.js';
+ import { confirmSignOutWithUnsyncedData, signOutBrowser } from '../features/auth/sign-out.js';
+@@ -296,6 +297,10 @@ export function App() {
+   const [sessionValidation, setSessionValidation] = useState<
+     'valid' | 'locked' | 'retry' | 'wrong_account'
+   >(() => (sessionStorage.getItem('naaseh-session-view') ? 'locked' : 'valid'));
++  const [taskCatchUpPending, setTaskCatchUpPending] = useState(
++    () => Boolean(session && sessionStorage.getItem(taskCatchUpSessionKey) === session.userId),
++  );
++  const [taskSnapshotRevision, setTaskSnapshotRevision] = useState(0);
+   useFinanceSession(session?.userId, session?.csrfToken, sessionValidation === 'valid');
+   const financeOptions = useFinanceItemOptions();
+   const initialRoute = parseAppRoute(location.pathname);
+@@ -400,7 +405,18 @@ export function App() {
+     () => location.pathname.match(/^\/tasks\/([^/]+)$/)?.[1],
+   );
+   const completionUndo = useTaskCompletionUndo(session?.userId);
+-  const taskResult = useLiveQuery(() => readLocalTaskSnapshot(), []);
++  // The live query can still hold its previous result while it reads the synced cache.
++  const taskSnapshot = useLiveQuery(
++    () =>
++      taskCatchUpPending
++        ? Promise.resolve(undefined)
++        : readLocalTaskSnapshot().then((result) => ({ revision: taskSnapshotRevision, result })),
++    [taskCatchUpPending, taskSnapshotRevision],
++  );
++  const taskResult =
++    !taskCatchUpPending && taskSnapshot?.revision === taskSnapshotRevision
++      ? taskSnapshot.result
++      : undefined;
+   const tasks = taskResult?.tasks ?? [];
+   const categories = useLiveQuery(() => listCategories(), []) ?? [];
+   const projects = useLiveQuery(() => listLocalProjects(), []) ?? [];
+@@ -941,8 +957,20 @@ export function App() {
+         syncRetryTimer.current = undefined;
+       }
+       syncing.current = true;
+-      try {
+-        let journalError: unknown;
++      const initialTaskCatchUp = sessionStorage.getItem(taskCatchUpSessionKey) === session.userId;
++      const finishTaskCatchUp = () => {
++        if (
++          !initialTaskCatchUp ||
++          signingOutRef.current ||
++          sessionStorage.getItem(taskCatchUpSessionKey) !== session.userId
++        )
++          return;
++        sessionStorage.removeItem(taskCatchUpSessionKey);
++        setTaskSnapshotRevision((revision) => revision + 1);
++        setTaskCatchUpPending(false);
++      };
++      let journalError: unknown;
++      const syncJournal = async () => {
+         try {
+           await drainJournalDataInDependencyOrder(
+             session.userId,
+@@ -953,8 +981,13 @@ export function App() {
+         } catch (error) {
+           journalError = error;
+         }
+-        if (fullReplay) await resyncFromServer(session.csrfToken);
+-        else {
++      };
++      try {
++        if (!initialTaskCatchUp) await syncJournal();
++        if (fullReplay) {
++          await resyncFromServer(session.csrfToken);
++          finishTaskCatchUp();
++        } else {
+           await drainSequentially(
+             session.csrfToken,
+             (delay) => {
+@@ -965,9 +998,11 @@ export function App() {
+               }, delay);
+             },
+             syncRetryAttempt.current,
++            finishTaskCatchUp,
+           );
+           syncRetryAttempt.current = 0;
+         }
++        if (initialTaskCatchUp) await syncJournal();
+         if (journalError) throw journalError;
+         setSyncError(undefined);
+       } catch (error) {
+@@ -1116,7 +1151,12 @@ export function App() {
+     return (
+       <Login
+         onAuthenticated={(next) => {
+-          sessionStorage.setItem('naaseh-session-view', JSON.stringify(next));
++          saveSessionView(next);
++          const requiresCatchUp = next.userId !== 'local-steve';
++          if (requiresCatchUp) sessionStorage.setItem(taskCatchUpSessionKey, next.userId);
++          else sessionStorage.removeItem(taskCatchUpSessionKey);
++          setTaskCatchUpPending(requiresCatchUp);
++          setSyncError(undefined);
+           setSession(next);
+           setSessionValidation('valid');
+         }}
+@@ -1144,6 +1184,27 @@ export function App() {
+       </main>
+     );
+ 
++  if (taskCatchUpPending)
++    return (
++      <main className="login-page">
++        <section className="login-card" aria-live="polite">
++          <h1>Syncing your tasks</h1>
++          <p>
++            {!online
++              ? 'Reconnect to finish loading your tasks.'
++              : syncError
++                ? 'Your tasks could not finish syncing. Na’aseh will retry.'
++                : 'Downloading your latest task changes…'}
++          </p>
++          {online && syncError && (
++            <button type="button" onClick={() => void synchronize()}>
++              Retry sync
++            </button>
++          )}
++        </section>
++      </main>
++    );
++
+   async function addTask(input: TaskInput & { financeLinkSelections?: FinanceLinkSelection[] }) {
+     const { financeLinkSelections, ...task } = input;
+     if (!financeLinkSelections?.length) return saveNewTask(task, session!.userId);
+diff --git a/apps/web/src/db/task-repository.ts b/apps/web/src/db/task-repository.ts
+index 8b0ad638..3b88cc2c 100644
+--- a/apps/web/src/db/task-repository.ts
++++ b/apps/web/src/db/task-repository.ts
+@@ -14,7 +14,7 @@ import {
+   type CompletionEvent,
+ } from '@naaseh/domain';
+ import Dexie from 'dexie';
+-import { db } from './database.js';
++import { db, type EncryptedTaskRecord } from './database.js';
+ import { createDeviceKey, decryptText, encryptText } from '../crypto/vault.js';
+ import { getClientId } from './client-id.js';
+ import { assertNoExtraLowActiveValues } from './extra-low-removal.js';
+@@ -46,8 +46,8 @@ export async function decryptLocalValue<T>(
+ ): Promise<T> {
+   return JSON.parse(await decryptText(value, await deviceKey(), `${namespace}:${id}`)) as T;
+ }
+-export async function taskToEncryptedRecord(task: Task) {
+-  const value = await encryptText(JSON.stringify(task), await deviceKey(), `task:${task.id}`);
++async function encryptTaskRecord(task: Task, key: CryptoKey): Promise<EncryptedTaskRecord> {
++  const value = await encryptText(JSON.stringify(task), key, `task:${task.id}`);
+   return {
+     id: task.id,
+     ownerId: task.ownerId,
+@@ -71,6 +71,16 @@ export async function taskToEncryptedRecord(task: Task) {
+     value,
+   };
+ }
++export async function taskToEncryptedRecord(task: Task): Promise<EncryptedTaskRecord> {
++  return encryptTaskRecord(task, await deviceKey());
++}
++export async function tasksToEncryptedRecords(
++  tasks: readonly Task[],
++): Promise<EncryptedTaskRecord[]> {
++  if (!tasks.length) return [];
++  const key = await deviceKey();
++  return Promise.all(tasks.map((task) => encryptTaskRecord(task, key)));
++}
+ async function encryptMutationPayload(mutationId: string, payload: unknown) {
+   return encryptText(JSON.stringify(payload), await deviceKey(), `mutation:${mutationId}`);
+ }
+@@ -133,32 +143,39 @@ async function encryptRevision(revision: TaskRevision) {
+ async function migrateLegacyTasks() {
+   const legacy = await db.tasks.toArray();
+   if (!legacy.length) return;
+-  const encrypted = await Promise.all(legacy.map(taskToEncryptedRecord));
++  const encrypted = await tasksToEncryptedRecords(legacy);
+   await db.transaction('rw', db.tasks, db.secureTasks, async () => {
+     await db.secureTasks.bulkPut(encrypted);
+     await db.tasks.clear();
+   });
+ }
+-export async function readLocalTaskSnapshot() {
++export async function readLocalTaskSnapshot(ids?: string[]) {
+   await migrateLegacyTasks();
+-  const records = await db.secureTasks.orderBy('updatedAt').reverse().toArray();
+-  const key = await deviceKey();
++  const records = ids
++    ? (await db.secureTasks.bulkGet(ids)).filter((record) => record !== undefined)
++    : await db.secureTasks.orderBy('updatedAt').reverse().toArray();
+   const tasks: Task[] = [];
+-  const unreadable: import('./database.js').EncryptedTaskRecord[] = [];
+-  for (const record of records) {
+-    try {
+-      const raw = JSON.parse(await decryptText(record.value, key, `task:${record.id}`)) as Record<
+-        string,
+-        unknown
+-      >;
+-      const task = taskSchema.parse(raw);
+-      tasks.push(task);
+-      if (!raw.assigneeId) await db.secureTasks.put(await taskToEncryptedRecord(task));
+-    } catch (error) {
+-      // Keep the original ciphertext intact. A broken cached task must not take
+-      // the entire application down or conceal the other readable tasks.
+-      if (!(error instanceof Error) || error.name !== 'OperationError') throw error;
+-      unreadable.push(record);
++  const unreadable: EncryptedTaskRecord[] = [];
++  const key = await deviceKey();
++  const batchSize = 32;
++  for (let offset = 0; offset < records.length; offset += batchSize) {
++    const results = await Promise.all(
++      records.slice(offset, offset + batchSize).map(async (record) => {
++        try {
++          const raw = JSON.parse(await decryptText(record.value, key, `task:${record.id}`));
++          const task = taskSchema.parse(raw);
++          if (!raw.assigneeId) await db.secureTasks.put(await encryptTaskRecord(task, key));
++          return { task };
++        } catch (error) {
++          // Keep unreadable ciphertext available for recovery when the server copy arrives.
++          if (!(error instanceof Error) || error.name !== 'OperationError') throw error;
++          return { unreadable: record };
++        }
++      }),
++    );
++    for (const result of results) {
++      if (result.task) tasks.push(result.task);
++      else unreadable.push(result.unreadable);
+     }
+   }
+   return { tasks, unreadable };
+diff --git a/apps/web/src/features/auth/session.ts b/apps/web/src/features/auth/session.ts
+index 986af13a..2230d4b6 100644
+--- a/apps/web/src/features/auth/session.ts
++++ b/apps/web/src/features/auth/session.ts
+@@ -6,7 +6,11 @@ export interface BrowserSession {
+ }
+ export const saveSessionView = (session: BrowserSession) =>
+   sessionStorage.setItem('naaseh-session-view', JSON.stringify(session));
+-export const clearSessionView = () => sessionStorage.removeItem('naaseh-session-view');
++export const taskCatchUpSessionKey = 'naaseh-task-catch-up-pending';
++export const clearSessionView = () => {
++  sessionStorage.removeItem('naaseh-session-view');
++  sessionStorage.removeItem(taskCatchUpSessionKey);
++};
+ 
+ export async function validateBrowserSession(): Promise<
+   { valid: true; session: BrowserSession } | { valid: false; reason: 'revoked' | 'expired' }
+diff --git a/apps/web/src/sync/sync-engine.ts b/apps/web/src/sync/sync-engine.ts
+index 1ad19e8a..255b1136 100644
+--- a/apps/web/src/sync/sync-engine.ts
++++ b/apps/web/src/sync/sync-engine.ts
+@@ -34,9 +34,9 @@ import {
+   decryptLocalValue,
+   decryptMutation,
+   encryptLocalValue,
+-  taskToEncryptedRecord,
+   markRevisionSynced,
+   readLocalTaskSnapshot,
++  tasksToEncryptedRecords,
+ } from '../db/task-repository.js';
+ import { getClientId } from '../db/client-id.js';
+ import { listReviewConflicts, readConflictDisplayContext } from './conflict-review.js';
+@@ -176,6 +176,12 @@ const needsCsvReview = (item: Pick<StoredMutation, 'entityType' | 'operation'>)
+ 
+ const automaticOutbox = () => db.outbox.filter((item) => !needsCsvReview(item));
+ 
++const fetchOrdinaryBootstrap = () =>
++  fetch('/api/v1/sync/bootstrap', {
++    credentials: 'include',
++    headers: { 'x-naaseh-sync-bootstrap': 'ordinary' },
++  });
++
+ async function recoverMissingSnapshots(): Promise<void> {
+   const [
+     snapshot,
+@@ -205,9 +211,7 @@ async function recoverMissingSnapshots(): Promise<void> {
+   );
+   const shouldRecoverLists = shouldBootstrapListSnapshot(listBootstrapState?.value);
+   if (shouldRecoverTasks || shouldRecoverOrganization || shouldRecoverLists) {
+-    const response = await fetch('/api/v1/sync/bootstrap', {
+-      credentials: 'include',
+-    });
++    const response = await fetchOrdinaryBootstrap();
+     if (!response.ok) throw await syncHttpResponseError('Synchronization bootstrap', response);
+     const body = (await response.json()) as {
+       tasks?: unknown[];
+@@ -217,9 +221,20 @@ async function recoverMissingSnapshots(): Promise<void> {
+       lists?: unknown[];
+       listItems?: unknown[];
+     };
++    const cachedTasks = new Map(snapshot.tasks.map((task) => [task.id, task]));
++    const serverTasks = new Map<string, Task>();
++    if (shouldRecoverTasks) {
++      for (const value of body.tasks ?? []) {
++        const task = taskSchema.parse(value);
++        serverTasks.set(task.id, task);
++      }
++    }
+     const records = shouldRecoverTasks
+-      ? await Promise.all(
+-          (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
++      ? await tasksToEncryptedRecords(
++          [...serverTasks.values()].filter((task) => {
++            const cached = cachedTasks.get(task.id);
++            return !cached || JSON.stringify(cached) !== JSON.stringify(task);
++          }),
+         )
+       : [];
+     const organizationSnapshotAvailable =
+@@ -324,26 +339,28 @@ async function recoverMissingSnapshots(): Promise<void> {
+           pending.filter((item) => item.entityType === 'listItem').map((item) => item.entityId),
+         );
+         const unreadable = new Map(snapshot.unreadable.map((record) => [record.id, record]));
+-        for (const record of records) {
+-          if (protectedTasks.has(record.id)) continue;
+-          const existing = await db.secureTasks.get(record.id);
+-          if (existing) {
+-            const broken = unreadable.get(record.id);
+-            if (broken) {
+-              // Recheck inside the transaction so a concurrent local save wins.
+-              if (
+-                existing.value.ciphertext !== broken.value.ciphertext ||
+-                existing.value.iv !== broken.value.iv
+-              )
+-                continue;
+-              await db.settings.put({
+-                key: `task-recovery:${existing.id}:${existing.value.iv}`,
+-                value: JSON.stringify(existing),
+-              });
+-            }
++        const writes = new Map(
++          records.filter((record) => !protectedTasks.has(record.id)).map((row) => [row.id, row]),
++        );
++        const repairs = [...unreadable.keys()].filter((id) => writes.has(id));
++        const previous = repairs.length ? await db.secureTasks.bulkGet(repairs) : [];
++        for (const existing of previous) {
++          if (!existing) continue;
++          const broken = unreadable.get(existing.id)!;
++          // Recheck inside the transaction so a concurrent local save wins.
++          if (
++            existing.value.ciphertext !== broken.value.ciphertext ||
++            existing.value.iv !== broken.value.iv
++          ) {
++            writes.delete(existing.id);
++            continue;
+           }
+-          await db.secureTasks.put(record);
++          await db.settings.put({
++            key: `task-recovery:${existing.id}:${existing.value.iv}`,
++            value: JSON.stringify(existing),
++          });
+         }
++        if (writes.size) await db.secureTasks.bulkPut([...writes.values()]);
+         for (const record of categoryRecords) {
+           if (!protectedCategories.has(record.id)) await db.secureCategories.put(record);
+         }
+@@ -457,6 +474,7 @@ async function pushMutation(
+ export async function drainOutbox(csrfToken: string): Promise<void> {
+   if (!navigator.onLine) return;
+   const stored = await db.outbox.orderBy('createdAt').toArray();
++  if (!stored.length) return;
+   const blockedCategoryIds = new Set(
+     (await listReviewConflicts())
+       .filter((conflict) => conflict.mutation?.entityType === 'category')
+@@ -626,6 +644,10 @@ export function cursorAdvanced(current: VectorCursor, next: VectorCursor): boole
+ 
+ export async function pullChanges(): Promise<boolean> {
+   if (!navigator.onLine) return false;
++  return (await pullOrdinaryPage()).advanced;
++}
++
++async function pullOrdinaryPage() {
+   const current = await readCursor();
+   const response = await fetch('/api/v1/sync/pull', {
+     method: 'POST',
+@@ -644,8 +666,14 @@ export async function pullChanges(): Promise<boolean> {
+       changedAt?: string;
+     }>;
+     cursor: VectorCursor;
++    ordinaryHasMore?: boolean;
+   };
+-  const records = [];
++  const cursor = mergeCursor(current, body.cursor);
++  const advanced = cursorAdvanced(current, cursor);
++  if (body.ordinaryHasMore === true && !advanced)
++    throw new Error('Synchronization did not advance safely.');
++
++  const tasks: Task[] = [];
+   const tombstones = [];
+   const enhanced = [];
+   const revocations: { groupId: string; listIds: string[] }[] = [];
+@@ -854,28 +882,27 @@ export async function pullChanges(): Promise<boolean> {
+       tombstones.push(change.entityId);
+       continue;
+     }
+-    records.push(await taskToEncryptedRecord(taskSchema.parse(change.payload)));
++    tasks.push(taskSchema.parse(change.payload));
+   }
+-  const cursor = mergeCursor(current, body.cursor);
++  const [records, unreadable] = tasks.length
++    ? await Promise.all([
++        tasksToEncryptedRecords(tasks),
++        readLocalTaskSnapshot(tasks.map(({ id }) => id)).then((snapshot) => snapshot.unreadable),
++      ])
++    : [[], []];
+   if (enhanced.length) await commitEnhancedPull(enhanced, [], cursor, revocations);
+   if (records.length || tombstones.length || !enhanced.length)
+-    await commitPull(
+-      records,
+-      tombstones,
+-      [],
+-      cursor,
+-      records.length ? (await readLocalTaskSnapshot()).unreadable : [],
+-    );
++    await commitPull(records, tombstones, [], cursor, unreadable);
+   if (tombstones.length || revocations.length) await invalidateFinanceForAccessRevocation();
+-  return cursorAdvanced(current, cursor);
++  return { advanced, hasMore: body.ordinaryHasMore };
+ }
+ 
+ async function refreshTaskSnapshotFromServer(): Promise<void> {
+-  const response = await fetch('/api/v1/sync/bootstrap', { credentials: 'include' });
++  const response = await fetchOrdinaryBootstrap();
+   if (!response.ok) throw await syncHttpResponseError('Task snapshot refresh', response);
+   const body = (await response.json()) as { tasks?: unknown[] };
+-  const records = await Promise.all(
+-    (body.tasks ?? []).map((task) => taskToEncryptedRecord(taskSchema.parse(task))),
++  const records = await tasksToEncryptedRecords(
++    (body.tasks ?? []).map((task) => taskSchema.parse(task)),
+   );
+   const canonical = [...new Map(records.map((record) => [record.id, record])).values()];
+   await db.transaction('rw', db.secureTasks, db.outbox, db.settings, async () => {
+@@ -889,7 +916,17 @@ async function refreshTaskSnapshotFromServer(): Promise<void> {
+     });
+   });
+ }
+-async function performSync(csrfToken: string) {
++async function catchUpOrdinaryChanges(maxPages = 100): Promise<void> {
++  for (let page = 0; page < maxPages; page += 1) {
++    if (!navigator.onLine) throw new Error('Reconnect to finish downloading your changes.');
++    const { advanced, hasMore } = await pullOrdinaryPage();
++    // Older servers omit continuation. Their cursor can advance even on Finance-only pages.
++    if (!(hasMore ?? advanced)) return;
++  }
++  throw new Error('There are more changes to download. Synchronization will retry.');
++}
++
++async function performSync(csrfToken: string, onOrdinaryReady?: () => void) {
+   let recoveryError: unknown;
+   try {
+     await recoverMissingSnapshots();
+@@ -902,7 +939,8 @@ async function performSync(csrfToken: string) {
+   } catch (error) {
+     pushError = error;
+   }
+-  await pullChanges();
++  await catchUpOrdinaryChanges();
++  if (!recoveryError) onOrdinaryReady?.();
+   try {
+     await catchUpFinanceChanges();
+   } catch {
+@@ -936,8 +974,8 @@ export async function runWithSyncLock(
+   }
+ }
+ 
+-export async function syncNow(csrfToken: string) {
+-  await runWithSyncLock(() => performSync(csrfToken));
++export async function syncNow(csrfToken: string, onOrdinaryReady?: () => void) {
++  await runWithSyncLock(() => performSync(csrfToken, onOrdinaryReady));
+ }
+ 
+ /**
+@@ -958,19 +996,17 @@ export async function resyncFromServer(csrfToken: string, maxPages = 100) {
+       await db.settings.delete('sync-cursor');
+       await db.settings.delete('pending-sync-replay-cursor');
+     });
+-    for (let page = 0; page < maxPages; page += 1) {
+-      if (!(await pullChanges())) return;
+-    }
+-    throw new Error('Full synchronization exceeded the safe replay limit.');
++    await catchUpOrdinaryChanges(maxPages);
+   });
+ }
+ export async function drainSequentially(
+   csrfToken: string,
+   onRetry: (delay: number) => void = () => {},
+   failedSyncAttempts = 0,
++  onOrdinaryReady?: () => void,
+ ): Promise<void> {
+   try {
+-    await syncNow(csrfToken);
++    await syncNow(csrfToken, onOrdinaryReady);
+   } catch (error) {
+     const item = await db.outbox
+       .orderBy('createdAt')
+diff --git a/apps/web/test/db/personal-stack-offline.test.ts b/apps/web/test/db/personal-stack-offline.test.ts
+index 973292d3..024a2df7 100644
+--- a/apps/web/test/db/personal-stack-offline.test.ts
++++ b/apps/web/test/db/personal-stack-offline.test.ts
+@@ -121,14 +121,15 @@ vi.mock('../../src/db/task-repository.js', () => ({
+     payload: JSON.parse(Buffer.from(record.payload.ciphertext, 'base64').toString()),
+   }),
+   markRevisionSynced: vi.fn(),
+-  taskToEncryptedRecord: async (task: Row) => ({
+-    id: task.id,
+-    ownerId: task.ownerId,
+-    status: task.status,
+-    visibility: task.visibility,
+-    updatedAt: task.updatedAt,
+-    value: { iv: 'test-iv', ciphertext: Buffer.from(JSON.stringify(task)).toString('base64') },
+-  }),
++  tasksToEncryptedRecords: async (tasks: Row[]) =>
++    tasks.map((task) => ({
++      id: task.id,
++      ownerId: task.ownerId,
++      status: task.status,
++      visibility: task.visibility,
++      updatedAt: task.updatedAt,
++      value: { iv: 'test-iv', ciphertext: Buffer.from(JSON.stringify(task)).toString('base64') },
++    })),
+   readLocalTaskSnapshot: async () => ({ tasks: [], unreadable: [] }),
+ }));
+ 
+@@ -236,6 +237,7 @@ describe('encrypted offline personal-stack persistence', () => {
+     expect(fetch).toHaveBeenCalledTimes(3);
+     expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/sync/bootstrap', {
+       credentials: 'include',
++      headers: { 'x-naaseh-sync-bootstrap': 'ordinary' },
+     });
+     expect(state.tasks.get(recoveredTask.id)).toMatchObject({
+       id: recoveredTask.id,
+diff --git a/apps/web/test/features/sync-lock.test.ts b/apps/web/test/features/sync-lock.test.ts
+index 70d87e19..b0b0272c 100644
+--- a/apps/web/test/features/sync-lock.test.ts
++++ b/apps/web/test/features/sync-lock.test.ts
+@@ -1,10 +1,12 @@
+ import { describe, expect, it, vi } from 'vitest';
++import { readCursor } from '../../src/db/sync-cursor.js';
+ import * as financeDelivery from '../../src/sync/finance-delivery.js';
+ import {
+   drainOutbox,
+   drainSequentially,
+   pullChanges,
+   runWithSyncLock,
++  syncNow,
+ } from '../../src/sync/sync-engine.js';
+ 
+ import {
+@@ -42,7 +44,9 @@ vi.mock('../../src/db/finance-repository.js', async (original) => ({
+   ...(await original<object>()),
+   commitFinanceReplayOutcome: persistence.acknowledge,
+ }));
+-vi.mock('../../src/db/sync-cursor.js', () => ({ readCursor: async () => ({ owner: 1 }) }));
++vi.mock('../../src/db/sync-cursor.js', () => ({
++  readCursor: vi.fn(async () => ({ owner: 1 })),
++}));
+ vi.mock('../../src/db/database.js', () => ({
+   db: {
+     settings: {
+@@ -75,6 +79,56 @@ vi.mock('../../src/db/outbox.js', async (original) => ({
+ }));
+ 
+ describe('desktop synchronization lock', () => {
++  it.each([false, true])(
++    'applies every catch-up page (server continuation: %s)',
++    async (modern) => {
++      vi.mocked(readCursor)
++        .mockResolvedValueOnce({ owner: 1 })
++        .mockResolvedValueOnce({ owner: 2 })
++        .mockResolvedValueOnce({ owner: 3 });
++      const requests = vi
++        .fn<typeof fetch>()
++        // An entire page can consist of Finance changes filtered out of the ordinary lane.
++        .mockResolvedValueOnce(
++          Response.json({
++            changes: [],
++            cursor: { owner: 2 },
++            ...(modern ? { ordinaryHasMore: true } : {}),
++          }),
++        )
++        .mockResolvedValueOnce(
++          Response.json({
++            changes: [{ entityType: 'task', entityId: 'old-task', operation: 'tombstone' }],
++            cursor: { owner: 3 },
++            ...(modern ? { ordinaryHasMore: false } : {}),
++          }),
++        )
++        .mockResolvedValueOnce(Response.json({ changes: [], cursor: { owner: 3 } }));
++      const ready = vi.fn();
++      persistence.commit.mockClear();
++      vi.stubGlobal('navigator', { onLine: true });
++      vi.stubGlobal('fetch', requests);
++      try {
++        await syncNow('csrf', ready);
++        expect(requests).toHaveBeenCalledTimes(modern ? 2 : 3);
++        expect(persistence.commit).toHaveBeenNthCalledWith(
++          2,
++          [],
++          ['old-task'],
++          [],
++          { owner: 3 },
++          [],
++        );
++        expect(persistence.commit).toHaveBeenCalledTimes(modern ? 2 : 3);
++        expect(persistence.commit).toHaveBeenCalledBefore(ready);
++        expect(ready).toHaveBeenCalledOnce();
++      } finally {
++        vi.mocked(readCursor).mockReset().mockResolvedValue({ owner: 1 });
++        vi.unstubAllGlobals();
++      }
++    },
++  );
++
+   it('requests a backed-off retry when a task download fails with an empty outbox', async () => {
+     const networkError = new TypeError('Failed to fetch');
+     const fetcher = vi.fn<typeof fetch>().mockRejectedValue(networkError);
+diff --git a/tests/e2e/admin.spec.ts b/tests/e2e/admin.spec.ts
+index c3eb9301..5b4d45a6 100644
+--- a/tests/e2e/admin.spec.ts
++++ b/tests/e2e/admin.spec.ts
+@@ -1,6 +1,11 @@
+ import { expect, test } from '@playwright/test';
++import { mockEmptySyncBootstrap, mockSuccessfulSync } from './enhanced-helpers.js';
+ 
+ test.use({ serviceWorkers: 'block' });
++test.beforeEach(async ({ page }) => {
++  await mockEmptySyncBootstrap(page);
++  await mockSuccessfulSync(page);
++});
+ 
+ test('an administrator responsively lists, disables, and reactivates users without self-disablement', async ({
+   page,
+diff --git a/tests/e2e/auth-tfa-reset.spec.ts b/tests/e2e/auth-tfa-reset.spec.ts
+index 1ecd6c54..917e8e56 100644
+--- a/tests/e2e/auth-tfa-reset.spec.ts
++++ b/tests/e2e/auth-tfa-reset.spec.ts
+@@ -1,4 +1,5 @@
+ import { expect, test } from '@playwright/test';
++import { mockEmptySyncBootstrap, mockSuccessfulSync } from './enhanced-helpers.js';
+ 
+ test('TFA challenge and PIN reset remain generic and usable', async ({ page }) => {
+   await page.route('**/api/v1/auth/login', (route) =>
+@@ -21,6 +22,8 @@ test('TFA challenge and PIN reset remain generic and usable', async ({ page }) =
+ });
+ 
+ test('offers a 30-day browser choice only after the TFA code is verified', async ({ page }) => {
++  await mockEmptySyncBootstrap(page);
++  await mockSuccessfulSync(page);
+   let challengeBody: unknown;
+   await page.route('**/api/v1/auth/login', (route) =>
+     route.fulfill({
+diff --git a/tests/e2e/enhanced-helpers.ts b/tests/e2e/enhanced-helpers.ts
+index 76559036..2b9f32bc 100644
+--- a/tests/e2e/enhanced-helpers.ts
++++ b/tests/e2e/enhanced-helpers.ts
+@@ -24,7 +24,7 @@ export async function setTaskDueDate(form: Locator, date: string, time?: string)
+   await dialog.getByRole('button', { name: 'Set due date' }).click();
+ }
+ 
+-export async function signIn(page: Page) {
++export async function mockEmptySyncBootstrap(page: Page) {
+   await page.route('**/api/v1/sync/bootstrap', (route) =>
+     route.fulfill({
+       status: 200,
+@@ -39,6 +39,10 @@ export async function signIn(page: Page) {
+       }),
+     }),
+   );
++}
++
++export async function signIn(page: Page) {
++  await mockEmptySyncBootstrap(page);
+   await page.goto('/');
+   await page.getByLabel('Username').fill('steve');
+   await page.getByLabel('Password').fill('local');
+diff --git a/tests/e2e/profile-admin.spec.ts b/tests/e2e/profile-admin.spec.ts
+index 68786b39..45f96de9 100644
+--- a/tests/e2e/profile-admin.spec.ts
++++ b/tests/e2e/profile-admin.spec.ts
+@@ -1,5 +1,5 @@
+ import { expect, test } from '@playwright/test';
+-import { signIn } from './enhanced-helpers.js';
++import { mockEmptySyncBootstrap, mockSuccessfulSync, signIn } from './enhanced-helpers.js';
+ 
+ test.use({ serviceWorkers: 'block' });
+ 
+@@ -48,6 +48,8 @@ test('discovers personal settings on Profile and renders a responsive administra
+ });
+ 
+ test('keeps system administration unavailable to an ordinary user', async ({ page }) => {
++  await mockEmptySyncBootstrap(page);
++  await mockSuccessfulSync(page);
+   await page.route('**/api/v1/auth/login', (route) =>
+     route.fulfill({
+       status: 200,
+diff --git a/tests/e2e/profile-identity.spec.ts b/tests/e2e/profile-identity.spec.ts
+index 7d8601b2..eb335c9b 100644
+--- a/tests/e2e/profile-identity.spec.ts
++++ b/tests/e2e/profile-identity.spec.ts
+@@ -1,10 +1,11 @@
+ import { expect, test } from '@playwright/test';
+-import { signIn, expandTaskDetails } from './enhanced-helpers.js';
++import { signIn, expandTaskDetails, mockSuccessfulSync } from './enhanced-helpers.js';
+ import { expectNoDocumentOverflow } from './responsive-assertions.js';
+ test.use({ serviceWorkers: 'block' });
+ test('ordinary users see identity, all assignees, readable priorities, and consistently spaced buttons', async ({
+   page,
+ }) => {
++  await mockSuccessfulSync(page);
+   await page.route('**/api/v1/auth/login', (route) =>
+     route.fulfill({
+       json: { user: { id: 'alex', displayName: 'Alex', role: 'user' }, csrfToken: 'csrf' },
+diff --git a/tests/e2e/session-sync-account.spec.ts b/tests/e2e/session-sync-account.spec.ts
+index d93515ed..be153a22 100644
+--- a/tests/e2e/session-sync-account.spec.ts
++++ b/tests/e2e/session-sync-account.spec.ts
+@@ -1,4 +1,5 @@
+ import { expect, test } from '@playwright/test';
++import { createTask, journalSyncContractVersion } from '@naaseh/domain';
+ 
+ test.use({ serviceWorkers: 'block' });
+ 
+@@ -37,3 +38,92 @@ test('a saved admin view cannot sync under a different browser account', async (
+   await expect(page.getByRole('heading', { name: 'Categories and Projects' })).toHaveCount(0);
+   expect(pushes).toBe(0);
+ });
++
++test('after session expiry, waits for later task pages before showing the list', async ({
++  page,
++}) => {
++  const user = { id: 'steve-id', displayName: 'Steve', role: 'user' };
++  const oldTask = createTask({ label: 'Task removed on another device' }, user.id);
++  const currentTask = createTask({ label: 'Current task from another device' }, user.id);
++  const upsert = (task: typeof oldTask) => ({
++    entityType: 'task',
++    entityId: task.id,
++    operation: 'upsert',
++    payload: task,
++  });
++  let validSession = false;
++  let renewed = false;
++  const laterPageRequested = Promise.withResolvers<void>();
++  const releaseLaterPage = Promise.withResolvers<void>();
++  await page.route('**/api/v1/auth/session', (route) =>
++    route.fulfill({ status: validSession ? 200 : 401, json: { user, csrfToken: 'csrf' } }),
++  );
++  await page.route('**/api/v1/auth/login', (route) => {
++    validSession = true;
++    return route.fulfill({ json: { user, csrfToken: 'csrf' } });
++  });
++  await page.route('**/api/v1/sync/bootstrap', (route) =>
++    route.fulfill({
++      json: {
++        tasks: [renewed ? currentTask : oldTask],
++        categories: [],
++        projects: [],
++        lists: [],
++        listItems: [],
++      },
++    }),
++  );
++  await page.route('**/api/v1/sync/pull', async (route) => {
++    const body = route.request().postDataJSON();
++    if (body.journalCursor !== undefined)
++      return route.fulfill({
++        json: {
++          version: journalSyncContractVersion,
++          changes: [],
++          journalCursor: body.journalCursor,
++          hasMore: false,
++        },
++      });
++    const after = body.cursor?.owner ?? 0;
++    if (after === 0)
++      return route.fulfill({ json: { changes: [upsert(oldTask)], cursor: { owner: 1 } } });
++    if (renewed && after === 1) {
++      laterPageRequested.resolve();
++      await releaseLaterPage.promise;
++      return route.fulfill({
++        json: {
++          changes: [
++            { entityType: 'task', entityId: oldTask.id, operation: 'tombstone' },
++            upsert(currentTask),
++          ],
++          cursor: { owner: 2 },
++        },
++      });
++    }
++    return route.fulfill({ json: { changes: [], cursor: { owner: after } } });
++  });
++
++  const signIn = async () => {
++    await page.getByLabel('Username').fill('steve');
++    await page.getByLabel('Password').fill('local');
++    await page.getByRole('button', { name: 'Sign in' }).click();
++  };
++  const staleHeading = page.getByRole('heading', { name: oldTask.label });
++  await page.goto('/');
++  await signIn();
++  await expect(staleHeading).toBeVisible();
++
++  validSession = false;
++  renewed = true;
++  await page.reload();
++  await signIn();
++  try {
++    await expect(page.getByRole('heading', { name: 'Syncing your tasks' })).toBeVisible();
++    await laterPageRequested.promise;
++    await expect(staleHeading).toHaveCount(0);
++  } finally {
++    releaseLaterPage.resolve();
++  }
++  await expect(page.getByRole('heading', { name: currentTask.label })).toBeVisible();
++  await expect(staleHeading).toHaveCount(0);
++});
+diff --git a/tests/integration/finance-protected-sync.test.ts b/tests/integration/finance-protected-sync.test.ts
+index 90717ee3..7ca4fb54 100644
+--- a/tests/integration/finance-protected-sync.test.ts
++++ b/tests/integration/finance-protected-sync.test.ts
+@@ -57,6 +57,48 @@ const changes = [
+ const read = async (_audience: string, after: number) => changes.filter((c) => c.sequence > after);
+ const feeds: [string, string][] = [['owner', 'OWNER#u1']];
+ describe('independent protected Finance synchronization delivery', () => {
++  it('reports ordinary continuation even when the current page only contains withheld Finance', async () => {
++    httpMocks.pull.mockImplementation(async (audience, after) =>
++      audience === 'OWNER#u1' && after === 0
++        ? Array.from({ length: 200 }, (_, index) => ({
++            ...changes[1],
++            sequence: index + 1,
++          }))
++        : [],
++    );
++    try {
++      for (const after of [0, 200]) {
++        const result = (await handler(
++          {
++            rawPath: '/api/v1/sync/pull',
++            headers: {},
++            body: JSON.stringify({
++              contractVersion: 8,
++              deliverFinance: false,
++              cursor: { owner: after },
++            }),
++            requestContext: {
++              requestId: 'ordinary-continuation',
++              http: { method: 'POST' },
++              authorizer: { lambda: { userId: 'u1', role: 'user' } },
++            },
++          } as never,
++          {} as never,
++          () => undefined,
++        )) as { statusCode: number; body: string };
++        expect(result.statusCode).toBe(200);
++        expect(JSON.parse(result.body)).toMatchObject({
++          changes: [],
++          financeChanges: [],
++          ordinaryHasMore: after === 0,
++          cursor: { owner: 200 },
++        });
++      }
++    } finally {
++      httpMocks.pull.mockReset();
++    }
++  });
++
+   it('serves an opt-in bootstrap page without reading or acknowledging ordinary feeds', async () => {
+     const previousSecret = process.env.CURSOR_SIGNING_SECRET;
+     process.env.CURSOR_SIGNING_SECRET = 'bootstrap-route-test-secret-'.repeat(3);

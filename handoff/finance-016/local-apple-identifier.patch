@@ -1,0 +1,13 @@
+diff --git a/apps/apple/Naaseh.xcodeproj/project.pbxproj b/apps/apple/Naaseh.xcodeproj/project.pbxproj
+index 242f88da..d31465a3 100644
+--- a/apps/apple/Naaseh.xcodeproj/project.pbxproj
++++ b/apps/apple/Naaseh.xcodeproj/project.pbxproj
+@@ -640,7 +640,7 @@
+ 				GENERATE_INFOPLIST_FILE = NO;
+ 				INFOPLIST_FILE = "Config/Info-iOS.plist";
+ 				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+-				PRODUCT_BUNDLE_IDENTIFIER = "-link.thepandas.naaseh";
++				PRODUCT_BUNDLE_IDENTIFIER = com.stevekessler.naaseh.personal;
+ 				PRODUCT_NAME = "$(TARGET_NAME)";
+ 				SDKROOT = iphoneos;
+ 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

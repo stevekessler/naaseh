@@ -1,5 +1,14 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 22 consolidated transfer: use
+> [`handoff/finance-016/second-computer-prompt.md`](../../handoff/finance-016/second-computer-prompt.md)
+> on `codex/finance-transfer-20261122`. Integrated source remains at the
+> November 16 checkpoint (132/166). Original first-computer working files,
+> separate sync/Apple patches, generated outputs and exact-history bundles are
+> preserved. Additional already-published spend-report/forecast work is identified
+> in that prompt for reconciliation. No new application test pass, migration,
+> deployment or release acceptance is claimed by this transfer.
+
 > November 16 dashboard and spending trends checkpoint: 132/166 tasks checked.
 > The default dashboard displays canonical upcoming expenses, flagged balances,
 > open budgets, recent merchant/category transactions and spending trends by
