@@ -174,7 +174,7 @@ test('creates a multiline location, saves an item and filters inventory', async 
   await expect(page.getByRole('textbox', { name: 'Item name', exact: true })).toHaveValue(
     'Travel bag',
   );
-  await expect(page).toHaveURL(new RegExp(`/inventory/${creation.id}$`));
+  await expect(page).toHaveURL((url) => url.pathname === `/inventory/${creation.id}`);
   const upload = page.getByLabel('Choose an image', { exact: true });
   await upload.setInputFiles({ name: 'first.png', mimeType: 'image/png', buffer: imageBytes });
   await page.context().setOffline(true);
