@@ -23,13 +23,19 @@ export async function mountWorkspaceStory(
   actor: string,
   access = { allowed: true },
 ) {
-  const [release] = fixture.releases;
-  (await installFeatureFixture(page, entry))(release);
+  const setManifest = await installFeatureFixture(page, entry);
+  let active: (typeof fixture.releases)[number] | null = fixture.releases[0];
+  setManifest(active);
   const units = defaultStrengthUnits.map((unit) => ({ ...unit }));
-  await page.route(`**/api/v1/contacts-inventory/releases/${release}/**`, async (route) => {
+  await page.route('**/api/v1/contacts-inventory/releases/*/**', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    const path = url.pathname.split(`/${release}/`)[1] ?? '';
+    const prefix = '/api/v1/contacts-inventory/releases/';
+    const versionAndPath = url.pathname.slice(prefix.length);
+    const separator = versionAndPath.indexOf('/');
+    if (versionAndPath.slice(0, separator) !== active)
+      return route.fulfill({ status: 410, json: { code: 'stale_release' } });
+    const path = versionAndPath.slice(separator + 1);
     if (!access.allowed) return route.fulfill({ status: 403, json: { code: 'forbidden' } });
     if (path === 'catalogs')
       return route.fulfill({
@@ -88,4 +94,8 @@ export async function mountWorkspaceStory(
       return route.fulfill({ status: 409, json: { code: error.code } });
     }
   });
+  return (release: (typeof fixture.releases)[number] | null) => {
+    active = release;
+    setManifest(release);
+  };
 }
