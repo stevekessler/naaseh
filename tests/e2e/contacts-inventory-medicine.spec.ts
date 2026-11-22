@@ -90,7 +90,11 @@ test('replays an offline Prescriber before its dependent Medicine', async ({ pag
   await signIn(page);
   await page.goto('/inventory');
   await page.getByRole('button', { name: 'New item' }).click();
-  await expect(page.getByRole('option', { name: 'Linen closet' })).toBeAttached();
+  await expect(
+    page
+      .getByRole('combobox', { name: 'Location', exact: true })
+      .getByRole('option', { name: 'Linen closet', exact: true }),
+  ).toBeAttached();
   await page.goto('/lists/contacts');
   await page.getByRole('button', { name: 'New contact' }).click();
   const contactType = page.getByRole('combobox', { name: 'Contact Type', exact: true });
@@ -124,7 +128,7 @@ test('replays an offline Prescriber before its dependent Medicine', async ({ pag
     ),
   );
   await context.setOffline(false);
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   const [contact, item] = await Promise.all(saved.map(async (response) => (await response).json()));
   expect((await repo.read({ kind: 'item', id: item.id }))?.fields.prescriberId).toBe(contact.id);
   await expect(page.getByText('1 change waiting to sync.')).toHaveCount(0);

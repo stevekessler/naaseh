@@ -53,6 +53,8 @@ test('independent feature Search scopes default off and suppress an unauthorized
   await page.goto('/search');
   const scopes = ['Contacts', 'Inventory Items', 'Medicine'];
   const titles = ['Fixture contact', 'Fixture inventory', 'Fixture medicine'];
+  const resultCounts = [0, 1, 1, 2, 1, 2, 2, 3];
+  const status = page.getByRole('status').filter({ hasText: /results?$/u });
   for (const scope of scopes)
     await expect(page.getByRole('checkbox', { name: scope, exact: true })).not.toBeChecked();
   await page.getByRole('searchbox', { name: 'Search tasks and list items' }).fill('Fixture');
@@ -66,7 +68,20 @@ test('independent feature Search scopes default off and suppress an unauthorized
       if (mask & (1 << index)) await expect(link).toBeVisible();
       else await expect(link).toHaveCount(0);
     }
+    await expect(status).toHaveText(
+      `${resultCounts[mask]} ${resultCounts[mask] === 1 ? 'result' : 'results'}`,
+    );
   }
+  await page.getByRole('button', { name: 'Fixture medicine', exact: true }).click();
+  await expect(page).toHaveURL(
+    (url) => url.pathname === '/inventory/b4d02419-80af-4a8f-b710-1a49e7ca3002',
+  );
+  await expect(page.getByRole('textbox', { name: 'Item name', exact: true })).toHaveValue(
+    'Fixture medicine',
+  );
+  await page.goto('/search');
+  await page.getByRole('searchbox', { name: 'Search tasks and list items' }).fill('Fixture');
+  await expect(status).toHaveText('3 results');
   const deleted = await repo.read({ kind: 'contact', id: 'b4d02419-80af-4a8f-b710-1a49e7ca3000' });
   if (!deleted) throw new Error('Fixture contact was missing');
   await repo.mutate({
@@ -90,4 +105,5 @@ test('independent feature Search scopes default off and suppress an unauthorized
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByRole('button', { name: 'Fixture inventory', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Fixture medicine', exact: true })).toHaveCount(0);
+  await expect(status).toHaveText('0 results');
 });
