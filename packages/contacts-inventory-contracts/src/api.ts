@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { imageGenerationSchema, imagePointerSchema } from './images.js';
 
 export const syncCursorSchema = z.object({
   generation: z.int().positive(),
@@ -15,6 +16,7 @@ export const recordIdentitySchema = z.object({
 });
 export const tombstoneSchema = recordIdentitySchema.extend({
   deleted: z.literal(true),
+  imageGeneration: imageGenerationSchema.optional(),
 });
 export type Tombstone = z.infer<typeof tombstoneSchema>;
 
@@ -36,6 +38,8 @@ export const workspaceRecordSchema = recordIdentitySchema.extend({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   fields: z.record(z.string(), z.json()),
+  image: imagePointerSchema.optional(),
+  imageGeneration: imageGenerationSchema.optional(),
 });
 export type WorkspaceRecord = z.infer<typeof workspaceRecordSchema>;
 export type MutationPrecondition = z.infer<typeof mutationPreconditionSchema>;

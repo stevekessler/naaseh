@@ -1,3 +1,4 @@
+import { ItemImage } from './ItemImage.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   itemFieldsSchema,
@@ -136,6 +137,10 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
             id: record.id,
             revision: record.revision,
             fields: parsed.data,
+            ...(record.image ? { image: record.image } : {}),
+            ...(record.imageGeneration === undefined
+              ? {}
+              : { imageGeneration: record.imageGeneration }),
           });
       }
       for (const draft of drafts.filter((entry) => entry.kind === 'item')) {
@@ -143,6 +148,7 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
         const parsed = itemFieldsSchema.safeParse(draft.fields);
         if (parsed.success)
           displayed.set(draft.id, {
+            ...displayed.get(draft.id),
             id: draft.id,
             revision: (draft.revision ?? 0) + 1,
             fields: parsed.data,
@@ -238,6 +244,16 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
           {...(item ? { item } : {})}
           save={(fields) => change(item ? 'update' : 'create', fields)}
           remove={() => change('delete')}
+        />
+      )}
+      {item && generation && workspace && (
+        <ItemImage
+          host={host}
+          id={item.id}
+          generation={generation}
+          imageGeneration={item.imageGeneration ?? 0}
+          {...(item.image ? { image: item.image } : {})}
+          refresh={workspace.refresh}
         />
       )}
       {recordId && !item && generation && <p>This item is unavailable.</p>}

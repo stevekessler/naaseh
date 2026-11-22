@@ -9,6 +9,7 @@ import {
   locationSchema,
   parseMutationHeaders,
   type InventoryLocation,
+  type ImagePointer,
 } from '../../packages/contacts-inventory-contracts/src/index.js';
 import { buildFeatureFixture, installFeatureFixture } from '../fixtures/contacts-inventory-host.js';
 import { MemoryWorkspaceStore } from '../fixtures/contacts-inventory-store.js';
@@ -20,6 +21,19 @@ test.use({ serviceWorkers: 'block' });
 test('creates a multiline location, saves an item and filters inventory', async ({ page }) => {
   const repo = new WorkspaceRepository(new MemoryWorkspaceStore());
   const locations: InventoryLocation[] = [];
+  const imageBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR8sAAAAASUVORK5CYII=',
+    'base64',
+  );
+  let image: ImagePointer | undefined;
+  let imageGeneration = 0;
+  let shouldRejectImage = false;
+  let uploads = 0;
+  await page.route('**/test-inventory-upload', (route) => {
+    uploads++;
+    return route.fulfill({ status: 200, headers: { 'x-amz-version-id': 'fixture-version' } });
+  });
+
   const [release] = fixture.releases;
   const activate = await installFeatureFixture(page, await buildFeatureFixture('contacts'));
   activate(release);
@@ -38,6 +52,49 @@ test('creates a multiline location, saves an item and filters inventory', async 
       locations.push(result);
       return route.fulfill({ status: 201, json: result });
     }
+    const media = /^items\/([^/]+)\/image(?:\/candidates(?:\/([^/]+)(\/confirm)?)?)?$/u.exec(path);
+    if (media?.[1]) {
+      const itemId = media[1];
+      if (path.endsWith('/candidates')) {
+        const { id } = request.postDataJSON();
+        return route.fulfill({
+          status: 201,
+          json: {
+            id,
+            state: 'pending_upload',
+            uploadUrl: new URL('/test-inventory-upload', request.url()).href,
+          },
+        });
+      }
+      if (media[2] && media[3]) {
+        if (shouldRejectImage) return route.fulfill({ json: { state: 'failed' } });
+        const item = await repo.read({ kind: 'item', id: itemId });
+        if (!item) return route.fulfill({ status: 404 });
+        image = { id: media[2], mediaType: 'image/png', bytes: imageBytes.length };
+        imageGeneration++;
+        await repo.mutate({
+          kind: 'item',
+          id: itemId,
+          action: 'update',
+          revision: item.revision,
+          generation: 1,
+          actor: fixture.members[0],
+          mutationId: media[2],
+          fields: item.fields,
+        });
+        return route.fulfill({ json: { state: 'active', image } });
+      }
+      if (!image) return route.fulfill({ status: 404 });
+      return route.fulfill({
+        status: 206,
+        headers: {
+          'content-type': image.mediaType,
+          'content-range': `bytes 0-${imageBytes.length - 1}/${imageBytes.length}`,
+          etag: `"${imageGeneration}-${image.id}"`,
+        },
+        body: imageBytes,
+      });
+    }
     if (request.method() === 'GET') {
       const result = await readWorkspace(
         repo,
@@ -47,6 +104,12 @@ test('creates a multiline location, saves an item and filters inventory', async 
         Object.fromEntries(url.searchParams),
         request.headers(),
       );
+      if (image && result && 'changes' in result) {
+        for (const change of result.changes) {
+          if (change.record?.kind === 'item' && !('deleted' in change.record))
+            Object.assign(change.record, { image, imageGeneration });
+        }
+      }
       return route.fulfill({ status: result ? 200 : 404, json: result ?? {} });
     }
     const version = parseMutationHeaders(request.headers());
@@ -112,6 +175,28 @@ test('creates a multiline location, saves an item and filters inventory', async 
     'Travel bag',
   );
   await expect(page).toHaveURL(new RegExp(`/inventory/${creation.id}$`));
+  const upload = page.getByLabel('Choose an image', { exact: true });
+  await upload.setInputFiles({ name: 'first.png', mimeType: 'image/png', buffer: imageBytes });
+  await page.context().setOffline(true);
+  await page.getByRole('button', { name: 'Upload image', exact: true }).click();
+  await expect(
+    page.getByText('Image changes require a connection.', { exact: false }),
+  ).toBeVisible();
+  expect(uploads).toBe(0);
+  await page.context().setOffline(false);
+  await page.getByRole('button', { name: 'Upload image', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'Inventory item', exact: true })).toBeVisible();
+  expect(uploads).toBe(1);
+  shouldRejectImage = true;
+  await upload.setInputFiles({
+    name: 'replacement.png',
+    mimeType: 'image/png',
+    buffer: imageBytes,
+  });
+  await page.getByRole('button', { name: 'Replace image', exact: true }).click();
+  await expect(page.getByText('The new image was not saved.', { exact: false })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Inventory item', exact: true })).toBeVisible();
+  expect(uploads).toBe(2);
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete item', exact: true }).click();
   await expect(page.getByText('This item is unavailable.')).toBeVisible();

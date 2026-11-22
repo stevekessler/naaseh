@@ -1,3 +1,4 @@
+import { handleItemImage, itemImageRoute } from './images.js';
 import { mutateItem } from './items.js';
 import { z } from 'zod';
 import { ContactCatalog } from './catalogs.js';
@@ -95,9 +96,13 @@ async function handleRequest(
   const table = process.env.CONTACTS_INVENTORY_RECORDS_TABLE;
   const ledger = process.env.CONTACTS_INVENTORY_LEDGER_TABLE;
   if (table && ledger) {
-    const repo = new WorkspaceRepository(new DynamoWorkspaceStore(workspace, table, ledger));
+    const store = new DynamoWorkspaceStore(workspace, table, ledger);
+    const repo = new WorkspaceRepository(store);
     const catalog = new ContactCatalog(table, workspace);
     try {
+      const mediaBucket = process.env.CONTACTS_INVENTORY_MEDIA_BUCKET;
+      if (mediaBucket && itemImageRoute(path))
+        return await handleItemImage(store, mediaBucket, path, event);
       let body: unknown;
       let statusCode = 200;
       const item = path.match(/^items\/([^/]+)$/u);

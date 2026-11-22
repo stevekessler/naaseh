@@ -123,9 +123,19 @@ export class WorkspaceRepository {
       const now = this.now();
       const record: StoredRecord =
         action === 'delete'
-          ? { ...identity, deleted: true }
+          ? {
+              ...identity,
+              deleted: true,
+              ...(kind === 'item' ? { imageGeneration: (current?.imageGeneration ?? 0) + 1 } : {}),
+            }
           : {
               ...identity,
+              ...(kind === 'item' && isLive(current) && current.imageGeneration !== undefined
+                ? {
+                    imageGeneration: current.imageGeneration,
+                    ...(current.image ? { image: current.image } : {}),
+                  }
+                : {}),
               fields: mutation.fields,
               createdAt: isLive(current) ? current.createdAt : now,
               updatedAt: now,

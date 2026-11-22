@@ -1,3 +1,4 @@
+import { protectInventoryMedia } from './contacts-inventory-media-protection.js';
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as backup from 'aws-cdk-lib/aws-backup';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -48,12 +49,13 @@ export class ContactsInventoryDataStack extends Stack {
         {
           allowedOrigins: [webOrigin.origin],
           allowedMethods: [s3.HttpMethods.PUT],
-          allowedHeaders: ['content-type', 'x-amz-*'],
+          allowedHeaders: ['content-type', 'if-none-match', 'x-amz-*'],
           exposedHeaders: ['etag', 'x-amz-version-id'],
           maxAge: 300,
         },
       ],
     });
+    protectInventoryMedia(this, this.media, key);
     const backupVault = new backup.BackupVault(this, 'BackupVault', {
       encryptionKey: key,
       removalPolicy: RemovalPolicy.RETAIN,

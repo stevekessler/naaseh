@@ -35,7 +35,7 @@ export function createWebResources(
         contentSecurityPolicy: contentSecurityPolicy
           .replace(
             "img-src 'self' data:",
-            `img-src 'self' data:${options.mediaOrigin ? ` ${options.mediaOrigin}` : ''}`,
+            `img-src 'self' data:${featureUploadOrigin ? ' blob:' : ''}${options.mediaOrigin ? ` ${options.mediaOrigin}` : ''}`,
           )
           .replace(
             "connect-src 'self'",

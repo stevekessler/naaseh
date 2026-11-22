@@ -1,6 +1,12 @@
-import type { ItemFields } from '@naaseh/contacts-inventory-contracts';
+import type { ImagePointer, ItemFields } from '@naaseh/contacts-inventory-contracts';
 
-export type InventoryItem = { id: string; revision: number; fields: ItemFields };
+export type InventoryItem = {
+  id: string;
+  revision: number;
+  fields: ItemFields;
+  image?: ImagePointer;
+  imageGeneration?: number;
+};
 
 export function visibleItems(items: InventoryItem[], name: string, locationId: string) {
   const query = name.trim().toLowerCase();
