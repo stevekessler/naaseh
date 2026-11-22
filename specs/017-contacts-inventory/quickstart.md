@@ -13,12 +13,12 @@ npx playwright install chromium webkit
 npm run validate:pre-aws:browsers
 ```
 
-Use `npm run dev` for the existing local shell. Implementation must add a local feature host fixture that serves a real built manifest/assets and a test API on the same origin as the shell. It must be able to switch a release off, stage a version and switch the manifest independently of the shell. The feature-specific validation commands below are targets for implementation and become runnable as the feature suites are added.
+Use `npm run dev` for the existing local shell. The local feature fixture serves a built manifest and assets on the same origin as the shell, with a test API. It can switch a release off, stage a version and switch the manifest independently of the shell. Use the feature suites to exercise those paths.
 
 ```sh
-npm test -- -t 'Contacts and Inventory'
-npm run test:e2e -- --list --grep 'Contacts and Inventory'
-npm run test:e2e -- --grep 'Contacts and Inventory'
+npx vitest run --config apps/contacts-inventory/vitest.config.ts
+npx playwright test 'contacts-inventory-.*\.spec\.ts'
+npx playwright test --config playwright.contacts-inventory.performance.config.ts
 ```
 
 For the front-to-back AWS check, synthesize the host and feature stacks with the existing repository CDK setup and scope the diff to the intended stacks. The code and release runbook must provide the isolated AWS fixture configuration and protected feature workflow inputs. There is no standing staging environment. Use an approved isolated AWS environment for real service evidence. Completing this guide is separate from authorizing production deployment.

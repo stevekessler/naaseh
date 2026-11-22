@@ -65,3 +65,22 @@ test('Contacts and Inventory encrypts pending edits and purges them when deletio
   expect(deleted?.status).toBe('deleted');
   expect(deleted?.ciphertext).toBeUndefined();
 });
+
+test('retains an encrypted draft until the user applies it to a restored workspace', async ({
+  page,
+}) => {
+  const activate = await installFeatureFixture(page, await buildFeatureFixture('offline'));
+  activate(contactsInventoryFixture.releases[0]);
+  await signIn(page);
+  await page.goto('/lists/contacts');
+  const status = page.locator('main').getByRole('status');
+  await page.getByRole('button', { name: 'Cache synthetic contact' }).click();
+  await expect(status).toHaveText('1 local records, 0 queued changes');
+  await page.getByRole('button', { name: 'Queue synthetic edit' }).click();
+  await expect(status).toHaveText('1 local records, 1 queued changes');
+  await page.getByRole('button', { name: 'Restore workspace' }).click();
+  await expect(status).toHaveText('1 local records, 0 queued changes');
+  await page.reload();
+  await page.getByRole('button', { name: 'Review and apply draft' }).click();
+  await expect(status).toHaveText('1 local records, 1 queued changes');
+});

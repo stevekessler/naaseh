@@ -1,7 +1,11 @@
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { DynamoWorkspaceStore } from '../../apps/api/src/contacts-inventory/dynamo-store.js';
-import { handleItemImage, imageRange } from '../../apps/api/src/contacts-inventory/images.js';
+import {
+  handleItemImage,
+  imageRange,
+  reconcileInventoryScan,
+} from '../../apps/api/src/contacts-inventory/images.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   imageByteLimit,
@@ -98,4 +102,30 @@ it('serves only an active exact version and stops a stale or oversized range', a
   } finally {
     send.mockRestore();
   }
+});
+
+it('activates only the clean exact version and keeps a superseded candidate inactive', async () => {
+  const itemId = 'b4d02419-80af-4a8f-b710-1a49e7ca3000';
+  const id = 'b4d02419-80af-4a8f-b710-1a49e7ca3001';
+  const image = { id, mediaType: 'image/jpeg', bytes: 9 };
+  const candidate = {
+    ...image,
+    version: 'current',
+    createdAt: Date.now(),
+    workspaceGeneration: 3,
+    imageGeneration: 5,
+  };
+  const changeImage = vi.fn().mockResolvedValue(false);
+  const record = vi.fn().mockResolvedValue({ deleted: true });
+  const imageCandidate = vi.fn().mockResolvedValue(candidate);
+  const store = { record, changeImage, imageCandidate } as unknown as DynamoWorkspaceStore;
+  await reconcileInventoryScan(store, itemId, id, 'stale', 'NO_THREATS_FOUND');
+  await reconcileInventoryScan(store, itemId, id, 'current', 'THREATS_FOUND');
+  expect(changeImage).not.toHaveBeenCalled();
+  imageCandidate.mockResolvedValueOnce({ ...candidate, createdAt: 0 });
+  await reconcileInventoryScan(store, itemId, id, 'current', 'NO_THREATS_FOUND');
+  expect(changeImage).not.toHaveBeenCalled();
+  await reconcileInventoryScan(store, itemId, id, 'current', 'NO_THREATS_FOUND');
+  expect(changeImage).toHaveBeenCalledExactlyOnceWith(itemId, 3, 5, image);
+  expect(record).toHaveBeenCalledExactlyOnceWith({ kind: 'item', id: itemId });
 });

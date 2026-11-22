@@ -4,7 +4,7 @@ import {
 } from '@naaseh/contacts-inventory-contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FinanceAccountSearchOption } from '../../search/finance-index.js';
-import type { FinanceSearchPreferences } from './search-state.js';
+import { defaultFeatureSearchPreferences, type FinanceSearchPreferences } from './search-state.js';
 
 export function CombinedSearchTypeSettings({
   preferences,
@@ -54,6 +54,14 @@ export function CombinedSearchTypeSettings({
               {{ contacts: 'Contacts', inventory: 'Inventory Items', medicine: 'Medicine' }[type]}
             </label>
           ))}
+          <button
+            type="button"
+            className="quiet"
+            disabled={!featureSearchTypes.some((type) => feature[type])}
+            onClick={() => updateFeature(defaultFeatureSearchPreferences)}
+          >
+            Reset Contacts and Inventory scopes
+          </button>
         </div>
       )}
       {preferences.includeTransactions ? (

@@ -51,7 +51,7 @@ export function connectWorkspace(
   onFailure: (error: unknown) => void,
 ) {
   const controller = new AbortController();
-  let running: Promise<void> | undefined;
+  let running: Promise<boolean> | undefined;
   const request = (path: string, options?: RequestInit) =>
     host.request(path, { ...options, signal: controller.signal });
 
@@ -102,10 +102,10 @@ export function connectWorkspace(
         } while (next !== null);
       }
       controller.signal.throwIfAborted();
-      if (!(await local.apply(existing, checkpoint, projections, true))) return;
+      if (!(await local.apply(existing, checkpoint, projections, true))) return false;
     }
     const cursor = await local.cursor();
-    if (!cursor || !(await catchUp(cursor))) return;
+    if (!cursor || !(await catchUp(cursor))) return false;
 
     // Sequential replay keeps later writes behind their earlier record dependencies.
     for (const row of await local.pending()) {
@@ -128,7 +128,7 @@ export function connectWorkspace(
       }
     }
     const latest = await local.cursor();
-    if (latest) await catchUp(latest);
+    return latest ? catchUp(latest) : false;
   }
 
   function refresh() {
@@ -136,6 +136,7 @@ export function connectWorkspace(
       running = synchronize()
         .catch((error: unknown) => {
           if (!controller.signal.aborted) onFailure(error);
+          return false;
         })
         .finally(() => {
           running = undefined;

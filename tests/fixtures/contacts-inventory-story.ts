@@ -5,6 +5,8 @@ import {
 } from '../../apps/api/src/contacts-inventory/repository.js';
 import { readWorkspace } from '../../apps/api/src/contacts-inventory/read-routes.js';
 import {
+  contactFieldsSchema,
+  contactPayload,
   defaultStrengthUnits,
   itemFieldsSchema,
   itemPayload,
@@ -59,17 +61,22 @@ export async function mountWorkspaceStory(
       return route.fulfill({ status: value ? 200 : 404, json: value ?? {} });
     }
     const version = parseMutationHeaders(request.headers());
-    const id = path.split('/')[1];
-    if (!version || !id) return route.fulfill({ status: 400, json: {} });
+    const [collection, id] = path.split('/');
+    if (!version || !id || (collection !== 'items' && collection !== 'contacts'))
+      return route.fulfill({ status: 400, json: {} });
     const base = {
-      kind: 'item' as const,
+      kind: collection === 'contacts' ? ('contact' as const) : ('item' as const),
       id,
       actor,
       generation: version.generation,
       mutationId: version.mutationId,
     };
     try {
-      const fields = itemPayload(itemFieldsSchema.parse(request.postDataJSON()));
+      const raw = request.postDataJSON();
+      const fields =
+        base.kind === 'contact'
+          ? contactPayload(contactFieldsSchema.parse(raw))
+          : itemPayload(itemFieldsSchema.parse(raw));
       const result = await repo.mutate(
         version.mode === 'create'
           ? { ...base, action: 'create', fields }

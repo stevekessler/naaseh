@@ -53,19 +53,16 @@ export function watchSearch(host: FeatureHost, publish: (search: FeatureSearch |
   const local = new OfflineWorkspace(host);
   const sync = connectWorkspace(host, local, () => {});
   let running = false;
+  let mayReadSnapshot = true;
   async function refresh() {
     if (running || controller.signal.aborted) return;
     running = true;
     try {
-      if (navigator.onLine) {
-        // A prior encrypted snapshot alone cannot authorize online results.
-        const permission = await host.request('/sync/checkpoint', { signal: controller.signal });
-        if (!permission.ok) {
-          publish(null);
-          return;
-        }
-        await permission.body?.cancel();
-        await sync.refresh();
+      // An encrypted snapshot cannot authorize results while the service is reachable.
+      if (navigator.onLine) mayReadSnapshot = (await sync.refresh()) === true;
+      if (!mayReadSnapshot) {
+        if (!controller.signal.aborted) publish(null);
+        return;
       }
       const records = await local.read();
       if (!controller.signal.aborted) publish(searchProjection(records));

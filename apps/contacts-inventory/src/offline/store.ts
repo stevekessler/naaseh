@@ -39,6 +39,12 @@ export type QueueRow = {
   status: Status;
   ciphertext?: string;
 };
+export type DraftReview = {
+  generation: number;
+  row: QueueRow;
+  current?: WorkspaceRecord;
+  draft?: Draft;
+};
 type SyncRow = SyncCursor & {
   account: string;
   contactTypes?: string;
@@ -135,6 +141,76 @@ export class OfflineWorkspace {
       rows.filter((row) => row.status === 'pending').map((row) => this.decode(row)),
     );
     return { drafts, conflicts: rows.length - drafts.length };
+  }
+
+  async reviews(): Promise<DraftReview[]> {
+    const cursor = await this.cursor();
+    if (!cursor) return [];
+    const { generation } = cursor;
+    const rows = await this.outbox.where('account').equals(this.account).sortBy('order');
+    return Promise.all(
+      rows
+        .filter((row) => row.status !== 'pending')
+        .map(async (row) => {
+          if (!row.ciphertext) return { row, generation };
+          const draft = await this.decode(row);
+          const record = await this.records.get([this.account, row.target]);
+          const current = record?.ciphertext
+            ? (JSON.parse(
+                await this.host.decrypt(`record:${record.key}`, record.ciphertext),
+              ) as WorkspaceRecord)
+            : undefined;
+          return { row, generation, draft, ...(current ? { current } : {}) };
+        }),
+    );
+  }
+
+  async resolve(review: DraftReview, retry: boolean) {
+    const { row, current, draft } = review;
+    const latest = await this.cursor();
+    if (latest?.generation !== review.generation || row.account !== this.account)
+      throw new Error('Refresh the workspace to review this change.');
+    let replacement: QueueRow | undefined;
+    if (retry) {
+      if (!draft || (draft.action === 'create' ? current : !current))
+        throw new Error('This draft cannot be applied to the saved record.');
+      const next: Draft = {
+        ...draft,
+        generation: latest.generation,
+        mutationId: crypto.randomUUID(),
+        ...(current ? { revision: current.revision } : {}),
+      };
+      const slot = `draft:${next.mutationId}`;
+      replacement = {
+        ...row,
+        slot,
+        status: 'pending',
+        ciphertext: await this.host.encrypt(slot, JSON.stringify(next)),
+      };
+    }
+    await this.db.transaction('rw', this.sync, this.records, this.outbox, async () => {
+      const liveRow = await this.outbox.get(row.order);
+      if (
+        liveRow?.account !== this.account ||
+        liveRow.status !== row.status ||
+        liveRow.ciphertext !== row.ciphertext
+      )
+        throw new Error('This draft changed. Review the latest version.');
+      if (!replacement) {
+        await this.outbox.delete(row.order);
+        return;
+      }
+      const checkpoint = await this.sync.get(this.account);
+      const liveRecord = await this.records.get([this.account, row.target]);
+      if (
+        checkpoint?.generation !== latest.generation ||
+        (current
+          ? !liveRecord?.ciphertext || liveRecord.sequence !== current.lastChangeSequence
+          : Boolean(liveRecord))
+      )
+        throw new Error('The saved record changed. Review the latest version.');
+      await this.outbox.put(replacement);
+    });
   }
 
   async cursor() {

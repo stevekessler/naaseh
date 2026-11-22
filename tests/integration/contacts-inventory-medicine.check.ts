@@ -138,6 +138,40 @@ describe('shared Medicine validation and references', () => {
     ).rejects.toMatchObject({ code: 'invalid_reference' });
   });
 
+  it.each(['delete', 'update'] as const)(
+    'does not orphan a new Medicine link when a prescriber %s races it',
+    async (action) => {
+      const { store, repo } = await setup();
+      const results = await Promise.allSettled([
+        repo.mutate({
+          kind: 'item',
+          id: medicineId,
+          generation,
+          actor,
+          mutationId: 'race-link',
+          action: 'create',
+          fields: itemPayload(itemFieldsSchema.parse(medicine)),
+        }),
+        repo.mutate({
+          kind: 'contact',
+          id: clinicianId,
+          generation,
+          actor: 'member-two',
+          mutationId: 'race-contact',
+          revision: 1,
+          ...(action === 'delete'
+            ? { action }
+            : { action, fields: { firstName: 'Synthetic contact', contactTypeId: 'other' } }),
+        }),
+      ]);
+      expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+      const item = await repo.read({ kind: 'item', id: medicineId });
+      const contact = await repo.read({ kind: 'contact', id: clinicianId });
+      expect(await store.referenceCount(clinicianId)).toBe(item ? 1 : 0);
+      if (item) expect(contact?.fields.contactTypeId).toBe(prescriberContactTypeId);
+    },
+  );
+
   it('includes medicine on the list only when its inclusion toggle is set', () => {
     const fields = itemFieldsSchema.parse({ ...medicine, includeOnMedList: true });
     const item = { id: medicineId, revision: 1, fields };

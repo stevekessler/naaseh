@@ -16,7 +16,8 @@ import {
   type ItemFields,
 } from '@naaseh/contacts-inventory-contracts';
 import { connectWorkspace } from '../offline/replay.js';
-import { OfflineWorkspace, type Draft } from '../offline/store.js';
+import { ReviewChanges } from '../offline/ReviewChanges.js';
+import { OfflineWorkspace, type Draft, type DraftReview } from '../offline/store.js';
 import { visibleItems, type InventoryItem } from './item-filters.js';
 
 function ItemForm({
@@ -153,7 +154,7 @@ export function InventoryPage({
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [generation, setGeneration] = useState<number>();
   const [pending, setPending] = useState(0);
-  const [conflicts, setConflicts] = useState(0);
+  const [reviews, setReviews] = useState<DraftReview[]>([]);
   const [message, setMessage] = useState('');
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
@@ -172,12 +173,13 @@ export function InventoryPage({
     });
 
     async function readLocal() {
-      const [records, cursor, catalogs, cachedUnits, { drafts, conflicts }] = await Promise.all([
+      const [records, cursor, catalogs, cachedUnits, { drafts }, failed] = await Promise.all([
         local.read(),
         local.cursor(),
         local.locations(),
         local.strengthUnits(),
         local.draftStatus(),
+        local.reviews(),
       ]);
       if (controller.signal.aborted) return;
       const displayed = new Map<string, InventoryItem>();
@@ -224,7 +226,7 @@ export function InventoryPage({
       setGeneration(cursor?.generation);
       setLocations(catalogs);
       setPending(drafts.filter((entry) => entry.kind === 'item').length);
-      setConflicts(conflicts);
+      setReviews(failed);
     }
 
     async function refresh() {
@@ -301,7 +303,18 @@ export function InventoryPage({
           {pending} {pending === 1 ? 'change' : 'changes'} waiting to sync.
         </p>
       )}
-      {conflicts > 0 && <p role="alert">{conflicts} workspace changes need review.</p>}
+      {reviews.length > 0 && <p role="alert">{reviews.length} workspace changes need review.</p>}
+      <ReviewChanges
+        reviews={reviews}
+        resolve={async (review, retry) => {
+          if (!workspace) throw new Error('Inventory is unavailable.');
+          try {
+            await workspace.local.resolve(review, retry);
+          } finally {
+            await workspace.refresh();
+          }
+        }}
+      />
       {recordId && (
         <button type="button" onClick={() => host.navigate({ page: 'inventory' })}>
           Back to inventory

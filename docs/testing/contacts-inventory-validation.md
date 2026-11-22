@@ -22,7 +22,7 @@ The first release fixture passed in the regular Mac Terminal on Chromium, WebKit
 npx playwright test tests/e2e/contacts-inventory-release.spec.ts tests/e2e/contacts-inventory-offline-foundation.spec.ts
 ```
 
-The browser fixture exercises host activation, upgrade, rollback, and safe fallback. The complete release proof still needs the supported Finance compatibility, offline, and persistence checks specified in T016 and quickstart. Workspace reads and Contacts create, update, and delete are implemented. Inventory and Medication features still need their schemas and workflows. No AWS rollout or recovery drill was performed.
+The browser fixture exercises host activation, upgrade, rollback, and safe fallback. The complete release proof still needs the supported Finance compatibility, offline, and persistence checks specified in T016 and quickstart. No AWS rollout or recovery drill was performed.
 
 ## Persistence and offline foundation
 
@@ -47,3 +47,19 @@ The `contacts-inventory-release` GitHub environment owns the feature-specific de
 
 - Run [45057960735](https://github.com/stevekessler/naaseh/actions/runs/45057960735) passed the Contacts create, filter and edit journey on Chromium, WebKit, iPhone and iPad.
 - Run [45058527537](https://github.com/stevekessler/naaseh/actions/runs/45058527537) passed the expanded journey including a Prescriber catalog rename that preserved the ID and a stale offline edit purged after another member deleted the record.
+
+## Inventory, Medicine and Search
+
+- Hosted run [45059657838](https://github.com/stevekessler/naaseh/actions/runs/45059657838) passed the Inventory journey on Chromium, WebKit, iPhone and iPad. It covers multiline locations, filtering, image deferral while offline, activation after an accepted scan, and a rejected replacement that preserves the existing image. The hosted browser tests use simulated scan responses.
+- The targeted feature configuration passed 42 local checks across API access, deletion and sync, image validation and scan versioning, Medicine links and reference races, Search preferences and projection, and infrastructure. The repository Vitest suite also passed 1,364 tests across 411 files in 72 seconds. TypeScript, the two standalone feature builds, Apple contract validation and feature stack synthesis passed.
+- Offline conflict review now compares the saved record with the encrypted draft and requires an explicit apply or discard. A targeted browser fixture covers rebasing a draft onto a new restore generation.
+- The managed session started the browser preview server. Chromium and WebKit exited during launch in all four projects before the new Medicine and Search assertions ran. The hosted runner is available once the new commit is pushed. The required browser selection is unchanged.
+- The mobile benchmark seeds 500 contacts and 500 inventory records, applies 4× CPU slowdown under a Pixel 7 profile, and records 40 end-to-visible-result measurements. Successful browser timing and observations from five first-time testers are still pending.
+
+```sh
+npx vitest run --config apps/contacts-inventory/vitest.config.ts
+npx playwright test tests/e2e/contacts-inventory-medicine.spec.ts tests/e2e/contacts-inventory-search.spec.ts
+npx playwright test --config playwright.contacts-inventory.performance.config.ts
+```
+
+The [release runbook](../operations/contacts-inventory-release.md) covers isolated install, rollback and paired recovery. Hosted AWS acceptance and the paired recovery exercise still need an approved isolated environment.

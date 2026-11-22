@@ -83,3 +83,49 @@ test('saves Medicine with a shared prescriber and includes it regardless of stat
     page.getByRole('button', { name: 'Synthetic medication', exact: true }),
   ).toBeVisible();
 });
+
+test('replays an offline Prescriber before its dependent Medicine', async ({ page, context }) => {
+  const repo = new WorkspaceRepository(new MemoryWorkspaceStore());
+  await mountWorkspaceStory(page, repo, await buildFeatureFixture('contacts'), fixture.members[0]);
+  await signIn(page);
+  await page.goto('/inventory');
+  await page.getByRole('button', { name: 'New item' }).click();
+  await expect(page.getByRole('option', { name: 'Linen closet' })).toBeAttached();
+  await page.goto('/lists/contacts');
+  await page.getByRole('button', { name: 'New contact' }).click();
+  const contactType = page.getByRole('combobox', { name: 'Contact Type', exact: true });
+  await expect(contactType.getByRole('option', { name: 'Prescriber' })).toBeAttached();
+
+  await context.setOffline(true);
+  await page.getByLabel('First Name', { exact: true }).fill('Offline prescriber');
+  await contactType.selectOption(prescriberContactTypeId);
+  await page.getByRole('button', { name: 'Save contact' }).click();
+  await expect(page.getByText('1 changes waiting to sync.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Inventory', exact: true }).click();
+  await page.getByRole('button', { name: 'New item' }).click();
+  await page.getByRole('textbox', { name: 'Item name' }).fill('Offline medicine');
+  await page.getByRole('combobox', { name: 'Location', exact: true }).selectOption('closet');
+  await page.getByRole('combobox', { name: 'Item type', exact: true }).selectOption('medicine');
+  await page.getByRole('combobox', { name: 'Who’s Med', exact: true }).selectOption('both');
+  await page.getByRole('combobox', { name: 'Time Taken', exact: true }).selectOption('night');
+  await page
+    .getByRole('combobox', { name: 'Prescriber', exact: true })
+    .selectOption({ label: 'Offline prescriber' });
+  await page.getByRole('button', { name: 'Save item', exact: true }).click();
+  await expect(page.getByText('1 change waiting to sync.')).toBeVisible();
+
+  const saved = ['contacts', 'items'].map((collection) =>
+    page.waitForResponse(
+      (response) =>
+        response.url().includes(`/${collection}/`) &&
+        response.request().method() === 'PUT' &&
+        response.status() === 201,
+    ),
+  );
+  await context.setOffline(false);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  const [contact, item] = await Promise.all(saved.map(async (response) => (await response).json()));
+  expect((await repo.read({ kind: 'item', id: item.id }))?.fields.prescriberId).toBe(contact.id);
+  await expect(page.getByText('1 change waiting to sync.')).toHaveCount(0);
+});

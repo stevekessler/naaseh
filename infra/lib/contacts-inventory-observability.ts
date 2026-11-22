@@ -20,15 +20,15 @@ export function observeContactsInventory(scope: Construct, backupVaultName: stri
     datapointsToAlarm: 2,
     treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
   });
-  for (const [id, metricName, threshold] of [
-    ['ImageScanAge', 'ContactsInventoryScanAgeSeconds', 900],
-    ['ImageReconciliationBacklog', 'ContactsInventoryReconciliationBacklog', 20],
+  for (const [id, metricName, statistic, threshold] of [
+    ['ImageScanAge', 'ContactsInventoryScanAgeSeconds', 'Maximum', 900],
+    ['ImageReconciliationBacklog', 'ContactsInventoryReconciliationBacklog', 'Sum', 20],
   ] as const) {
     new cloudwatch.Alarm(scope, id, {
       metric: new cloudwatch.Metric({
         namespace: 'Naaseh',
         metricName,
-        statistic: 'Maximum',
+        statistic,
         period,
       }),
       threshold,

@@ -51,6 +51,27 @@ export const mount: FeatureModule['mount'] = (container, _location, host) => {
         fields: { firstName: 'Synthetic queued edit' },
       }),
     ),
+    button('Restore workspace', () =>
+      local.apply(initial, { generation: 2, sequence: 1 }, [record], true),
+    ),
+    button('Review and apply draft', async () => {
+      const [review] = await local.reviews();
+      if (
+        review?.draft?.fields?.firstName !== 'Synthetic queued edit' ||
+        review.current?.fields.firstName !== 'Synthetic offline contact'
+      )
+        throw new Error('Expected the offline edit and the restored record');
+      await local.resolve(review, true);
+      const [pending] = await local.pending();
+      if (!pending) throw new Error('Expected an explicitly reconciled draft');
+      const draft = await local.decode(pending);
+      if (
+        draft.generation !== 2 ||
+        draft.revision !== record.revision ||
+        draft.mutationId === review.draft.mutationId
+      )
+        throw new Error('The reconciled draft was not rebased onto the restored workspace');
+    }),
     button('Apply tombstone', () =>
       local.apply(initial, { generation: 1, sequence: 2 }, [
         {

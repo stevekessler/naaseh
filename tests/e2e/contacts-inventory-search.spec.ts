@@ -80,6 +80,12 @@ test('independent feature Search scopes default off and suppress an unauthorized
   });
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByRole('button', { name: 'Fixture contact', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Reset Contacts and Inventory scopes' }).click();
+  for (const scope of scopes)
+    await expect(page.getByRole('checkbox', { name: scope, exact: true })).not.toBeChecked();
+  await page.getByRole('checkbox', { name: 'Inventory Items', exact: true }).check();
+  await page.getByRole('checkbox', { name: 'Medicine', exact: true }).check();
+  await expect(page.getByRole('button', { name: 'Fixture inventory', exact: true })).toBeVisible();
   access.allowed = false;
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expect(page.getByRole('button', { name: 'Fixture inventory', exact: true })).toHaveCount(0);

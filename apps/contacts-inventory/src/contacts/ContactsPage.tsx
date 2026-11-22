@@ -8,7 +8,8 @@ import {
   type FeatureHost,
 } from '@naaseh/contacts-inventory-contracts';
 import { connectWorkspace } from '../offline/replay.js';
-import { OfflineWorkspace } from '../offline/store.js';
+import { ReviewChanges } from '../offline/ReviewChanges.js';
+import { OfflineWorkspace, type DraftReview } from '../offline/store.js';
 import { contactName, visibleContacts, type DirectoryContact } from './contact-filters.js';
 
 const fields = [
@@ -166,15 +167,16 @@ export function ContactsPage({ host, recordId }: { host: FeatureHost; recordId?:
   const [editing, setEditing] = useState<string | 'new' | null>(recordId ?? null);
   const [generation, setGeneration] = useState<number>();
   const [pendingCount, setPendingCount] = useState(0);
-  const [conflicts, setConflicts] = useState(0);
+  const [reviews, setReviews] = useState<DraftReview[]>([]);
   const [issue, setIssue] = useState('');
   const client = useRef<{ local: OfflineWorkspace; refresh: () => Promise<void> } | null>(null);
   const loaded = useCallback(async (local: OfflineWorkspace) => {
-    const [records, info, draftStatus, catalog] = await Promise.all([
+    const [records, info, draftStatus, catalog, failed] = await Promise.all([
       local.read(),
       local.cursor(),
       local.draftStatus(),
       local.contactTypes(),
+      local.reviews(),
     ]);
     if (client.current?.local !== local) return;
     const entries = new Map<string, DirectoryContact>();
@@ -200,7 +202,7 @@ export function ContactsPage({ host, recordId }: { host: FeatureHost; recordId?:
     setTypes(catalog);
     setGeneration(info?.generation);
     setPendingCount(draftStatus.drafts.length);
-    setConflicts(draftStatus.conflicts);
+    setReviews(failed);
   }, []);
 
   useEffect(() => {
@@ -270,7 +272,21 @@ export function ContactsPage({ host, recordId }: { host: FeatureHost; recordId?:
       <h1>Contacts</h1>
       {issue && <p role="status">{issue}</p>}
       {pendingCount > 0 && <p>{pendingCount} changes waiting to sync.</p>}
-      {conflicts > 0 && <p role="alert">{conflicts} contact or inventory changes need review.</p>}
+      {reviews.length > 0 && (
+        <p role="alert">{reviews.length} contact or inventory changes need review.</p>
+      )}
+      <ReviewChanges
+        reviews={reviews}
+        resolve={async (review, retry) => {
+          if (!client.current) throw new Error('Contacts are unavailable.');
+          const { local, refresh } = client.current;
+          try {
+            await local.resolve(review, retry);
+          } finally {
+            await refresh();
+          }
+        }}
+      />
       <button type="button" disabled={!generation} onClick={() => setEditing('new')}>
         New contact
       </button>
