@@ -125,16 +125,18 @@ test('preserves existing Finance search results when Contacts and Inventory acti
   const merchant = page.getByRole('link', { name: 'Juniper Merchant', exact: true });
   const search = page.getByRole('searchbox', { name: 'Search tasks and list items' });
   const contacts = page.getByRole('checkbox', { name: 'Contacts', exact: true });
+  const merchants = page.getByRole('checkbox', { name: 'Merchants', exact: true });
   await page.getByRole('button', { name: 'Search', exact: true }).click();
-  await page.getByRole('checkbox', { name: 'Merchants', exact: true }).check();
+  await merchants.check();
   await search.fill('Juniper');
   await expect(merchant).toBeVisible();
   await expect(contacts).toHaveCount(0);
 
   setActive(fixture.releases[0]);
   await page.reload();
-  await search.fill('Juniper');
   await expect(contacts).not.toBeChecked();
+  await merchants.check();
+  await search.fill('Juniper');
   await expect(merchant).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: /^1 result$/u })).toBeVisible();
 });
