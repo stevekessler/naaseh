@@ -17,7 +17,15 @@ import { signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
 
-async function mountContacts(page: Page, repo: WorkspaceRepository, actor: string, entry: string) {
+type CatalogFixture = { name: string; revision: number };
+
+async function mountContacts(
+  page: Page,
+  repo: WorkspaceRepository,
+  actor: string,
+  entry: string,
+  catalog: CatalogFixture,
+) {
   const [release] = fixture.releases;
   const activate = await installFeatureFixture(page, entry);
   activate(release);
@@ -28,10 +36,21 @@ async function mountContacts(page: Page, repo: WorkspaceRepository, actor: strin
     if (path === 'catalogs')
       return route.fulfill({
         json: {
-          contactTypes: [{ id: prescriberContactTypeId, name: 'Prescriber', revision: 1 }],
+          contactTypes: [{ id: prescriberContactTypeId, ...catalog }],
           generation: 1,
         },
       });
+    if (
+      path === `catalogs/contact-types/${prescriberContactTypeId}` &&
+      request.method() === 'PUT'
+    ) {
+      const version = parseMutationHeaders(request.headers());
+      if (version?.mode !== 'update' || version.revision !== catalog.revision)
+        return route.fulfill({ status: 409, json: { code: 'revision_conflict' } });
+      catalog.name = request.postDataJSON().name;
+      catalog.revision++;
+      return route.fulfill({ json: { id: prescriberContactTypeId, ...catalog } });
+    }
     if (request.method() === 'GET') {
       const result = await readWorkspace(
         repo,
@@ -83,7 +102,8 @@ test('workspace members create, filter and edit the same contact', async ({
 }) => {
   const repo = new WorkspaceRepository(new MemoryWorkspaceStore());
   const entry = await buildFeatureFixture('contacts');
-  await mountContacts(page, repo, fixture.members[0], entry);
+  const catalog = { name: 'Prescriber', revision: 1 };
+  await mountContacts(page, repo, fixture.members[0], entry, catalog);
 
   await page.getByRole('button', { name: 'New contact' }).click();
   await expect(page.getByLabel('State', { exact: true })).toHaveValue('CO');
@@ -115,7 +135,7 @@ test('workspace members create, filter and edit the same contact', async ({
   });
   try {
     const other = await context.newPage();
-    await mountContacts(other, repo, fixture.members[1], entry);
+    await mountContacts(other, repo, fixture.members[1], entry, catalog);
     await other.getByRole('button', { name: 'Synthetic Contact' }).click();
     await expect(other.getByLabel('Zip', { exact: true })).toHaveValue('00123');
     await other.getByLabel('Cell', { exact: true }).fill('');
@@ -133,6 +153,51 @@ test('workspace members create, filter and edit the same contact', async ({
     expect((await repo.read({ kind: 'contact', id: creation.id }))?.fields).not.toHaveProperty(
       'defaultNumber',
     );
+
+    await other.goto('/admin/contact-types');
+    await other.getByRole('button', { name: 'Prescriber', exact: true }).click();
+    await other.getByRole('textbox', { name: 'Name', exact: true }).fill('Medication Prescriber');
+    await other.getByRole('button', { name: 'Save type' }).click();
+    await expect(
+      other.getByRole('status').filter({ hasText: 'Contact type saved.' }),
+    ).toBeVisible();
+    expect(catalog).toEqual({ name: 'Medication Prescriber', revision: 2 });
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Synthetic Contact', exact: true }).click();
+    await expect(
+      page
+        .getByRole('combobox', { name: 'Contact Type', exact: true })
+        .getByRole('option', { name: 'Medication Prescriber', exact: true }),
+    ).toBeAttached();
+    await expect(page.getByRole('combobox', { name: 'Contact Type', exact: true })).toHaveValue(
+      prescriberContactTypeId,
+    );
+
+    await page.context().setOffline(true);
+    await page.getByRole('textbox', { name: 'First Name', exact: true }).fill('Offline stale edit');
+    await page.getByRole('button', { name: 'Save contact' }).click();
+    await expect(page.getByText('1 changes waiting to sync.')).toBeVisible();
+
+    await other.goto('/lists/contacts');
+    await other.getByRole('button', { name: 'Synthetic Contact', exact: true }).click();
+    other.once('dialog', (dialog) => dialog.accept());
+    const deleted = other.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        response.url().endsWith(`/contacts/${creation.id}`) &&
+        response.status() === 200,
+    );
+    await other.getByRole('button', { name: 'Delete contact' }).click();
+    await deleted;
+    await expect(other.getByText('No contacts yet.')).toBeVisible();
+
+    await page.context().setOffline(false);
+    // A foreground notification also covers browsers that delay the online event.
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(page.getByText('No contacts yet.')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('changes need review');
+    expect(await repo.read({ kind: 'contact', id: creation.id })).toBeNull();
   } finally {
     await context.close();
   }
