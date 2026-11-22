@@ -47,7 +47,7 @@ Write story tests and confirm they fail against the supported baseline before im
 
 **Independent test** — Configure a location, create an item with a JPEG or PNG, replace the image, and find the same item by name and location. Delete it from the other account and verify image access ends.
 
-- [ ] T023 [P] [US2] Test inventory, location and image contracts, including member/outsider access, actual file validation, stale scan and concurrent replacement or deletion, in `tests/integration/contacts-inventory-media.test.ts`.
+- [X] T023 [P] [US2] Test inventory, location and image contracts, including member/outsider access, actual file validation, stale scan and concurrent replacement or deletion, in `tests/integration/contacts-inventory-media.test.ts`.
 - [X] T024 [P] [US2] Write Chromium/WebKit coverage for multiline location details, shared inventory, filters, image error and replacement, and offline image deferral in `tests/e2e/contacts-inventory-items.spec.ts`.
 - [X] T025 [US2] Implement base item schemas and location references in `packages/contacts-inventory-contracts/src/items.ts` and `apps/api/src/contacts-inventory/catalogs.ts`.
 - [X] T026 [US2] Implement inventory list, detail and mutation routes and transactional deletion with image generation invalidation in `apps/api/src/contacts-inventory/items.ts` and `apps/api/src/contacts-inventory/handler.ts`.

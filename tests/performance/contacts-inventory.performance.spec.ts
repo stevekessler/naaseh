@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { devices, expect, test, type Locator } from '@playwright/test';
 import { WorkspaceRepository } from '../../apps/api/src/contacts-inventory/repository.js';
 import { signIn } from '../e2e/enhanced-helpers.js';
 import { buildFeatureFixture } from '../fixtures/contacts-inventory-host.js';
@@ -6,7 +6,12 @@ import { MemoryWorkspaceStore } from '../fixtures/contacts-inventory-store.js';
 import { mountWorkspaceStory } from '../fixtures/contacts-inventory-story.js';
 import { contactsInventoryFixture } from '../fixtures/contacts-inventory.js';
 
-test.use({ serviceWorkers: 'block' });
+const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch } = devices['Pixel 7'];
+test.use({ viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, serviceWorkers: 'block' });
+test.skip(
+  ({ browserName }) => browserName !== 'chromium',
+  'The mobile benchmark uses CDP throttling.',
+);
 
 test('updates warm workspace results for 500 contacts and 500 inventory items', async ({
   page,
@@ -44,6 +49,14 @@ test('updates warm workspace results for 500 contacts and 500 inventory items', 
   await signIn(page);
   const cdp = await context.newCDPSession(page);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  const mobileConnection = {
+    offline: false,
+    latency: 150,
+    downloadThroughput: 200_000,
+    uploadThroughput: 90_000,
+  };
+  await cdp.send('Network.enable');
+  await cdp.send('Network.emulateNetworkConditions', mobileConnection);
 
   const durations: number[] = [];
   async function measure(field: Locator, prefix: string, offset: number, count: number) {
@@ -73,7 +86,7 @@ test('updates warm workspace results for 500 contacts and 500 inventory items', 
   const sorted = [...durations].sort((left, right) => left - right);
   const p95Ms = sorted[Math.ceil(sorted.length * 0.95) - 1];
   await testInfo.attach('warm-result-latency-ms', {
-    body: JSON.stringify({ cpuThrottle: 4, durations, p95Ms }),
+    body: JSON.stringify({ cpuThrottle: 4, mobileConnection, durations, p95Ms }),
     contentType: 'application/json',
   });
   expect(p95Ms).toBeLessThanOrEqual(2000);
