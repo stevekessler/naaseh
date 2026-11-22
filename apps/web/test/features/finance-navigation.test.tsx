@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FinanceNavigation } from '../../src/components/FinanceNavigation.js';
 import {
+  financeTransactionOrigin,
   navigate,
   parseAppRoute,
   routePath,
@@ -68,6 +69,16 @@ describe('authoritative Finance navigation', () => {
 
     expect(location.pathname).toBe('/finance/transactions/transaction%201');
     expect(history.state).toEqual({ financeBackground: background });
+    for (const [pathname, view] of [
+      ['/finance', 'dashboard'],
+      ['/finance/reports/spend', 'spend-report'],
+    ]) {
+      const financeBackground = { ...background, pathname };
+      expect(financeTransactionOrigin({ financeBackground })).toEqual({
+        background: financeBackground,
+        route: { section: 'finance', view },
+      });
+    }
     expect(changed).toHaveBeenCalledOnce();
   });
 

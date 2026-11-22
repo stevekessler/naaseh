@@ -135,7 +135,13 @@ export async function startSpendTrendPeriod(
   return { queryId, dateFrom, dateTo };
 }
 
-export async function readDashboardUpcoming(userId: string, guard: FinanceSyncSourceGuard) {
+export async function readDashboardUpcoming(
+  userId: string,
+  guard: FinanceSyncSourceGuard,
+  timeZone = 'UTC',
+  now = new Date().toISOString(),
+) {
+  const today = localFinanceDate(now, timeZone);
   const [expenseIds, claimIds] = await Promise.all([
     listFinanceBrowseKeys(userId, 'upcomingExpenses'),
     listFinanceBrowseKeys(userId, 'expenseFulfillments'),
@@ -149,7 +155,6 @@ export async function readDashboardUpcoming(userId: string, guard: FinanceSyncSo
     group.push(claim);
     claims.set(claim.upcomingExpenseId, group);
   }
-  const today = localFinanceDate(new Date().toISOString(), 'UTC');
   const items = [];
   for (const id of expenseIds) {
     const row = await guard.readCanonicalSource('financeUpcomingExpense', id);

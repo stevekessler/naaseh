@@ -35,6 +35,7 @@ import {
 import {
   csvDuplicateCheckSchema,
   financeQueryStartSchema,
+  financeQueryFiltersSchema,
   financeQueryPageSchema,
   financeBudgetAccountLinkInputSchema,
   financeBudgetItemInputSchema,
@@ -473,7 +474,10 @@ export function createFinanceHandler(
       ) {
         const role = auth.role === 'admin' ? 'admin' : 'user';
         const source = new FinanceSyncSourceGuard({ userId: auth.userId, role });
-        const items = await readDashboardUpcoming(auth.userId, source);
+        const { timeZone } = financeQueryFiltersSchema.parse({
+          timeZone: event.queryStringParameters?.timeZone,
+        });
+        const items = await readDashboardUpcoming(auth.userId, source, timeZone);
         await source.assertCurrent();
         await authorize(gate);
         const proof = snapshotRequested

@@ -43,8 +43,12 @@ function useDashboardItems<T>(ownerId: string, path: `/finance/${string}`) {
           setWidget({ state: 'ready', ownerId, value, cached: true });
         return;
       }
+      const readPath: `/finance/${string}` =
+        path === '/finance/upcoming-expenses'
+          ? `${path}?timeZone=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone)}`
+          : path;
       next = await loadFinanceApiSnapshot(
-        async (read) => (await read<{ items: T[] }>(path, { browse: true })).items,
+        async (read) => (await read<{ items: T[] }>(readPath, { browse: true })).items,
       );
       const value = await readFinanceApiSnapshot(next, (items) => items);
       if (current !== request.current) {

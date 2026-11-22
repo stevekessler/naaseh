@@ -348,10 +348,10 @@ acceptance. See validation and runtime reports; other US2 tasks remain open.
 
 ### Tests — write first
 
-- [ ] T124 [P] [US7] Add owner-only flags/count, canonical upcoming dedupe, active-on-save/inactive/closed budget eligibility, zero/overspent positive spent/percent-used and refund-aware recent activity reference tests in `tests/integration/finance-dashboard.test.ts` using shared predicates.
-- [ ] T125 [P] [US7] Add personal preference isolation, hidden account totals/counts and revoked-flag/source leakage tests in `tests/security/finance-dashboard.security.test.ts`.
+- [x] T124 [P] [US7] Add owner-only flags/count, canonical upcoming dedupe, active-on-save/inactive/closed budget eligibility, zero/overspent positive spent/percent-used and refund-aware recent activity reference tests in `tests/integration/finance-dashboard.test.ts` using shared predicates.
+- [x] T125 [P] [US7] Add personal preference isolation, hidden account totals/counts and revoked-flag/source leakage tests in `tests/security/finance-dashboard.security.test.ts`.
 - [x] T126 [P] [US7] Add Chromium/WebKit per-kind flag controls, independent widget empty/stale/error states and count persistence journeys in `tests/e2e/finance-dashboard.spec.ts`.
-- [ ] T127 [P] [US7] Add/validate separate row/aggregate readiness and exactness, owner-only preferences and budget activity/refund-aware response contracts in `tests/contract/finance-dashboard.contract.test.ts`; progress is distinct from usable values and stale revisions are never final totals.
+- [x] T127 [P] [US7] Add/validate separate row/aggregate readiness and exactness, owner-only preferences and budget activity/refund-aware response contracts in `tests/contract/finance-dashboard.contract.test.ts`; progress is distinct from usable values and stale revisions are never final totals.
 
 ### Implementation and Verification
 
@@ -399,15 +399,15 @@ acceptance. See validation and runtime reports; other US2 tasks remain open.
 
 ### Tests — write first
 
-- [ ] T141 [P] [US9] Add AND/OR filter/same-allocation intersection, default-month, stable cursor/revision, no-result and safe pending/final total contracts in `tests/contract/finance-spend-report.contract.test.ts`.
-- [ ] T142 [P] [US9] Add exact refund-aware same-allocation filtered rows/totals, automatic aggregate completion, source-revision/cursor dedupe, authorization and cold sparse/empty read-budget tests in `tests/integration/finance-spend-report.test.ts`; assert both 2s row readiness and 10s exact count/totals rather than progress.
-- [ ] T143 [P] [US9] Add Chromium/WebKit Reports/Spend entry, combined filters, empty/partial/final totals and modal-close report-state preservation journeys in `tests/e2e/finance-spend-report.spec.ts`.
+- [x] T141 [P] [US9] Add AND/OR filter/same-allocation intersection, default-month, stable cursor/revision, no-result and safe pending/final total contracts in `tests/contract/finance-spend-report.contract.test.ts`.
+- [x] T142 [P] [US9] Add exact refund-aware same-allocation filtered rows/totals, automatic aggregate completion, source-revision/cursor dedupe, authorization and cold sparse/empty read-budget tests in `tests/integration/finance-spend-report.test.ts`; assert both 2s row readiness and 10s exact count/totals rather than progress.
+- [x] T143 [P] [US9] Add Chromium/WebKit Reports/Spend entry, combined filters, empty/partial/final totals and modal-close report-state preservation journeys in `tests/e2e/finance-spend-report.spec.ts`.
 
 ### Implementation and Verification
 
 - [ ] T144 [US9] Implement Spend and automatic query status/completion using shared spend predicates and narrowest authorized fact/posting indexes in `apps/api/src/finance/spend-report-service.ts`, `apps/api/src/finance/query-job-service.ts`, `apps/api/src/finance/read-repository.ts` and `apps/api/src/finance/handlers.ts`; actual matches/definitive empty <=2s and exact connected counts/totals <=10s, with version-vector invalidation and no user paging dependency.
-- [ ] T145 [US9] Build Reports/Spend filters, authorized rows, independent aggregate-pending labels and per-currency totals in `apps/web/src/features/finance/reports/FinanceReportsPage.tsx` and `apps/web/src/features/finance/reports/SpendReportPage.tsx`; auto-poll protected query status as needed, preserve default month/all accessible accounts and expose no export action.
-- [ ] T146 [US9] Share guarded transaction modal navigation and worker-based offline report calculation in `apps/web/src/features/finance/reports/spend-report-query.ts`, `apps/web/src/features/finance/reports/SpendReportPage.tsx` and `apps/web/src/search/finance-index.worker.ts`; label partial scope and restore filters on modal close.
+- [x] T145 [US9] Build Reports/Spend filters, authorized rows, independent aggregate-pending labels and per-currency totals in `apps/web/src/features/finance/reports/FinanceReportsPage.tsx` and `apps/web/src/features/finance/reports/SpendReportPage.tsx`; auto-poll protected query status as needed, preserve default month/all accessible accounts and expose no export action.
+- [x] T146 [US9] Share guarded transaction modal navigation and worker-based offline report calculation in `apps/web/src/features/finance/reports/spend-report-query.ts`, `apps/web/src/features/finance/reports/SpendReportPage.tsx` and `apps/web/src/search/finance-index.worker.ts`; label partial scope and restore filters on modal close.
 - [ ] T147 [US9] Run report contract/integration/browser checks and compare full final ledger/allocation totals to independent expected values in `docs/testing/finance-experience-validation.md`; record cold useful-content and full-completion timings separately.
 
 **Checkpoint**: Run a Spend Report is complete only after its independent acceptance and relevant failure paths pass; preserve pending evidence as unresolved.
@@ -424,9 +424,9 @@ all original T001–T159 IDs/checks and precede the complete-feature acceptance 
 explicit optional non-budgeted history cannot change budget-only report actuals.
 No forecast method or UI is complete merely because history selection is implemented.
 
-- [ ] T160 [P] [US13] Add independent known-plan/history/partial-income-expense/refund-transfer/allocation/obligation-identity reference fixtures and strict opt-in/model-period response contract tests in `packages/domain/src/finance/forecast.test.ts` and `tests/contract/finance-forecast.contract.test.ts`; extend the existing history-scope tests without weakening budget-report isolation.
+- [x] T160 [P] [US13] Add independent known-plan/history/partial-income-expense/refund-transfer/allocation/obligation-identity reference fixtures and strict opt-in/model-period response contract tests in `packages/domain/src/finance/forecast.test.ts` and `tests/contract/finance-forecast.contract.test.ts`; extend the existing history-scope tests without weakening budget-report isolation.
 - [ ] T161 [P] [US13] Add current private/shared membership, admin-without-override, PIN/lock, cached-source/method/opt-in collision, insufficient history, offline coverage and budget/dashboard browser fixtures in `tests/security/finance-forecast.security.test.ts` and `tests/e2e/finance-forecast.spec.ts`; preserve measured required/quick runtime and keep exhaustive cases in the full gate.
-- [ ] T162 [US13] Implement transparent shared known-plan and historical forecast calculations in `packages/domain/src/finance/forecast.ts`, reusing canonical source eligibility and `forecast-history-scope.ts`; document lookback/period and insufficient-history criteria, preserve per-currency income/expense/net amounts, and deduplicate linked obligations without forecasting bank cash balances or invoking an external model service.
+- [x] T162 [US13] Implement transparent shared known-plan and historical forecast calculations in `packages/domain/src/finance/forecast.ts`, reusing canonical source eligibility and `forecast-history-scope.ts`; document lookback/period and insufficient-history criteria, preserve per-currency income/expense/net amounts, and deduplicate linked obligations without forecasting bank cash balances or invoking an external model service.
 - [ ] T163 [US13] Add bounded canonical forecast contracts/read/service/route integration in `packages/contracts/src/finance.ts`, `apps/api/src/finance/forecast-service.ts`, `apps/api/src/finance/read-repository.ts` and existing Finance handlers/query jobs; current viewer/source/PIN checks and method/period/opt-in/version identity are mandatory, with no history hydration fallback, new always-on resource or migration execution.
 - [ ] T164 [US13] Build guarded per-budget model controls and both labeled outputs in `apps/web/src/features/finance/budgets/BudgetForecast.tsx` and the budget detail route; default non-budgeted history off, require an explicit forecast request to use it, and show truthful coverage/estimate/loading/failure states under snapshot/lock/owner fences.
 - [ ] T165 [US13] Add the authorized per-budget forecast overview to `apps/web/src/features/finance/dashboard/FinanceDashboardPage.tsx` and its query/composition layer; keep budget actuals strict, methods/currencies separate, personal dashboard selection and current source rights intact, and prevent reuse of expanded-history results as report actuals.

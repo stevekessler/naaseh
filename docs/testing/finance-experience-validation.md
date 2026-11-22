@@ -1,5 +1,50 @@
 # Finance Experience Expansion Implementation Validation
 
+## November 22 receiving-computer reconciliation
+
+The imported bundle verified its pinned SHA-256, prerequisite and continuation
+commit. The manifest verified all 1,918 entries. The original checkout's
+existing local changes were preserved by importing into a separate checkout.
+
+| Published tip | Reconciliation |
+| --- | --- |
+| Spend Report `913e40ab` | Integrated the protected indexed query, automatic totals, filters, offline worker and transaction modal behavior. The dashboard and report preserve their respective backgrounds. |
+| Forecast `42bc68da` | Integrated the independent domain models, strict contracts and their tests. The canonical reader, protected route, security and browser cases, and budget/dashboard views are still open. |
+| Import error redaction `0d52d946` | Integrated the SimpleFIN worker error sanitization and regression check. |
+| Receipt recovery `1d00d17` | The source snapshot already contained the equivalent patch as `e71d4eb7`. The later receipt retention and restore changes are part of the snapshot. |
+
+The dashboard now classifies upcoming expenses in the browser's calendar.
+A fixed-date fixture proves that a due date can be due today in Denver while
+already overdue in UTC. The persisted date is unchanged. Local reference,
+contract and authorization cases exercise active-on-save, inactive, closed
+and archived budgets, linked refund totals, independent row/aggregate readiness,
+owner-only flags and count, and removal of revoked or private source data.
+
+The focused dashboard and navigation selection passed **26 tests in five
+files**. The focused report, forecasts, trends and SimpleFIN selection passed
+**35 tests in eight files**. All seven report contract and integration cases
+passed in a separate run. The 1,250-fact command-double measurements were:
+
+| Cold fixture | First usable rows or confirmed empty | Exact count and totals |
+| --- | ---: | ---: |
+| Dense | 7.38 ms | 16.40 ms |
+| Sparse | 1.32 ms | 1.32 ms |
+| Empty | 0.96 ms | 0.96 ms |
+
+These figures measure local fixture execution. Live storage, browser rendering
+and network latency remain unmeasured. The required validation and Playwright
+discovery and startup outcomes are in the [runtime record](finance-experience-validation-runtime.md).
+
+The checked set is **142/166**. The report browser cases have been authored
+(T143). Their integrated execution and reference-total acceptance remain under
+T147. T129, T132–T133, T140, T144 and T147 retain their unverified live,
+cross-device, or browser requirements. Continue forecast T161 and T163–T166.
+Staging needs a separate AWS profile/account, delegated zone and domain,
+recovery role and approved hosted target. The local AWS profile list contains
+no designated staging profile. The $6.50/month combined ceiling, including
+30% contingency, remains in force. No deployment or migration ran.
+
+
 ## November 16 Dashboard and spending trends
 
 The Finance landing dashboard combines independently loaded upcoming

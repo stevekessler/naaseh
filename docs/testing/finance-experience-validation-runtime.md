@@ -1,5 +1,30 @@
 # Finance Experience Required Validation Runtime
 
+## November 22 receiving-computer validation
+
+Node 24.22.2 and Playwright 1.64.1 were used for both revisions. The locked
+dependencies came from the local Finance forecast checkout with the identical
+lockfile after the registry could not be reached.
+
+| Gate | Verified transfer baseline | Reconciled checkpoint |
+| --- | --- | --- |
+| `npm run validate` | 2,021 passed in 507 files, 77.94 s real | 2,042 passed in 513 files, 67.89 s real |
+| `/usr/bin/time -p npm run test:e2e:quick` | 31 cases discovered. Preview listener denied at 3.93 s. | 31 cases discovered. Preview listener denied at 3.67 s. |
+| Dashboard/trends, Spend Report, receipts and expense/task links | — | 34 Chromium and WebKit cases discovered. Preview listener denied at 3.63 s. |
+
+Required local validation includes the runtime gate, typecheck, lint and builds.
+No browser case ran because the environment denied binding `127.0.0.1:4173`.
+Run the existing quick command and the dedicated desktop selection where the
+preview server can bind:
+
+```sh
+/usr/bin/time -p npm run test:e2e:quick
+/usr/bin/time -p npm run test:e2e -- --project=chromium --project=webkit finance-dashboard.spec.ts finance-spend-report.spec.ts finance-receipts.spec.ts finance-expense-task-links.spec.ts
+```
+
+Required commands, workflows, browser selection, projects, retries and timeouts
+are unchanged. Hosted PR runtime and deployed Finance measurements remain open.
+
 ## November 16 Dashboard and spending trends
 
 On Node 24.18.0, `npm run validate` passed **2,021 tests in 507 files

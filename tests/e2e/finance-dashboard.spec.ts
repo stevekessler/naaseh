@@ -95,7 +95,7 @@ async function openDashboard(
           json: { items: options.accounts ?? [account] },
         }),
   );
-  await page.route('**/api/v1/finance/upcoming-expenses', (route) =>
+  await page.route(/\/api\/v1\/finance\/upcoming-expenses\?timeZone=/u, (route) =>
     route.fulfill({ headers: financeSnapshotFixtureHeaders, json: { items: expenses } }),
   );
   await page.route('**/api/v1/finance/dashboard-preferences', (route) => {

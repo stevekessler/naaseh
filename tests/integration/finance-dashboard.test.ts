@@ -1,8 +1,18 @@
-import { selectDashboardUpcoming, type UpcomingExpensePlannedSource } from '@naaseh/domain';
+import {
+  closeBudget,
+  createBudget,
+  createExpenseRefundRelationship,
+  createUpcomingExpense,
+  deactivateBudget,
+  selectDashboardUpcoming,
+  type UpcomingExpensePlannedSource,
+} from '@naaseh/domain';
 import { GetCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb';
 import { financeDashboardPreferencesResponseSchema } from '@naaseh/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { FinanceDashboardPreferenceService } from '../../apps/api/src/finance/dashboard-preference-service.js';
+import { FinanceReadRepository } from '../../apps/api/src/finance/read-repository.js';
+import { createFinanceFact } from '../../apps/api/src/finance/spend-projection-service.js';
 import { buildExperienceFixture, experienceId } from '../fixtures/finance/experience.js';
 
 const now = new Date('2026-11-15T18:00:00.000Z');
@@ -277,13 +287,15 @@ it('keeps hidden budget amounts and linked accounts out of the dashboard project
     string,
     string,
   ];
-  const budget = {
+  const budget = createBudget({
     id: budgetId,
     groupId,
     name: 'Shared budget',
+    budgetDate: '2026-11-01',
     startDate: '2026-11-01',
     status: 'active',
-  };
+  });
+  expect(budget.activity).toBe('active');
   const sources = new Map<string, Record<string, unknown>>([
     [budgetId, budget],
     [firstLink, { budgetId, status: 'active', accountId: visibleAccount }],
@@ -332,12 +344,112 @@ it('keeps hidden budget amounts and linked accounts out of the dashboard project
     expect(JSON.stringify(result)).not.toContain(hiddenAccount);
     expect(JSON.stringify(result)).not.toContain('987654');
     expect(assertCurrent).toHaveBeenCalledTimes(1);
-    sources.set(budgetId, { ...budget, activity: 'inactive' });
-    await expect(readDashboardBudget('owner', budgetId)).resolves.toBeNull();
+    for (const excluded of [
+      deactivateBudget(budget, 'owner', now),
+      closeBudget(budget, 'owner', now),
+      { ...budget, status: 'archived' },
+    ]) {
+      sources.set(budgetId, excluded);
+      await expect(readDashboardBudget('owner', budgetId)).resolves.toBeNull();
+    }
     expect(send).toHaveBeenCalledTimes(2);
   } finally {
     source.mockRestore();
     assertCurrent.mockRestore();
     send.mockRestore();
+  }
+});
+
+it('includes a linked refund once across multiple watched categories and keeps its signed spend', async () => {
+  const { actors, budgetItems, categories, transactions, refunds } = buildExperienceFixture();
+  const original = transactions[0]!;
+  const credit = transactions[2]!;
+  const ordinaryCredit = transactions[3]!;
+  const { id, linkedAmountMinor, allocations } = refunds[1]!;
+  const refund = createExpenseRefundRelationship({
+    id,
+    original,
+    refund: credit,
+    linkedAmountMinor,
+    refundedAllocations: allocations,
+    confirmedPartialAllocations: true,
+    existing: [],
+    budgetItems,
+    actorId: actors.owner.id,
+    now,
+  });
+  const facts = [
+    createFinanceFact(original, { budgetItems }),
+    createFinanceFact(credit, { original, refund }),
+    createFinanceFact(ordinaryCredit, {}),
+  ];
+  const [parent, child] = categories;
+  const repo = new FinanceReadRepository({
+    client: { send: async () => ({ Items: facts.map((fact) => ({ fact })) }) },
+    tableName: 'finance-table',
+    cursorSecret: 'x'.repeat(32),
+    authorize: async () => true,
+    loadDashboardCategories: async (rows) => {
+      for (const row of rows) {
+        row.dashboardCategoryIds = row.slices.flatMap(({ categoryId }) =>
+          categoryId === child!.id ? [parent!.id, child!.id] : categoryId ? [categoryId] : [],
+        );
+      }
+    },
+  });
+  const result = await repo.scanForJob({
+    userId: actors.owner.id,
+    accountId: credit.accountId,
+    securityRevision: 1,
+    sourceRevision: 'fixture',
+    filters: { dashboardCategoryIds: [parent!.id, child!.id] },
+    limit: 10,
+  });
+  expect(result.topRows.map((row) => row.id)).toEqual([credit.id, original.id]);
+  expect(result.matchedCount).toBe(2);
+  expect(result.totalsByCurrency).toEqual([
+    { currency: 'USD', currencyExponent: 2, amountMinor: 8500 },
+  ]);
+});
+
+it('classifies upcoming expenses on the dashboard in the viewer’s calendar', async () => {
+  const { readDashboardUpcoming } = await import('../../apps/api/src/finance/dashboard-service.js');
+  const runtime = await import('../../apps/api/src/finance/query-runtime.js');
+  const { FinanceSyncSourceGuard } = await import(
+    '../../apps/api/src/finance/sync-source-guard.js'
+  );
+  const expense = createUpcomingExpense({
+    id: experienceId(900),
+    accountId: experienceId(100),
+    budgetId: experienceId(200),
+    groupId: experienceId(1),
+    description: 'Calendar boundary',
+    dueDate: '2026-11-22',
+    expectedAmountMinor: 2000,
+    currency: 'USD',
+    creatorId: 'owner',
+    entryContext: {
+      enteredAt: '2026-11-20T18:00:00.000Z',
+      localDate: '2026-11-20',
+      timeZone: 'America/Denver',
+    },
+  });
+  const keys = vi
+    .spyOn(runtime, 'listFinanceBrowseKeys')
+    .mockImplementation(async (_, collection) =>
+      collection === 'upcomingExpenses' ? [expense.id] : [],
+    );
+  const guard = new FinanceSyncSourceGuard({ userId: 'owner', role: 'user' });
+  vi.spyOn(guard, 'readCanonicalSource').mockResolvedValue(expense);
+  try {
+    const instant = '2026-11-23T02:30:00.000Z';
+    await expect(
+      readDashboardUpcoming('owner', guard, 'America/Denver', instant),
+    ).resolves.toMatchObject([{ state: 'due-today', expense: { dueDate: '2026-11-22' } }]);
+    await expect(readDashboardUpcoming('owner', guard, 'UTC', instant)).resolves.toMatchObject([
+      { state: 'overdue', expense: { dueDate: '2026-11-22' } },
+    ]);
+  } finally {
+    keys.mockRestore();
   }
 });

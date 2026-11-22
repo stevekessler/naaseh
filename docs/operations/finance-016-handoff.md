@@ -1,5 +1,18 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 22 receiving-computer checkpoint on `codex/finance-continuation-20261122`
+> (142/166). The transfer verified 1,918 files at `9109abb87492b85b6497ef37f006741b651dd760`.
+> Spend Report, the forecast model and contracts, and SimpleFIN worker error
+> redaction are integrated. The receipt recovery fix was already present as
+> `e71d4eb7`. Dashboard tests cover owner isolation, revoked access, hidden
+> amounts, budget closure, refund arithmetic, and the viewer's calendar.
+> See [validation evidence](../testing/finance-experience-validation.md) for
+> the local gate and the blocked browser runs. Continue with desktop browser
+> acceptance and the bounded canonical forecast reader and protected route
+> (T163), then the per-budget and dashboard views. T018 still requires an
+> isolated AWS target, live measurements, and cost verification.
+>
+
 > November 22 consolidated transfer: use
 > [`handoff/finance-016/second-computer-prompt.md`](../../handoff/finance-016/second-computer-prompt.md)
 > on `codex/finance-transfer-20261122`. Integrated source remains at the

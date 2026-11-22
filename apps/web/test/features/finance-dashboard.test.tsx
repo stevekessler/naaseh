@@ -318,7 +318,7 @@ describe('protected Finance dashboard', () => {
   });
   it('keeps flagged balances available when upcoming expenses fail', async () => {
     f.request.mockImplementation(async (path: string) => {
-      if (path === '/finance/upcoming-expenses') throw new Error('unavailable');
+      if (path.startsWith('/finance/upcoming-expenses?timeZone=')) throw new Error('unavailable');
       return {
         items: [
           {
