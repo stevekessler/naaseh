@@ -1,3 +1,4 @@
+import type { FeatureCatalog } from '@naaseh/contacts-inventory-contracts';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -7,8 +8,12 @@ export function AdminNavigation({
   isAdmin,
   section,
   navigate,
+  featureCatalogsAvailable = false,
+  openFeatureCatalog,
 }: {
   isAdmin: boolean;
+  featureCatalogsAvailable?: boolean;
+  openFeatureCatalog?: (catalog: FeatureCatalog) => void;
   section: string;
   navigate: (section: AdminSection) => void;
 }) {
@@ -48,7 +53,7 @@ export function AdminNavigation({
     document.addEventListener('pointerdown', closeOutside);
     return () => document.removeEventListener('pointerdown', closeOutside);
   }, [open]);
-  const active = ['admin', 'admin-categories', 'groups'].includes(section);
+  const active = ['admin', 'admin-categories', 'groups', 'inventory-admin'].includes(section);
   return (
     <div
       ref={container}
@@ -113,6 +118,28 @@ export function AdminNavigation({
                 {label}
               </button>
             ))}
+            {isAdmin &&
+              featureCatalogsAvailable &&
+              openFeatureCatalog &&
+              (
+                [
+                  ['contact-types', 'Contact Types'],
+                  ['locations', 'Locations'],
+                  ['strength-units', 'Strength Units'],
+                ] as const
+              ).map(([catalog, label]) => (
+                <button
+                  type="button"
+                  className="quiet"
+                  key={catalog}
+                  onClick={() => {
+                    openFeatureCatalog(catalog);
+                    setOpen(false);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
           </div>,
           document.body,
         )}

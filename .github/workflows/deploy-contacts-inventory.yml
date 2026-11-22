@@ -1,0 +1,84 @@
+name: Release Contacts and Inventory
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        type: choice
+        options: [publish, activate, withdraw]
+        required: true
+      expected_release:
+        description: Currently active release ID, or inactive
+        type: string
+        required: true
+      retained_release:
+        description: Previously published release ID to reactivate
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: contacts-inventory-release
+  cancel-in-progress: false
+jobs:
+  feature-release:
+    runs-on: ubuntu-latest
+    environment: contacts-inventory-release
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FEATURE_MEDIA_ORIGIN: '${{ vars.NAASEH_CONTACTS_INVENTORY_MEDIA_ORIGIN }}'
+      FEATURE_WEB_ORIGIN: '${{ vars.FEATURE_WEB_ORIGIN }}'
+      FEATURE_ARTIFACT_BUCKET: '${{ vars.FEATURE_ARTIFACT_BUCKET }}'
+      EXPECTED_RELEASE: '${{ inputs.expected_release }}'
+      RELEASE_OPERATION: '${{ inputs.operation }}'
+      RETAINED_RELEASE: '${{ inputs.retained_release }}'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npx vitest run --config apps/contacts-inventory/vitest.config.ts
+      - name: Build feature artifacts
+        if: inputs.operation == 'publish'
+        run: |
+          npm run build:release -w @naaseh/contacts-inventory
+          npm run build:contacts-inventory -w @naaseh/api
+          node --import tsx --input-type=module -e 'const { protocol, mount } = await import("./apps/contacts-inventory/dist/entry.js"); if (protocol !== 1 || typeof mount !== "function") throw new Error("Feature entry is not ready");'
+      - uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885
+        with:
+          role-to-assume: '${{ secrets.FEATURE_RELEASE_ROLE_ARN }}'
+          role-session-name: contacts-inventory-release
+          aws-region: us-west-2
+      - name: Stage the immutable feature API
+        if: inputs.operation == 'publish'
+        working-directory: infra
+        env:
+          HOST_API_ID: '${{ vars.HOST_API_ID }}'
+          HOST_AUTHORIZER_ID: '${{ vars.HOST_AUTHORIZER_ID }}'
+          FEATURE_WORKSPACE_ID: '${{ secrets.FEATURE_WORKSPACE_ID }}'
+          FEATURE_MEMBER_ONE: '${{ secrets.FEATURE_MEMBER_ONE }}'
+          FEATURE_MEMBER_TWO: '${{ secrets.FEATURE_MEMBER_TWO }}'
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ ]]
+          : "${HOST_API_ID:?}" "${HOST_AUTHORIZER_ID:?}" "${FEATURE_WORKSPACE_ID:?}" "${FEATURE_MEMBER_ONE:?}" "${FEATURE_MEMBER_TWO:?}" "${FEATURE_ARTIFACT_BUCKET:?}"
+          test "$FEATURE_MEMBER_ONE" != "$FEATURE_MEMBER_TWO"
+          release_stack="NaasehContactsInventory-$GITHUB_SHA"
+          if result="$(aws cloudformation describe-stacks --stack-name "$release_stack" --query 'Stacks[0].StackStatus' --output text 2>&1)"; then
+            case "$result" in CREATE_COMPLETE|UPDATE_COMPLETE) exit 0 ;; *) echo 'Existing release stack requires operator review.' >&2; exit 1 ;; esac
+          fi
+          [[ "$result" == *'does not exist'* ]] || { echo 'Unable to inspect the release stack.' >&2; exit 1; }
+          npx cdk deploy "$release_stack" --exclusively --require-approval never --rollback --no-lookups             --app 'node --import tsx bin/contacts-inventory.ts'             -c "contactsInventoryWebOrigin=$FEATURE_WEB_ORIGIN" -c "contactsInventoryReleaseId=$GITHUB_SHA"             --parameters "$release_stack:ArtifactBucket=$FEATURE_ARTIFACT_BUCKET"             --parameters "$release_stack:HostApiId=$HOST_API_ID" --parameters "$release_stack:HostAuthorizerId=$HOST_AUTHORIZER_ID"             --parameters "$release_stack:WorkspaceId=$FEATURE_WORKSPACE_ID"             --parameters "$release_stack:MemberOne=$FEATURE_MEMBER_ONE" --parameters "$release_stack:MemberTwo=$FEATURE_MEMBER_TWO"
+      - name: Probe assets and authorization, then switch the release pointer
+        env:
+          FEATURE_SMOKE_COOKIE: '${{ secrets.FEATURE_SMOKE_COOKIE }}'
+        run: |
+          set -euo pipefail
+          case "$RELEASE_OPERATION" in
+            publish) node --import tsx tools/release-contacts-inventory.mjs publish "$GITHUB_SHA" apps/contacts-inventory/dist ;;
+            activate) node --import tsx tools/release-contacts-inventory.mjs activate "$RETAINED_RELEASE" ;;
+            withdraw) node --import tsx tools/release-contacts-inventory.mjs withdraw ;;
+          esac

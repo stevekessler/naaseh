@@ -21,7 +21,27 @@ export default defineConfig({
         skipWaiting: true,
         navigateFallback: '/index.html',
         // This recovery route must reach the network instead of the cached app shell.
-        navigateFallbackDenylist: [/^\/force-update\/?$/],
+        navigateFallbackDenylist: [
+          /^\/force-update\/?$/,
+          /^\/features\/contacts-inventory\//,
+          /^\/api\/v1\/contacts-inventory\//,
+        ],
+        runtimeCaching: [
+          {
+            urlPattern: ({ url, sameOrigin }) =>
+              sameOrigin &&
+              url.search === '' &&
+              /^\/features\/contacts-inventory\/releases\/[a-z0-9][a-z0-9-]{0,63}\/(?:[\w-][\w.-]*\/)*[\w-][\w.-]*$/u.test(
+                url.pathname,
+              ),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'naaseh-contacts-inventory-assets',
+              expiration: { maxEntries: 512 },
+              cacheableResponse: { statuses: [200] },
+            },
+          },
+        ],
         globPatterns: ['**/*.{js,css,html,png,svg}'],
         importScripts: ['/push-sw.js'],
       },

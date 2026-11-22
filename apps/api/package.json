@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:contacts-inventory": "esbuild src/contacts-inventory/handler.ts --bundle --platform=node --target=node24 --outfile=dist/contacts-inventory/handler.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-backup": "3.1092.0",
@@ -19,6 +20,7 @@
     "@aws-sdk/lib-dynamodb": "3.1092.0",
     "@aws-sdk/s3-request-presigner": "^3.1092.0",
     "@aws-sdk/util-dynamodb": "3.996.7",
+    "@naaseh/contacts-inventory-contracts": "1.0.0",
     "@naaseh/contracts": "1.0.0",
     "@naaseh/domain": "1.0.0",
     "@naaseh/observability": "1.0.0",

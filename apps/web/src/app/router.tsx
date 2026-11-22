@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { featureCatalogs, type FeatureCatalog } from '@naaseh/contacts-inventory-contracts';
 
 export type AppRoute =
   | { section: 'tasks'; taskId?: string }
@@ -11,6 +12,9 @@ export type AppRoute =
     }
   | { section: 'lists'; listId?: string }
   | { section: 'directory' }
+  | { section: 'contacts'; recordId?: string }
+  | { section: 'inventory'; recordId?: string; medicationList?: boolean }
+  | { section: 'inventory-admin'; catalog?: FeatureCatalog }
   | { section: 'groups' }
   | { section: 'archive' }
   | { section: 'projects' }
@@ -47,6 +51,17 @@ export function parseAppRoute(pathname: string): AppRoute {
       section: 'journal',
       ...(journal[1] ? { entryId: decodeURIComponent(journal[1]) } : {}),
     };
+  const contacts = pathname.match(/^\/lists\/contacts(?:\/([\w-]+))?\/?$/u);
+  if (contacts) return { section: 'contacts', ...(contacts[1] ? { recordId: contacts[1] } : {}) };
+  if (/^\/inventory\/medication-list\/?$/u.test(pathname))
+    return { section: 'inventory', medicationList: true };
+  const inventory = pathname.match(/^\/inventory(?:\/([\w-]+))?\/?$/u);
+  if (inventory)
+    return { section: 'inventory', ...(inventory[1] ? { recordId: inventory[1] } : {}) };
+  const catalog = featureCatalogs.find(
+    (name) => pathname === `/admin/${name}` || pathname === `/admin/${name}/`,
+  );
+  if (catalog) return { section: 'inventory-admin', catalog };
   const list = pathname.match(/^\/lists(?:\/([^/]+))?\/?$/);
   if (list)
     return { section: 'lists', ...(list[1] ? { listId: decodeURIComponent(list[1]) } : {}) };
@@ -86,6 +101,17 @@ export function parseAppRoute(pathname: string): AppRoute {
 }
 
 export function routePath(route: AppRoute): string {
+  if (route.section === 'contacts')
+    return route.recordId
+      ? `/lists/contacts/${encodeURIComponent(route.recordId)}`
+      : '/lists/contacts';
+  if (route.section === 'inventory')
+    return route.medicationList
+      ? '/inventory/medication-list'
+      : route.recordId
+        ? `/inventory/${encodeURIComponent(route.recordId)}`
+        : '/inventory';
+  if (route.section === 'inventory-admin') return `/admin/${route.catalog ?? 'contact-types'}`;
   if (route.section === 'lists')
     return route.listId ? `/lists/${encodeURIComponent(route.listId)}` : '/lists';
   if (route.section === 'tasks')

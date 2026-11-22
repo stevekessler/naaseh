@@ -1,4 +1,4 @@
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import { CfnOutput, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as authorizers from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -902,6 +902,10 @@ export function createApplicationApi(
   );
   attachCollaborationRoutes(api, sessionAuthorizer, group);
   attachAdminRoutes(api, sessionAuthorizer, { admin, categories, projects });
+  new CfnOutput(scope, 'ContactsInventoryHostApiId', { value: api.apiId });
+  new CfnOutput(scope, 'ContactsInventoryHostAuthorizerId', {
+    value: sessionAuthorizer.authorizerId,
+  });
   return {
     api,
     functions: {

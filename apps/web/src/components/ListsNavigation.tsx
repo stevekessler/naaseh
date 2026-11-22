@@ -1,13 +1,15 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-type ListSection = 'lists' | 'directory';
+type ListSection = 'lists' | 'directory' | 'contacts';
 
 export function ListsNavigation({
   section,
   navigate,
+  contactsAvailable = false,
 }: {
   section: string;
+  contactsAvailable?: boolean;
   navigate: (section: ListSection) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -57,7 +59,7 @@ export function ListsNavigation({
     closeTimer.current = window.setTimeout(() => setOpen(false), 140);
   };
 
-  const active = section === 'lists' || section === 'directory';
+  const active = section === 'lists' || section === 'directory' || section === 'contacts';
   return (
     <div
       ref={container}
@@ -101,6 +103,7 @@ export function ListsNavigation({
               [
                 ['lists', 'My Lists'],
                 ['directory', 'Global Items'],
+                ...(contactsAvailable ? ([['contacts', 'Contacts']] as const) : []),
               ] as const
             ).map(([target, label]) => (
               <button

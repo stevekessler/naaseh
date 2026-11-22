@@ -1,3 +1,4 @@
+import type { FeatureSearchPreferences } from '@naaseh/contacts-inventory-contracts';
 import type { Filters } from '../../search/task-search.js';
 import { parseUrgencySet, serializeUrgencySet } from '@naaseh/domain';
 import type { DatePreset } from '../../search/task-filters.js';
@@ -162,4 +163,43 @@ export function filtersFromSearch(search: string): Filters {
       .split(',')
       .filter((preset): preset is DatePreset => datePresets.includes(preset as DatePreset)),
   };
+}
+
+export const defaultFeatureSearchPreferences = {
+  contacts: false,
+  inventory: false,
+  medicine: false,
+};
+
+const featureSearchStorageKey = (userId: string) => `naaseh.combined-search-feature.v1.${userId}`;
+
+export function readFeatureSearchPreferences(userId: string): FeatureSearchPreferences {
+  try {
+    return normalizeFeatureSearchPreferences(
+      JSON.parse(localStorage.getItem(featureSearchStorageKey(userId)) ?? 'null'),
+    );
+  } catch {
+    return { ...defaultFeatureSearchPreferences };
+  }
+}
+
+export function normalizeFeatureSearchPreferences(value: unknown): FeatureSearchPreferences {
+  if (!value || typeof value !== 'object') return { ...defaultFeatureSearchPreferences };
+  const flags = value as Partial<FeatureSearchPreferences>;
+  return {
+    contacts: flags.contacts === true,
+    inventory: flags.inventory === true,
+    medicine: flags.medicine === true,
+  };
+}
+
+export function persistFeatureSearchPreferences(
+  userId: string,
+  preferences: FeatureSearchPreferences,
+) {
+  try {
+    localStorage.setItem(featureSearchStorageKey(userId), JSON.stringify(preferences));
+  } catch {
+    /* Keep the in-memory selection if storage is unavailable. */
+  }
 }
