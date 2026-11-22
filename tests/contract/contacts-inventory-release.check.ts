@@ -1,7 +1,7 @@
 import { isActiveRelease } from '../../apps/api/src/contacts-inventory/active-release.js';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { describe, expect, it, vi } from 'vitest';
-import { switchRelease } from '../../tools/release-contacts-inventory.mjs';
+import { permitsInventoryImages, switchRelease } from '../../tools/release-contacts-inventory.mjs';
 
 const current = 'retained';
 const candidate = 'candidate';
@@ -99,4 +99,14 @@ it('rejects stale API versions as soon as the authoritative manifest switches or
   } finally {
     send.mockRestore();
   }
+});
+
+it('requires the exact media origin and blob previews on the prepared web host', () => {
+  const media = 'https://feature-media.s3.us-west-2.amazonaws.com';
+  const connect = `connect-src 'self' ${media}`;
+  const images = "img-src 'self' data: blob:";
+  expect(permitsInventoryImages(`${connect}; ${images};`, media)).toBe(true);
+  expect(permitsInventoryImages(`${connect}.example; ${images};`, media)).toBe(false);
+  expect(permitsInventoryImages(`${connect}; img-src 'self';`, media)).toBe(false);
+  expect(permitsInventoryImages(`default-src ${media}; ${images};`, media)).toBe(false);
 });

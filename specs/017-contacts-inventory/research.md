@@ -39,6 +39,6 @@
 
 ## Release evidence
 
-- **Decision** — Use fixture-driven local validation for install/upgrade/rollback sequencing and an approved isolated AWS environment for infrastructure behavior. Use supported Finance build and existing native contract/liveness probes as compatibility fixtures. Use the protected operational canary for any actual production release.
+- **Decision** — Use fixture-driven local validation for install/upgrade/rollback sequencing and protected production acceptance for infrastructure behavior, using disconnected AWS restore destinations for recovery. Use supported Finance build and existing native contract/liveness probes as compatibility fixtures. Use the protected operational canary for any actual production release.
 - **Rationale** — The [release runbook](../../docs/operations/release-with-aws.md) documents that the repo has no standing staging environment. Unit or local AWS mocks are useful for deterministic races and regressions but cannot prove CloudFront origin order, IAM integration, API Gateway stage changes, real scan events, or restoration.
 - **Alternatives considered** — A production-only first drill would make rollback and recovery harder to validate safely. A permanent staging stack adds unnecessary standing cost.

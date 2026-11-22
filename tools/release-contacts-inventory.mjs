@@ -116,7 +116,21 @@ async function putImmutable(objects, bucket, key, bytes, type) {
   }
 }
 
-async function verifyHosted(manifest, origin, cookie) {
+export function permitsInventoryImages(policy, mediaOrigin) {
+  const directives = policy.split(';').map((directive) => directive.trim().split(/\s+/u));
+  return (
+    directives
+      .find(([name]) => name === 'connect-src')
+      ?.slice(1)
+      .includes(mediaOrigin) === true &&
+    directives
+      .find(([name]) => name === 'img-src')
+      ?.slice(1)
+      .includes('blob:') === true
+  );
+}
+
+async function verifyHosted(manifest, origin, cookie, mediaOrigin) {
   const api = `${origin}/api/v1/contacts-inventory/releases/${manifest.releaseId}/release/readiness`;
   const fetchRelease = (url, headers) =>
     globalThis.fetch(url, {
@@ -124,6 +138,13 @@ async function verifyHosted(manifest, origin, cookie) {
       redirect: 'error',
       signal: globalThis.AbortSignal.timeout(15_000),
     });
+  const host = await fetchRelease(origin);
+  const policy = host.headers.get('content-security-policy') ?? '';
+  await host.body?.cancel();
+  if (!host.ok || !permitsInventoryImages(policy, mediaOrigin))
+    throw new Error(
+      'The web host does not allow Contacts and Inventory image uploads and previews.',
+    );
   const anonymous = await fetchRelease(api);
   if (![401, 403].includes(anonymous.status))
     throw new Error('Anonymous API access was not denied.');
@@ -162,6 +183,13 @@ async function release(args) {
     return;
   }
   if (!cookie) throw new Error('A current workspace canary session is required.');
+  const mediaOrigin = process.env.FEATURE_MEDIA_ORIGIN;
+  if (
+    !mediaOrigin ||
+    new URL(mediaOrigin).origin !== mediaOrigin ||
+    !mediaOrigin.startsWith('https://')
+  )
+    throw new Error('Set the exact HTTPS origin from the Contacts and Inventory data stack.');
   releaseIdSchema.parse(version);
   let manifest;
   if (operation === 'publish') {
@@ -195,7 +223,7 @@ async function release(args) {
     bucket,
     manifest,
     expectedRelease,
-    verify: (candidate) => verifyHosted(candidate, origin, cookie),
+    verify: (candidate) => verifyHosted(candidate, origin, cookie, mediaOrigin),
   });
 }
 

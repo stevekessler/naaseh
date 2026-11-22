@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { WorkspaceRepository } from '../../apps/api/src/contacts-inventory/repository.js';
-import { buildFeatureFixture } from '../fixtures/contacts-inventory-host.js';
+import { buildFeatureFixture, installFeatureFixture } from '../fixtures/contacts-inventory-host.js';
 import { MemoryWorkspaceStore } from '../fixtures/contacts-inventory-store.js';
 import { mountWorkspaceStory } from '../fixtures/contacts-inventory-story.js';
 import { contactsInventoryFixture as fixture } from '../fixtures/contacts-inventory.js';
+import { seedFinanceSearch } from '../fixtures/finance-search.js';
 import { signIn } from './enhanced-helpers.js';
 
 test.use({ serviceWorkers: 'block' });
@@ -106,4 +107,34 @@ test('independent feature Search scopes default off and suppress an unauthorized
   await expect(page.getByRole('button', { name: 'Fixture inventory', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Fixture medicine', exact: true })).toHaveCount(0);
   await expect(status).toHaveText('0 results');
+});
+
+test('preserves existing Finance search results when Contacts and Inventory activates', async ({
+  page,
+}) => {
+  const setActive = await installFeatureFixture(page, await buildFeatureFixture('contacts'));
+  await signIn(page);
+  await seedFinanceSearch(page, [
+    {
+      id: 'workspace-search-merchant',
+      entityType: 'financeMerchant',
+      scopeKey: 'PUBLIC',
+      value: { id: 'workspace-search-merchant', name: 'Juniper Merchant', status: 'active' },
+    },
+  ]);
+  const merchant = page.getByRole('link', { name: 'Juniper Merchant', exact: true });
+  const search = page.getByRole('searchbox', { name: 'Search tasks and list items' });
+  const contacts = page.getByRole('checkbox', { name: 'Contacts', exact: true });
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Merchants', exact: true }).check();
+  await search.fill('Juniper');
+  await expect(merchant).toBeVisible();
+  await expect(contacts).toHaveCount(0);
+
+  setActive(fixture.releases[0]);
+  await page.reload();
+  await search.fill('Juniper');
+  await expect(contacts).not.toBeChecked();
+  await expect(merchant).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: /^1 result$/u })).toBeVisible();
 });

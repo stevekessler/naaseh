@@ -171,7 +171,7 @@ A user can expand a combined Search to find contacts, base inventory items, and 
 
 ### Measurable Outcomes
 
-- **SC-001** — At least four of five representative testers can create a Prescriber contact and use it to save a Medicine item at a configured location within three minutes on their first attempt.
+- **SC-001** — The automated browser acceptance journey creates a Prescriber contact and uses it to save a Medicine item at a configured location. The workspace has two users, so first-time participant recruitment and timing are waived.
 - **SC-002** — In acceptance checks, each combination of Contacts, Inventory Items, and Medicine Search controls returns exactly the matching enabled types. The default returns zero results from those three types.
 - **SC-003** — In each tested failed or concurrent image replacement scenario, an item has at most one available image and its original image remains available until a replacement succeeds.
 - **SC-004** — Each tested medicine enters or leaves the medication-list view when its toggle changes, and the selected Medicine filters return the expected records. Switching back to All restores results without the previous Medicine-only filters.

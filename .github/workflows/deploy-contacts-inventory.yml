@@ -28,6 +28,7 @@ jobs:
       contents: read
       id-token: write
     env:
+      FEATURE_MEDIA_ORIGIN: '${{ vars.NAASEH_CONTACTS_INVENTORY_MEDIA_ORIGIN }}'
       FEATURE_WEB_ORIGIN: '${{ vars.FEATURE_WEB_ORIGIN }}'
       FEATURE_ARTIFACT_BUCKET: '${{ vars.FEATURE_ARTIFACT_BUCKET }}'
       EXPECTED_RELEASE: '${{ inputs.expected_release }}'
