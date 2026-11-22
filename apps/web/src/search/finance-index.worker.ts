@@ -46,7 +46,9 @@ function matches(row: FinanceBrowseDocument, filters: FinanceQueryFilters) {
 let generation = 0;
 self.onmessage = ({
   data,
-}: MessageEvent<FinanceWorkerRequest | FinanceSpendWorkerRequest | { spend: FinanceTrendWorkerRequest }>) => {
+}: MessageEvent<
+  FinanceWorkerRequest | FinanceSpendWorkerRequest | { spend: FinanceTrendWorkerRequest }
+>) => {
   if ('spend' in data) {
     try {
       self.postMessage({ totals: calculateCachedSpendTrend(data.spend) });

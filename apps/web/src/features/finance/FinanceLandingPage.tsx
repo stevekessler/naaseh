@@ -206,7 +206,13 @@ export function FinanceLandingPage({
   );
   const originDashboard = modalOrigin?.route.view === 'dashboard';
   const originReport = modalOrigin?.route.view === 'spend-report';
-  const view = originDashboard ? 'dashboard' : originAccount ? 'accounts' : originReport ? 'spend-report' : route.view;
+  const view = originDashboard
+    ? 'dashboard'
+    : originAccount
+      ? 'accounts'
+      : originReport
+        ? 'spend-report'
+        : route.view;
   const transactionModal = route.transactionId ? (
     <FinanceTransactionsPage
       csrfToken={csrfToken}
@@ -353,17 +359,7 @@ export function FinanceLandingPage({
             navigate({ section: 'finance', view: 'accounts', accountId })
           }
         />
-      ) : (
-        <section aria-labelledby={`finance-${view}-title`}>
-          <h2 id={`finance-${view}-title`}>
-            {view
-              .split('-')
-              .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
-              .join(' ')}
-          </h2>
-          <p>This Finance destination is not available yet.</p>
-        </section>
-      )}
+      ) : null}
     </section>
   );
 }
