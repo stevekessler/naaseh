@@ -78,3 +78,11 @@ The [release runbook](../operations/contacts-inventory-release.md) covers isolat
 The workspace owner approved production as the only deployed environment and waived first-time tester recruitment for the two-user workspace. The automated Medicine run covers creating a Prescriber and saving a linked Medicine at a configured location. Recover backups into disconnected resources in the production AWS account and keep the live feature pointer serving its existing data.
 
 Production preparation still requires a signed-in `naaseh-admin` AWS CLI session. The current session token expired. GitHub currently has the `production` environment. The production host bridge and feature release workflow still need to reach `main`, and the feature release needs its own protected GitHub environment settings.
+
+## Production preparation evidence
+
+- The production web bundle and CDK stack synthesized with the explicit media origin. The host template exposes the feature artifact bucket, API ID and authorizer ID. It includes separate manifest and asset routes, the exact upload origin and blob previews. Feature publication checks the deployed host policy before switching the manifest.
+- The targeted feature suite passed 46 checks. All seven production workflow orchestration checks and the Apple contract check passed. The required Playwright selection remains 36 tests across 22 files and Playwright remains at 1.61.1.
+- The [host release and persistence fixture](https://github.com/stevekessler/naaseh/actions/runs/45075360678) passed on Chromium, WebKit, iPhone and iPad. A saved item kept the same ID and contents across fixture install, upgrade and rollback.
+- The [existing Finance Search fixture](https://github.com/stevekessler/naaseh/actions/runs/45075166595) and [feature activation Search fixture](https://github.com/stevekessler/naaseh/actions/runs/45075629504) passed on the four browser profiles. The activation fixture used the same explicit Finance scope before and after enabling Contacts and Inventory and returned the same merchant and result count.
+- The [production preparation pull request](https://github.com/stevekessler/naaseh/pull/91) targets `main`. The most recent successful production deployment in Actions used `8d5759ec865f507dc408c1b58bbc245e41e0be3b`. Recheck the deployed revision before dispatching a production host update.
