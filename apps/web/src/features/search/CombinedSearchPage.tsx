@@ -1,4 +1,9 @@
 import {
+  useFeatureSearch,
+  type FeatureSearchSession,
+} from '../contacts-inventory-host/useFeatureSearch.js';
+import { readFeatureSearchPreferences, persistFeatureSearchPreferences } from './search-state.js';
+import {
   urgencyLabels,
   type CategoryRecord,
   type GlobalDirectoryItem,
@@ -44,6 +49,8 @@ export function CombinedSearchPage({
   currentUserGroupIds,
   openTask,
   openList,
+  featureSearchSession,
+  openFeatureResult,
   loadFinanceSource = loadAuthorizedFinanceSearchSource,
 }: {
   tasks: readonly Task[];
@@ -56,6 +63,8 @@ export function CombinedSearchPage({
   currentUserGroupIds: readonly string[];
   openTask: (taskId: string) => void;
   openList: (listId: string) => void;
+  featureSearchSession?: FeatureSearchSession;
+  openFeatureResult?: (page: 'contacts' | 'inventory', recordId: string) => void;
   loadFinanceSource?: () => Promise<FinanceSearchSource>;
 }) {
   const [query, setQuery] = useState('');
@@ -63,6 +72,17 @@ export function CombinedSearchPage({
     () => new URLSearchParams(location.search).get('scope') === 'all',
   );
   const [preferences, setPreferences] = useState(readFinanceSearchPreferences);
+  const [featureFlags, setFeatureFlags] = useState(() =>
+    readFeatureSearchPreferences(currentUserId),
+  );
+  const featureSearch = useFeatureSearch(
+    featureSearchSession,
+    Object.values(featureFlags).some(Boolean),
+  );
+  const featureResults = useMemo(
+    () => featureSearch?.(query, featureFlags) ?? [],
+    [featureSearch, query, featureFlags],
+  );
   const [financeSource, setFinanceSource] = useState(emptyFinanceSource);
   const [financeProgress, setFinanceProgress] = useState<FinanceIndexProgress>({
     indexed: 0,
@@ -194,6 +214,7 @@ export function CombinedSearchPage({
       financeHits,
     ],
   );
+  const resultCount = results.length + featureResults.length;
   const hiddenClasses = combinedSearchColumns
     .filter(({ id }) => !columns.visible.has(id))
     .map(({ id }) => `hide-${id}`)
@@ -221,7 +242,7 @@ export function CombinedSearchPage({
         />
         <span role="status" aria-live="polite">
           {query.trim()
-            ? `${results.length} ${results.length === 1 ? 'result' : 'results'}`
+            ? `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`
             : 'Enter a search term'}
         </span>
       </label>
@@ -229,6 +250,15 @@ export function CombinedSearchPage({
         preferences={preferences}
         accounts={financeSource.accounts}
         update={updatePreferences}
+        {...(featureSearchSession
+          ? {
+              feature: featureFlags,
+              updateFeature: (next) => {
+                setFeatureFlags(next);
+                persistFeatureSearchPreferences(currentUserId, next);
+              },
+            }
+          : {})}
       />
       <label className="search-scope-toggle">
         <input
@@ -264,7 +294,7 @@ export function CombinedSearchPage({
       ) : null}
       <div className="task-list-toolbar combined-search-toolbar">
         <p>
-          {results.length} {results.length === 1 ? 'result' : 'results'}
+          {resultCount} {resultCount === 1 ? 'result' : 'results'}
         </p>
         <CombinedSearchColumnSettings {...columns} />
       </div>
@@ -343,9 +373,35 @@ export function CombinedSearchPage({
                 </td>
               </tr>
             ))}
+            {featureResults.map((result) => (
+              <tr key={`${result.type}-${result.id}`}>
+                <th scope="row" className="search-title-cell">
+                  <button
+                    type="button"
+                    className="task-link"
+                    onClick={() =>
+                      openFeatureResult?.(
+                        result.type === 'contacts' ? 'contacts' : 'inventory',
+                        result.id,
+                      )
+                    }
+                  >
+                    {result.title}
+                  </button>
+                </th>
+                <td className="search-type-cell" data-label="Type">
+                  {
+                    { contacts: 'Contact', inventory: 'Inventory Item', medicine: 'Medicine' }[
+                      result.type
+                    ]
+                  }
+                </td>
+                <td colSpan={7} />
+              </tr>
+            ))}
           </tbody>
         </table>
-        {query.trim() && !results.length ? (
+        {query.trim() && !resultCount ? (
           <p className="combined-search-empty">No selected content matches “{query.trim()}”.</p>
         ) : !query.trim() ? (
           <p className="combined-search-empty">

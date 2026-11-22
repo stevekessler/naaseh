@@ -71,7 +71,17 @@ export interface FeatureHost {
   navigate(location: FeatureLocation): void;
 }
 
+export const featureSearchTypes = ['contacts', 'inventory', 'medicine'] as const;
+export type FeatureSearchType = (typeof featureSearchTypes)[number];
+export type FeatureSearchPreferences = Record<FeatureSearchType, boolean>;
+export type FeatureSearchHit = { type: FeatureSearchType; id: string; title: string };
+export type FeatureSearch = (
+  query: string,
+  preferences: FeatureSearchPreferences,
+) => FeatureSearchHit[];
+
 export interface FeatureModule {
   protocol: typeof hostProtocol;
+  watchSearch?(host: FeatureHost, publish: (search: FeatureSearch | null) => void): () => void;
   mount(container: HTMLElement, location: FeatureLocation, host: FeatureHost): () => void;
 }

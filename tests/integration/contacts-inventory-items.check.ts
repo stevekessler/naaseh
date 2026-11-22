@@ -11,6 +11,9 @@ import { MemoryWorkspaceStore } from '../fixtures/contacts-inventory-store.js';
 const itemId = 'b4d02419-80af-4a8f-b710-1a49e7ca3000';
 const base = { name: 'Travel bag', locationId: 'linen-closet', type: 'base' };
 const catalog = {
+  async strengthUnit() {
+    return undefined;
+  },
   async location(id: string) {
     return id === base.locationId ? { id, name: 'Linen closet', revision: 1 } : undefined;
   },

@@ -9,6 +9,8 @@ import {
 import {
   contactTypeSchema,
   locationSchema,
+  strengthUnitSchema,
+  defaultStrengthUnits,
   prescriberContactTypeId,
   type ContactType,
   type InventoryLocation,
@@ -20,6 +22,7 @@ import { WorkspaceError } from './repository.js';
 const partition = 'CATALOG';
 const prefix = 'contact-types#';
 const locationPrefix = 'locations#';
+const unitPrefix = 'strength-units#';
 const seed: ContactType = { id: prescriberContactTypeId, name: 'Prescriber', revision: 1 };
 
 export class ContactCatalog {
@@ -51,6 +54,38 @@ export class ContactCatalog {
 
   async locations() {
     return this.listValues(locationPrefix, (value) => locationSchema.parse(value));
+  }
+
+  async strengthUnit(id: string) {
+    const item = await this.get(unitPrefix + id);
+    return item
+      ? strengthUnitSchema.parse(item.value)
+      : defaultStrengthUnits.find((unit) => unit.id === id);
+  }
+
+  async strengthUnits() {
+    return this.listValues(
+      unitPrefix,
+      (value) => strengthUnitSchema.parse(value),
+      defaultStrengthUnits,
+    );
+  }
+
+  async writeStrengthUnit(
+    id: string,
+    name: string,
+    actor: string,
+    precondition: MutationPrecondition,
+  ) {
+    const revision = precondition.mode === 'create' ? 1 : precondition.revision + 1;
+    const value = strengthUnitSchema.parse({ id, name, revision });
+    return this.writeValue(
+      unitPrefix,
+      value,
+      actor,
+      precondition,
+      defaultStrengthUnits.some((unit) => unit.id === id),
+    );
   }
 
   async list() {

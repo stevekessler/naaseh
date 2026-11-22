@@ -1,3 +1,4 @@
+import { createLogger } from '@naaseh/observability';
 import {
   GetObjectCommand,
   GetObjectTaggingCommand,
@@ -18,6 +19,7 @@ import { bodyJson } from './contacts.js';
 import type { DynamoWorkspaceStore, ImageCandidate } from './dynamo-store.js';
 import { matchesImageSignature, scanState } from './scan-results.js';
 
+const log = createLogger(process.env, { verbose: false });
 const media = new S3Client({ requestChecksumCalculation: 'WHEN_REQUIRED' });
 const uuid = z.uuid();
 const keyFor = (itemId: string, id: string) => `candidates/${itemId}/${id}`;
@@ -75,9 +77,24 @@ async function candidateStatus(
   const scan = scanState(
     result.TagSet?.find(({ Key }) => Key === 'GuardDutyMalwareScanStatus')?.Value,
   );
-  if (scan === 'pending') return json(202, { state: 'scanning' });
+  if (scan === 'pending') {
+    log.metric(
+      'ContactsInventoryScanAgeSeconds',
+      Math.round((Date.now() - candidate.createdAt) / 1000),
+      'Seconds',
+    );
+    return json(202, { state: 'scanning' });
+  }
   if (scan === 'rejected') return json(200, { state: 'failed', code: 'scan_rejected' });
 
+  return activateConfirmedImage(store, itemId, candidate);
+}
+
+async function activateConfirmedImage(
+  store: DynamoWorkspaceStore,
+  itemId: string,
+  candidate: ImageCandidate,
+) {
   const image = { id: candidate.id, mediaType: candidate.mediaType, bytes: candidate.bytes };
   const activated = await store.changeImage(
     itemId,
@@ -91,6 +108,24 @@ async function candidateStatus(
       return json(409, { state: 'failed', code: 'image_changed' });
   }
   return json(200, { state: 'active', image });
+}
+
+export async function reconcileInventoryScan(
+  store: DynamoWorkspaceStore,
+  itemId: string,
+  id: string,
+  version: string,
+  status: string,
+) {
+  const candidate = await store.imageCandidate(itemId, id);
+  if (!candidate || candidate.version !== version) return;
+  const age = Date.now() - candidate.createdAt;
+  log.metric('ContactsInventoryScanAgeSeconds', Math.round(age / 1000), 'Seconds');
+  if (age > expiresAfter) {
+    log.metric('ContactsInventoryReconciliationBacklog', 1);
+    return;
+  }
+  if (scanState(status) === 'clean') await activateConfirmedImage(store, itemId, candidate);
 }
 
 export async function handleItemImage(

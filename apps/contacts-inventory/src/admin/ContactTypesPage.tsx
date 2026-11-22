@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import {
   contactTypeSchema,
   locationSchema,
+  strengthUnitSchema,
   workspaceGenerationHeader,
   type InventoryLocation,
   type FeatureHost,
@@ -12,12 +13,13 @@ export function CatalogPage({
   kind,
 }: {
   host: FeatureHost;
-  kind: 'contact-types' | 'locations';
+  kind: 'contact-types' | 'locations' | 'strength-units';
 }) {
   const isLocation = kind === 'locations';
-  const schema = isLocation ? locationSchema : contactTypeSchema;
-  const title = isLocation ? 'Locations' : 'Contact Types';
-  const singular = isLocation ? 'location' : 'contact type';
+  const isUnit = kind === 'strength-units';
+  const schema = isLocation ? locationSchema : isUnit ? strengthUnitSchema : contactTypeSchema;
+  const title = isLocation ? 'Locations' : isUnit ? 'Strength Units' : 'Contact Types';
+  const singular = isLocation ? 'location' : isUnit ? 'strength unit' : 'contact type';
   const [types, setTypes] = useState<InventoryLocation[]>([]);
   const [selected, setSelected] = useState<InventoryLocation>();
   const [name, setName] = useState('');
@@ -36,14 +38,18 @@ export function CatalogPage({
         if (!response.ok) throw new Error();
         const body = await response.json();
         if (controller.signal.aborted) return;
-        setTypes(schema.array().parse(isLocation ? body.locations : body.contactTypes));
+        setTypes(
+          schema
+            .array()
+            .parse(isLocation ? body.locations : isUnit ? body.strengthUnits : body.contactTypes),
+        );
         setGeneration(body.generation);
       })
       .catch(() => {
         if (!controller.signal.aborted) setMessage(`${title} could not be loaded.`);
       });
     return () => controller.abort();
-  }, [host, isLocation, schema, title]);
+  }, [host, isLocation, isUnit, schema, title]);
 
   function choose(type?: InventoryLocation) {
     setSelected(type);
@@ -84,7 +90,9 @@ export function CatalogPage({
         ),
       );
       choose();
-      setMessage(isLocation ? 'Location saved.' : 'Contact type saved.');
+      setMessage(
+        isLocation ? 'Location saved.' : isUnit ? 'Strength unit saved.' : 'Contact type saved.',
+      );
     } catch {
       setMessage(`The ${singular} could not be saved. Try again.`);
     } finally {
@@ -132,7 +140,7 @@ export function CatalogPage({
           </label>
         )}
         <button type="submit" disabled={busy || !generation}>
-          {isLocation ? 'Save location' : 'Save type'}
+          {isLocation ? 'Save location' : isUnit ? 'Save unit' : 'Save type'}
         </button>
         {selected && (
           <button type="button" disabled={busy} onClick={() => choose()}>

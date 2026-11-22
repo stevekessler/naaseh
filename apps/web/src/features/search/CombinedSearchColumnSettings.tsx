@@ -1,3 +1,7 @@
+import {
+  featureSearchTypes,
+  type FeatureSearchPreferences,
+} from '@naaseh/contacts-inventory-contracts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FinanceAccountSearchOption } from '../../search/finance-index.js';
 import type { FinanceSearchPreferences } from './search-state.js';
@@ -6,10 +10,14 @@ export function CombinedSearchTypeSettings({
   preferences,
   accounts,
   update,
+  feature,
+  updateFeature,
 }: {
   preferences: FinanceSearchPreferences;
   accounts: readonly FinanceAccountSearchOption[];
   update: (patch: Partial<FinanceSearchPreferences>) => void;
+  feature?: FeatureSearchPreferences;
+  updateFeature?: (next: FeatureSearchPreferences) => void;
 }) {
   const types = [
     ['includeTasks', 'Tasks'],
@@ -32,6 +40,22 @@ export function CombinedSearchTypeSettings({
           </label>
         ))}
       </div>
+      {feature && updateFeature && (
+        <div>
+          {featureSearchTypes.map((type) => (
+            <label key={type}>
+              <input
+                type="checkbox"
+                checked={feature[type]}
+                onChange={(event) =>
+                  updateFeature({ ...feature, [type]: event.currentTarget.checked })
+                }
+              />
+              {{ contacts: 'Contacts', inventory: 'Inventory Items', medicine: 'Medicine' }[type]}
+            </label>
+          ))}
+        </div>
+      )}
       {preferences.includeTransactions ? (
         <label>
           Transaction account

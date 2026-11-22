@@ -232,7 +232,18 @@ export class DynamoWorkspaceStore implements WorkspaceStore {
     return false;
   }
 
-  async commit({ expected, record, receipt, entry, ledger }: Commit) {
+  async referenceCount(id: string) {
+    const { Item } = await dynamodb.send(
+      new GetCommand({
+        TableName: this.table,
+        Key: { pk: this.pk, sk: `PRESCRIBER#${id}` },
+        ConsistentRead: true,
+      }),
+    );
+    return Number(Item?.count ?? 0);
+  }
+
+  async commit({ expected, record, receipt, entry, ledger, referenceDeltas }: Commit) {
     const receiptKey = `RECEIPT#${JSON.stringify([receipt.actor, receipt.mutationId])}`;
     const writes: NonNullable<TransactWriteCommandInput['TransactItems']> = [
       {
@@ -274,6 +285,18 @@ export class DynamoWorkspaceStore implements WorkspaceStore {
         },
       },
     ];
+    for (const { id, count } of referenceDeltas ?? []) {
+      writes.push({
+        Update: {
+          TableName: this.table,
+          Key: { pk: this.pk, sk: `PRESCRIBER#${id}` },
+          UpdateExpression: 'ADD #count :delta',
+          ExpressionAttributeNames: { '#count': 'count' },
+          ExpressionAttributeValues: { ':delta': count, ...(count < 0 ? { ':zero': 0 } : {}) },
+          ...(count < 0 ? { ConditionExpression: '#count > :zero' } : {}),
+        },
+      });
+    }
     if (ledger)
       writes.push({
         Put: {

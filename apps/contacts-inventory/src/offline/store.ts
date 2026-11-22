@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie';
 import {
   contactTypeSchema,
   locationSchema,
+  strengthUnitSchema,
   featureDatabaseName,
   featureDatabaseSchema,
   featureDatabaseVersion,
@@ -38,7 +39,12 @@ export type QueueRow = {
   status: Status;
   ciphertext?: string;
 };
-type SyncRow = SyncCursor & { account: string; contactTypes?: string; locations?: string };
+type SyncRow = SyncCursor & {
+  account: string;
+  contactTypes?: string;
+  locations?: string;
+  strengthUnits?: string;
+};
 
 export class OfflineWorkspace {
   private readonly db = new Dexie(featureDatabaseName);
@@ -107,6 +113,20 @@ export class OfflineWorkspace {
   async cacheLocations(locations: InventoryLocation[]) {
     const encrypted = await this.host.encrypt('locations', JSON.stringify(locations));
     await this.sync.update(this.account, { locations: encrypted });
+  }
+
+  async strengthUnits() {
+    const state = await this.sync.get(this.account);
+    if (!state?.strengthUnits) return [];
+    const decoded: unknown = JSON.parse(
+      await this.host.decrypt('strength-units', state.strengthUnits),
+    );
+    return strengthUnitSchema.array().parse(decoded);
+  }
+
+  async cacheStrengthUnits(units: ContactType[]) {
+    const encrypted = await this.host.encrypt('strength-units', JSON.stringify(units));
+    await this.sync.update(this.account, { strengthUnits: encrypted });
   }
 
   async draftStatus() {
@@ -249,6 +269,9 @@ export class OfflineWorkspace {
           : {}),
         ...(current?.generation === next.generation && current.locations
           ? { locations: current.locations }
+          : {}),
+        ...(current?.generation === next.generation && current.strengthUnits
+          ? { strengthUnits: current.strengthUnits }
           : {}),
       });
       return true;

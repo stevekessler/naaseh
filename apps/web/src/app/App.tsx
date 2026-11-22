@@ -1443,6 +1443,20 @@ export function App() {
             />
           ) : section === 'search' ? (
             <CombinedSearchPage
+              key={session.userId}
+              {...(featureRelease.manifest && !signingOut
+                ? {
+                    featureSearchSession: {
+                      manifest: featureRelease.manifest,
+                      userId: session.userId,
+                      isAdmin: session.role === 'admin',
+                      csrfToken: session.csrfToken,
+                      refresh: featureRelease.refresh,
+                      revalidateSession,
+                    },
+                    openFeatureResult: (page, recordId) => navigate({ section: page, recordId }),
+                  }
+                : {})}
               tasks={tasks}
               lists={lists}
               items={listItems}

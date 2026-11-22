@@ -1,3 +1,5 @@
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 import {
   ArnFormat,
   CfnOutput,
@@ -105,6 +107,14 @@ export class ContactsInventoryReleaseStack extends Stack {
       authorizationType: 'CUSTOM',
       authorizerId: authorizerId.valueAsString,
       target: `integrations/${integration.ref}`,
+    });
+    new events.Rule(this, 'InventoryScanResults', {
+      eventPattern: {
+        source: ['aws.guardduty'],
+        detailType: ['GuardDuty Malware Protection Object Scan Result'],
+        detail: { s3ObjectDetails: { bucketName: [props.data.media.bucketName] } },
+      },
+      targets: [new targets.LambdaFunction(version, { retryAttempts: 3 })],
     });
     new CfnOutput(this, 'ReleaseId', { value: props.releaseId });
   }

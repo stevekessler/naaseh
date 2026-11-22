@@ -38,6 +38,15 @@ export class MemoryWorkspaceStore implements WorkspaceStore {
     const records = matches.slice(0, limit);
     return { records, next: matches.length > limit ? records.at(-1)?.id : undefined };
   }
+  async referenceCount(id: string) {
+    return [...this.records.values()].filter(
+      (row) =>
+        row.kind === 'item' &&
+        !('deleted' in row) &&
+        row.fields.type === 'medicine' &&
+        row.fields.prescriberId === id,
+    ).length;
+  }
   async commit({ expected, receipt, record, entry, ledger }: Commit) {
     if (this.state.sequence !== expected.sequence || this.state.generation !== expected.generation)
       return false;

@@ -1,4 +1,4 @@
-import { handleItemImage, itemImageRoute } from './images.js';
+import { handleItemImage, itemImageRoute, reconcileInventoryScan } from './images.js';
 import { mutateItem } from './items.js';
 import { z } from 'zod';
 import { ContactCatalog } from './catalogs.js';
@@ -8,7 +8,11 @@ import { DynamoWorkspaceStore } from './dynamo-store.js';
 import { isWorkspaceReadPath, readWorkspace } from './read-routes.js';
 import { WorkspaceError, WorkspaceRepository } from './repository.js';
 import { createFeatureTelemetry, featureOperation } from './telemetry.js';
-import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
+import type {
+  APIGatewayProxyEventV2,
+  APIGatewayProxyStructuredResultV2,
+  EventBridgeEvent,
+} from 'aws-lambda';
 import {
   catalogIdSchema,
   locationFieldsSchema,
@@ -108,7 +112,7 @@ async function handleRequest(
       const item = path.match(/^items\/([^/]+)$/u);
       const location = path.match(/^catalogs\/locations\/([^/]+)$/u);
       const contact = path.match(/^contacts\/([^/]+)$/u);
-      const contactType = path.match(/^catalogs\/contact-types\/([^/]+)$/u);
+      const nameCatalog = path.match(/^catalogs\/(contact-types|strength-units)\/([^/]+)$/u);
       if (method === 'GET' && (readiness || isWorkspaceReadPath(path))) {
         body = await readWorkspace(
           repo,
@@ -124,11 +128,11 @@ async function handleRequest(
         body = {
           contactTypes: await catalog.list(),
           locations: await catalog.locations(),
-          strengthUnits: [],
+          strengthUnits: await catalog.strengthUnits(),
           generation: (await repo.store.checkpoint()).generation,
         };
-      } else if (method === 'PUT' && contactType) {
-        const id = catalogIdSchema.safeParse(contactType[1]);
+      } else if (method === 'PUT' && nameCatalog) {
+        const id = catalogIdSchema.safeParse(nameCatalog[2]);
         const input = z
           .strictObject({ name: z.string().trim().min(1).max(80) })
           .safeParse(bodyJson(event));
@@ -137,7 +141,15 @@ async function handleRequest(
           return error(400, 'invalid_catalog', 'Enter a valid contact type and retry.');
         if ((await repo.store.checkpoint()).generation !== precondition.generation)
           throw new WorkspaceError('reset_required');
-        body = await catalog.write(id.data, input.data.name, session.userId, precondition);
+        body =
+          nameCatalog[1] === 'strength-units'
+            ? await catalog.writeStrengthUnit(
+                id.data,
+                input.data.name,
+                session.userId,
+                precondition,
+              )
+            : await catalog.write(id.data, input.data.name, session.userId, precondition);
         statusCode = precondition.mode === 'create' ? 201 : 200;
       } else if (method === 'PUT' && location) {
         const id = catalogIdSchema.safeParse(location[1]);
@@ -174,6 +186,18 @@ async function handleRequest(
           return error(400, failure.code, 'Refresh the current page and try again.');
         if (failure.code === 'reset_required')
           return error(409, failure.code, 'Refresh the local workspace before continuing.');
+        if (failure.code === 'reference_in_use')
+          return error(
+            409,
+            failure.code,
+            'Reassign this prescriber on linked medicine records first.',
+          );
+        if (failure.code === 'invalid_reference')
+          return error(
+            409,
+            failure.code,
+            'Choose an available prescriber or keep the existing item type.',
+          );
         if (failure.code === 'revision_conflict' || failure.code === 'idempotency_conflict')
           return error(409, failure.code, 'The record has changed. Refresh it before retrying.');
       }
@@ -186,7 +210,66 @@ async function handleRequest(
 
 const telemetry = createFeatureTelemetry();
 
-export async function handler(event: APIGatewayProxyEventV2) {
+type InventoryScan = EventBridgeEvent<'GuardDuty Malware Protection Object Scan Result', unknown>;
+async function handleScan(event: InventoryScan) {
+  if (
+    event.source !== 'aws.guardduty' ||
+    event['detail-type'] !== 'GuardDuty Malware Protection Object Scan Result'
+  )
+    return;
+  const detail = z
+    .object({
+      s3ObjectDetails: z.object({
+        bucketName: z.string(),
+        objectKey: z.string(),
+        versionId: z.string().min(1),
+      }),
+      scanResultDetails: z.object({ scanResultStatus: z.string() }),
+    })
+    .safeParse(event.detail);
+  const mediaBucket = process.env.CONTACTS_INVENTORY_MEDIA_BUCKET;
+  if (!detail.success || !mediaBucket || detail.data.s3ObjectDetails.bucketName !== mediaBucket)
+    return;
+  const [, itemId, id] = detail.data.s3ObjectDetails.objectKey.split('/');
+  if (
+    !detail.data.s3ObjectDetails.objectKey.startsWith('candidates/') ||
+    !uuidForScan.safeParse(itemId).success ||
+    !uuidForScan.safeParse(id).success ||
+    !itemId ||
+    !id ||
+    detail.data.s3ObjectDetails.objectKey !== `candidates/${itemId}/${id}`
+  )
+    return;
+  const {
+    CONTACTS_INVENTORY_WORKSPACE: workspace,
+    CONTACTS_INVENTORY_RECORDS_TABLE: table,
+    CONTACTS_INVENTORY_LEDGER_TABLE: ledger,
+    CONTACTS_INVENTORY_ARTIFACT_BUCKET: artifacts,
+    CONTACTS_INVENTORY_RELEASE: release,
+  } = process.env;
+  if (
+    !workspace ||
+    !table ||
+    !ledger ||
+    !artifacts ||
+    !release ||
+    !(await isActiveRelease(artifacts, release))
+  )
+    return;
+  await reconcileInventoryScan(
+    new DynamoWorkspaceStore(workspace, table, ledger),
+    itemId,
+    id,
+    detail.data.s3ObjectDetails.versionId,
+    detail.data.scanResultDetails.scanResultStatus,
+  );
+}
+const uuidForScan = z.uuid();
+
+export function handler(event: APIGatewayProxyEventV2): Promise<APIGatewayProxyStructuredResultV2>;
+export function handler(event: InventoryScan): Promise<void>;
+export async function handler(event: APIGatewayProxyEventV2 | InventoryScan) {
+  if ('detail-type' in event) return handleScan(event);
   const start = performance.now();
   const response = await handleRequest(event);
   const release = process.env.CONTACTS_INVENTORY_RELEASE;

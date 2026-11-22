@@ -1,7 +1,15 @@
+import { MedicineFields, medicineFormData, type PrescriberOption } from './MedicineFields.js';
+import { emptyMedicineFilters, MedicineFilters } from './MedicineFilters.js';
+import { contactName } from '../contacts/contact-filters.js';
 import { ItemImage } from './ItemImage.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import {
+  contactFieldsSchema,
+  prescriberContactTypeId,
+  strengthUnitSchema,
+  type ContactType,
   itemFieldsSchema,
+  itemPayload,
   locationSchema,
   type FeatureHost,
   type InventoryLocation,
@@ -14,24 +22,34 @@ import { visibleItems, type InventoryItem } from './item-filters.js';
 function ItemForm({
   item,
   locations,
+  units,
+  prescribers,
   save,
   remove,
 }: {
   item?: InventoryItem;
   locations: InventoryLocation[];
+  units: ContactType[];
+  prescribers: PrescriberOption[];
   save(fields: ItemFields): Promise<void>;
   remove(): Promise<void>;
 }) {
   const [name, setName] = useState(item?.fields.name ?? '');
+  const [type, setType] = useState<ItemFields['type']>(item?.fields.type ?? 'base');
   const [locationId, setLocation] = useState(item?.fields.locationId ?? '');
   const [busy, setBusy] = useState(false);
   const [issue, setIssue] = useState('');
 
-  async function submit(event: FormEvent) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const parsed = itemFieldsSchema.safeParse({ name, locationId, type: 'base' });
+    const parsed = itemFieldsSchema.safeParse({
+      name,
+      locationId,
+      type,
+      ...(type === 'medicine' ? medicineFormData(new FormData(event.currentTarget)) : {}),
+    });
     if (!parsed.success) {
-      setIssue('Enter an item name and choose a location.');
+      setIssue('Check the item details and required selections.');
       return;
     }
     await act(() => save(parsed.data));
@@ -78,6 +96,26 @@ function ItemForm({
           ))}
         </select>
       </label>
+      <label>
+        Item type
+        <select
+          value={type}
+          disabled={Boolean(item)}
+          onChange={(event) =>
+            setType(event.currentTarget.value === 'medicine' ? 'medicine' : 'base')
+          }
+        >
+          <option value="base">Base</option>
+          <option value="medicine">Medicine</option>
+        </select>
+      </label>
+      {type === 'medicine' && (
+        <MedicineFields
+          units={units}
+          prescribers={prescribers}
+          {...(item?.fields.type === 'medicine' ? { fields: item.fields } : {})}
+        />
+      )}
       <button type="submit" disabled={busy}>
         Save item
       </button>
@@ -98,8 +136,20 @@ function ItemForm({
   );
 }
 
-export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?: string }) {
+export function InventoryPage({
+  host,
+  recordId,
+  medicationList = false,
+}: {
+  host: FeatureHost;
+  recordId?: string;
+  medicationList?: boolean;
+}) {
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [type, setType] = useState('');
+  const [medicineFilters, setMedicineFilters] = useState(emptyMedicineFilters);
+  const [units, setUnits] = useState<ContactType[]>([]);
+  const [prescribers, setPrescribers] = useState<PrescriberOption[]>([]);
   const [locations, setLocations] = useState<InventoryLocation[]>([]);
   const [generation, setGeneration] = useState<number>();
   const [pending, setPending] = useState(0);
@@ -122,17 +172,29 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
     });
 
     async function readLocal() {
-      const [records, cursor, catalogs, { drafts, conflicts }] = await Promise.all([
+      const [records, cursor, catalogs, cachedUnits, { drafts, conflicts }] = await Promise.all([
         local.read(),
         local.cursor(),
         local.locations(),
+        local.strengthUnits(),
         local.draftStatus(),
       ]);
       if (controller.signal.aborted) return;
       const displayed = new Map<string, InventoryItem>();
+      const clinicians = new Map<string, PrescriberOption>();
+      function setPrescriber(id: string, fields: unknown) {
+        const contact = contactFieldsSchema.safeParse(fields);
+        if (contact.success && contact.data.contactTypeId === prescriberContactTypeId)
+          clinicians.set(id, { id, name: contactName(contact.data) });
+        else clinicians.delete(id);
+      }
       for (const record of records) {
+        if (record.kind === 'contact') {
+          setPrescriber(record.id, record.fields);
+          continue;
+        }
         const parsed = itemFieldsSchema.safeParse(record.fields);
-        if (record.kind === 'item' && parsed.success)
+        if (parsed.success)
           displayed.set(record.id, {
             id: record.id,
             revision: record.revision,
@@ -154,6 +216,10 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
             fields: parsed.data,
           });
       }
+      for (const draft of drafts.filter((entry) => entry.kind === 'contact'))
+        setPrescriber(draft.id, draft.action === 'delete' ? undefined : draft.fields);
+      setPrescribers([...clinicians.values()].sort((a, b) => a.name.localeCompare(b.name)));
+      setUnits(cachedUnits);
       setItems([...displayed.values()]);
       setGeneration(cursor?.generation);
       setLocations(catalogs);
@@ -171,10 +237,13 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
         setMessage('');
         await sync.refresh();
         const response = await host.request('/catalogs', { signal: controller.signal });
-        if (response.ok)
-          await local.cacheLocations(
-            locationSchema.array().parse((await response.json()).locations),
-          );
+        if (response.ok) {
+          const data = await response.json();
+          await Promise.all([
+            local.cacheLocations(locationSchema.array().parse(data.locations)),
+            local.cacheStrengthUnits(strengthUnitSchema.array().parse(data.strengthUnits ?? [])),
+          ]);
+        }
         await readLocal();
       } catch {
         if (!controller.signal.aborted) setMessage('Inventory could not be refreshed. Try again.');
@@ -203,18 +272,29 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
       mutationId: crypto.randomUUID(),
       action,
       ...(item ? { revision: item.revision } : {}),
-      ...(fields ? { fields } : {}),
+      ...(fields ? { fields: itemPayload(fields) } : {}),
     });
     if (action === 'delete')
       setItems((current) => current.filter((entry) => entry.id !== item?.id));
     setCreating(false);
     void workspace.refresh();
   }
-  const filtered = visibleItems(items, name, location);
+  const filtered = visibleItems(items, name, location, type, medicineFilters, medicationList);
+  const title = medicationList ? 'Medication List' : 'Inventory';
 
   return (
-    <section aria-label="Inventory">
-      <h1>Inventory</h1>
+    <section aria-label={title}>
+      <h1>{title}</h1>
+      {!recordId &&
+        (medicationList ? (
+          <button type="button" onClick={() => host.navigate({ page: 'inventory' })}>
+            Back to inventory
+          </button>
+        ) : (
+          <button type="button" onClick={() => host.navigate({ page: 'medication-list' })}>
+            Medication List
+          </button>
+        ))}
       {message && <p role="status">{message}</p>}
       {pending > 0 && (
         <p>
@@ -227,7 +307,7 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
           Back to inventory
         </button>
       )}
-      {!recordId && (
+      {!recordId && !medicationList && (
         <button
           type="button"
           disabled={!generation || locations.length === 0}
@@ -236,11 +316,15 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
           New item
         </button>
       )}
-      {!locations.length && generation && <p>Add an inventory location before creating an item.</p>}
+      {!locations.length && generation && !medicationList && (
+        <p>Add an inventory location before creating an item.</p>
+      )}
       {(creating || item) && (
         <ItemForm
           key={item?.id ?? 'new'}
           locations={locations}
+          units={units}
+          prescribers={prescribers}
           {...(item ? { item } : {})}
           save={(fields) => change(item ? 'update' : 'create', fields)}
           remove={() => change('delete')}
@@ -279,9 +363,36 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
                 ))}
               </select>
             </label>
+            {!medicationList && (
+              <label>
+                Filter by item type
+                <select
+                  value={type}
+                  onChange={(event) => {
+                    const value = event.currentTarget.value;
+                    setType(value);
+                    if (value !== 'medicine') setMedicineFilters(emptyMedicineFilters);
+                  }}
+                >
+                  <option value="">All item types</option>
+                  <option value="base">Base</option>
+                  <option value="medicine">Medicine</option>
+                </select>
+              </label>
+            )}
+            {!medicationList && type === 'medicine' && (
+              <MedicineFilters
+                filters={medicineFilters}
+                change={setMedicineFilters}
+                units={units}
+                prescribers={prescribers}
+              />
+            )}
             <button
               type="button"
               onClick={() => {
+                setType('');
+                setMedicineFilters(emptyMedicineFilters);
                 setName('');
                 setLocation('');
               }}
@@ -290,7 +401,13 @@ export function InventoryPage({ host, recordId }: { host: FeatureHost; recordId?
             </button>
           </div>
           {filtered.length === 0 ? (
-            <p>{name || location ? 'No matching items.' : 'No inventory items yet.'}</p>
+            <p>
+              {name || location || type
+                ? 'No matching items.'
+                : medicationList
+                  ? 'No medications on the list.'
+                  : 'No inventory items yet.'}
+            </p>
           ) : (
             <ul>
               {filtered.map(({ id, fields }) => (

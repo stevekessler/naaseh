@@ -2,6 +2,8 @@ import { createRoot } from 'react-dom/client';
 import { hostProtocol, type FeatureModule } from '@naaseh/contacts-inventory-contracts';
 import { ContactsPage } from './contacts/ContactsPage.js';
 import { InventoryPage } from './inventory/InventoryPage.js';
+import { MedicationListPage } from './inventory/MedicationListPage.js';
+import { StrengthUnitsPage } from './admin/StrengthUnitsPage.js';
 import { LocationsPage } from './admin/LocationsPage.js';
 import { ContactTypesPage } from './admin/ContactTypesPage.js';
 
@@ -17,6 +19,10 @@ export const mount: FeatureModule['mount'] = (container, location, host) => {
     root.render(
       <InventoryPage host={host} {...(location.recordId ? { recordId: location.recordId } : {})} />,
     );
+  } else if (location.page === 'medication-list') {
+    root.render(<MedicationListPage host={host} />);
+  } else if (location.page === 'catalog' && location.catalog === 'strength-units' && host.isAdmin) {
+    root.render(<StrengthUnitsPage host={host} />);
   } else if (location.page === 'catalog' && location.catalog === 'locations' && host.isAdmin) {
     root.render(<LocationsPage host={host} />);
   } else if (location.page === 'catalog' && location.catalog === 'contact-types' && host.isAdmin) {
@@ -26,3 +32,4 @@ export const mount: FeatureModule['mount'] = (container, location, host) => {
   }
   return () => root.unmount();
 };
+export { watchSearch } from './search.js';

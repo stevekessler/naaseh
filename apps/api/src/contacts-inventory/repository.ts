@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import type { SyncCursor, Tombstone, WorkspaceRecord } from '@naaseh/contacts-inventory-contracts';
+import {
+  prescriberContactTypeId,
+  type SyncCursor,
+  type Tombstone,
+  type WorkspaceRecord,
+} from '@naaseh/contacts-inventory-contracts';
 
 export type RecordKey = Pick<WorkspaceRecord, 'kind' | 'id'>;
 export type StoredRecord = WorkspaceRecord | Tombstone;
@@ -33,6 +38,7 @@ export type Commit = {
   receipt: Receipt;
   entry: ChangeEntry;
   ledger?: DeletionEntry;
+  referenceDeltas?: Array<{ id: string; count: 1 | -1 }>;
 };
 export interface WorkspaceStore {
   checkpoint(): Promise<SyncCursor>;
@@ -44,6 +50,7 @@ export interface WorkspaceStore {
     after: string | undefined,
     limit: number,
   ): Promise<{ records: StoredRecord[]; next: string | undefined }>;
+  referenceCount(id: string): Promise<number>;
   commit(input: Commit): Promise<boolean>;
 }
 
@@ -54,7 +61,9 @@ export class WorkspaceError extends Error {
       | 'revision_conflict'
       | 'idempotency_conflict'
       | 'retry_required'
-      | 'invalid_cursor',
+      | 'invalid_cursor'
+      | 'reference_in_use'
+      | 'invalid_reference',
     readonly current?: StoredRecord,
   ) {
     super(code);
@@ -116,6 +125,41 @@ export class WorkspaceRepository {
         throw new WorkspaceError('revision_conflict', current);
       }
 
+      const currentFields = isLive(current) ? current.fields : undefined;
+      const nextFields = mutation.action === 'delete' ? undefined : mutation.fields;
+      let referenceIssue: 'reference_in_use' | 'invalid_reference' | undefined;
+      const prescriber = (fields: WorkspaceRecord['fields'] | undefined) =>
+        fields?.type === 'medicine' && typeof fields.prescriberId === 'string'
+          ? fields.prescriberId
+          : undefined;
+      const previousPrescriber = kind === 'item' ? prescriber(currentFields) : undefined;
+      const nextPrescriber = kind === 'item' ? prescriber(nextFields) : undefined;
+      if (kind === 'item' && action === 'update' && currentFields?.type !== nextFields?.type)
+        referenceIssue = 'invalid_reference';
+      if (nextPrescriber && previousPrescriber !== nextPrescriber) {
+        const contact = await this.store.record({ kind: 'contact', id: nextPrescriber });
+        if (!isLive(contact) || contact.fields.contactTypeId !== prescriberContactTypeId)
+          referenceIssue = 'invalid_reference';
+      }
+      if (
+        kind === 'contact' &&
+        currentFields?.contactTypeId === prescriberContactTypeId &&
+        nextFields?.contactTypeId !== prescriberContactTypeId &&
+        (await this.store.referenceCount(id)) > 0
+      )
+        referenceIssue = 'reference_in_use';
+      if (referenceIssue) {
+        const latest = await this.store.checkpoint();
+        if (latest.generation !== generation) throw new WorkspaceError('reset_required');
+        if (latest.sequence !== expected.sequence) continue;
+        throw new WorkspaceError(referenceIssue);
+      }
+      const referenceDeltas: NonNullable<Commit['referenceDeltas']> = [];
+      if (previousPrescriber !== nextPrescriber) {
+        if (previousPrescriber) referenceDeltas.push({ id: previousPrescriber, count: -1 });
+        if (nextPrescriber) referenceDeltas.push({ id: nextPrescriber, count: 1 });
+      }
+
       const revision = (current?.revision ?? 0) + 1;
       const sequence = expected.sequence + 1;
       const identity = { ...key, revision, lastChangeSequence: sequence };
@@ -146,6 +190,7 @@ export class WorkspaceRepository {
           record,
           receipt: { actor, mutationId, digest, outcome },
           entry: { ...key, sequence },
+          ...(referenceDeltas.length ? { referenceDeltas } : {}),
           ...('deleted' in record ? { ledger: { ...record, generation } } : {}),
         })
       )
