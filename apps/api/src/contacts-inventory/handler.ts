@@ -1,3 +1,4 @@
+import { mutateItem } from './items.js';
 import { z } from 'zod';
 import { ContactCatalog } from './catalogs.js';
 import { bodyJson, mutateContact } from './contacts.js';
@@ -9,6 +10,7 @@ import { createFeatureTelemetry, featureOperation } from './telemetry.js';
 import type { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
 import {
   catalogIdSchema,
+  locationFieldsSchema,
   parseMutationHeaders,
   featureApiPrefix,
   featureCatalogs,
@@ -98,6 +100,8 @@ async function handleRequest(
     try {
       let body: unknown;
       let statusCode = 200;
+      const item = path.match(/^items\/([^/]+)$/u);
+      const location = path.match(/^catalogs\/locations\/([^/]+)$/u);
       const contact = path.match(/^contacts\/([^/]+)$/u);
       const contactType = path.match(/^catalogs\/contact-types\/([^/]+)$/u);
       if (method === 'GET' && (readiness || isWorkspaceReadPath(path))) {
@@ -114,7 +118,7 @@ async function handleRequest(
       } else if (method === 'GET' && path === 'catalogs') {
         body = {
           contactTypes: await catalog.list(),
-          locations: [],
+          locations: await catalog.locations(),
           strengthUnits: [],
           generation: (await repo.store.checkpoint()).generation,
         };
@@ -130,6 +134,22 @@ async function handleRequest(
           throw new WorkspaceError('reset_required');
         body = await catalog.write(id.data, input.data.name, session.userId, precondition);
         statusCode = precondition.mode === 'create' ? 201 : 200;
+      } else if (method === 'PUT' && location) {
+        const id = catalogIdSchema.safeParse(location[1]);
+        const input = locationFieldsSchema.safeParse(bodyJson(event));
+        const precondition = parseMutationHeaders(event.headers);
+        if (!id.success || !input.success || !precondition)
+          return error(400, 'invalid_catalog', 'Enter a valid inventory location and retry.');
+        if ((await repo.store.checkpoint()).generation !== precondition.generation)
+          throw new WorkspaceError('reset_required');
+        body = await catalog.writeLocation(id.data, input.data, session.userId, precondition);
+        statusCode = precondition.mode === 'create' ? 201 : 200;
+      } else if (item?.[1] && (method === 'PUT' || method === 'DELETE')) {
+        const result = await mutateItem(repo, catalog, session.userId, item[1], event);
+        if (!result)
+          return error(400, 'invalid_item', 'Check the item name and location and try again.');
+        body = result;
+        statusCode = result.action === 'create' ? 201 : 200;
       } else if (contact?.[1] && (method === 'PUT' || method === 'DELETE')) {
         const result = await mutateContact(repo, catalog, session.userId, contact[1], event);
         if (!result)

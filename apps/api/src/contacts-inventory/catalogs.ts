@@ -8,8 +8,10 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import {
   contactTypeSchema,
+  locationSchema,
   prescriberContactTypeId,
   type ContactType,
+  type InventoryLocation,
   type MutationPrecondition,
 } from '@naaseh/contacts-inventory-contracts';
 import { dynamodb } from '../shared/dynamodb.js';
@@ -17,6 +19,7 @@ import { WorkspaceError } from './repository.js';
 
 const partition = 'CATALOG';
 const prefix = 'contact-types#';
+const locationPrefix = 'locations#';
 const seed: ContactType = { id: prescriberContactTypeId, name: 'Prescriber', revision: 1 };
 
 export class ContactCatalog {
@@ -41,8 +44,25 @@ export class ContactCatalog {
     return item ? contactTypeSchema.parse(item.value) : id === seed.id ? seed : undefined;
   }
 
+  async location(id: string) {
+    const item = await this.get(locationPrefix + id);
+    return item ? locationSchema.parse(item.value) : undefined;
+  }
+
+  async locations() {
+    return this.listValues(locationPrefix, (value) => locationSchema.parse(value));
+  }
+
   async list() {
-    const types = new Map([[seed.id, seed]]);
+    return this.listValues(prefix, (value) => contactTypeSchema.parse(value), [seed]);
+  }
+
+  private async listValues<T extends ContactType>(
+    keyPrefix: string,
+    parse: (value: unknown) => T,
+    defaults: T[] = [],
+  ) {
+    const types = new Map(defaults.map((value) => [value.id, value]));
     let cursor: QueryCommandOutput['LastEvaluatedKey'];
     do {
       const page = await dynamodb.send(
@@ -51,12 +71,12 @@ export class ContactCatalog {
           ConsistentRead: true,
           Limit: 100,
           KeyConditionExpression: 'pk = :pk AND begins_with(sk, :prefix)',
-          ExpressionAttributeValues: { ':pk': partition, ':prefix': prefix },
+          ExpressionAttributeValues: { ':pk': partition, ':prefix': keyPrefix },
           ...(cursor ? { ExclusiveStartKey: cursor } : {}),
         }),
       );
       for (const item of page.Items ?? []) {
-        const type = contactTypeSchema.parse(item.value);
+        const type = parse(item.value);
         types.set(type.id, type);
       }
       cursor = page.LastEvaluatedKey;
@@ -67,14 +87,37 @@ export class ContactCatalog {
   }
 
   async write(id: string, name: string, actor: string, precondition: MutationPrecondition) {
-    const { mode, mutationId, generation } = precondition;
-    const revision = mode === 'create' ? 1 : precondition.revision + 1;
+    const revision = precondition.mode === 'create' ? 1 : precondition.revision + 1;
     const value = contactTypeSchema.parse({ id, name, revision });
-    const sk = prefix + id;
+    return this.writeValue(prefix, value, actor, precondition, id === seed.id);
+  }
+
+  async writeLocation(
+    id: string,
+    fields: Pick<InventoryLocation, 'name' | 'details'>,
+    actor: string,
+    precondition: MutationPrecondition,
+  ) {
+    const revision = precondition.mode === 'create' ? 1 : precondition.revision + 1;
+    const value = locationSchema.parse({ id, ...fields, revision });
+    return this.writeValue(locationPrefix, value, actor, precondition);
+  }
+
+  private async writeValue<T extends ContactType>(
+    keyPrefix: string,
+    value: T,
+    actor: string,
+    precondition: MutationPrecondition,
+    seeded = false,
+  ) {
+    const { mode, mutationId, generation } = precondition;
+    const sk = keyPrefix + value.id;
     const receipt = `RECEIPT#${JSON.stringify([actor, mutationId])}`;
-    const digest = createHash('sha256')
-      .update(JSON.stringify([id, name, mode, revision, generation]))
-      .digest('hex');
+    const input =
+      keyPrefix === prefix
+        ? [value.id, value.name, mode, value.revision, generation]
+        : [keyPrefix, value, mode, generation];
+    const digest = createHash('sha256').update(JSON.stringify(input)).digest('hex');
     const repeated = async () => {
       const recorded = await this.get(receipt);
       if (!recorded) return false;
@@ -82,12 +125,12 @@ export class ContactCatalog {
       return true;
     };
     if (await repeated()) return value;
-    if (mode === 'create' && id === seed.id) throw new WorkspaceError('revision_conflict');
+    if (mode === 'create' && seeded) throw new WorkspaceError('revision_conflict');
 
     const condition =
       mode === 'create'
         ? 'attribute_not_exists(pk)'
-        : id === seed.id && precondition.revision === 1
+        : seeded && precondition.revision === 1
           ? 'attribute_not_exists(pk) OR #value.revision = :revision'
           : '#value.revision = :revision';
     try {

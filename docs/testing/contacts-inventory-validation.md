@@ -42,3 +42,8 @@ npx playwright test tests/e2e/contacts-inventory-contacts.spec.ts
 ```
 
 The `contacts-inventory-release` GitHub environment owns the feature-specific deployment role, workspace canary session, and workspace identities. Before the isolated proof, configure the target host's API and authorizer IDs, HTTPS origin, and retained artifact bucket. Provision the retained data stack first. The release role needs conditional writes to the feature manifest and release prefix, and prefix-scoped listing for the first manifest lookup. The feature API role only reads the active manifest. Use the expected active release ID on each manual workflow dispatch, or `inactive` before the first publication.
+
+## Hosted Contacts browser verification
+
+- Run [45057960735](https://github.com/stevekessler/naaseh/actions/runs/45057960735) passed the Contacts create, filter and edit journey on Chromium, WebKit, iPhone and iPad.
+- Run [45058527537](https://github.com/stevekessler/naaseh/actions/runs/45058527537) passed the expanded journey including a Prescriber catalog rename that preserved the ID and a stale offline edit purged after another member deleted the record.

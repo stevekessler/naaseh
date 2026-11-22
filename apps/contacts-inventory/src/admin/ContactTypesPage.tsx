@@ -1,15 +1,27 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   contactTypeSchema,
+  locationSchema,
   workspaceGenerationHeader,
-  type ContactType,
+  type InventoryLocation,
   type FeatureHost,
 } from '@naaseh/contacts-inventory-contracts';
 
-export function ContactTypesPage({ host }: { host: FeatureHost }) {
-  const [types, setTypes] = useState<ContactType[]>([]);
-  const [selected, setSelected] = useState<ContactType>();
+export function CatalogPage({
+  host,
+  kind,
+}: {
+  host: FeatureHost;
+  kind: 'contact-types' | 'locations';
+}) {
+  const isLocation = kind === 'locations';
+  const schema = isLocation ? locationSchema : contactTypeSchema;
+  const title = isLocation ? 'Locations' : 'Contact Types';
+  const singular = isLocation ? 'location' : 'contact type';
+  const [types, setTypes] = useState<InventoryLocation[]>([]);
+  const [selected, setSelected] = useState<InventoryLocation>();
   const [name, setName] = useState('');
+  const [details, setDetails] = useState('');
   const [generation, setGeneration] = useState<number>();
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
@@ -24,18 +36,19 @@ export function ContactTypesPage({ host }: { host: FeatureHost }) {
         if (!response.ok) throw new Error();
         const body = await response.json();
         if (controller.signal.aborted) return;
-        setTypes(contactTypeSchema.array().parse(body.contactTypes));
+        setTypes(schema.array().parse(isLocation ? body.locations : body.contactTypes));
         setGeneration(body.generation);
       })
       .catch(() => {
-        if (!controller.signal.aborted) setMessage('Contact types could not be loaded.');
+        if (!controller.signal.aborted) setMessage(`${title} could not be loaded.`);
       });
     return () => controller.abort();
-  }, [host]);
+  }, [host, isLocation, schema, title]);
 
-  function choose(type?: ContactType) {
+  function choose(type?: InventoryLocation) {
     setSelected(type);
     setName(type?.name ?? '');
+    setDetails(type?.details ?? '');
     setDraftId(crypto.randomUUID());
     setMutationId(crypto.randomUUID());
     setMessage('');
@@ -46,7 +59,7 @@ export function ContactTypesPage({ host }: { host: FeatureHost }) {
     if (!generation || busy || !name.trim()) return;
     setBusy(true);
     try {
-      const response = await host.request(`/catalogs/contact-types/${selected?.id ?? draftId}`, {
+      const response = await host.request(`/catalogs/${kind}/${selected?.id ?? draftId}`, {
         method: 'PUT',
         headers: {
           'content-type': 'application/json',
@@ -54,34 +67,34 @@ export function ContactTypesPage({ host }: { host: FeatureHost }) {
           'idempotency-key': mutationId,
           ...(selected ? { 'if-match': `"${selected.revision}"` } : { 'if-none-match': '*' }),
         },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: name.trim(), ...(isLocation ? { details } : {}) }),
       });
       if (!response.ok) {
         setMessage(
           response.status === 409
-            ? 'This contact type changed. Reopen Contact Types before retrying.'
-            : 'Contact type could not be saved. Try again.',
+            ? `This ${singular} changed. Reopen ${title} before retrying.`
+            : `The ${singular} could not be saved. Try again.`,
         );
         return;
       }
-      const updated = contactTypeSchema.parse(await response.json());
+      const updated = schema.parse(await response.json());
       setTypes((previous) =>
         [...previous.filter(({ id }) => id !== updated.id), updated].sort((a, b) =>
           a.name.localeCompare(b.name),
         ),
       );
       choose();
-      setMessage('Contact type saved.');
+      setMessage(isLocation ? 'Location saved.' : 'Contact type saved.');
     } catch {
-      setMessage('Contact type could not be saved. Try again.');
+      setMessage(`The ${singular} could not be saved. Try again.`);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section aria-label="Contact Types">
-      <h1>Contact Types</h1>
+    <section aria-label={title}>
+      <h1>{title}</h1>
       <ul>
         {types.map((type) => (
           <li key={type.id}>
@@ -92,7 +105,7 @@ export function ContactTypesPage({ host }: { host: FeatureHost }) {
         ))}
       </ul>
       <form onSubmit={(event) => void save(event)}>
-        <h2>{selected ? 'Rename contact type' : 'New contact type'}</h2>
+        <h2>{`${selected ? (isLocation ? 'Edit' : 'Rename') : 'New'} ${singular}`}</h2>
         <label>
           Name
           <input
@@ -105,8 +118,21 @@ export function ContactTypesPage({ host }: { host: FeatureHost }) {
             }}
           />
         </label>
+        {isLocation && (
+          <label>
+            Location details
+            <textarea
+              value={details}
+              maxLength={12000}
+              onChange={(event) => {
+                setDetails(event.currentTarget.value);
+                setMutationId(crypto.randomUUID());
+              }}
+            />
+          </label>
+        )}
         <button type="submit" disabled={busy || !generation}>
-          Save type
+          {isLocation ? 'Save location' : 'Save type'}
         </button>
         {selected && (
           <button type="button" disabled={busy} onClick={() => choose()}>
@@ -117,4 +143,8 @@ export function ContactTypesPage({ host }: { host: FeatureHost }) {
       {message && <p role="status">{message}</p>}
     </section>
   );
+}
+
+export function ContactTypesPage({ host }: { host: FeatureHost }) {
+  return <CatalogPage host={host} kind="contact-types" />;
 }

@@ -35,11 +35,11 @@ Write story tests and confirm they fail against the supported baseline before im
 **Independent test** — Create a CO Prescriber with a preferred phone number, make an edit from the other account, filter to the original UUID, then delete it and verify that access ends for both.
 
 - [X] T017 [P] [US1] Test contact field validation, default-number clearing, case-insensitive names and digit matching, and admin catalog permissions in `tests/contract/contacts-inventory-contacts.check.ts`.
-- [ ] T018 [P] [US1] Write Chromium/WebKit coverage for catalog seeding and renaming, shared contact create/edit, filtering, and offline stale-edit replay after deletion in `tests/e2e/contacts-inventory-contacts.spec.ts`.
+- [X] T018 [P] [US1] Write Chromium/WebKit coverage for catalog seeding and renaming, shared contact create/edit, filtering, and offline stale-edit replay after deletion in `tests/e2e/contacts-inventory-contacts.spec.ts`.
 - [X] T019 [US1] Implement Contact validation and default-number handling in `packages/contacts-inventory-contracts/src/contacts.ts`. Add catalog reads, revision-checked admin writes and a stable, idempotent Prescriber seed in `apps/api/src/contacts-inventory/catalogs.ts` and route them in `apps/api/src/contacts-inventory/handler.ts`.
 - [X] T020 [US1] Implement UUID-based shared contact list, detail, create, edit and deletion endpoints in `apps/api/src/contacts-inventory/contacts.ts`, registered via `apps/api/src/contacts-inventory/handler.ts`.
 - [X] T021 [US1] Build Contact Types admin and the Contacts directory, form, empty state and filters in `apps/contacts-inventory/src/admin/ContactTypesPage.tsx`, `apps/contacts-inventory/src/contacts/ContactsPage.tsx`, and `apps/contacts-inventory/src/contacts/contact-filters.ts`. Cover blank fields and duplicate names in `apps/contacts-inventory/src/contacts/contact-filters.test.ts`.
-- [ ] T022 [US1] Wire the feature entry and offline interaction, including deletion confirmation and status feedback, in `apps/contacts-inventory/src/entry.tsx` and `apps/contacts-inventory/src/contacts/ContactsPage.tsx`. Run the story’s contract and browser checks.
+- [X] T022 [US1] Wire the feature entry and offline interaction, including deletion confirmation and status feedback, in `apps/contacts-inventory/src/entry.tsx` and `apps/contacts-inventory/src/contacts/ContactsPage.tsx`. Run the story’s contract and browser checks.
 
 ## Phase 4 — US2 Track inventory and its location (P1)
 
@@ -49,7 +49,7 @@ Write story tests and confirm they fail against the supported baseline before im
 
 - [ ] T023 [P] [US2] Test inventory, location and image contracts, including member/outsider access, actual file validation, stale scan and concurrent replacement or deletion, in `tests/integration/contacts-inventory-media.test.ts`.
 - [ ] T024 [P] [US2] Write Chromium/WebKit coverage for multiline location details, shared inventory, filters, image error and replacement, and offline image deferral in `tests/e2e/contacts-inventory-items.spec.ts`.
-- [ ] T025 [US2] Implement base item schemas and location references in `packages/contacts-inventory-contracts/src/items.ts` and `apps/api/src/contacts-inventory/catalogs.ts`.
+- [X] T025 [US2] Implement base item schemas and location references in `packages/contacts-inventory-contracts/src/items.ts` and `apps/api/src/contacts-inventory/catalogs.ts`.
 - [ ] T026 [US2] Implement inventory list, detail and mutation routes and transactional deletion with image generation invalidation in `apps/api/src/contacts-inventory/items.ts` and `apps/api/src/contacts-inventory/handler.ts`.
 - [ ] T027 [US2] Implement candidate upload, exact-version JPEG/PNG verification, 25 MiB limit, GuardDuty scan handling, conditional image activation, timeouts and reconciliation in `apps/api/src/contacts-inventory/images.ts`, `apps/api/src/contacts-inventory/scan-results.ts`, and `infra/lib/contacts-inventory-data-stack.ts`.
 - [ ] T028 [US2] Add authenticated, uncached image reads in `apps/api/src/contacts-inventory/images.ts`. Serve at most 4 MiB of raw bytes per response, require the current strong validator for subsequent ranges, and recheck the live pointer and membership on each request.

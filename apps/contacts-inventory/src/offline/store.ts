@@ -1,10 +1,12 @@
 import Dexie, { type Table } from 'dexie';
 import {
   contactTypeSchema,
+  locationSchema,
   featureDatabaseName,
   featureDatabaseSchema,
   featureDatabaseVersion,
   type ContactType,
+  type InventoryLocation,
   type FeatureHost,
   type SyncCursor,
   type Tombstone,
@@ -36,7 +38,7 @@ export type QueueRow = {
   status: Status;
   ciphertext?: string;
 };
-type SyncRow = SyncCursor & { account: string; contactTypes?: string };
+type SyncRow = SyncCursor & { account: string; contactTypes?: string; locations?: string };
 
 export class OfflineWorkspace {
   private readonly db = new Dexie(featureDatabaseName);
@@ -93,6 +95,18 @@ export class OfflineWorkspace {
   async cacheContactTypes(types: ContactType[]) {
     const encrypted = await this.host.encrypt('contact-types', JSON.stringify(types));
     await this.sync.update(this.account, { contactTypes: encrypted });
+  }
+
+  async locations() {
+    const state = await this.sync.get(this.account);
+    if (!state?.locations) return [];
+    const decoded: unknown = JSON.parse(await this.host.decrypt('locations', state.locations));
+    return locationSchema.array().parse(decoded);
+  }
+
+  async cacheLocations(locations: InventoryLocation[]) {
+    const encrypted = await this.host.encrypt('locations', JSON.stringify(locations));
+    await this.sync.update(this.account, { locations: encrypted });
   }
 
   async draftStatus() {
@@ -232,6 +246,9 @@ export class OfflineWorkspace {
         account: this.account,
         ...(current?.generation === next.generation && current.contactTypes
           ? { contactTypes: current.contactTypes }
+          : {}),
+        ...(current?.generation === next.generation && current.locations
+          ? { locations: current.locations }
           : {}),
       });
       return true;
