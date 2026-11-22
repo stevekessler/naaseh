@@ -53,8 +53,8 @@ The `contacts-inventory-release` GitHub environment owns the feature-specific de
 - Hosted run [45059657838](https://github.com/stevekessler/naaseh/actions/runs/45059657838) passed the Inventory journey on Chromium, WebKit, iPhone and iPad. It covers multiline locations, filtering, image deferral while offline, activation after an accepted scan, and a rejected replacement that preserves the existing image. The hosted browser tests use simulated scan responses.
 - The targeted feature configuration passed 42 local checks across API access, deletion and sync, image validation and scan versioning, Medicine links and reference races, Search preferences and projection, and infrastructure. The repository Vitest suite also passed 1,364 tests across 411 files in 72 seconds. TypeScript, the two standalone feature builds, Apple contract validation and feature stack synthesis passed.
 - Offline conflict review now compares the saved record with the encrypted draft and requires an explicit apply or discard. A targeted browser fixture covers rebasing a draft onto a new restore generation.
-- The managed session started the browser preview server. Chromium and WebKit exited during launch in all four projects before the new Medicine and Search assertions ran. The hosted runner is available once the new commit is pushed. The required browser selection is unchanged.
-- The mobile benchmark seeds 500 contacts and 500 inventory records, applies 4× CPU slowdown under a Pixel 7 profile, and records 40 end-to-visible-result measurements. Successful browser timing and observations from five first-time testers are still pending.
+- The managed session started the preview server, but Chromium and WebKit exited during launch. The on-demand GitHub Actions workflow supplies browser evidence. The required browser selection remains 36 tests across 22 files.
+- The [hosted mobile benchmark](https://github.com/stevekessler/naaseh/actions/runs/45065132543) passed the two-second threshold for all 40 measured interactions with 500 Contacts and 500 Inventory records. Pixel 7 emulation used 4× CPU slowdown, 150 ms network latency, 200 kB/s download, and 90 kB/s upload. The 95th percentile was 119 ms and the slowest result was 957 ms. This verifies SC-005 for the emulated profile. SC-001 still requires observations from five representative first-time testers.
 
 ```sh
 npx vitest run --config apps/contacts-inventory/vitest.config.ts
@@ -63,3 +63,16 @@ npx playwright test --config playwright.contacts-inventory.performance.config.ts
 ```
 
 The [release runbook](../operations/contacts-inventory-release.md) covers isolated install, rollback and paired recovery. Hosted AWS acceptance and the paired recovery exercise still need an approved isolated environment.
+
+## Hosted browser verification of the expanded feature
+
+- The [Medicine browser suite](https://github.com/stevekessler/naaseh/actions/runs/45065213759) passed on Chromium, WebKit, iPhone and iPad. It covers shared Prescriber selection, strength-unit rename, Medicine filter reset, medication-list inclusion independent of status, and offline replay of a Prescriber before the Medicine that references it.
+- The [Search browser suite](https://github.com/stevekessler/naaseh/actions/runs/45065214907) passed on the four profiles. It checks all eight switch combinations and counts, reset defaults, a Medicine result linking to its record, deletion, and removal of results and counts when workspace access is denied.
+- The [Contacts regression run](https://github.com/stevekessler/naaseh/actions/runs/45065239001) and [Inventory regression run](https://github.com/stevekessler/naaseh/actions/runs/45065238498) passed on the same four profiles against the updated branch.
+- The [encrypted offline storage and restore fixture](https://github.com/stevekessler/naaseh/actions/runs/45064830479) passed on Chromium, WebKit, iPhone and iPad. It verifies that queued data remains encrypted, deletion removes queued record contents, and applying a retained draft after a restore updates its generation and mutation ID.
+- The [release fixture](https://github.com/stevekessler/naaseh/actions/runs/45064830315) passed across all four profiles for activation, upgrade, rollback, incompatible manifest fallback and withdrawal on the prepared host. Finance-enabled deployment fingerprints, retained data on the real host, and authenticated native probes still require the isolated environment.
+- The targeted suite now passes 45 checks, including rejection of a mislabelled file by inspecting the submitted S3 object version, and verification that image replacement loses safely after a competing replacement or deletion.
+
+## First-use acceptance procedure
+
+Set up the isolated acceptance host with the Contacts and Inventory release active, one configured location, and synthetic workspace data. Give each of five representative first-time testers a fresh browser session with access to that workspace. Start timing when they receive the task: create a Prescriber in Contacts, then save a Medicine record at the configured location with that Prescriber. Give each tester one attempt without coaching. Stop the clock when the saved Medicine is visible and confirm its Prescriber reference. Log only anonymous elapsed seconds and completion status. SC-001 passes when at least four of five testers complete the task within three minutes.
