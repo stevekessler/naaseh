@@ -75,6 +75,46 @@ export const financeReadKeys = {
   date: (fact: Pick<FinanceFact, 'effectiveAt' | 'id'>) => `DATE#${fact.effectiveAt}#${fact.id}`,
 };
 
+/** Read only indexed identifiers. The caller resolves at most one bounded batch of sources. */
+export async function readFinanceForecastReferences(
+  client: FinanceQueryClient,
+  tableName: string,
+  accountId: string,
+  dateFrom: string,
+  dateTo: string,
+  limit: number,
+) {
+  const partition = financeReadKeys.account(accountId);
+  // All supported offsets fit inside one UTC day on either side of the local window.
+  const shift = (date: string, days: number) =>
+    new Date(Date.parse(date + 'T00:00:00Z') + days * 86_400_000).toISOString().slice(0, 10);
+  const first = shift(dateFrom, -1);
+  const last = shift(dateTo, 1);
+  const page = await client.send(
+    new QueryCommand({
+      TableName: tableName,
+      KeyConditionExpression: 'PK = :pk AND SK BETWEEN :first AND :last',
+      ExpressionAttributeValues: {
+        ':pk': partition,
+        ':first': /^\d{4}-/u.test(first) ? 'DATE#' + first : 'DATE#',
+        ':last': /^\d{4}-/u.test(last) ? 'DATE#' + last + '\uffff' : 'DATE#\uffff',
+      },
+      ProjectionExpression: 'PK, SK, transactionId',
+      ConsistentRead: true,
+      Limit: limit,
+      ScanIndexForward: false,
+    }),
+  );
+  const ids = (page.Items ?? []).map(({ PK, SK, transactionId }) => {
+    if (PK !== partition || !transactionId || !SK?.endsWith('#' + transactionId))
+      throw new Error('Invalid Finance forecast reference.');
+    return transactionId;
+  });
+  if (ids.length > limit || new Set(ids).size !== ids.length)
+    throw new Error('Invalid Finance forecast reference count.');
+  return { ids, complete: !page.LastEvaluatedKey };
+}
+
 const taskLinkPartition = (taskId: string) => `FINANCE#TASK#${taskId}`;
 const targetLinkPartition = (targetType: string, targetId: string) =>
   `FINANCE#TASK_TARGET#${targetType}#${targetId}`;

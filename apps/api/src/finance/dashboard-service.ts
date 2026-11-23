@@ -18,7 +18,7 @@ import { SafeApiError } from '../shared/http.js';
 import { listFinanceBrowseKeys, type createFinanceQueryRuntime } from './query-runtime.js';
 import { FinanceSyncSourceGuard } from './sync-source-guard.js';
 
-async function budgetRows(
+export async function budgetRows(
   groupId: string,
   collection: 'budgetItems' | 'budgetAccountLinks',
   budgetId: string,

@@ -149,6 +149,8 @@ export async function loadCanonicalFinanceFact(
       { budgetItems, ...(refund && original ? { refund, original } : {}) },
       merchantName,
     ),
+    transaction,
+    isLinkedRefund: refund !== undefined,
     dependencies,
     sourceKey: record.storageKey,
   };

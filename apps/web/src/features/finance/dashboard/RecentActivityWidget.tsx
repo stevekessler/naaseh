@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { z } from 'zod';
-import { dashboardMoney } from './BudgetStatusWidget.js';
+import { dashboardMoney } from './dashboard-money.js';
 import { dashboardBatch, finishDashboardQuery, startDashboardQuery } from './dashboard-query.js';
 import { useDashboardQuery } from './use-dashboard-query.js';
 

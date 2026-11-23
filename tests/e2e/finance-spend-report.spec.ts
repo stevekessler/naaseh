@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import {
+  financeSnapshotFixtureHeaders,
   mockFinanceSnapshotEvidence,
+  mockSuccessfulSync,
   mockUnprotectedFinanceSecurity,
   seedFinanceSearch,
   signIn,
@@ -16,7 +18,8 @@ test('opens Spend, combines report filters and automatically settles pending tot
   page,
 }) => {
   await mockUnprotectedFinanceSecurity(page, { role: 'user' });
-  await mockFinanceSnapshotEvidence(page);
+  await mockSuccessfulSync(page);
+  await mockFinanceSnapshotEvidence(page, { allowProoflessPull: true });
   await page.route(
     /\/api\/v1\/finance\/(accounts|budgets|merchants|categories)(?:\?|$)/u,
     (route) => {
@@ -27,7 +30,7 @@ test('opens Spend, combines report filters and automatically settles pending tot
           : kind === 'categories'
             ? [{ id: category, name: 'Food' }]
             : [];
-      return route.fulfill({ json: { items } });
+      return route.fulfill({ headers: financeSnapshotFixtureHeaders, json: { items } });
     },
   );
   const queryId = '01J00000000000000000000603';
@@ -78,21 +81,24 @@ test('opens Spend, combines report filters and automatically settles pending tot
     route.fulfill({ json: pending }),
   );
   await page.route(/\/api\/v1\/finance\/(review-issues|connections)(\?|$)/u, (route) =>
-    route.fulfill({ json: { items: [] } }),
+    route.fulfill({ headers: financeSnapshotFixtureHeaders, json: { items: [] } }),
   );
   await page.route(/\/api\/v1\/finance\/transactions(?:\?|$)/u, (route) =>
     route.fulfill({ json: { items: [row], rowsState: 'ready', aggregateState: 'exact' } }),
   );
-  await page.route('**/api/v1/finance/transactions/' + transaction, (route) =>
-    route.fulfill({
-      json: {
-        ...row,
-        version: 1,
-        allocations: [],
-        reconciliationState: 'not-applicable',
-        reviewState: 'none',
-      },
-    }),
+  await page.route(
+    new RegExp('/api/v1/finance/transactions/' + transaction + '(?:[?]browse=1)?$'),
+    (route) =>
+      route.fulfill({
+        headers: financeSnapshotFixtureHeaders,
+        json: {
+          ...row,
+          version: 1,
+          allocations: [],
+          reconciliationState: 'not-applicable',
+          reviewState: 'none',
+        },
+      }),
   );
   await signIn(page);
   await page.goto('/finance/reports');
@@ -122,10 +128,11 @@ test('opens Spend, combines report filters and automatically settles pending tot
 
 test('uses the encrypted offline report and labels cached coverage', async ({ page }) => {
   await mockUnprotectedFinanceSecurity(page, { role: 'user' });
-  await mockFinanceSnapshotEvidence(page);
+  await mockSuccessfulSync(page);
+  await mockFinanceSnapshotEvidence(page, { allowProoflessPull: true });
   await page.route(
     /\/api\/v1\/finance\/(accounts|budgets|merchants|categories)(?:\?|$)/u,
-    (route) => route.fulfill({ json: { items: [] } }),
+    (route) => route.fulfill({ headers: financeSnapshotFixtureHeaders, json: { items: [] } }),
   );
   await page.route(/\/api\/v1\/finance\/reports\/spend\?/u, (route) =>
     route.fulfill({

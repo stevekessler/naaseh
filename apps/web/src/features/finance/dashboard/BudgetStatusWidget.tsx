@@ -1,25 +1,23 @@
 import { useCallback } from 'react';
-import { financeDashboardBudgetResponseSchema } from '@naaseh/contracts';
+import {
+  financeDashboardBudgetResponseSchema,
+  financeDashboardPreferencesResponseSchema,
+} from '@naaseh/contracts';
 import { localFinanceDate, summarizeDashboardBudget } from '@naaseh/domain';
 import { financeRequest } from '../finance-client.js';
 import { dashboardBatch, finishDashboardQuery, startDashboardQuery } from './dashboard-query.js';
+import { BudgetForecast } from '../budgets/BudgetForecast.js';
+import { dashboardMoney } from './dashboard-money.js';
 import { useDashboardQuery } from './use-dashboard-query.js';
-
-export function dashboardMoney(amount: number, currency: string, exponent: number) {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: exponent,
-    maximumFractionDigits: exponent,
-  }).format(amount / 10 ** exponent);
-}
 
 export function BudgetStatusWidget({
   ids,
+  ownerId,
   csrfToken,
   onOpenBudget,
 }: {
   ids: readonly string[];
+  ownerId: string;
   csrfToken: string;
   onOpenBudget: (id: string) => void;
 }) {
@@ -113,6 +111,24 @@ export function BudgetStatusWidget({
                 </dd>
               </dl>
             ))}
+            <details>
+              <summary>Forecast for {budget.name}</summary>
+              <BudgetForecast
+                budgetId={budget.id}
+                ownerId={ownerId}
+                csrfToken={csrfToken}
+                overview
+                verifyAccess={async () => {
+                  const preferences = financeDashboardPreferencesResponseSchema.parse(
+                    await financeRequest('/finance/dashboard-preferences'),
+                  );
+                  return preferences.flags.some(
+                    (flag) =>
+                      flag.targetKind === 'budget' && flag.targetId === budget.id && flag.included,
+                  );
+                }}
+              />
+            </details>
             <button type="button" onClick={() => onOpenBudget(budget.id)}>
               Open budget
             </button>

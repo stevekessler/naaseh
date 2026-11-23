@@ -5,6 +5,20 @@ User routes, PIN lifecycle and downstream stories still have their own unfinishe
 gates. No live deployment, alarm-delivery test or AWS performance acceptance has
 been performed in this continuation.
 
+## Run a budget forecast
+
+Open a budget and use **Budget forecast** to run **Known plan** or a
+**History-based estimate**. Leave both dates blank for the default period or
+supply a start and end date. The historical option uses up to six closed
+months. Expanded history is off by default and can only be requested from a
+budget detail. A flagged open budget offers forecasts on the dashboard using
+budget-only history.
+
+Amounts are separated by currency and reflect the sources you can access.
+The forecast reports its source check time and labels partial coverage,
+including when the bounded read cannot exhaust the source. Insufficient
+history leaves future amounts blank. Reconnect to run a current forecast.
+
 ## Safe event and alarm signals
 
 Finance uses the existing sync/application log group with 30-day retention.

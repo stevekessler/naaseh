@@ -5064,6 +5064,28 @@ canvas.finance-receipt-preview[hidden] {
   text-align: start;
 }
 
+.finance-forecast-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem 1rem;
+  min-inline-size: 0;
+}
+
+.finance-forecast-options label {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.finance-forecast-options label:has([type='checkbox']) {
+  display: flex;
+  align-items: center;
+}
+
+.finance-forecast-table {
+  overflow-x: auto;
+}
+
 .finance-spend-filters {
   display: flex;
   flex-wrap: wrap;

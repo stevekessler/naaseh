@@ -4,6 +4,7 @@ import { fixturePdf } from '../fixtures/finance/receipts/documents.js';
 import {
   financeSnapshotFixtureHeaders,
   mockFinanceSnapshotEvidence,
+  mockSuccessfulSync,
   mockUnprotectedFinanceSecurity,
   signIn,
 } from './enhanced-helpers.js';
@@ -33,7 +34,8 @@ const transaction = {
 
 async function setup(page: Page) {
   await mockUnprotectedFinanceSecurity(page, { role: 'user' });
-  await mockFinanceSnapshotEvidence(page);
+  await mockSuccessfulSync(page);
+  await mockFinanceSnapshotEvidence(page, { allowProoflessPull: true });
   await page.route('**/api/v1/finance/accounts', (route) =>
     route.fulfill({
       headers: financeSnapshotFixtureHeaders,

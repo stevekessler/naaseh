@@ -1,3 +1,4 @@
+import { readFinanceBudgetForecast } from './forecast-service.js';
 import { browseFinanceSpendReport, parseSpendReportRequest } from './spend-report-service.js';
 import { dispatchFinanceReceipt } from './receipt-handler.js';
 import { FinanceCacheProofService, type FinanceCacheAuthorizationSnapshot } from './cache-proof.js';
@@ -491,6 +492,28 @@ export function createFinanceHandler(
         if (proof && proof.length > 4000)
           throw new Error('Finance snapshot evidence exceeds the header budget.');
         return json(200, { items }, proof ? { 'x-finance-cache-proof': proof } : {});
+      }
+      const budgetForecast =
+        /^\/api\/v1\/finance\/budgets\/([0-9A-HJKMNP-TV-Z]{26})\/forecast$/u.exec(event.rawPath);
+      if (event.requestContext.http.method === 'POST' && budgetForecast) {
+        const result = await readFinanceBudgetForecast({
+          userId: auth.userId,
+          securityRevision: visit.securityRevision,
+          budgetId: budgetForecast[1]!,
+          request: JSON.parse(event.body ?? '{}'),
+        });
+        const current = await authorize(gate);
+        if (
+          current.securityRevision !== visit.securityRevision ||
+          current.sessionEpoch !== visit.sessionEpoch
+        )
+          throw new SafeApiError(
+            409,
+            'finance_forecast_changed',
+            'Finance changed. Try the forecast again.',
+            'authorization',
+          );
+        return json(200, result, { 'cache-control': 'no-store' });
       }
       const dashboardBudget =
         /^\/api\/v1\/finance\/dashboard\/budgets\/([0-9A-HJKMNP-TV-Z]{26})$/u.exec(event.rawPath);

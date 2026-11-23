@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { financeTrendModes, financeTrendPeriods, type FinanceTrendMode } from '@naaseh/domain';
 import type { FinanceDashboardAccount } from './AccountBalancesWidget.js';
-import { dashboardMoney } from './BudgetStatusWidget.js';
+import { dashboardMoney } from './dashboard-money.js';
 import { readCachedSpendTrend, readSpendTrend, type TrendPeriod } from './spend-trends-query.js';
 import { useDashboardQuery } from './use-dashboard-query.js';
 

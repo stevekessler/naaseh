@@ -142,6 +142,7 @@ export function FinanceDashboardPage({
       {preferences.status === 'ready' ? (
         <>
           <BudgetStatusWidget
+            ownerId={ownerId}
             ids={flags('budget')}
             csrfToken={csrfToken}
             onOpenBudget={onOpenBudget}

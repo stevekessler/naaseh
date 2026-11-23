@@ -1,5 +1,21 @@
 # Finance Experience Required Validation Runtime
 
+## November 22 forecast validation
+
+Node 24.22.2 and Playwright 1.64.1.
+
+| Gate | Prior checkpoint | Forecast checkpoint |
+| --- | --- | --- |
+| `npm run validate` | 2,042 tests in 513 files, 67.89 s | 2,050 tests in 516 files, 66.98 s |
+| `/usr/bin/time -p npm run test:e2e:quick` | 31 cases discovered, preview denied at 3.67 s | 31 cases discovered, preview denied at 3.74 s |
+| Targeted desktop Chromium and WebKit | 34 cases | 36 cases discovered, preview denied at 3.70 s |
+
+The full local gate includes Node runtime, typecheck, lint, tests and builds.
+The required browser selection, retries, projects and workflow are unchanged.
+The forecast browser case is included in the full matrix. No browser case started
+during this checkpoint because the environment denied binding `127.0.0.1:4173`.
+Hosted PR duration and live staging metrics remain open.
+
 ## November 22 receiving-computer validation
 
 Node 24.22.2 and Playwright 1.64.1 were used for both revisions. The locked

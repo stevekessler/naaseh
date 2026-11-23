@@ -114,6 +114,14 @@ Task creation/update must additionally accept optional `financeLinkSelections` r
 | GET `/finance/dashboard` | Independent widget states `{status,data?,asOf,complete,error?}`; flagged balances/open budgets; next N canonical upcoming expenses; separate overdue section; latest ten merchant/category transactions |
 | GET `/finance/spend-trends` | `accountIds[]`, `period:month|quarter|year`, `timeZone`; latest 12/8/5 periods including labeled current partial period; distinct currency series plus readable values |
 | GET `/finance/reports/spend` | date/date range, timeZone, budgetIds/accountIds/merchantIds/categoryIds/subcategoryIds, limit/cursor; matching rows, exact or explicitly pending/partial totals per currency |
+| POST `/finance/budgets/{budgetId}/forecast` | `method`, `timeZone`, optional paired inclusive dates, and historical-only `includeNonBudgetedHistory`. Returns one model, its period, source revision, coverage, and currency-separated actual and projected flows. |
+
+The forecast uses the existing Finance session, PIN and mutation request guards.
+The computation is read-only and has no retained response cache or export.
+Known-plan and historical scenarios are separate. Historical non-budgeted data
+requires opt-in and current access to a linked account. Both scenarios keep
+actuals budget-assigned. Bounded reads can yield partial coverage or insufficient
+history. The result is withheld if a relevant source or the active visit changes.
 
 Spend defaults current calendar month/all accessible accounts. Budget widgets supply planned, spent, remaining, percentUsed (`null` when planned=0), effective period and currency; negative remaining is overspent. Parent category selections include historical children under that parent association. Receipt count/amount indicators remain access filtered. No export endpoint is added.
 

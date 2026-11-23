@@ -1,5 +1,23 @@
 # Finance 015 + 016 cost gate
 
+## November 22 forecast request bounds
+
+A forecast runs only on explicit submission from the budget detail or the
+owner's selected dashboard budget. The dashboard makes no forecast request
+when it opens. One forecast reuses the Finance API and existing DynamoDB
+storage. It checks canonical budget, account, membership, version and PIN
+state. It reads at most 100 date-indexed transaction references across at most
+50 accounts, with up to five concurrent reads. Canonical point reads resolve
+the selected facts and referenced allocations. They add to the index reads
+and are not included in the 100-reference quantity. Known-plan requests also
+read budget items, upcoming expenses and fulfillment rows within bounded
+partitions. An incomplete source reduces coverage.
+
+The endpoint makes no forecast writes and introduces no new infrastructure,
+poller or paid service. Measure authorization and canonical point-read capacity,
+Lambda duration, and request frequency before accepting the combined
+$6.50/month ceiling with contingency. Local fixture counts are not an AWS bill.
+
 ## November 16 T018 cost preflight
 
 The rerun used the current integration tree and the established household

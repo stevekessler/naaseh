@@ -1,5 +1,35 @@
 # Finance Experience Expansion Implementation Validation
 
+## November 22 forecast endpoint and views
+
+T163–T165 add bounded date-indexed and canonical point reads to the existing
+Finance handler. The request binds method, window, historical opt-in and the
+active visit to a source revision. The endpoint checks current canonical budgets,
+accounts, allocation links, refund originals, coverage and memberships. It
+withholds results after access or revision changes. Known-plan forecasts reduce
+outstanding plans by posted budget allocations and use linked upcoming
+obligation identity and fulfillment. Historical estimates use six closed months
+and omit coverage before evidence of a source's observed history. A capped
+transaction read or unavailable projection can produce partial coverage or
+insufficient history even while online. The forecast does not cache results.
+
+Budget detail supports custom dates and explicit expanded history. Selected
+dashboard budgets use the default period and budget-only history. The dashboard
+performs no forecast reads until the viewer submits a request. The Finance
+lock, changed source snapshot and offline state clear protected results.
+
+The focused forecast contract, integration, security, component and dashboard
+selection passed **18 tests in five files**. This covers reference bounds,
+known-plan arithmetic, incomplete history, revision identity, administrative
+denial, lock and view cleanup. The budget and dashboard browser journey is
+in the full Playwright suite. The prior 34-case desktop run recorded 22 passes
+and 12 receipt or Spend Report fixture failures. Their mock sync setup now
+accepts the empty cache's initial proofless pull and supplies the Finance
+snapshot header for report drilldown. The rerun reached web build, then the
+preview listener was denied before any case ran. T161 and T166 remain open
+for browser and acceptance evidence, including live latency and cost. T018
+remains open for isolated staging. The checklist is **145/166**.
+
 ## November 22 receiving-computer reconciliation
 
 The imported bundle verified its pinned SHA-256, prerequisite and continuation

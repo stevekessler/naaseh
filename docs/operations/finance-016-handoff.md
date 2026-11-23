@@ -1,5 +1,14 @@
 # Na’aseh Finance 016 handoff for Steve’s Codex
 
+> November 22 forecast checkpoint on `codex/finance-continuation-20261122`
+> (145/166). T163–T165 add the protected budget forecast endpoint, budget
+> detail controls, and forecasts for selected dashboard budgets. A forecast
+> labels incomplete coverage and does not cache results. The earlier desktop
+> report recorded 22 passes and 12 receipt/report fixture failures. Those fixtures
+> now permit the initial proofless cache check. Local validation passed 2,050
+> tests. Browser execution and live performance/cost acceptance remain open
+> under T161/T166. See the [validation record](../testing/finance-experience-validation.md).
+>
 > November 22 receiving-computer checkpoint on `codex/finance-continuation-20261122`
 > (142/166). The transfer verified 1,918 files at `9109abb87492b85b6497ef37f006741b651dd760`.
 > Spend Report, the forecast model and contracts, and SimpleFIN worker error

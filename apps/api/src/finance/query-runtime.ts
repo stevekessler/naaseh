@@ -325,6 +325,15 @@ async function sourceSnapshot(
   return revisions;
 }
 
+/** Reuse canonical forecast account coverage and viewer identity without starting a query job. */
+export async function readFinanceForecastAccountCoverage(userId: string, accountIds: string[]) {
+  const current = await currentActor(userId);
+  if (!current)
+    throw new FinanceExperienceFailure('authorization', 'Finance query access denied.', 'user');
+  const revisions = await sourceSnapshot(current.actor, accountIds);
+  return { viewerRevision: current.fingerprint, revisions: [...revisions.entries()] };
+}
+
 /** No delivery credential is present in a background invocation; status/create fail closed there. */
 export async function checkIndexedCsvDuplicates(
   userId: string,

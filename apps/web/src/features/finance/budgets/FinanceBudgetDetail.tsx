@@ -8,6 +8,7 @@ import { createUlid } from '@naaseh/domain';
 import { queueEncryptedBudgetMutation } from '../../../db/finance-repository.js';
 import { queueFinanceBudgetActivityChange } from '../../../sync/finance-sync.js';
 import { financeRequest } from '../finance-client.js';
+import { BudgetForecast } from './BudgetForecast.js';
 import { BudgetReconciliation } from './BudgetReconciliation.js';
 import { CreateFinancialTask } from './CreateFinancialTask.js';
 
@@ -314,6 +315,13 @@ export function FinanceBudgetDetail({
           Totals are incomplete because this view cannot access every linked account.
         </p>
       ) : null}
+      <BudgetForecast
+        key={budget.id + ':' + budget.version}
+        budgetId={budget.id}
+        ownerId={currentUserId}
+        csrfToken={csrfToken}
+        verifyAccess={verifyAccess}
+      />
       <BudgetReconciliation
         budget={budget}
         csrfToken={csrfToken}
